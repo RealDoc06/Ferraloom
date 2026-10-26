@@ -22,6 +22,23 @@ pub(super) struct TickTask {
     packet: ListenerAndPacket,
 }
 
+/// MinecraftServer#haveTime's two deadlines during waitUntilNextTick. A
+/// successful poll retains the delayed-task budget; an idle poll drops it.
+struct NextTickWait {
+    next_tick: tokio::time::Instant,
+    delayed_tasks: tokio::time::Instant,
+    may_have_delayed_tasks: bool,
+}
+impl NextTickWait {
+    fn deadline(&self) -> tokio::time::Instant {
+        if self.may_have_delayed_tasks {
+            self.delayed_tasks
+        } else {
+            self.next_tick
+        }
+    }
+}
+
 impl MinecraftServer {
     /// Accept FIFO ingress outside tickChildren. Native login control work can
     /// reply now; ordinary packets wait for processQueuedPackets before the tick.
@@ -243,49 +260,82 @@ impl MinecraftServer {
         Ok(())
     }
 
-    /// Main-executor half of MinecraftServer#pollTask. None is managedBlock's
-    /// shouldRunAllTasks; a deadline uses the native three-tick starvation guard.
+    /// Port of MinecraftServer#pollTaskInternal: main executor first, then one
+    /// chunk-source task in getAllLevels order. None is shouldRunAllTasks; a
+    /// deadline retains the native three-tick starvation guard for main tasks.
     async fn poll_task(&mut self, deadline: Option<tokio::time::Instant>) -> Result<bool> {
         self.receive_available_ingress()?;
         // Login/control replies also flush outside tickChildren, even when no
         // chat task is ready. No holder changes are drained here.
         self.flush_outbound();
-        let Some(task) = self.pending_tasks.front() else {
-            return Ok(false);
-        };
-        if let Some(deadline) = deadline
-            && task.tick.wrapping_add(3) >= self.tick
-            && tokio::time::Instant::now() >= deadline
-        {
-            return Ok(false);
+        if self.pending_tasks.front().is_some_and(|task| {
+            task.tick.wrapping_add(3) < self.tick
+                || deadline.is_none_or(|deadline| tokio::time::Instant::now() < deadline)
+        }) {
+            let task = self
+                .pending_tasks
+                .pop_front()
+                .expect("ready main-executor task");
+            self.handle_queued_packet(task.packet).await?;
+            self.flush_outbound();
+            return Ok(true);
         }
-        let task = self
-            .pending_tasks
-            .pop_front()
-            .expect("ready main-executor task");
-        self.handle_queued_packet(task.packet).await?;
-        self.flush_outbound();
-        Ok(true)
+        if self.tick_rate_manager.is_sprinting()
+            || deadline.is_none_or(|deadline| tokio::time::Instant::now() < deadline)
+        {
+            for dimension in self.level_keys() {
+                let lent = self.lend_server_shared_to(&dimension)?;
+                let result = (|| -> Result<_> {
+                    let progress = self
+                        .live_level_in_mut(&dimension)?
+                        .level
+                        .poll_chunk_acquisition_mut()
+                        .map_err(game_error)?;
+                    if progress != ferraloom_game::level::acquisition::AcquireProgress::Idle {
+                        // Publication callbacks emit in this task's Shared loan.
+                        // tickChildren's flushing suspension has already ended.
+                        self.apply_level_effects_in(&dimension)?;
+                    }
+                    Ok(progress)
+                })();
+                self.return_server_shared(lent);
+                if result? != ferraloom_game::level::acquisition::AcquireProgress::Idle {
+                    self.flush_outbound();
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
     }
 
     /// Port of BlockableEventLoop#runAllTasks before the next-tick managed wait.
-    async fn run_all_tasks(&mut self, deadline: tokio::time::Instant) -> Result<()> {
-        while self.poll_task(Some(deadline)).await? {}
+    async fn run_all_tasks(&mut self, wait: &mut NextTickWait) -> Result<()> {
+        loop {
+            wait.may_have_delayed_tasks = self.poll_task(Some(wait.deadline())).await?;
+            if !wait.may_have_delayed_tasks {
+                break;
+            }
+        }
         Ok(())
     }
 
-    /// Port of MinecraftServer#waitUntilNextTick's main-executor polling. Ingress
-    /// wakes the wait, but PacketProcessor work never executes in this idle slot.
+    /// Port of MinecraftServer#waitUntilNextTick. Ingress wakes the wait, but
+    /// PacketProcessor work never executes in this idle slot.
     /// Tick phases, gameTime, holder broadcasts and packet ACKs are not advanced.
     pub(super) async fn wait_until_next_tick(
         &mut self,
         deadline: tokio::time::Instant,
         tick_length: Duration,
     ) -> Result<()> {
-        let delayed_tasks_deadline = (tokio::time::Instant::now() + tick_length).max(deadline);
-        self.run_all_tasks(delayed_tasks_deadline).await?;
-        while !self.stop && tokio::time::Instant::now() < deadline {
-            if self.poll_task(None).await? {
+        let mut wait = NextTickWait {
+            next_tick: deadline,
+            delayed_tasks: (tokio::time::Instant::now() + tick_length).max(deadline),
+            may_have_delayed_tasks: true,
+        };
+        self.run_all_tasks(&mut wait).await?;
+        while !self.stop && tokio::time::Instant::now() < wait.deadline() {
+            wait.may_have_delayed_tasks = self.poll_task(None).await?;
+            if wait.may_have_delayed_tasks {
                 continue;
             }
             tokio::select! {
