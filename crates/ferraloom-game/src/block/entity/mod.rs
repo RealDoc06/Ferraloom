@@ -6,22 +6,27 @@ use ferraloom_protocol::component::{ComponentTypeId, DataComponentMap, DataCompo
 use ferraloom_util::{BlockPos, ChunkPos};
 
 pub mod banner;
+pub mod beacon;
 pub mod beehive;
 pub mod bell;
 pub mod brewing_stand;
 pub mod brushable;
 pub mod campfire;
 pub mod chiseled_bookshelf;
-mod components;
+pub(crate) mod components;
+pub mod conduit;
+pub mod copper_golem_statue;
 pub mod creaking_heart;
 pub mod daylight_detector;
 pub mod decorated_pot;
 pub mod enchanting_table;
 pub mod ender_chest;
 pub mod jigsaw;
+pub mod jukebox;
 pub mod lectern;
 pub mod potent_sulfur;
 pub mod sculk;
+pub mod shelf;
 pub mod spawner;
 mod worldgen;
 use super::containers::{
@@ -41,6 +46,13 @@ pub struct BlockEntityRef {
 }
 
 impl BlockEntityRef {
+    /// Invoke the original receiver's class setRemoved under a call-frame root.
+    pub fn set_removed_live(self, level: &mut Level) -> Result<(), LevelError> {
+        level.with_block_entity_callback(self, |level| {
+            let behavior = level.block_entity_state(self)?.behavior();
+            behavior.set_removed_live(self, level)
+        })
+    }
     /// Live loadCustomOnly, used by TypedEntityData#loadInto. Class callbacks run
     /// on this generation; the existing extra component map stays untouched.
     pub fn load_custom_only(self, tag: &CompoundTag, level: &mut Level) -> Result<(), LevelError> {
@@ -197,6 +209,18 @@ pub trait BlockEntity: Sync {
     }
     /// Port of BlockEntity#preRemoveSideEffects. Non-container base has no effects;
     /// registered container dispatchers override this before allowing removal.
+    /// Port of BlockEntity#setRemoved. Live overrides run on the retained
+    /// generation while the world observes the native replacement/removal state.
+    fn set_removed_live(
+        &self,
+        handle: BlockEntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        level
+            .block_entity_mut::<BlockEntityData>(handle)?
+            .set_removed();
+        Ok(())
+    }
     fn pre_remove_side_effects(
         &self,
         _entity: BlockEntityRef,
@@ -215,6 +239,11 @@ static THE_END_PORTAL: TheEndPortal = TheEndPortal;
 /// Canonical concrete states. Extend this enum when porting a subclass, never Any.
 #[derive(Clone, Debug)]
 pub enum BlockEntityState {
+    Jukebox(Box<jukebox::JukeboxBlockEntity>),
+    CopperGolemStatue(Box<copper_golem_statue::CopperGolemStatueBlockEntity>),
+    Shelf(Box<shelf::ShelfBlockEntity>),
+    Conduit(Box<conduit::ConduitBlockEntity>),
+    Beacon(Box<beacon::BeaconBlockEntity>),
     Jigsaw(Box<jigsaw::JigsawBlockEntity>),
     Campfire(Box<campfire::CampfireBlockEntity>),
     Bell(Box<bell::BellBlockEntity>),
@@ -253,6 +282,11 @@ pub enum BlockEntityState {
 impl BlockEntityState {
     pub fn data(&self) -> &BlockEntityData {
         match self {
+            Self::Jukebox(entity) => &entity.parent,
+            Self::CopperGolemStatue(entity) => &entity.parent,
+            Self::Shelf(entity) => &entity.parent,
+            Self::Conduit(entity) => &entity.parent,
+            Self::Beacon(entity) => &entity.parent,
             Self::Jigsaw(entity) => &entity.parent,
             Self::Campfire(entity) => &entity.parent,
             Self::Bell(entity) => &entity.parent,
@@ -291,6 +325,11 @@ impl BlockEntityState {
     }
     pub fn data_mut(&mut self) -> &mut BlockEntityData {
         match self {
+            Self::Jukebox(entity) => &mut entity.parent,
+            Self::CopperGolemStatue(entity) => &mut entity.parent,
+            Self::Shelf(entity) => &mut entity.parent,
+            Self::Conduit(entity) => &mut entity.parent,
+            Self::Beacon(entity) => &mut entity.parent,
             Self::Jigsaw(entity) => &mut entity.parent,
             Self::Campfire(entity) => &mut entity.parent,
             Self::Bell(entity) => &mut entity.parent,
@@ -329,6 +368,11 @@ impl BlockEntityState {
     }
     pub fn behavior(&self) -> &'static dyn BlockEntity {
         match self {
+            Self::Jukebox(_) => &jukebox::JUKEBOX_ENTITY,
+            Self::CopperGolemStatue(_) => &copper_golem_statue::COPPER_GOLEM_STATUE_ENTITY,
+            Self::Shelf(_) => &shelf::SHELF_ENTITY,
+            Self::Conduit(_) => &conduit::CONDUIT_ENTITY,
+            Self::Beacon(_) => &beacon::BEACON_ENTITY,
             Self::Jigsaw(_) => &jigsaw::JIGSAW_ENTITY,
             Self::Campfire(_) => &campfire::CAMPFIRE_ENTITY,
             Self::Bell(_) => &bell::BELL_ENTITY,
@@ -365,9 +409,10 @@ impl BlockEntityState {
     }
     /// Port of BlockEntity#setLevel and the supported subclass initialization.
     /// These assignments use the current clock without invoking world callbacks.
-    pub fn set_level(&mut self, game_time: i64) {
+    pub fn set_level(&mut self, game_time: i64, min_y: i32) {
         match self {
             Self::PotentSulfur(entity) => entity.set_level(game_time),
+            Self::Beacon(entity) => entity.set_level(min_y),
             _ => self.data_mut().has_level = true,
         }
     }
@@ -376,6 +421,7 @@ impl BlockEntityState {
     pub fn has_server_ticker(&self, has_skylight: Option<bool>) -> Result<bool, LevelError> {
         match self {
             Self::CreakingHeart(entity) => Ok(entity.has_server_ticker()),
+            Self::Jukebox(entity) => Ok(entity.has_server_ticker()),
             Self::DaylightDetector(_) => has_skylight.ok_or(LevelError::UnsupportedLightQuery),
             Self::PotentSulfur(entity) => Ok(entity.has_server_ticker()),
             _ => Ok(self.behavior().has_server_ticker()),
@@ -551,6 +597,21 @@ pub fn create(pos: BlockPos, state: BlockState) -> Result<BlockEntityState, Leve
         .ok_or(LevelError::UnsupportedBlockEntity(state.block()))?;
     let data = BlockEntityData::new(kind, pos, state)?;
     match kind {
+        BlockEntityType::JUKEBOX => Ok(BlockEntityState::Jukebox(Box::new(
+            jukebox::JukeboxBlockEntity::new(data),
+        ))),
+        BlockEntityType::COPPER_GOLEM_STATUE => Ok(BlockEntityState::CopperGolemStatue(Box::new(
+            copper_golem_statue::CopperGolemStatueBlockEntity::new(data),
+        ))),
+        BlockEntityType::SHELF => Ok(BlockEntityState::Shelf(Box::new(
+            shelf::ShelfBlockEntity::new(data),
+        ))),
+        BlockEntityType::CONDUIT => Ok(BlockEntityState::Conduit(Box::new(
+            conduit::ConduitBlockEntity::new(data),
+        ))),
+        BlockEntityType::BEACON => Ok(BlockEntityState::Beacon(Box::new(
+            beacon::BeaconBlockEntity::new(data),
+        ))),
         BlockEntityType::JIGSAW => Ok(BlockEntityState::Jigsaw(Box::new(
             jigsaw::JigsawBlockEntity::new(data),
         ))),
@@ -696,7 +757,12 @@ pub fn supports(block: Block) -> bool {
     matches!(
         registry::for_block(block),
         Some(
-            BlockEntityType::JIGSAW
+            BlockEntityType::BEACON
+                | BlockEntityType::CONDUIT
+                | BlockEntityType::SHELF
+                | BlockEntityType::COPPER_GOLEM_STATUE
+                | BlockEntityType::JUKEBOX
+                | BlockEntityType::JIGSAW
                 | BlockEntityType::CAMPFIRE
                 | BlockEntityType::BELL
                 | BlockEntityType::LECTERN
@@ -739,6 +805,8 @@ pub fn supports(block: Block) -> bool {
     )
 }
 
+#[cfg(test)]
+mod lock_tests;
 #[cfg(test)]
 mod tests;
 
@@ -887,3 +955,19 @@ projection!(decorated_pot::DecoratedPotBlockEntity, DecoratedPot);
 
 #[cfg(test)]
 mod factory_two_tests;
+
+projection!(beacon::BeaconBlockEntity, Beacon);
+
+projection!(conduit::ConduitBlockEntity, Conduit);
+
+projection!(shelf::ShelfBlockEntity, Shelf);
+
+projection!(
+    copper_golem_statue::CopperGolemStatueBlockEntity,
+    CopperGolemStatue
+);
+
+projection!(jukebox::JukeboxBlockEntity, Jukebox);
+
+#[cfg(test)]
+mod factory_three_tests;

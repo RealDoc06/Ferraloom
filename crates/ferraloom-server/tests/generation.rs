@@ -8,8 +8,10 @@ use ferraloom_util::ChunkPos;
 async fn default_noise_reaches_full_without_skips_and_synthetic_unported_is_rejected() -> Result<()>
 {
     let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder provides vanilla jar");
-    let resources = ResourceManager::new(vec![Pack::vanilla_jar(std::path::Path::new(&jar))?]);
-    let registries = std::sync::Arc::new(RegistrySet::load(&resources)?);
+    let resources = std::sync::Arc::new(ResourceManager::new(vec![Pack::vanilla_jar(
+        std::path::Path::new(&jar),
+    )?]));
+    let registries = std::sync::Arc::new(RegistrySet::load(resources.clone())?);
     let mut properties = ServerProperties::from_values(Default::default());
     properties.set("level-seed", 0);
     for policy in [UnportedBehavior::Strict, UnportedBehavior::Warn] {

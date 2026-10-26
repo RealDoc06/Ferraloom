@@ -134,9 +134,11 @@ impl Level {
         region.next_chunk_generation.set(generation);
         prepared.chunk.publication_generation = generation;
         prepared.chunk.loaded.set(false);
-        region
-            .block_entity_state
-            .prepare_published_chunk(&mut prepared.chunk, region.game_time);
+        region.block_entity_state.prepare_published_chunk(
+            &mut prepared.chunk,
+            region.game_time,
+            region.min_y,
+        );
         let reference = ChunkReference {
             pos,
             generation,

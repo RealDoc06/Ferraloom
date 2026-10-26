@@ -90,7 +90,7 @@ impl BlockEntity for CrafterBehavior {
         &self,
         state: &mut BlockEntityState,
         tag: &CompoundTag,
-        _registries: &dyn ferraloom_protocol::codec::RegistryContext,
+        registries: &dyn ferraloom_protocol::codec::RegistryContext,
     ) {
         let BlockEntityState::Crafter(crafter) = state else {
             unreachable!()
@@ -100,7 +100,7 @@ impl BlockEntity for CrafterBehavior {
             .items_list_generation
             .checked_add(1)
             .expect("crafter items list generations exhausted");
-        crafter.parent.load(tag);
+        crafter.parent.load(tag, registries);
         crafter.crafting_ticks_remaining = tag.get_int_or("crafting_ticks_remaining", 0);
         crafter.triggered = tag.get_int_or("triggered", 0);
         crafter.disabled_slots = [false; 9];

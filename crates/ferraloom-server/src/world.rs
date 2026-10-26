@@ -2632,7 +2632,7 @@ mod generation_order_tests {
     #[tokio::test]
     async fn dimensions_share_worldgen_registries_and_keep_flat_features_separate() {
         let resources = crate::generation_tests::resources();
-        let registries = Arc::new(RegistrySet::load(&resources).unwrap());
+        let registries = Arc::new(RegistrySet::load(resources.clone()).unwrap());
         let directory = tempfile::tempdir().unwrap();
         let mut properties = ServerProperties::from_values(Default::default());
         properties.set("level-type", "minecraft:normal");
@@ -2724,10 +2724,10 @@ mod generation_order_tests {
     #[tokio::test]
     async fn saved_world_structure_option_overrides_properties_and_defaults_to_true() {
         let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder vanilla jar");
-        let resources = ResourceManager::new(vec![
+        let resources = std::sync::Arc::new(ResourceManager::new(vec![
             ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
-        ]);
-        let registries = Arc::new(RegistrySet::load(&resources).unwrap());
+        ]));
+        let registries = Arc::new(RegistrySet::load(resources.clone()).unwrap());
         for generate_structures in [false, true] {
             let directory = tempfile::tempdir().unwrap();
             let mut properties = ServerProperties::from_values(Default::default());
@@ -2827,10 +2827,11 @@ mod generation_order_tests {
     #[test]
     fn saving_uses_dimension_sections_and_retains_generation_light_until_live_attachment() {
         let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder vanilla jar");
-        let resources = ResourceManager::new(vec![
+        let resources = std::sync::Arc::new(ResourceManager::new(vec![
             ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
-        ]);
-        let registry = RegistryAdapter::new(&RegistrySet::load(&resources).unwrap()).unwrap();
+        ]));
+        let registry =
+            RegistryAdapter::new(&RegistrySet::load(resources.clone()).unwrap()).unwrap();
         let biome = BiomeId(0);
         let section = LevelChunkSection::new(
             Strategy::block_states(),
@@ -2897,10 +2898,10 @@ mod generation_order_tests {
         use ferraloom_game::{Behaviors, level::Region, level::server_level::ServerLevel};
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
         let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder vanilla jar");
-        let resources = ResourceManager::new(vec![
+        let resources = std::sync::Arc::new(ResourceManager::new(vec![
             ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
-        ]);
-        let registries = Arc::new(RegistrySet::load(&resources).unwrap());
+        ]));
+        let registries = Arc::new(RegistrySet::load(resources.clone()).unwrap());
         let mut properties = ServerProperties::from_values(Default::default());
         properties.set("level-type", "minecraft:debug_all_block_states");
         let directory = tempfile::tempdir().unwrap();

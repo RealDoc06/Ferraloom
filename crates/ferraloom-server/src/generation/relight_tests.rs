@@ -32,7 +32,8 @@ pub(super) fn fixture() -> (GenerationState, RegistryAdapter) {
     context.dimension.min_y = 0;
     context.dimension.height = 32;
     let registry =
-        RegistryAdapter::new(&crate::registries::RegistrySet::load(&resources).unwrap()).unwrap();
+        RegistryAdapter::new(&crate::registries::RegistrySet::load(resources.clone()).unwrap())
+            .unwrap();
     (
         GenerationState::new(
             Arc::new(context),

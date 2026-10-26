@@ -8,7 +8,7 @@ use ferraloom_protocol::{
     common::clientbound::{RegistryTags, TagEntry, UpdateTags},
     configuration as cfg,
 };
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 /// RegistryDataLoader.SYNCHRONIZED_REGISTRIES order is wire-visible.
 pub const SYNCHRONIZED: &[&str] = &[
@@ -57,11 +57,12 @@ pub fn core_pack() -> cfg::KnownPack {
 }
 #[derive(Clone)]
 pub struct RegistrySet {
+    pub resources: Arc<ResourceManager>,
     pub entries: BTreeMap<String, Vec<String>>,
     pub tags: UpdateTags,
 }
 impl RegistrySet {
-    pub fn load(resources: &ResourceManager) -> Result<Self> {
+    pub fn load(resources: Arc<ResourceManager>) -> Result<Self> {
         let mut entries = BTreeMap::new();
         for &registry in SYNCHRONIZED {
             let names = resources
@@ -95,7 +96,7 @@ impl RegistrySet {
                 .enumerate()
                 .map(|(i, n)| (n.as_str(), i as i32))
                 .collect();
-            let loaded = load_tags(resources, directory, |id, _| {
+            let loaded = load_tags(&resources, directory, |id, _| {
                 lookup.get(id.to_string().as_str()).copied()
             });
             ensure!(
@@ -116,6 +117,7 @@ impl RegistrySet {
             });
         }
         Ok(Self {
+            resources,
             entries,
             tags: UpdateTags { tags },
         })
@@ -150,6 +152,19 @@ impl RegistrySet {
     }
 }
 impl ferraloom_protocol::codec::RegistryContext for RegistrySet {
+    fn entry_value(&self, registry: &Identifier, key: &Identifier) -> Option<serde_json::Value> {
+        self.entry_id(registry, key)?;
+        self.resources
+            .get(
+                &ferraloom_data::datapack::Identifier::new(
+                    key.namespace(),
+                    format!("{}/{}.json", registry.path(), key.path()),
+                )
+                .ok()?,
+            )?
+            .json()
+            .ok()
+    }
     fn entry_id(&self, registry: &Identifier, entry: &Identifier) -> Option<i32> {
         if let Some(names) = self.entries.get(registry.as_str()) {
             names
@@ -259,6 +274,7 @@ mod tests {
     }
     fn registries() -> RegistrySet {
         RegistrySet {
+            resources: Arc::new(ResourceManager::default()),
             entries: [(
                 "minecraft:enchantment".into(),
                 vec!["example:published".into()],
@@ -266,6 +282,38 @@ mod tests {
             .into(),
             tags: UpdateTags { tags: Vec::new() },
         }
+    }
+
+    #[test]
+    fn cold_registry_values_require_published_keys_and_share_the_resource_owner() {
+        use ferraloom_protocol::codec::RegistryContext;
+        let resources = Arc::new(resources(&[
+            (
+                "example:jukebox_song/published.json",
+                r#"{"length_in_seconds":2.5}"#,
+            ),
+            (
+                "example:jukebox_song/unpublished.json",
+                r#"{"length_in_seconds":99}"#,
+            ),
+        ]));
+        let mut registry = registries();
+        registry.resources = resources.clone();
+        registry.entries.insert(
+            "minecraft:jukebox_song".into(),
+            vec!["example:published".into()],
+        );
+        assert!(Arc::ptr_eq(&registry.resources, &resources));
+        let kind = id("minecraft:jukebox_song");
+        assert_eq!(
+            registry.entry_value(&kind, &id("example:published")),
+            Some(serde_json::json!({"length_in_seconds":2.5}))
+        );
+        assert_eq!(
+            registry.entry_value(&kind, &id("example:unpublished")),
+            None
+        );
+        assert_eq!(registry.entry_value(&kind, &id("example:missing")), None);
     }
 
     #[test]
