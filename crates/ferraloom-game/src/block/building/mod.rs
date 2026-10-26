@@ -26,6 +26,8 @@ mod fire_powder;
 mod fire_tests;
 pub(crate) use fire::lava_random_tick;
 #[cfg(test)]
+mod dripstone_tests;
+#[cfg(test)]
 mod fire_powder_tests;
 mod orientation;
 mod pointed_dripstone;

@@ -45,12 +45,18 @@ fn find_vertical(
     Ok(None)
 }
 fn is_tip(state: BlockState, merged: bool, level: &Level) -> Result<bool, LevelError> {
-    Ok(level
+    if !level
         .block_tags()?
         .contains_key(BlockTags::SPELEOTHEMS, state.block())
-        && (state.get(p::THICKNESS) == Some(p::Thickness::Tip)
-            || merged && state.get(p::THICKNESS) == Some(p::Thickness::TipMerge)))
+    {
+        return Ok(false);
+    }
+    let thickness = state
+        .get(p::THICKNESS)
+        .expect("tagged speleothem thickness");
+    Ok(thickness == p::Thickness::Tip || merged && thickness == p::Thickness::TipMerge)
 }
+
 fn free_hanging(state: BlockState, level: &Level) -> Result<bool, LevelError> {
     Ok(
         with_direction(state, Direction::Down, &LevelReaderRef::Server(level))?
