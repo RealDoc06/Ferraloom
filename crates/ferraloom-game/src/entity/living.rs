@@ -35,6 +35,8 @@ pub struct FallSounds {
 #[derive(Debug)]
 pub struct LivingEntity {
     pub parent: EntityData,
+    /// Server-side handler selected by LivingEntity#createInterpolationHandler.
+    pub(crate) interpolation_tracker: super::tracking::codec::SteppedInterpolationTracker,
     pub attributes: AttributeMap,
     pub equipment: EntityEquipment,
     /// Port of LivingEntity#locatorBarIcon; the persistent icon, before team color overrides.
@@ -94,6 +96,7 @@ impl LivingEntity {
         let attributes = AttributeMap::new(parent.entity_type);
         let mut living = Self {
             parent,
+            interpolation_tracker: Default::default(),
             attributes,
             equipment: EntityEquipment::default(),
             locator_bar_icon: crate::level::waypoints::default_icon(),
