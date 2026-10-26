@@ -1,7 +1,8 @@
 //! Wire discriminator for PistonPhaseVectors' ordinary/sticky, off=0/1/2/4 cases.
 //! Receive-order observations never consult the asynchronously advanced BotState.
-//! Clock brackets are offsets from the logged initial server query; adding that
-//! origin recovers each confirmed absolute endpoint without inventing send times.
+//! Atomic datapack phases contain edits, one step and a returned clock marker.
+//! Two native JVMs must agree before Ferraloom is compared; no packet or event
+//! order is normalized. Clock brackets retain offsets from the logged baseline.
 #[allow(dead_code)]
 mod level_support;
 #[allow(dead_code)]
@@ -15,8 +16,10 @@ use ferraloom_parity::{
 use ferraloom_util::BlockPos;
 use serde::Serialize;
 use serde_json::Value;
+use std::path::Path;
 
 const POS: BlockPos = BlockPos::new(8, -59, 8);
+const CLOCK_FUNCTION: &str = "ferraloom_delivery:clock";
 
 #[derive(Debug, PartialEq, Serialize)]
 #[serde(tag = "event")]
@@ -105,50 +108,7 @@ impl Trace {
         Ok(())
     }
 
-    async fn acknowledge(
-        &mut self,
-        bot: &mut Bot,
-        label: &str,
-        command: &str,
-        expected: &[&str],
-    ) -> Result<()> {
-        bot.command(command).await?;
-        self.until(bot, label, |packet| {
-            let Some(message) = message(packet)? else {
-                return Ok(false);
-            };
-            if expected.iter().any(|key| translated(&message, key)) {
-                return Ok(true);
-            }
-            ensure!(
-                ![
-                    "commands.generic.failed",
-                    "command.unknown.command",
-                    "command.unknown.argument"
-                ]
-                .iter()
-                .any(|key| translated(&message, key)),
-                "{command}: {message}"
-            );
-            Ok(false)
-        })
-        .await?;
-        self.entries.push(Delivery::Command {
-            label: label.into(),
-            command: command.into(),
-        });
-        Ok(())
-    }
-
-    async fn query(&mut self, bot: &mut Bot, label: &str) -> Result<()> {
-        bot.command("time query gametime").await?;
-        let mut clock = None;
-        self.until(bot, label, |packet| {
-            clock = message(packet)?.as_ref().and_then(game_time);
-            Ok(clock.is_some())
-        })
-        .await?;
-        let time = clock.expect("the matching wire response supplies the time");
+    fn confirm_clock(&mut self, time: i64, label: &str) -> Result<()> {
         ensure!(time >= self.confirmed, "server gameTime moved backwards");
         for entry in &mut self.entries {
             if let Delivery::Packet {
@@ -169,23 +129,46 @@ impl Trace {
         Ok(())
     }
 
-    async fn command(
-        &mut self,
-        bot: &mut Bot,
-        label: &str,
-        command: &str,
-        expected: &[&str],
-    ) -> Result<()> {
-        self.acknowledge(bot, label, command, expected).await?;
-        self.query(bot, label).await
+    async fn function(&mut self, bot: &mut Bot, label: &str, id: &str) -> Result<i64> {
+        let command = format!("function {id}");
+        bot.command(&command).await?;
+        let mut clock = None;
+        self.until(bot, label, |packet| {
+            if let Some(value) = message(packet)? {
+                clock = function_clock(&value, id);
+                ensure!(
+                    ![
+                        "commands.generic.failed",
+                        "command.unknown.command",
+                        "command.unknown.argument",
+                        "commands.function.scheduled.no_functions",
+                        "commands.function.instantiationFailure"
+                    ]
+                    .iter()
+                    .any(|key| translated(&value, key)),
+                    "{command}: {value}"
+                );
+            }
+            Ok(clock.is_some())
+        })
+        .await?;
+        self.entries.push(Delivery::Command {
+            label: label.into(),
+            command,
+        });
+        let clock = clock.expect("the function's result supplies its actual clock");
+        self.confirm_clock(clock, label)?;
+        Ok(clock)
     }
 
-    async fn step(&mut self, bot: &mut Bot, label: &str) -> Result<()> {
-        let target = self.confirmed + 1;
-        self.acknowledge(bot, label, "tick step 1", &["commands.tick.step.success"])
-            .await?;
-        // A clock packet is a wire progress marker, not a client snapshot or a
-        // guess based on elapsed wall time. Every update before it is retained.
+    async fn phase(&mut self, bot: &mut Bot, label: &str, id: &str) -> Result<()> {
+        let initial = self.confirmed;
+        let clock = self.function(bot, &format!("{label}.begin"), id).await?;
+        ensure!(
+            clock == initial,
+            "phase must return its pre-step clock {initial}, got {clock}"
+        );
+        let target = initial + 1;
         self.until(bot, label, |packet| {
             if let cb::Packet::SetTime(time) = packet {
                 ensure!(time.game_time <= target, "tick step overshot {target}");
@@ -194,11 +177,13 @@ impl Trace {
             Ok(false)
         })
         .await?;
-        self.query(bot, label).await?;
-        ensure!(
-            self.confirmed == target,
-            "tick step did not stop at {target}"
-        );
+        // SetTime is sent before that frame's chunk broadcast. This read-only
+        // function runs in the following task slot, fencing the complete flush,
+        // including changes produced after the stepped frame's first broadcast.
+        let clock = self
+            .function(bot, &format!("{label}.end"), CLOCK_FUNCTION)
+            .await?;
+        ensure!(clock == target, "tick step did not stop at {target}");
         Ok(())
     }
 }
@@ -223,15 +208,82 @@ fn translated(value: &Value, key: &str) -> bool {
     }
 }
 
-fn game_time(value: &Value) -> Option<i64> {
-    if value.get("translate")?.as_str()? != "commands.time.query.gametime" {
+fn function_clock(value: &Value, id: &str) -> Option<i64> {
+    if value.get("translate")?.as_str()? != "commands.function.result" {
         return None;
     }
-    let value = value.get("with")?.as_array()?.first()?;
-    value
-        .as_i64()
-        .or_else(|| value.as_str()?.parse().ok())
-        .or_else(|| value.get("text")?.as_str()?.parse().ok())
+    let arguments = value.get("with")?.as_array()?;
+    let name = arguments.first()?;
+    let name = name.as_str().or_else(|| name.get("text")?.as_str())?;
+    if name != id {
+        return None;
+    }
+    let time = arguments.get(1)?;
+    time.as_i64()
+        .or_else(|| time.as_str()?.parse().ok())
+        .or_else(|| time.get("text")?.as_str()?.parse().ok())
+}
+
+fn phase_function(sticky: bool, off: i32, tick: i32) -> String {
+    format!(
+        "ferraloom_delivery:{}_off_{off}/tick_{tick}",
+        if sticky { "sticky" } else { "ordinary" }
+    )
+}
+
+fn write_function(pack: &Path, id: &str, commands: &[String]) -> Result<()> {
+    let path = pack
+        .join("data/ferraloom_delivery/function")
+        .join(format!("{id}.mcfunction"));
+    std::fs::create_dir_all(path.parent().expect("function parent"))?;
+    std::fs::write(path, format!("{}\n", commands.join("\n")))?;
+    Ok(())
+}
+
+fn phase_fixture() -> Result<tempfile::TempDir> {
+    let fixture = tempfile::tempdir()?;
+    let pack = fixture.path().join("datapacks/ferraloom_delivery");
+    std::fs::create_dir_all(&pack)?;
+    std::fs::write(
+        pack.join("pack.mcmeta"),
+        serde_json::to_vec(&serde_json::json!({
+            "pack": {"description": "Atomic piston delivery phases", "min_format": [121, 0], "max_format": [121, 0]}
+        }))?,
+    )?;
+    write_function(&pack, "clock", &["return run time query gametime".into()])?;
+    for sticky in [false, true] {
+        for off in [0, 1, 2, 4] {
+            for tick in 1..=8 {
+                let mut commands = Vec::new();
+                if tick == 1 {
+                    commands.extend([
+                        "fill 7 -59 8 10 -59 8 minecraft:air".into(),
+                        format!(
+                            "setblock 8 -59 8 minecraft:{}[facing=east]",
+                            if sticky { "sticky_piston" } else { "piston" }
+                        ),
+                        "setblock 9 -59 8 minecraft:stone".into(),
+                        "setblock 7 -59 8 minecraft:redstone_block".into(),
+                    ]);
+                }
+                // Original off=N is after completed tick N, before tick N+1.
+                if tick == off + 1 {
+                    commands.push("setblock 7 -59 8 minecraft:air".into());
+                }
+                commands.extend([
+                    "tick step 1".into(),
+                    "return run time query gametime".into(),
+                ]);
+                let function = phase_function(sticky, off, tick);
+                write_function(
+                    &pack,
+                    function.strip_prefix("ferraloom_delivery:").unwrap(),
+                    &commands,
+                )?;
+            }
+        }
+    }
+    Ok(fixture)
 }
 
 async fn record(session: &mut Session) -> Result<Vec<Delivery>> {
@@ -239,88 +291,29 @@ async fn record(session: &mut Session) -> Result<Vec<Delivery>> {
     let bot = session.bot(id)?;
     redstone_support::command(bot, "tick freeze", "commands.tick.status.frozen").await?;
     bot.teleport([4.5, -59.0, 4.5]).await?;
-    redstone_support::loaded(bot, &[POS, POS.east(2)]).await?;
+    redstone_support::loaded(bot, &[POS.west(1), POS.east(2)]).await?;
     let mut trace = Trace::new(redstone_support::game_time(bot).await?);
     eprintln!("PISTON_DELIVERY_CLOCK_ORIGIN {}", trace.baseline);
+    let initial = trace.function(bot, "initial", CLOCK_FUNCTION).await?;
+    ensure!(initial == trace.baseline, "frozen setup advanced time");
     for sticky in [false, true] {
         for off in [0, 1, 2, 4] {
-            let case = format!("sticky={sticky},off={off}");
-            trace
-                .command(
-                    bot,
-                    &format!("{case}.clear"),
-                    "fill 7 -59 8 10 -59 8 minecraft:air",
-                    &["commands.fill.success", "commands.fill.failed"],
-                )
-                .await?;
-            let block = if sticky { "sticky_piston" } else { "piston" };
-            trace
-                .command(
-                    bot,
-                    &format!("{case}.piston"),
-                    &format!("setblock 8 -59 8 minecraft:{block}[facing=east]"),
-                    &["commands.setblock.success"],
-                )
-                .await?;
-            trace
-                .command(
-                    bot,
-                    &format!("{case}.stone"),
-                    "setblock 9 -59 8 minecraft:stone",
-                    &["commands.setblock.success"],
-                )
-                .await?;
-            trace
-                .command(
-                    bot,
-                    &format!("{case}.on"),
-                    "setblock 7 -59 8 minecraft:redstone_block",
-                    &["commands.setblock.success"],
-                )
-                .await?;
-            for tick in 0..=8 {
-                if tick > 0 {
-                    trace.step(bot, &format!("{case}.tick{tick}")).await?;
-                }
-                if tick == off {
-                    trace
-                        .command(
-                            bot,
-                            &format!("{case}.off"),
-                            "setblock 7 -59 8 minecraft:air",
-                            &["commands.setblock.success"],
-                        )
-                        .await?;
-                }
+            for tick in 1..=8 {
+                trace
+                    .phase(
+                        bot,
+                        &format!("sticky={sticky},off={off}.tick{tick}"),
+                        &phase_function(sticky, off, tick),
+                    )
+                    .await?;
             }
         }
     }
-    trace.query(bot, "end").await?;
+    ensure!(
+        trace.confirmed - trace.baseline == 64,
+        "all eight native cases must complete eight steps"
+    );
     Ok(trace.entries)
-}
-
-fn normalized_initial_tick_feedback(entries: &[Delivery]) -> Vec<&Delivery> {
-    let mut order: Vec<_> = entries.iter().collect();
-    // Separate vanilla JVMs in piston-delivery-196e0b8d.log,
-    // block-packet-delivery-24a70730-regression-resume.log and
-    // block-packet-delivery-73f4de68-regression.log prove both orders at event 11.
-    // Only this first tick's feedback/section pair is unordered. Packet bytes,
-    // fence ordinal and gameTime bracket are still compared without changes.
-    if matches!(
-        order.get(11),
-        Some(Delivery::Packet {
-            fence: 5,
-            game_time_before: 0,
-            game_time_after: Some(1),
-            kind: "SectionBlocksUpdate",
-            ..
-        })
-    ) && matches!(order.get(12), Some(Delivery::Command { label, command })
-        if label == "sticky=false,off=0.tick1" && command == "tick step 1")
-    {
-        order.swap(11, 12);
-    }
-    order
 }
 
 fn compare(expected: &[Delivery], actual: &[Delivery]) -> Result<()> {
@@ -340,8 +333,6 @@ fn compare(expected: &[Delivery], actual: &[Delivery]) -> Result<()> {
             "first divergent outbound block packet #{index}:\nvanilla={expected:#?}\nFerraloom={actual:#?}"
         );
     }
-    let expected = normalized_initial_tick_feedback(expected);
-    let actual = normalized_initial_tick_feedback(actual);
     for index in 0..expected.len().max(actual.len()) {
         ensure!(
             expected.get(index) == actual.get(index),
@@ -357,24 +348,35 @@ fn compare(expected: &[Delivery], actual: &[Delivery]) -> Result<()> {
 #[ignore = "requires dedicated builder vanilla/JDK; exact live piston packet comparison"]
 async fn piston_packets_preserve_payload_order_game_time_brackets_and_command_fences() -> Result<()>
 {
+    let fixture = phase_fixture()?;
+    let mut options = redstone_support::options();
+    options.fixture = Some(fixture.path().to_path_buf());
     let mut expected: Option<Vec<Delivery>> = None;
-    run(
-        redstone_support::options(),
-        RunMode::Both,
-        async |session| {
+    let mut run_index = 0;
+    // The first session and the Vanilla session inside Both are separate JVMs.
+    // Ferraloom is attempted only after their complete raw streams agree.
+    for mode in [RunMode::Vanilla, RunMode::Both] {
+        run(options.clone(), mode, async |session| {
             let entries = record(session).await?;
+            run_index += 1;
+            eprintln!("PISTON_DELIVERY_RUN {run_index}");
             eprintln!("PISTON_DELIVERY_TRACE {}", serde_json::to_string(&entries)?);
             let mut log = ObservationLog::default();
-            log.record("wire", normalized_initial_tick_feedback(&entries))?;
+            log.record("wire", &entries)?;
             if let Some(expected) = &expected {
                 compare(expected, &entries)?;
             } else {
                 expected = Some(entries);
             }
             Ok(log)
-        },
-    )
-    .await
+        })
+        .await?;
+    }
+    ensure!(
+        run_index == 3,
+        "two native JVMs and one Ferraloom server must run"
+    );
+    Ok(())
 }
 
 #[test]
@@ -404,41 +406,4 @@ fn command_fences_and_packet_payload_changes_are_both_comparison_failures() {
             .to_string()
             .contains("first divergent command fence position #0")
     );
-}
-
-#[test]
-fn only_the_observed_initial_tick_feedback_pair_is_unordered() {
-    let prefix = || {
-        (0..11)
-            .map(|ordinal| Delivery::Fence {
-                ordinal,
-                label: "unchanged prefix".into(),
-                game_time: 0,
-            })
-            .collect::<Vec<_>>()
-    };
-    let command = || Delivery::Command {
-        label: "sticky=false,off=0.tick1".into(),
-        command: "tick step 1".into(),
-    };
-    let packet = |fence, byte| Delivery::Packet {
-        fence,
-        game_time_before: 0,
-        game_time_after: Some(1),
-        kind: "SectionBlocksUpdate",
-        payload: vec![byte],
-        decoded: byte.to_string(),
-    };
-    let mut expected = prefix();
-    expected.extend([command(), packet(5, 1)]);
-    let mut actual = prefix();
-    actual.extend([packet(5, 1), command()]);
-    compare(&expected, &actual).unwrap();
-
-    actual[11] = packet(5, 2);
-    assert!(compare(&expected, &actual).is_err());
-
-    expected[12] = packet(6, 1);
-    actual[11] = packet(6, 1);
-    assert!(compare(&expected, &actual).is_err());
 }
