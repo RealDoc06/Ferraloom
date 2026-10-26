@@ -265,6 +265,9 @@ mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
     impl CommandCallbackHost for Vec<i32> {
+        fn add_function_result(&mut self, _: crate::commands::functions::CollectorId, _: i32) {
+            panic!("this vector does not accumulate function results");
+        }
         fn send_success(
             &mut self,
             _: &super::super::CommandSourceStack,
@@ -275,6 +278,9 @@ mod tests {
         }
     }
     impl CommandCallbackHost for Option<PendingCommand> {
+        fn add_function_result(&mut self, _: crate::commands::functions::CollectorId, _: i32) {
+            panic!("this vector does not accumulate function results");
+        }
         fn send_success(
             &mut self,
             _: &super::super::CommandSourceStack,
@@ -293,6 +299,9 @@ mod tests {
     fn callbacks_mutate_the_live_host_before_the_action_continues() {
         struct Host(Vec<String>);
         impl CommandCallbackHost for Host {
+            fn add_function_result(&mut self, _: crate::commands::functions::CollectorId, _: i32) {
+                panic!("this vector does not accumulate function results");
+            }
             fn send_success(
                 &mut self,
                 _: &super::super::CommandSourceStack,

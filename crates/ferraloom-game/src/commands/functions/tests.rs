@@ -79,6 +79,9 @@ fn native_function_calls_continuations_returns_and_quotas() {
         pending: Option<PendingCommand>,
     }
     impl CommandCallbackHost for Host {
+        fn add_function_result(&mut self, _: crate::commands::functions::CollectorId, _: i32) {
+            panic!("this vector does not accumulate function results");
+        }
         fn send_success(&mut self, _: &CommandSourceStack, message: Component, _: bool) {
             self.events.push(crate::language::plain_text(&message));
         }
@@ -151,5 +154,40 @@ fn native_function_calls_continuations_returns_and_quotas() {
             vector.body, vector.parent, vector.quota
         );
         assert_eq!(context.remaining_quota(), vector.remaining);
+    }
+}
+
+#[test]
+fn native_function_accumulators_and_execution_scope_cleanup() {
+    #[derive(Deserialize)]
+    struct Vector {
+        values: Vec<i32>,
+        any: bool,
+        sum: i32,
+    }
+    let vectors: Vec<Vector> = serde_json::from_str(include_str!(
+        "../../../tests/java/commands/functions/accumulators.json"
+    ))
+    .unwrap();
+    assert_eq!(vectors.len(), 7);
+    let mut manager = ServerFunctionManager::default();
+    for vector in vectors {
+        let outer = manager.begin_execution();
+        let collector = manager.create_collector();
+        for value in vector.values {
+            manager.add_result(collector, value);
+        }
+        let inner = manager.begin_execution();
+        let discarded = manager.create_collector();
+        manager.add_result(discarded, 123);
+        manager.end_execution(inner);
+        assert_eq!(
+            manager.take_result(collector),
+            vector.any.then_some(vector.sum)
+        );
+        manager.end_execution(outer);
+        let next = manager.begin_execution();
+        assert_eq!(manager.create_collector(), collector);
+        manager.end_execution(next);
     }
 }

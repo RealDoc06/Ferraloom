@@ -3,6 +3,7 @@
 use super::*;
 use ferraloom_game::commands::{
     execution::{CommandExecutionHost, PendingCommand},
+    functions::{CollectorId, FunctionScope},
     source::CommandCallbackHost,
 };
 
@@ -10,6 +11,7 @@ pub(in crate::server) struct ServerCommandHost<'a> {
     pub server: &'a mut MinecraftServer,
     pub pending: Option<PendingCommand>,
     connection: Option<ConnectionId>,
+    scope: Option<FunctionScope>,
 }
 impl<'a> ServerCommandHost<'a> {
     pub fn new(server: &'a mut MinecraftServer, connection: Option<ConnectionId>) -> Self {
@@ -17,10 +19,27 @@ impl<'a> ServerCommandHost<'a> {
             server,
             pending: None,
             connection,
+            scope: None,
+        }
+    }
+    pub fn execution(server: &'a mut MinecraftServer, connection: Option<ConnectionId>) -> Self {
+        let scope = server.functions.begin_execution();
+        let mut host = Self::new(server, connection);
+        host.scope = Some(scope);
+        host
+    }
+}
+impl Drop for ServerCommandHost<'_> {
+    fn drop(&mut self) {
+        if let Some(scope) = self.scope.take() {
+            self.server.functions.end_execution(scope);
         }
     }
 }
 impl CommandCallbackHost for ServerCommandHost<'_> {
+    fn add_function_result(&mut self, collector: CollectorId, value: i32) {
+        self.server.functions.add_result(collector, value);
+    }
     fn send_success(&mut self, source: &CommandSourceStack, message: Component, broadcast: bool) {
         self.server
             .command_success(self.connection, source, message, broadcast);

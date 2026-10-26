@@ -9,6 +9,7 @@ use std::{fmt, sync::Arc};
 /// stores extend this host rather than capturing or deferring mutable world data.
 pub trait CommandCallbackHost {
     fn send_success(&mut self, source: &CommandSourceStack, message: Component, broadcast: bool);
+    fn add_function_result(&mut self, collector: super::functions::CollectorId, value: i32);
 }
 
 /// Port of CommandResultCallback. Callbacks run inline, in composition order.
@@ -292,6 +293,9 @@ mod java_tests {
     use std::sync::Mutex;
     struct Host;
     impl CommandCallbackHost for Host {
+        fn add_function_result(&mut self, _: crate::commands::functions::CollectorId, _: i32) {
+            panic!("this vector does not accumulate function results");
+        }
         fn send_success(&mut self, _: &CommandSourceStack, _: Component, _: bool) {
             panic!("source transformation does not send feedback");
         }

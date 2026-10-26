@@ -203,6 +203,7 @@ pub struct MinecraftServer {
     level: crate::generation::runtime::LiveLevel,
     additional_levels: Vec<crate::generation::runtime::LiveLevel>,
     commands: Commands,
+    functions: ferraloom_game::commands::functions::ServerFunctionManager,
     game_rules: ferraloom_game::gamerules::GameRules,
     shared: Option<Box<ferraloom_game::ServerShared>>,
     clocks: ferraloom_game::commands::clocks::ServerClockManager,
@@ -328,6 +329,21 @@ impl MinecraftServer {
             &resources,
             command_runtime::rule_features(&world_root),
         );
+        let commands = Commands::new(command_context);
+        let (function_library, function_errors, tag_errors) =
+            ferraloom_game::commands::functions::FunctionLibrary::load(
+                &resources,
+                &commands,
+                CommandSourceStack::server(properties.int("function-permission-level"), Vec3::ZERO),
+            );
+        for error in function_errors {
+            eprintln!("Failed to load function {}: {}", error.id, error.error);
+        }
+        for error in tag_errors {
+            eprintln!("Failed to load function tag: {error:?}");
+        }
+        let functions =
+            ferraloom_game::commands::functions::ServerFunctionManager::new(function_library);
         let command_entity_tags =
             ferraloom_data::datapack::load_tags(&resources, "entity_type", |id, _| {
                 EntityType::from_name(&id.to_string())
@@ -597,7 +613,8 @@ impl MinecraftServer {
             saving_enabled: true,
             idle_timeout: properties.int("player-idle-timeout"),
             default_game_mode: game_type(properties.get("gamemode")),
-            commands: Commands::new(command_context),
+            commands,
+            functions,
             connections: BTreeMap::new(),
             players: Vec::new(),
             ingress,
@@ -3145,7 +3162,7 @@ impl MinecraftServer {
         );
         let frame = queue.top_frame(CommandResultCallback::default());
         execution::queue_command(&mut queue, frame, prepared, false);
-        let mut host = command_runtime::callbacks::ServerCommandHost::new(self, source);
+        let mut host = command_runtime::callbacks::ServerCommandHost::execution(self, source);
         loop {
             match queue.run_next(&mut host) {
                 Ok(false) => break,
