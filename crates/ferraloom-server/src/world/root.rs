@@ -178,7 +178,6 @@ impl WorldRoot {
                 dimension_types,
                 registry: Arc::new(RegistryAdapter::new(registries)?),
                 registry_context: registries.clone(),
-                resources: registries.resources.clone(),
                 worldgen,
                 generate_structures,
                 bonus_chest,
