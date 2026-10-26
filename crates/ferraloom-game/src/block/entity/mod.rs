@@ -7,14 +7,18 @@ use ferraloom_util::{BlockPos, ChunkPos};
 
 pub mod banner;
 pub mod beehive;
+pub mod bell;
 pub mod brewing_stand;
 pub mod brushable;
+pub mod campfire;
 pub mod chiseled_bookshelf;
 mod components;
 pub mod creaking_heart;
 pub mod daylight_detector;
+pub mod decorated_pot;
 pub mod enchanting_table;
 pub mod ender_chest;
+pub mod lectern;
 pub mod potent_sulfur;
 pub mod sculk;
 pub mod spawner;
@@ -210,6 +214,10 @@ static THE_END_PORTAL: TheEndPortal = TheEndPortal;
 /// Canonical concrete states. Extend this enum when porting a subclass, never Any.
 #[derive(Clone, Debug)]
 pub enum BlockEntityState {
+    Campfire(Box<campfire::CampfireBlockEntity>),
+    Bell(Box<bell::BellBlockEntity>),
+    Lectern(Box<lectern::LecternBlockEntity>),
+    DecoratedPot(Box<decorated_pot::DecoratedPotBlockEntity>),
     ChiseledBookShelf(Box<chiseled_bookshelf::ChiseledBookShelfBlockEntity>),
     CreakingHeart(Box<creaking_heart::CreakingHeartBlockEntity>),
     Banner(Box<banner::BannerBlockEntity>),
@@ -243,6 +251,10 @@ pub enum BlockEntityState {
 impl BlockEntityState {
     pub fn data(&self) -> &BlockEntityData {
         match self {
+            Self::Campfire(entity) => &entity.parent,
+            Self::Bell(entity) => &entity.parent,
+            Self::Lectern(entity) => &entity.parent,
+            Self::DecoratedPot(entity) => &entity.parent,
             Self::ChiseledBookShelf(entity) => &entity.parent,
             Self::CreakingHeart(entity) => &entity.parent,
             Self::Banner(entity) => &entity.parent,
@@ -276,6 +288,10 @@ impl BlockEntityState {
     }
     pub fn data_mut(&mut self) -> &mut BlockEntityData {
         match self {
+            Self::Campfire(entity) => &mut entity.parent,
+            Self::Bell(entity) => &mut entity.parent,
+            Self::Lectern(entity) => &mut entity.parent,
+            Self::DecoratedPot(entity) => &mut entity.parent,
             Self::ChiseledBookShelf(entity) => &mut entity.parent,
             Self::CreakingHeart(entity) => &mut entity.parent,
             Self::Banner(entity) => &mut entity.parent,
@@ -309,6 +325,10 @@ impl BlockEntityState {
     }
     pub fn behavior(&self) -> &'static dyn BlockEntity {
         match self {
+            Self::Campfire(_) => &campfire::CAMPFIRE_ENTITY,
+            Self::Bell(_) => &bell::BELL_ENTITY,
+            Self::Lectern(_) => &lectern::LECTERN_ENTITY,
+            Self::DecoratedPot(_) => &decorated_pot::DECORATED_POT_ENTITY,
             Self::ChiseledBookShelf(_) => &chiseled_bookshelf::CHISELED_BOOKSHELF_ENTITY,
             Self::CreakingHeart(_) => &creaking_heart::CREAKING_HEART_ENTITY,
             Self::SculkSensor(_) | Self::CalibratedSculkSensor(_) | Self::SculkShrieker(_) => {
@@ -526,6 +546,18 @@ pub fn create(pos: BlockPos, state: BlockState) -> Result<BlockEntityState, Leve
         .ok_or(LevelError::UnsupportedBlockEntity(state.block()))?;
     let data = BlockEntityData::new(kind, pos, state)?;
     match kind {
+        BlockEntityType::CAMPFIRE => Ok(BlockEntityState::Campfire(Box::new(
+            campfire::CampfireBlockEntity::new(data),
+        ))),
+        BlockEntityType::BELL => Ok(BlockEntityState::Bell(Box::new(
+            bell::BellBlockEntity::new(data),
+        ))),
+        BlockEntityType::LECTERN => Ok(BlockEntityState::Lectern(Box::new(
+            lectern::LecternBlockEntity::new(data),
+        ))),
+        BlockEntityType::DECORATED_POT => Ok(BlockEntityState::DecoratedPot(Box::new(
+            decorated_pot::DecoratedPotBlockEntity::new(data),
+        ))),
         BlockEntityType::CHISELED_BOOKSHELF => Ok(BlockEntityState::ChiseledBookShelf(Box::new(
             chiseled_bookshelf::ChiseledBookShelfBlockEntity::new(data),
         ))),
@@ -656,7 +688,11 @@ pub fn supports(block: Block) -> bool {
     matches!(
         registry::for_block(block),
         Some(
-            BlockEntityType::CHISELED_BOOKSHELF
+            BlockEntityType::CAMPFIRE
+                | BlockEntityType::BELL
+                | BlockEntityType::LECTERN
+                | BlockEntityType::DECORATED_POT
+                | BlockEntityType::CHISELED_BOOKSHELF
                 | BlockEntityType::CREAKING_HEART
                 | BlockEntityType::BANNER
                 | BlockEntityType::BREWING_STAND
@@ -833,3 +869,11 @@ projection!(ender_chest::EnderChestBlockEntity, EnderChest);
 
 #[cfg(test)]
 mod factory_tests;
+
+projection!(campfire::CampfireBlockEntity, Campfire);
+projection!(bell::BellBlockEntity, Bell);
+projection!(lectern::LecternBlockEntity, Lectern);
+projection!(decorated_pot::DecoratedPotBlockEntity, DecoratedPot);
+
+#[cfg(test)]
+mod factory_two_tests;
