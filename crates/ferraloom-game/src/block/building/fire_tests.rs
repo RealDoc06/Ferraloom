@@ -122,6 +122,13 @@ fn level(unloaded_corner: bool) -> Level {
                     ),
                 ))
                 .unwrap();
+            level
+                .set_chunk_loading_status(
+                    ChunkPos::new(x, z),
+                    crate::level::distance_manager::FullChunkStatus::BlockTicking,
+                    true,
+                )
+                .unwrap();
         }
     }
     level.set_block_tags(Arc::clone(&TAGS));
