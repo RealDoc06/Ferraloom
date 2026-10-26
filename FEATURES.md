@@ -5,7 +5,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | Area | Rows | Ferraloom todo | Ferraloom partial | Ferraloom pass | Ferraloom fail |
 |---|---:|---:|---:|---:|---:|
 | [Advancements](features/advancements.md) | 1958 | 4 | 192 | 1762 | 0 |
-| [Block entities](features/block-entities.md) | 150 | 41 | 51 | 58 | 0 |
+| [Block entities](features/block-entities.md) | 151 | 41 | 52 | 58 | 0 |
 | [Blocks](features/blocks.md) | 454 | 240 | 140 | 74 | 0 |
 | [Chat and text components](features/chat.md) | 23 | 21 | 2 | 0 | 0 |
 | [Chunks and tickets](features/chunks.md) | 61 | 20 | 40 | 1 | 0 |
@@ -14,7 +14,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Crafting and recipes](features/crafting-recipes.md) | 2137 | 2 | 29 | 2106 | 0 |
 | [Datapacks and resource reload](features/datapacks-reload.md) | 57 | 57 | 0 | 0 | 0 |
 | [Enchantments](features/enchantments.md) | 139 | 107 | 32 | 0 | 0 |
-| [Entities and AI](features/entities.md) | 814 | 659 | 138 | 17 | 0 |
+| [Entities and AI](features/entities.md) | 816 | 659 | 140 | 17 | 0 |
 | [Fluids](features/fluids.md) | 32 | 25 | 6 | 1 | 0 |
 | [Binary data, geometry and randomness](features/foundations.md) | 64 | 18 | 18 | 28 | 0 |
 | [Functions and macros](features/functions-macros.md) | 10 | 10 | 0 | 0 | 0 |
@@ -23,7 +23,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [GameTest](features/gametest.md) | 23 | 23 | 0 | 0 | 0 |
 | [Inventory and menus](features/inventory-menus.md) | 63 | 12 | 51 | 0 | 0 |
 | [Item modifiers](features/item-modifiers.md) | 4 | 1 | 3 | 0 | 0 |
-| [Items and data components](features/items.md) | 254 | 105 | 146 | 3 | 0 |
+| [Items and data components](features/items.md) | 255 | 104 | 148 | 3 | 0 |
 | [Lighting](features/lighting.md) | 15 | 2 | 2 | 11 | 0 |
 | [Loot](features/loot.md) | 1671 | 158 | 1513 | 0 | 0 |
 | [Management JSON-RPC](features/management.md) | 101 | 101 | 0 | 0 | 0 |
@@ -50,4 +50,4 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Weather, time and environment](features/weather-time.md) | 88 | 85 | 3 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 308 | 305 | 3 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3120 | 2640 | 180 | 300 | 0 |
-| **Total** | **19690** | **8197** | **2910** | **8583** | **0** |
+| **Total** | **19694** | **8196** | **2915** | **8583** | **0** |
