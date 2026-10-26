@@ -15,10 +15,16 @@ impl WorldgenBlockEntity for BlockEntityState {
             .map_err(|error| Error(format!("block entity save: {error}")))
     }
     fn is_randomizable(&self) -> bool {
-        self.randomizable().is_some()
+        matches!(self, Self::DecoratedPot(_)) || self.randomizable().is_some()
     }
     fn set_loot_table(&mut self, table: &Identifier, seed: i64) -> Result<(), Error> {
-        if let Self::Brushable(entity) = self {
+        if let Self::DecoratedPot(entity) = self {
+            entity.set_loot_table(
+                ferraloom_protocol::Identifier::parse(&table.to_string())
+                    .map_err(|error| Error(format!("loot table: {error}")))?,
+                seed,
+            );
+        } else if let Self::Brushable(entity) = self {
             entity.set_loot_table(
                 ferraloom_protocol::Identifier::parse(&table.to_string())
                     .map_err(|error| Error(format!("loot table: {error}")))?,
