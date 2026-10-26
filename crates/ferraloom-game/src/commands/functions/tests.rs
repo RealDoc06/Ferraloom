@@ -191,3 +191,123 @@ fn native_function_accumulators_and_execution_scope_cleanup() {
         manager.end_execution(next);
     }
 }
+
+#[test]
+fn native_function_command_results_aggregation_and_return_chains() {
+    use crate::commands::{
+        execution::{CommandExecutionHost, CommandQueueEntry, ExecutionContext, PendingCommand},
+        source::{CommandCallbackHost, CommandResultCallback},
+    };
+    use ferraloom_protocol::chat::Component;
+    use ferraloom_util::Vec3;
+    #[derive(Default)]
+    struct Host {
+        manager: ServerFunctionManager,
+        events: Vec<String>,
+        pending: Option<PendingCommand>,
+    }
+    impl CommandCallbackHost for Host {
+        fn add_function_result(&mut self, collector: CollectorId, value: i32) {
+            self.manager.add_result(collector, value);
+        }
+        fn send_success(&mut self, _: &CommandSourceStack, message: Component, _: bool) {
+            self.events.push(crate::language::plain_text(&message));
+        }
+    }
+    impl CommandExecutionHost for Host {
+        fn emit_command(&mut self, command: PendingCommand) {
+            self.pending = Some(command);
+        }
+    }
+    impl FunctionExecutionHost for Host {
+        fn create_function_collector(&mut self) -> CollectorId {
+            self.manager.create_collector()
+        }
+        fn take_function_result(&mut self, collector: CollectorId) -> Option<i32> {
+            self.manager.take_result(collector)
+        }
+    }
+    fn callback(name: &'static str) -> CommandResultCallback {
+        CommandResultCallback::new(move |host, success, value| {
+            host.send_success(
+                &CommandSourceStack::server(4, Vec3::ZERO),
+                Component::literal(format!("{name}:{success}:{value}")),
+                false,
+            );
+        })
+    }
+    #[derive(Deserialize)]
+    struct Vector {
+        bodies: Vec<Vec<String>>,
+        silent: bool,
+        callback: bool,
+        returning: bool,
+        quota: i32,
+        events: Vec<String>,
+        remaining: i32,
+    }
+    let vectors: Vec<Vector> = serde_json::from_str(include_str!(
+        "../../../tests/java/commands/functions/functions.json"
+    ))
+    .unwrap();
+    assert_eq!(vectors.len(), 128);
+    let commands = Commands::default();
+    for vector in vectors {
+        let mut source = CommandSourceStack::server(4, Vec3::ZERO);
+        source.silent = vector.silent;
+        if vector.callback {
+            source.callback = callback("original");
+        }
+        let functions = vector
+            .bodies
+            .iter()
+            .enumerate()
+            .map(|(index, body)| {
+                Arc::new(
+                    CompiledFunction::from_lines(
+                        format!("test:f{index}").parse().unwrap(),
+                        &commands,
+                        CommandSourceStack::server(4, Vec3::ZERO),
+                        body,
+                    )
+                    .unwrap(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let mut context = ExecutionContext::<Host>::new(vector.quota, 10);
+        let frame = context.top_frame(callback("frame"));
+        let mut host = Host::default();
+        let scope = host.manager.begin_execution();
+        queue_functions(
+            &mut context,
+            frame.clone(),
+            &functions,
+            source,
+            vector.returning,
+            &mut host,
+        )
+        .unwrap();
+        context.queue_next(CommandQueueEntry::new(
+            frame,
+            |context, _, host: &mut Host| {
+                host.events.push("tail".into());
+                context.increment_cost();
+            },
+        ));
+        while context.run_next(&mut host) == Ok(true) {
+            if let Some(command) = host.pending.take() {
+                assert_eq!(command.command.command, "seed");
+                assert!(command.command.source.silent);
+                assert!(command.command.source.callback.is_empty());
+                host.events.push(format!("seed:{}", command.frame.depth));
+            }
+        }
+        host.manager.end_execution(scope);
+        assert_eq!(
+            host.events, vector.events,
+            "{:?}, silent={}, callback={}, returning={}, quota={}",
+            vector.bodies, vector.silent, vector.callback, vector.returning, vector.quota
+        );
+        assert_eq!(context.remaining_quota(), vector.remaining);
+    }
+}

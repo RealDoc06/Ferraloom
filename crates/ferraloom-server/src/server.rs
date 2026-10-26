@@ -330,20 +330,11 @@ impl MinecraftServer {
             command_runtime::rule_features(&world_root),
         );
         let commands = Commands::new(command_context);
-        let (function_library, function_errors, tag_errors) =
-            ferraloom_game::commands::functions::FunctionLibrary::load(
-                &resources,
-                &commands,
-                CommandSourceStack::server(properties.int("function-permission-level"), Vec3::ZERO),
-            );
-        for error in function_errors {
-            eprintln!("Failed to load function {}: {}", error.id, error.error);
-        }
-        for error in tag_errors {
-            eprintln!("Failed to load function tag: {error:?}");
-        }
-        let functions =
-            ferraloom_game::commands::functions::ServerFunctionManager::new(function_library);
+        let functions = command_runtime::load_functions(
+            &resources,
+            &commands,
+            properties.int("function-permission-level"),
+        );
         let command_entity_tags =
             ferraloom_data::datapack::load_tags(&resources, "entity_type", |id, _| {
                 EntityType::from_name(&id.to_string())
@@ -3185,6 +3176,35 @@ impl MinecraftServer {
             };
             let prepared = pending.command;
             let stack = prepared.source.clone();
+            if prepared.command == "function" {
+                match host.server.prepare_function_call(source, &prepared) {
+                    Ok(functions) => {
+                        ferraloom_game::commands::functions::queue_functions(
+                            &mut queue,
+                            pending.frame,
+                            &functions,
+                            stack,
+                            pending.returning,
+                            &mut host,
+                        )?;
+                    }
+                    Err(error) => {
+                        if let Some(syntax) =
+                            error.downcast_ref::<ferraloom_brigadier::CommandSyntaxException>()
+                        {
+                            host.server.command_failure(
+                                source,
+                                &stack,
+                                ferraloom_game::commands::exceptions::error_component(syntax),
+                            );
+                            stack.callback.on_failure(&mut host);
+                        } else {
+                            return Err(error);
+                        }
+                    }
+                }
+                continue;
+            }
             let action = Commands::action(prepared);
             match action {
                 CommandAction::Run(command) => {

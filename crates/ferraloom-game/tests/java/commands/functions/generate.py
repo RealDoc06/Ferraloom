@@ -11,7 +11,8 @@ classes.mkdir(parents=True, exist_ok=True)
 cp = ':'.join(map(str, [vanilla / 'versions/26.3/server-26.3.jar',
     *sorted((vanilla / 'libraries').rglob('*.jar')),
     *sorted((vanilla / 'tree-harness').rglob('*.jar'))]))
-subprocess.run([str(jdk / 'javac'), '-cp', cp, '-d', str(classes), str(source / 'PlainVectors.java'), str(source / 'CallVectors.java'), str(source / 'AccumulatorVectors.java')], check=True)
+subprocess.run([str(jdk / 'javac'), '-cp', cp, '-d', str(classes), str(source / 'PlainVectors.java'), str(source / 'CallVectors.java'), str(source / 'AccumulatorVectors.java'), str(source / 'FunctionVectors.java')], check=True)
 subprocess.run([str(jdk / 'java'), '-Xmx1g', '-Dnet.bytebuddy.experimental=true', '-XX:+EnableDynamicAgentLoading', '-cp', f'{classes}:{cp}', 'PlainVectors', str(source / 'plain.json'), str(source / 'readers.json')], cwd=vanilla, check=True)
 subprocess.run([str(jdk / 'java'), '-Xmx1g', '-Dnet.bytebuddy.experimental=true', '-XX:+EnableDynamicAgentLoading', '-cp', f'{classes}:{cp}', 'CallVectors', str(source / 'calls.json')], cwd=vanilla, check=True)
 subprocess.run([str(jdk / 'java'), '-Xmx1g', '-cp', f'{classes}:{cp}', 'AccumulatorVectors', str(source / 'accumulators.json')], cwd=vanilla, check=True)
+subprocess.run([str(jdk / 'java'), '-Xmx1g', '-Dnet.bytebuddy.experimental=true', '-XX:+EnableDynamicAgentLoading', '-cp', f'{classes}:{cp}', 'FunctionVectors', str(source / 'functions.json')], cwd=vanilla, check=True)

@@ -6,6 +6,9 @@ mod bossbar_commands;
 pub(super) mod callbacks;
 #[path = "data_commands.rs"]
 mod data_commands;
+#[path = "function_commands.rs"]
+mod function_commands;
+pub(super) use function_commands::load_functions;
 #[path = "place_commands.rs"]
 mod place_commands;
 #[path = "scoreboard_commands.rs"]
@@ -990,6 +993,18 @@ impl MinecraftServer {
 impl MinecraftServer {
     fn command_suggestion_data(&self) -> ferraloom_game::commands::suggestions::SuggestionData {
         let mut data = ferraloom_game::commands::suggestions::SuggestionData {
+            functions: self
+                .functions
+                .library()
+                .names()
+                .map(ToString::to_string)
+                .collect(),
+            function_tags: self
+                .functions
+                .library()
+                .tag_names()
+                .map(ToString::to_string)
+                .collect(),
             operators: self
                 .shared()
                 .ops

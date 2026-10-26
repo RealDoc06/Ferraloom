@@ -3,7 +3,7 @@
 use super::*;
 use ferraloom_game::commands::{
     execution::{CommandExecutionHost, PendingCommand},
-    functions::{CollectorId, FunctionScope},
+    functions::{CollectorId, FunctionExecutionHost, FunctionScope},
     source::CommandCallbackHost,
 };
 
@@ -48,5 +48,13 @@ impl CommandCallbackHost for ServerCommandHost<'_> {
 impl CommandExecutionHost for ServerCommandHost<'_> {
     fn emit_command(&mut self, command: PendingCommand) {
         self.pending = Some(command);
+    }
+}
+impl FunctionExecutionHost for ServerCommandHost<'_> {
+    fn create_function_collector(&mut self) -> CollectorId {
+        self.server.functions.create_collector()
+    }
+    fn take_function_result(&mut self, collector: CollectorId) -> Option<i32> {
+        self.server.functions.take_result(collector)
     }
 }
