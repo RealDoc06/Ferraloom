@@ -193,6 +193,7 @@ impl WorldGenContext {
         if let Some(context) = self.registry_context.as_deref() {
             region.set_registry_context(context);
         }
+        region.set_structure_templates(&self.registries.templates);
         region.set_skip_unsupported(self.unported_behavior == crate::block::UnportedBehavior::Warn);
         region.set_has_skylight(self.dimension.has_skylight);
         region.set_fast_lava(self.dimension.fast_lava);

@@ -65,6 +65,7 @@ macro_rules! level_operations {
     };
 }
 level_operations! {
+    read fn structure_templates(self: &Self) -> Result<&crate::structure::template::StructureTemplateManager, Error> [{ Err(Error("Unsupported: live structure template manager".into())) }] => { WorldGenRegion::structure_templates(self) };
     read fn min_y(self: &Self) -> i32 [required] => { WorldGenRegion::min_y(self) };
     read fn height(self: &Self) -> i32 [required] => { WorldGenRegion::height(self) };
     read fn block(self: &Self, p: [i32; 3]) -> Result<BlockState, Error> [{ let _ = p; Err(Error("Unsupported: live feature block".into())) }] => { WorldGenRegion::block(self, p) };

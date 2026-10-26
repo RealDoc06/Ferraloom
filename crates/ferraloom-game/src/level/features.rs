@@ -45,6 +45,11 @@ impl Level {
 }
 
 impl LiveWorldGenLevel for Level {
+    fn structure_templates(
+        &self,
+    ) -> Result<&ferraloom_worldgen::structure::template::StructureTemplateManager, Error> {
+        required(self.context().structure_templates()).map(std::sync::Arc::as_ref)
+    }
     fn min_y(&self) -> i32 {
         self.min_build_height()
     }
