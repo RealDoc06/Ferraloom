@@ -32,6 +32,45 @@ pub struct BlockEntityData {
     pub components: DataComponentMap,
 }
 
+/// Port of CloneCommands' source block-entity capture. Components remain
+/// separate from saveCustomOnly's payload throughout the copy.
+pub fn capture_block_entity(
+    level: &mut crate::level::Level,
+    pos: BlockPos,
+) -> Result<Option<BlockEntityData>, super::placement::PlacementError> {
+    level
+        .get_or_promote_block_entity(pos)?
+        .map(|handle| {
+            let receiver = level.block_entity_state(handle)?;
+            Ok(BlockEntityData {
+                custom: receiver.save_custom_only()?,
+                components: receiver.data().components.clone(),
+            })
+        })
+        .transpose()
+}
+
+/// Port of CloneCommands' loadCustomOnly/setComponents/setChanged sequence.
+/// Class callbacks may replace the positional receiver, so retain the original
+/// generation through all three calls and release it on every exit path.
+pub fn restore_block_entity(
+    level: &mut crate::level::Level,
+    pos: BlockPos,
+    data: &BlockEntityData,
+) -> Result<(), crate::level::LevelError> {
+    let Some(handle) = level.get_or_promote_block_entity(pos)? else {
+        return Ok(());
+    };
+    level.retain_block_entity(handle)?;
+    let result = (|| {
+        handle.load_custom_only(&data.custom, level)?;
+        level.block_entity_state_mut(handle)?.data_mut().components = data.components.clone();
+        handle.set_changed(level)
+    })();
+    level.release_block_entity(handle);
+    result
+}
+
 pub trait CloneAccess {
     type Error: std::error::Error + 'static;
     type Filter;
