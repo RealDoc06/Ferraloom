@@ -6,6 +6,8 @@ mod bossbar_commands;
 mod data_commands;
 #[path = "scoreboard_commands.rs"]
 mod scoreboard_commands;
+#[path = "summon_commands.rs"]
+mod summon_commands;
 use ferraloom_game::{
     commands::{
         PreparedCommand,
