@@ -22,7 +22,7 @@ use std::io::Read;
 fn vectors() -> String {
     let mut text = String::new();
     flate2::read::GzDecoder::new(
-        include_bytes!("../../../../tests/java/items/honeycomb/honeycomb.tsv.gz").as_slice(),
+        include_bytes!("../../../tests/java/items/honeycomb/honeycomb.tsv.gz").as_slice(),
     )
     .read_to_string(&mut text)
     .unwrap();
