@@ -43,6 +43,7 @@ mod stair_slab_tests;
 mod stairs;
 #[cfg(test)]
 mod tests;
+mod weathering_copper;
 #[cfg(test)]
 mod workstation_tests;
 mod workstations;
@@ -51,6 +52,9 @@ pub(crate) fn ported_behavior(
     block: Block,
     method: BlockMethod,
 ) -> Option<&'static dyn BlockBehavior> {
+    if method == BlockMethod::RandomTick && block.weathering_copper_properties().is_some() {
+        return Some(&weathering_copper::WEATHERING_COPPER);
+    }
     if block == Block::BUDDING_AMETHYST && method == BlockMethod::RandomTick {
         return Some(&amethyst::BUDDING_AMETHYST);
     }
