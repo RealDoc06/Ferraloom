@@ -489,6 +489,50 @@ pub trait Entity: Sync {
             .as_living()
             .map(|living| living.equipment.get(slot)))
     }
+    /// Port of Entity#getSlot, with LivingEntity's equipment implementation.
+    fn get_slot(
+        &self,
+        entity: EntityRef,
+        slot: i32,
+        level: &Level,
+    ) -> Result<Option<crate::item::slot::SlotAccess>, LevelError> {
+        crate::item::slot::living_access(entity, slot, level)
+    }
+    /// Port of LivingEntity#canUseSlot's parent body.
+    fn can_use_slot(
+        &self,
+        entity: EntityRef,
+        _slot: ferraloom_protocol::component::EquipmentSlot,
+        level: &Level,
+    ) -> Result<bool, LevelError> {
+        level.entity::<LivingEntity>(entity)?;
+        Ok(true)
+    }
+    /// Port of LivingEntity#setItemSlot. Old and new object receivers are rooted
+    /// through the ordered onEquipItem callback, including PlayerEquipment.
+    fn set_item_slot(
+        &self,
+        entity: EntityRef,
+        slot: ferraloom_protocol::component::EquipmentSlot,
+        value: crate::inventory::StackValue,
+        operation: &mut crate::inventory::StackOperation<'_>,
+    ) -> Result<(), LevelError> {
+        crate::item::slot::set_equipment_value(entity, slot, value, operation)
+    }
+    fn on_equip_item(
+        &self,
+        entity: EntityRef,
+        slot: ferraloom_protocol::component::EquipmentSlot,
+        old: crate::inventory::StackRef,
+        new: crate::inventory::StackRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        living::on_equip_item_parent(self, entity, slot, old, new, level)
+    }
+    /// Port of LivingEntity#doesEmitEquipEvent; Player restricts it to armor.
+    fn does_emit_equip_event(&self, _slot: ferraloom_protocol::component::EquipmentSlot) -> bool {
+        true
+    }
     /// Port of Entity#getWeaponItem; LivingEntity returns its live main hand.
     fn weapon_item<'level>(
         &self,

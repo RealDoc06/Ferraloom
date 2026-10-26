@@ -12,6 +12,7 @@ pub use attribute_updates::{on_attribute_updated_parent, refresh_dirty_attribute
 pub mod climbable;
 pub mod damage_state;
 mod equipment;
+pub(crate) use equipment::on_equip_item_parent;
 pub use equipment::on_equipped_item_broken;
 pub(crate) use equipment::on_equipped_item_broken_parent;
 pub mod fall_damage;
