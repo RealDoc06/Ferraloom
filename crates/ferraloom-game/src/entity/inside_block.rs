@@ -151,18 +151,13 @@ pub fn apply_collected<E: Entity + ?Sized>(
                 }
                 InsideBlockEffectType::Extinguish => clear_fire(entity, level)?,
                 InsideBlockEffectType::LavaIgnite => {
-                    if !level
-                        .entity::<EntityData>(entity)?
-                        .entity_type
-                        .data()
-                        .fire_immune
-                    {
+                    if !behavior.fire_immune(entity, level)? {
                         behavior.ignite_for_ticks(entity, 300, level)?;
                     }
                 }
                 InsideBlockEffectType::FireIgnite => {
-                    let base = level.entity::<EntityData>(entity)?;
-                    if !base.entity_type.data().fire_immune {
+                    if !behavior.fire_immune(entity, level)? {
+                        let base = level.entity::<EntityData>(entity)?;
                         let remaining = base.remaining_fire_ticks;
                         let player = base.entity_type == EntityType::PLAYER;
                         let add = if remaining < 0 {
@@ -428,6 +423,77 @@ pub fn apply_effects<E: Entity + ?Sized>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn native_ignition_uses_item_fire_immunity_and_effective_empty_components() {
+        use crate::{
+            Behaviors,
+            block::UnportedBehavior,
+            entity::{
+                EntityState,
+                item::{ItemEntity, ItemEntityBehavior},
+            },
+            level::{LevelContext, Region},
+        };
+        use ferraloom_data::Item;
+        use ferraloom_protocol::component::ItemStack;
+        static BEHAVIORS: Behaviors = Behaviors::EMPTY;
+        let mut checked = 0;
+        for row in include_str!("../../tests/java/entity/inside_fire/vectors.tsv").lines() {
+            let fields: Vec<_> = row.split('\t').collect();
+            let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+            level.set_unported_behavior(UnportedBehavior::Strict);
+            level.random().set_seed(98);
+            let mut item = ItemEntity::new(1, 0);
+            item.set_item(ItemStack::new(
+                Item::from_name(fields[1]).unwrap(),
+                fields[2].parse().unwrap(),
+                Default::default(),
+            ));
+            item.parent.remaining_fire_ticks = fields[4].parse().unwrap();
+            item.parent
+                .entity_data
+                .set(synched_data::TICKS_FROZEN, VarInt(20));
+            item.parent.inside_effect_collector.apply(match fields[3] {
+                "FIRE_IGNITE" => InsideBlockEffectType::FireIgnite,
+                "LAVA_IGNITE" => InsideBlockEffectType::LavaIgnite,
+                _ => panic!("unexpected effect {row}"),
+            });
+            let entity = level.next_entity_ref();
+            level
+                .add_entity(entity, EntityState::Item(Box::new(item)))
+                .unwrap();
+            apply_collected(&ItemEntityBehavior, entity, &mut level).unwrap();
+            let base = level.entity::<EntityData>(entity).unwrap();
+            assert_eq!(
+                base.remaining_fire_ticks.to_string(),
+                fields[5],
+                "fire {row}"
+            );
+            assert_eq!(base.ticks_frozen().to_string(), fields[6], "freeze {row}");
+            assert_eq!(
+                ItemEntityBehavior
+                    .fire_immune(entity, &level)
+                    .unwrap()
+                    .to_string(),
+                fields[7],
+                "immunity {row}"
+            );
+            assert_eq!(
+                is_on_fire(entity, &level).unwrap().to_string(),
+                fields[8],
+                "onFire {row}"
+            );
+            assert_eq!(
+                format!("{:x}", level.random().next_long() as u64),
+                fields[9],
+                "rng {row}"
+            );
+            assert_eq!(level.unported_behavior_stats().skipped_calls, 0, "{row}");
+            checked += 1;
+        }
+        assert_eq!(checked, 48);
+    }
+
     #[test]
     fn effects_coalesce_per_step_and_keep_before_after_declaration_order() {
         let mut c = StepBasedCollector::default();
