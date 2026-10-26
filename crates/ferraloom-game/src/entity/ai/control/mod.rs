@@ -1,8 +1,12 @@
 //! Live control boundaries, replaced individually as their native bodies land.
+mod state;
 use super::{AiOperation, pending};
 use crate::{
     entity::EntityRef,
     level::{Level, LevelError},
+};
+pub use state::{
+    BodyRotationControl, JumpControl, LookControl, MoveControl, Operation, rotate_towards, rotlerp,
 };
 
 /// Port of MoveControl#tick's live entry point; implementation pending.
