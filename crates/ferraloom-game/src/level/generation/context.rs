@@ -175,7 +175,9 @@ impl WorldGenContext {
                 flat.new_chunk_in_dimension(position, self.dimension.clone())
             }
         };
-        Ok(RegionChunk::new(generated, ChunkStatus::Empty))
+        let mut chunk = RegionChunk::new(generated, ChunkStatus::Empty);
+        chunk.replace_heightmap_snapshots([]);
+        Ok(chunk)
     }
     pub fn region<'a>(
         &'a self,

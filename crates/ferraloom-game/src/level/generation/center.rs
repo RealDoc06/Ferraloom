@@ -2,7 +2,10 @@
 //! Beardifier observes canonical starts before any later feature-piece mutation.
 use super::{ChunkStatus, ChunkStatusTask, ChunkStep, WorldGenContext};
 use ferraloom_worldgen::{
-    Error, generator::ChunkGenerator, region::RegionChunk, structure::Beardifier,
+    Error,
+    generator::ChunkGenerator,
+    region::{Heightmap, RegionChunk},
+    structure::Beardifier,
 };
 use std::sync::Arc;
 
@@ -102,6 +105,17 @@ impl PreparedCenterStep {
                 center.block_ticks = previous.block_ticks;
                 center.fluid_ticks = previous.fluid_ticks;
                 center.poi_changes = previous.poi_changes;
+                if matches!(context.generator.as_ref(), ChunkGenerator::Debug(_)) {
+                    center.replace_heightmap_snapshots([]);
+                }
+                // ChunkStatusTasks#buildTerrain's thenApply retains WG maps and
+                // primes all four final maps before settling TERRAIN.
+                center.prime_heightmaps([
+                    Heightmap::WorldSurface,
+                    Heightmap::OceanFloor,
+                    Heightmap::MotionBlocking,
+                    Heightmap::MotionBlockingNoLeaves,
+                ]);
             }
         }
         center.status = center.status.max(status);

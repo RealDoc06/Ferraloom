@@ -8,13 +8,12 @@ use ferraloom_worldgen::{
     region::{Heightmap, RegionChunk, SavedTick},
 };
 
-/// Packed sections and heightmaps from an unchanged generation-owned chunk.
+/// Packed sections from an unchanged generation-owned chunk.
 /// Runtime invalidates this on biome/block changes and synchronizes saved light
 /// independently. Metadata such as shared structure flags always stays fresh.
 #[derive(Debug)]
 pub struct CapturedChunkTerrain {
     sections: Vec<storage::ChunkSection>,
-    heightmaps: std::collections::BTreeMap<ferraloom_nbt::NbtString, storage::LongArray>,
     before_terrain: bool,
 }
 impl CapturedChunkTerrain {
@@ -50,6 +49,8 @@ impl ProtoChunk {
                 z_pos: Some(pos.z),
                 y_pos: Some(context.dimension.min_y >> 4),
                 status: Some(status_name(ChunkStatus::Empty).into()),
+                last_update: Some(0),
+                inhabited_time: Some(0),
                 ..Default::default()
             },
             light_correct: false,
@@ -99,25 +100,37 @@ impl ProtoChunk {
                 }
             }
         }
-        // Reconstruct WG height caches from the actual sections before placing
-        // the RegionChunk around them; stale empty caches would corrupt features.
-        let data = context.generator.access().data();
-        for (map, surface) in [
-            (Heightmap::WorldSurfaceWg, true),
-            (Heightmap::OceanFloorWg, false),
-        ] {
-            let heights = std::array::from_fn(|index| {
-                let x = (index & 15) as u8;
-                let z = (index >> 4) as u8;
-                column_height(&chunk.region.chunk, data, map, x, z)
-            });
-            if surface {
-                chunk.region.chunk.world_surface = heights;
-            } else {
-                chunk.region.chunk.ocean_floor = heights;
+        chunk.region = RegionChunk::new(chunk.region.chunk, status);
+        let mut restored = Vec::new();
+        let mut invalid = Vec::new();
+        if let Some(saved) = &disk.heightmaps {
+            let bits = 32 - (context.dimension.height as u32).leading_zeros();
+            let per_word = 64 / bits as usize;
+            for (map, name) in heightmap_names() {
+                if let Some(words) = saved.get(&name.into()) {
+                    if words.0.len() == 256usize.div_ceil(per_word) {
+                        let mask = (1u64 << bits) - 1;
+                        let heights = std::array::from_fn(|index| {
+                            context.dimension.min_y
+                                + (((words.0[index / per_word] as u64)
+                                    >> ((index % per_word) * bits as usize))
+                                    & mask) as i32
+                        });
+                        restored.push((map, heights));
+                    } else {
+                        invalid.push(map);
+                    }
+                }
             }
         }
-        chunk.region = RegionChunk::new(chunk.region.chunk, status);
+        chunk.region.replace_heightmap_snapshots(restored);
+        chunk.region.prime_heightmaps(invalid);
+        chunk
+            .region
+            .prime_heightmaps(Heightmap::ALL.into_iter().filter(|map| {
+                (status < ChunkStatus::Terrain)
+                    == matches!(map, Heightmap::WorldSurfaceWg | Heightmap::OceanFloorWg)
+            }));
         if let Some(structures) = &disk.structures {
             chunk.region.structures = context
                 .restore_structures([pos.x, pos.z], &structures.to_nbt())
@@ -182,7 +195,7 @@ impl ProtoChunk {
                 ]);
             }
         }
-        chunk.light_correct = disk.is_light_on.unwrap_or(false) && status >= ChunkStatus::Light;
+        chunk.light_correct = disk.is_light_on.unwrap_or(false);
         chunk.disk = disk;
         Ok(chunk)
     }
@@ -200,7 +213,7 @@ impl ProtoChunk {
     /// partial effects and live FULL refresh, and synchronize light-only changes.
     pub fn capture_with_cached_terrain(
         &self,
-        context: &WorldGenContext,
+        _context: &WorldGenContext,
         registry: &impl SectionRegistry,
         terrain: &mut Option<CapturedChunkTerrain>,
     ) -> Result<SerializableChunkData, String> {
@@ -213,7 +226,7 @@ impl ProtoChunk {
         }
         let mut disk = self.disk.clone();
         disk.status = Some(status_name(self.region.status).into());
-        disk.is_light_on = Some(self.light_correct);
+        disk.is_light_on = self.light_correct.then_some(true);
         if let Some(cached) = terrain.as_ref() {
             disk.sections = Some(cached.sections.clone());
         } else {
@@ -289,86 +302,37 @@ impl ProtoChunk {
                 .push(((x & 15) | ((y & 15) << 4) | ((z & 15) << 8)) as i16);
         }
         disk.post_processing = Some(post_processing);
-        if let Some(cached) = terrain.as_ref() {
-            disk.heightmaps = Some(cached.heightmaps.clone());
-        } else {
-            let maps = disk.heightmaps.get_or_insert_default();
-            maps.retain(|name, _| {
-                let wg = matches!(
-                    name.to_string_lossy().as_str(),
-                    "WORLD_SURFACE_WG" | "OCEAN_FLOOR_WG"
-                );
-                if self.region.status < ChunkStatus::Terrain {
-                    wg
-                } else {
-                    !wg
-                }
-            });
-            let data = context.generator.access().data();
-            for (map, name) in [
-                (Heightmap::WorldSurfaceWg, "WORLD_SURFACE_WG"),
-                (Heightmap::OceanFloorWg, "OCEAN_FLOOR_WG"),
-                (Heightmap::WorldSurface, "WORLD_SURFACE"),
-                (Heightmap::OceanFloor, "OCEAN_FLOOR"),
-                (Heightmap::MotionBlocking, "MOTION_BLOCKING"),
-                (
-                    Heightmap::MotionBlockingNoLeaves,
-                    "MOTION_BLOCKING_NO_LEAVES",
-                ),
-            ] {
-                if (self.region.status < ChunkStatus::Terrain)
-                    != matches!(map, Heightmap::WorldSurfaceWg | Heightmap::OceanFloorWg)
-                {
-                    continue;
-                }
-                let heights: [u64; 256] = std::array::from_fn(|index| {
-                    (column_height(
-                        &self.region.chunk,
-                        data,
-                        map,
-                        (index & 15) as u8,
-                        (index >> 4) as u8,
-                    ) - self.region.chunk.min_y) as u64
-                });
-                let bits = 32 - (self.region.chunk.height as u32).leading_zeros();
-                let per_word = 64 / bits as usize;
-                let mut words = vec![0i64; 256usize.div_ceil(per_word)];
-                for (index, height) in heights.into_iter().enumerate() {
-                    words[index / per_word] |=
-                        (height << ((index % per_word) * bits as usize)) as i64;
-                }
-                maps.insert(name.into(), storage::LongArray(words));
+        // Heightmap materialization and canonical updates are metadata. Keep
+        // them fresh even when palettes are reused; raw section writes must not
+        // be turned into invented heightmap updates by a serializer scan.
+        let bits = 32 - (self.region.chunk.height as u32).leading_zeros();
+        let per_word = 64 / bits as usize;
+        let mut heightmaps = std::collections::BTreeMap::new();
+        for (map, heights) in self.region.heightmap_snapshots().filter(|(map, _)| {
+            self.region.status < ChunkStatus::Full
+                || !matches!(map, Heightmap::WorldSurfaceWg | Heightmap::OceanFloorWg)
+        }) {
+            let mut words = vec![0i64; 256usize.div_ceil(per_word)];
+            for (index, &height) in heights.iter().enumerate() {
+                let height = (height - self.region.chunk.min_y) as u64;
+                words[index / per_word] |= (height << ((index % per_word) * bits as usize)) as i64;
             }
+            let name = heightmap_names()
+                .into_iter()
+                .find(|(kind, _)| *kind == map)
+                .unwrap()
+                .1;
+            heightmaps.insert(name.into(), storage::LongArray(words));
+        }
+        disk.heightmaps = Some(heightmaps);
+        if terrain.is_none() {
             *terrain = Some(CapturedChunkTerrain {
                 sections: disk.sections.as_ref().unwrap().clone(),
-                heightmaps: disk.heightmaps.as_ref().unwrap().clone(),
                 before_terrain,
             });
         }
         Ok(disk)
     }
-}
-
-/// Heightmap#primeHeightmaps starts below empty upper sections. All six native
-/// predicates reject air, so lower empty sections can be skipped as well.
-fn column_height(
-    chunk: &ferraloom_worldgen::generator::GeneratedChunk,
-    data: &ferraloom_worldgen::generator::GenerationData,
-    map: Heightmap,
-    x: u8,
-    z: u8,
-) -> i32 {
-    for (index, section) in chunk.sections.iter().enumerate().rev() {
-        if section.has_only_air() {
-            continue;
-        }
-        for y in (0..16).rev() {
-            if data.heightmap_matches(map, section.get_block_state(x, y, z)) {
-                return chunk.min_y + index as i32 * 16 + i32::from(y) + 1;
-            }
-        }
-    }
-    chunk.min_y
 }
 
 fn retained_tick(
@@ -420,4 +384,18 @@ pub fn promote(
     chunk.set_structures(structures, structures_revision)?;
     chunk.mark_unsaved();
     Ok(chunk)
+}
+
+fn heightmap_names() -> [(Heightmap, &'static str); 6] {
+    [
+        (Heightmap::WorldSurfaceWg, "WORLD_SURFACE_WG"),
+        (Heightmap::OceanFloorWg, "OCEAN_FLOOR_WG"),
+        (Heightmap::WorldSurface, "WORLD_SURFACE"),
+        (Heightmap::OceanFloor, "OCEAN_FLOOR"),
+        (Heightmap::MotionBlocking, "MOTION_BLOCKING"),
+        (
+            Heightmap::MotionBlockingNoLeaves,
+            "MOTION_BLOCKING_NO_LEAVES",
+        ),
+    ]
 }

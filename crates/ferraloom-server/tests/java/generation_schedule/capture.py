@@ -2,6 +2,8 @@
 """Native worker-body schedule/output comparison. No Rust, ticks or listener."""
 from pathlib import Path
 import json
+import gzip
+import sys
 import subprocess
 import tempfile
 import zipfile
@@ -66,3 +68,20 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-generation-schedule-java-') a
         raise RuntimeError('native BIOMES/TERRAIN output depended on computation order')
     print(f'native serial/parallel TERRAIN agreement: {len(terrain[0])} bytes', flush=True)
     print(f'native fixed FEATURES order agreement: {len(outputs[0])} bytes; permuted order differs', flush=True)
+
+    fixtures = HERE / 'fixtures'
+    captures = {stage + '.nbt.gz': OUTPUT / ('worldgen-schedule-serial.jsonl.' + stage + '.nbt')
+                for stage in ['bare-empty', 'bare-light-correct', 'generator-body', 'terrain', 'features', 'features-edited']}
+    captures.update({
+        'terrain.bin.gz': OUTPUT / 'worldgen-schedule-serial.jsonl.terrain',
+        'features-request-order.bin.gz': OUTPUT / 'worldgen-schedule-ordered.jsonl.blocks',
+        'features-permuted-order.bin.gz': OUTPUT / 'worldgen-schedule-permuted.jsonl.blocks',
+    })
+    if '--update-fixtures' in sys.argv:
+        fixtures.mkdir(exist_ok=True)
+        for name, source in captures.items():
+            (fixtures / name).write_bytes(gzip.compress(source.read_bytes(), mtime=0))
+    if '--check-fixtures' in sys.argv:
+        for name, source in captures.items():
+            if gzip.decompress((fixtures / name).read_bytes()) != source.read_bytes():
+                raise RuntimeError(f'native fixture differs: {name}')

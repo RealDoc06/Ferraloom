@@ -9,6 +9,8 @@ pub(crate) use execution::{
 };
 pub(crate) mod profile;
 #[cfg(test)]
+mod proto_save_tests;
+#[cfg(test)]
 mod relight_tests;
 pub(crate) mod runtime;
 
@@ -674,7 +676,8 @@ impl GenerationState {
             .holders
             .get(&pos.pack())
             .context("light center missing")?;
-        let lighted = holder.chunk.light_correct;
+        let lighted =
+            holder.chunk.region.status >= ChunkStatus::Light && holder.chunk.light_correct;
         let disk_sections = holder.chunk.disk.sections.clone().unwrap_or_default();
         self.run_light_work(move |engine, snapshots| {
             let updates = if target == ChunkStatus::InitializeLight {

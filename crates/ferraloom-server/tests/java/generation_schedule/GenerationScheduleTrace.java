@@ -18,7 +18,11 @@ import net.minecraft.server.packs.repository.ServerPacksSource;
 import net.minecraft.util.Util;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.chunk.ProtoChunk;
+import net.minecraft.world.level.chunk.UpgradeData;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.storage.LevelStorageSource;
@@ -28,6 +32,27 @@ import net.minecraft.world.level.storage.LevelStorageSource;
  * executor identity, dependencies, method results and RNG draws stay native. */
 public final class GenerationScheduleTrace {
     public static volatile boolean enabled;
+    public static Path outputPrefix;
+    public static net.minecraft.server.level.ServerLevel outputLevel;
+    public static void saveStage(String stage,ChunkAccess chunk) {
+        try {
+            var tag=SerializableChunkData.copyOf(outputLevel,chunk).write();
+            NbtIo.write(tag,outputPrefix.resolveSibling(outputPrefix.getFileName()+"."+stage+".nbt"));
+            var row=new JsonObject();row.addProperty("stage",stage);
+            row.addProperty("LastUpdate",tag.getLongOr("LastUpdate",-1));
+            row.addProperty("InhabitedTime",tag.getLongOr("InhabitedTime",-1));
+            row.addProperty("has_isLightOn",tag.contains("isLightOn"));
+            row.addProperty("isLightOn",tag.getBooleanOr("isLightOn",false));
+            row.addProperty("status",tag.getStringOr("Status","missing"));
+            var names=new ArrayList<>(tag.getCompoundOrEmpty("Heightmaps").keySet());Collections.sort(names);
+            row.add("heightmaps",new Gson().toJsonTree(names));
+            System.out.println("PROTO_SAVE_VECTOR "+row);
+        } catch(IOException error) {throw new UncheckedIOException(error);}
+    }
+    public static void endTerrain(Frame frame,ChunkAccess chunk,Throwable error) {
+        if(frame!=null && frame.x()==64 && frame.z()==64 && error==null) saveStage("generator-body",chunk);
+        end(frame,error);
+    }
     public static boolean gated;
     public static final AtomicLong IDS = new AtomicLong();
     public static final ConcurrentMap<String,AtomicInteger> ACTIVE = new ConcurrentHashMap<>();
@@ -79,7 +104,7 @@ public final class GenerationScheduleTrace {
     }
     public static class Terrain {
         @Advice.OnMethodEnter public static Frame enter(@Advice.Argument(0) ChunkAccess chunk) { return begin("TERRAIN",chunk); }
-        @Advice.OnMethodExit(onThrowable=Throwable.class) public static void exit(@Advice.Enter Frame frame,@Advice.Thrown Throwable error) { end(frame,error); }
+        @Advice.OnMethodExit(onThrowable=Throwable.class) public static void exit(@Advice.Enter Frame frame,@Advice.Argument(0) ChunkAccess chunk,@Advice.Thrown Throwable error) { endTerrain(frame,chunk,error); }
     }
     public static class Features {
         @Advice.OnMethodEnter public static Frame enter(@Advice.Argument(3) ChunkAccess chunk) { return begin("FEATURES",chunk); }
@@ -107,6 +132,10 @@ public final class GenerationScheduleTrace {
             var source=LevelStorageSource.createDefault(temporary);var access=source.createAccess("world");var packs=ServerPacksSource.createPackRepository(access);
             try(var server=new PublishedLightTrace.Server(access,packs,PublishedLightTrace.load(packs))) {
                 var level=server.getLevel(Level.OVERWORLD);
+                outputPrefix=output;outputLevel=level;
+                var bare=new ProtoChunk(new ChunkPos(64,64),UpgradeData.EMPTY,level,level.palettedContainerFactory(),null);
+                saveStage("bare-empty",bare);
+                bare.setLightCorrect(true);saveStage("bare-light-correct",bare);
                 enabled=true;
                 if(variant.equals("observed") || variant.equals("gated")) {
                     level.getChunk(64,64,ChunkStatus.FULL);
@@ -121,15 +150,22 @@ public final class GenerationScheduleTrace {
                     }
                     for(int x=62;x<=66;x++)for(int z=62;z<=66;z++) level.getChunk(x,z,ChunkStatus.TERRAIN);
                     enabled=false;
+                    saveStage("terrain",level.getChunk(64,64,ChunkStatus.TERRAIN));
                     Files.write(output.resolveSibling(output.getFileName()+".terrain"),blocksHeightsAndNbt(level));
                     enabled=true;
                     var positions=new ArrayList<int[]>();
                     for(int x=63;x<=65;x++)for(int z=63;z<=65;z++)positions.add(new int[]{x,z});
                     if(variant.equals("permuted")) positions.addFirst(positions.remove(2));
                     for(var pos:positions)level.getChunk(pos[0],pos[1],ChunkStatus.FEATURES);
+                    saveStage("features",level.getChunk(64,64,ChunkStatus.FEATURES));
                 }
                 enabled=false;
                 Files.write(output.resolveSibling(output.getFileName()+".blocks"),blocksHeightsAndNbt(level));
+                if(!variant.equals("observed") && !variant.equals("gated")) {
+                    var edited=(ProtoChunk)level.getChunk(64,64,ChunkStatus.FEATURES);
+                    edited.setBlockState(new BlockPos(1024,319,1024),Blocks.STONE.defaultBlockState());
+                    saveStage("features-edited",edited);
+                }
             }
         } finally {
             var rows=EVENTS.stream().sorted(Comparator.comparingLong(r->r.get("ordinal").getAsLong())).map(new Gson()::toJson).toList();
