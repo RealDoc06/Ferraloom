@@ -268,14 +268,10 @@ impl MinecraftServer {
         // Login/control replies also flush outside tickChildren, even when no
         // chat task is ready. No holder changes are drained here.
         self.flush_outbound();
-        if self.pending_tasks.front().is_some_and(|task| {
+        if let Some(task) = self.pending_tasks.pop_front_if(|task| {
             task.tick.wrapping_add(3) < self.tick
                 || deadline.is_none_or(|deadline| tokio::time::Instant::now() < deadline)
         }) {
-            let task = self
-                .pending_tasks
-                .pop_front()
-                .expect("ready main-executor task");
             self.handle_queued_packet(task.packet).await?;
             self.flush_outbound();
             return Ok(true);

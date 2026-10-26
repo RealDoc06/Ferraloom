@@ -72,7 +72,7 @@ use ferraloom_protocol::{
     status,
 };
 use ferraloom_util::{BlockPos, ChunkPos, Vec3};
-use player_spawn::{PrepareSpawnTask, PreparedPlayerSpawn};
+use player_spawn::PrepareSpawnTask;
 use std::{
     collections::{BTreeMap, HashSet, VecDeque},
     net::SocketAddr,
