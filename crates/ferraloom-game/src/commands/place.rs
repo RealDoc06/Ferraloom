@@ -147,7 +147,7 @@ pub fn template<A: TemplateAccess>(
         .parse()
         .expect("validated template identifier");
     let Some(template) = access.template(&id).map_err(PlaceError::World)? else {
-        return Err(error("commands.place.template.invalid", &[id.to_string().into()]).into());
+        return Err(error("commands.place.template.invalid", &[id.to_string()]).into());
     };
     let size = access.size(&template);
     let end = BlockPos::new(

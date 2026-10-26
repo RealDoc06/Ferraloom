@@ -88,8 +88,8 @@ level_operations! {
     /// Live placement constructs and transforms one retained receiver. Generation
     /// keeps its existing deferred tag finalization and insertion path.
     write fn place_template_entity(self: &mut Self, chunk: [i32; 2], tag: CompoundTag, mirror: Mirror, rotation: Rotation, finalize: bool) -> Result<(), Error> [{ place_template_entity_deferred(self, chunk, tag, mirror, rotation, finalize) }] => { place_template_entity_deferred(self, chunk, tag, mirror, rotation, finalize) };
-    /// StructureTemplate's final placed-block pass calls setChanged only after
-    /// all waterlogging and neighbor-shape updates have completed.
+    /// After waterlogging, StructureTemplate's final per-block pass calls
+    /// setChanged after updating that block's neighbor shapes.
     write fn mark_template_block_entity_changed(self: &mut Self, p: [i32; 3]) -> Result<(), Error> [{ let _ = p; Err(Error("Unsupported: live template block entity setChanged".into())) }] => { let _ = p; Ok(()) };
     read fn is_outline_full_block(self: &Self, state: BlockState, p: [i32; 3]) -> Result<bool, Error> [{ let _ = (state, p); Err(Error("Unsupported: live feature is_outline_full_block".into())) }] => { WorldGenRegion::is_outline_full_block(self, state, p) };
     read fn is_collision_full_block(self: &Self, state: BlockState, p: [i32; 3]) -> Result<bool, Error> [{ let _ = (state, p); Err(Error("Unsupported: live feature is_collision_full_block".into())) }] => { WorldGenRegion::is_collision_full_block(self, state, p) };
