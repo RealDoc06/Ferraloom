@@ -361,6 +361,60 @@ impl LiveWorldGenLevel for Level {
     fn has_block_entity_at(&self, p: [i32; 3]) -> Result<bool, Error> {
         required(self.block_entity_ref(pos(p))).map(|handle| handle.is_some())
     }
+    /// Port of StructureTemplate#placeInWorld's retained loadWithComponents call.
+    fn load_block_entity(
+        &mut self,
+        p: [i32; 3],
+        mut tag: ferraloom_nbt::CompoundTag,
+        random: &mut FeatureRandomSelector<'_>,
+    ) -> Result<(), Error> {
+        let Some(handle) = required(self.get_or_promote_block_entity(pos(p)))? else {
+            return Ok(());
+        };
+        required(self.retain_block_entity(handle))?;
+        let result = (|| {
+            if required(self.block_entity_state(handle))?
+                .randomizable()
+                .is_some()
+            {
+                let seed = match random {
+                    FeatureRandomSelector::Canonical => self.random().next_long(),
+                    FeatureRandomSelector::External(random) => random.next_long(),
+                };
+                tag.insert("LootTableSeed", ferraloom_nbt::Tag::Long(seed));
+            }
+            // This canonical handle load owns component decoding and class
+            // callbacks through the actual Level, including registry services.
+            required(handle.load_with_components(&tag, self))
+        })();
+        self.release_block_entity(handle);
+        result
+    }
+    fn mark_template_block_entity_changed(&mut self, p: [i32; 3]) -> Result<(), Error> {
+        let Some(handle) = required(self.get_or_promote_block_entity(pos(p)))? else {
+            return Ok(());
+        };
+        required(self.retain_block_entity(handle))?;
+        let result = required(handle.set_changed(self));
+        self.release_block_entity(handle);
+        result
+    }
+    fn place_template_entity(
+        &mut self,
+        _chunk: [i32; 2],
+        tag: ferraloom_nbt::CompoundTag,
+        _mirror: ferraloom_util::Mirror,
+        _rotation: ferraloom_util::Rotation,
+        _finalize: bool,
+    ) -> Result<(), Error> {
+        // A single-root EntityType#create and virtual rotate/mirror must share
+        // one retained receiver. Do not substitute the recursive summon loader.
+        let id = tag.get_string("id").map(|id| id.to_string_lossy());
+        Err(Error(format!(
+            "Unsupported: live template EntityType#create for {}",
+            id.as_deref().unwrap_or("[invalid]")
+        )))
+    }
 }
 
 #[cfg(test)]
