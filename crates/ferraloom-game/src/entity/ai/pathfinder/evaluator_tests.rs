@@ -183,7 +183,11 @@ fn probe(row: &Value, level: &mut Level) -> Probe {
         stand_lava: row["stand_lava"].as_bool().unwrap(),
         step: row["step"].as_f64().unwrap() as f32,
         fall: row["fall"].as_i64().unwrap() as i32,
-        maluses: [None; 27],
+        // Animal's constructor overrides FIRE and FIRE_IN_NEIGHBOR. Capture
+        // the native receiver's initial input, not PathType defaults.
+        maluses: std::array::from_fn(|i| {
+            Some(f32::from_bits(row["maluses"][i].as_i64().unwrap() as u32))
+        }),
         starts: 0,
         ends: 0,
         writes: Vec::new(),

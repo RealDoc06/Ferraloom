@@ -88,7 +88,7 @@ impl<'a, M: MobAccess> SwimNodeEvaluator<'a, M> {
             return Ok(None);
         }
         let cost = self.context.malus(path_type)?;
-        if !(cost >= 0.0) {
+        if cost < 0.0 || cost.is_nan() {
             return Ok(None);
         }
         let node = self.context.node(pos, data);

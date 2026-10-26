@@ -118,6 +118,7 @@ public final class EvaluatorVectors {
         evaluator.setCanFloat((flags&1)!=0);evaluator.setCanOpenDoors((flags&2)!=0);evaluator.setCanPassDoors((flags&4)==0);evaluator.setCanWalkOverFences((flags&8)!=0);
         var row=new JsonObject();row.addProperty("kind",kind);row.addProperty("layout",layout);row.addProperty("width",width);row.addProperty("height",mob.getBbHeight());row.addProperty("flags",flags);row.addProperty("budget",budget);row.addProperty("reach",reach);row.addProperty("op",operation);row.addProperty("step",mob.step);row.addProperty("fall",mob.fall);row.addProperty("water",mob.water);row.addProperty("floatable",mob.floatable);row.addProperty("stand_water",mob.standWater);row.addProperty("stand_lava",mob.standLava);
         var coordinates=new JsonArray();coordinates.add(mob.getX());coordinates.add(mob.getY());coordinates.add(mob.getZ());row.add("position",coordinates);
+        var maluses=new JsonArray();for(var pathType:PathType.values())maluses.add(bits(mob.getPathfindingMalus(pathType)));row.add("maluses",maluses);
         var targets=new HashSet<BlockPos>();targets.add(new BlockPos(12,1,8));if(reach==2)targets.add(new BlockPos(10,1,3));
         var targetInputs=new JsonArray();for(var target:targets)targetInputs.add(pos(target));row.add("targets",targetInputs);
         if(operation.equals("neighbors")){

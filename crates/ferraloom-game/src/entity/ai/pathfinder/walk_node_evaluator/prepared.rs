@@ -667,7 +667,7 @@ impl<M: MobAccess> WalkNodeEvaluator<'_, M> {
     /// Port of FlyNodeEvaluator#getPathType, including its mob-position fence exception.
     fn fly_path_type(&mut self, pos: BlockPos) -> Result<PathType, LevelError> {
         let mut path_type = self.context.raw_type(pos)?;
-        if path_type == PathType::Open && pos.y >= self.context.region.min_y() + 1 {
+        if path_type == PathType::Open && pos.y >= self.context.region.min_y().wrapping_add(1) {
             let below = pos.below(1);
             let below_type = self.context.raw_type(below)?;
             match below_type {
