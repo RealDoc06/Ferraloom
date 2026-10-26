@@ -33,6 +33,12 @@ struct Probe<'a> {
     trace: &'a RefCell<Vec<Value>>,
 }
 impl LiveWorldGenLevel for Probe<'_> {
+    fn seed(&self) -> i64 {
+        self.level.seed()
+    }
+    fn sea_level(&self) -> i32 {
+        self.level.sea_level()
+    }
     fn min_y(&self) -> i32 {
         0
     }
