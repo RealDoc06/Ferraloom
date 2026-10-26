@@ -13,7 +13,7 @@ pub mod brewing_stand;
 pub mod brushable;
 pub mod campfire;
 pub mod chiseled_bookshelf;
-mod components;
+pub(crate) mod components;
 pub mod conduit;
 pub mod copper_golem_statue;
 pub mod creaking_heart;
@@ -796,6 +796,8 @@ pub fn supports(block: Block) -> bool {
     )
 }
 
+#[cfg(test)]
+mod lock_tests;
 #[cfg(test)]
 mod tests;
 

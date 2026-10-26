@@ -56,8 +56,12 @@ impl BrewingStandBlockEntity {
             _ => {}
         }
     }
-    fn load(&mut self, tag: &CompoundTag) {
-        self.parent.load_base(tag);
+    fn load(
+        &mut self,
+        tag: &CompoundTag,
+        registries: &dyn ferraloom_protocol::codec::RegistryContext,
+    ) {
+        self.parent.load_base(tag, registries);
         self.parent.load_items(tag);
         self.brew_time = tag.get_int_or("BrewTime", 0);
         self.total_brew_time = tag.get_int_or("total_brew_time", 400);
@@ -82,12 +86,12 @@ impl BlockEntity for BrewingStandBehavior {
         &self,
         state: &mut BlockEntityState,
         tag: &CompoundTag,
-        _registries: &dyn ferraloom_protocol::codec::RegistryContext,
+        registries: &dyn ferraloom_protocol::codec::RegistryContext,
     ) {
         let BlockEntityState::BrewingStand(entity) = state else {
             unreachable!()
         };
-        entity.load(tag);
+        entity.load(tag, registries);
     }
     fn save_additional(&self, state: &BlockEntityState) -> ferraloom_protocol::Result<CompoundTag> {
         let BlockEntityState::BrewingStand(entity) = state else {
