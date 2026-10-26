@@ -11,6 +11,7 @@ mod attribute_updates;
 pub use attribute_updates::{on_attribute_updated_parent, refresh_dirty_attributes};
 pub mod climbable;
 pub mod damage_state;
+pub mod death;
 mod equipment;
 pub(crate) use equipment::on_equip_item_parent;
 pub use equipment::on_equipped_item_broken;
@@ -68,6 +69,8 @@ pub struct LivingEntity {
     pub hurt_time: i32,
     pub hurt_duration: i32,
     pub death_time: i32,
+    pub(super) dead: bool,
+    pub(super) skip_drop_experience: bool,
     pub(super) combat_tracker: super::damage::combat_tracker::CombatTracker,
     pub(super) no_action_time: i32,
     pub(super) absorption_amount: f32,
@@ -126,6 +129,8 @@ impl LivingEntity {
             hurt_time: 0,
             hurt_duration: 0,
             death_time: 0,
+            dead: false,
+            skip_drop_experience: false,
             combat_tracker: Default::default(),
             no_action_time: 0,
             absorption_amount: 0.0,

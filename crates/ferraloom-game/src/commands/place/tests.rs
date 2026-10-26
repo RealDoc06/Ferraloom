@@ -190,3 +190,37 @@ fn native_template_arguments_loaded_area_settings_seeds_feedback_and_errors_matc
         );
     }
 }
+
+#[test]
+fn native_structure_block_seeded_random_matches_template_capture() {
+    use crate::block::containers::structure::StructureBlockEntity;
+    let vectors: Vec<serde_json::Value> = serde_json::from_str(include_str!(
+        "../../../tests/java/commands/place/vectors.json"
+    ))
+    .unwrap();
+    let mut checked = 0;
+    for vector in vectors {
+        let trace = vector["trace"].as_array().unwrap();
+        let Some(seed) = trace
+            .iter()
+            .find(|event| event["call"] == "random")
+            .and_then(|event| event["seed"].as_i64())
+            .filter(|seed| *seed != 0)
+        else {
+            continue;
+        };
+        let Some(expected) = trace
+            .iter()
+            .find(|event| event["call"] == "place")
+            .and_then(|event| event["placement_first_long"].as_i64())
+        else {
+            continue;
+        };
+        assert_eq!(
+            StructureBlockEntity::create_random(seed).next_long(),
+            expected
+        );
+        checked += 1;
+    }
+    assert!(checked >= 5);
+}
