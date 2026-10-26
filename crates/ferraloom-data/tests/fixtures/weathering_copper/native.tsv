@@ -1,0 +1,2666 @@
+block	0	minecraft:air	-1	-1	-1	0
+block	1	minecraft:stone	-1	-1	-1	1
+block	2	minecraft:granite	-1	-1	-1	2
+block	3	minecraft:polished_granite	-1	-1	-1	3
+block	4	minecraft:diorite	-1	-1	-1	4
+block	5	minecraft:polished_diorite	-1	-1	-1	5
+block	6	minecraft:andesite	-1	-1	-1	6
+block	7	minecraft:polished_andesite	-1	-1	-1	7
+block	8	minecraft:grass_block	-1	-1	-1	8
+block	9	minecraft:dirt	-1	-1	-1	9
+block	10	minecraft:coarse_dirt	-1	-1	-1	10
+block	11	minecraft:podzol	-1	-1	-1	11
+block	12	minecraft:cobblestone	-1	-1	-1	12
+block	13	minecraft:oak_planks	-1	-1	-1	13
+block	14	minecraft:spruce_planks	-1	-1	-1	14
+block	15	minecraft:birch_planks	-1	-1	-1	15
+block	16	minecraft:jungle_planks	-1	-1	-1	16
+block	17	minecraft:acacia_planks	-1	-1	-1	17
+block	18	minecraft:cherry_planks	-1	-1	-1	18
+block	19	minecraft:dark_oak_planks	-1	-1	-1	19
+block	20	minecraft:pale_oak_wood	-1	-1	-1	20
+block	21	minecraft:pale_oak_planks	-1	-1	-1	21
+block	22	minecraft:mangrove_planks	-1	-1	-1	22
+block	23	minecraft:poplar_planks	-1	-1	-1	23
+block	24	minecraft:bamboo_planks	-1	-1	-1	24
+block	25	minecraft:bamboo_mosaic	-1	-1	-1	25
+block	26	minecraft:oak_sapling	-1	-1	-1	26
+block	27	minecraft:spruce_sapling	-1	-1	-1	27
+block	28	minecraft:birch_sapling	-1	-1	-1	28
+block	29	minecraft:jungle_sapling	-1	-1	-1	29
+block	30	minecraft:acacia_sapling	-1	-1	-1	30
+block	31	minecraft:cherry_sapling	-1	-1	-1	31
+block	32	minecraft:dark_oak_sapling	-1	-1	-1	32
+block	33	minecraft:pale_oak_sapling	-1	-1	-1	33
+block	34	minecraft:mangrove_propagule	-1	-1	-1	34
+block	35	minecraft:poplar_sapling	-1	-1	-1	35
+block	36	minecraft:bedrock	-1	-1	-1	36
+block	37	minecraft:water	-1	-1	-1	37
+block	38	minecraft:lava	-1	-1	-1	38
+block	39	minecraft:sand	-1	-1	-1	39
+block	40	minecraft:suspicious_sand	-1	-1	-1	40
+block	41	minecraft:red_sand	-1	-1	-1	41
+block	42	minecraft:gravel	-1	-1	-1	42
+block	43	minecraft:suspicious_gravel	-1	-1	-1	43
+block	44	minecraft:gold_ore	-1	-1	-1	44
+block	45	minecraft:deepslate_gold_ore	-1	-1	-1	45
+block	46	minecraft:iron_ore	-1	-1	-1	46
+block	47	minecraft:deepslate_iron_ore	-1	-1	-1	47
+block	48	minecraft:coal_ore	-1	-1	-1	48
+block	49	minecraft:deepslate_coal_ore	-1	-1	-1	49
+block	50	minecraft:nether_gold_ore	-1	-1	-1	50
+block	51	minecraft:oak_log	-1	-1	-1	51
+block	52	minecraft:spruce_log	-1	-1	-1	52
+block	53	minecraft:birch_log	-1	-1	-1	53
+block	54	minecraft:jungle_log	-1	-1	-1	54
+block	55	minecraft:acacia_log	-1	-1	-1	55
+block	56	minecraft:cherry_log	-1	-1	-1	56
+block	57	minecraft:dark_oak_log	-1	-1	-1	57
+block	58	minecraft:pale_oak_log	-1	-1	-1	58
+block	59	minecraft:mangrove_log	-1	-1	-1	59
+block	60	minecraft:poplar_log	-1	-1	-1	60
+block	61	minecraft:mangrove_roots	-1	-1	-1	61
+block	62	minecraft:muddy_mangrove_roots	-1	-1	-1	62
+block	63	minecraft:bamboo_block	-1	-1	-1	63
+block	64	minecraft:stripped_spruce_log	-1	-1	-1	64
+block	65	minecraft:stripped_birch_log	-1	-1	-1	65
+block	66	minecraft:stripped_jungle_log	-1	-1	-1	66
+block	67	minecraft:stripped_acacia_log	-1	-1	-1	67
+block	68	minecraft:stripped_cherry_log	-1	-1	-1	68
+block	69	minecraft:stripped_dark_oak_log	-1	-1	-1	69
+block	70	minecraft:stripped_pale_oak_log	-1	-1	-1	70
+block	71	minecraft:stripped_oak_log	-1	-1	-1	71
+block	72	minecraft:stripped_mangrove_log	-1	-1	-1	72
+block	73	minecraft:stripped_poplar_log	-1	-1	-1	73
+block	74	minecraft:stripped_bamboo_block	-1	-1	-1	74
+block	75	minecraft:oak_wood	-1	-1	-1	75
+block	76	minecraft:spruce_wood	-1	-1	-1	76
+block	77	minecraft:birch_wood	-1	-1	-1	77
+block	78	minecraft:jungle_wood	-1	-1	-1	78
+block	79	minecraft:acacia_wood	-1	-1	-1	79
+block	80	minecraft:cherry_wood	-1	-1	-1	80
+block	81	minecraft:dark_oak_wood	-1	-1	-1	81
+block	82	minecraft:mangrove_wood	-1	-1	-1	82
+block	83	minecraft:poplar_wood	-1	-1	-1	83
+block	84	minecraft:stripped_oak_wood	-1	-1	-1	84
+block	85	minecraft:stripped_spruce_wood	-1	-1	-1	85
+block	86	minecraft:stripped_birch_wood	-1	-1	-1	86
+block	87	minecraft:stripped_jungle_wood	-1	-1	-1	87
+block	88	minecraft:stripped_acacia_wood	-1	-1	-1	88
+block	89	minecraft:stripped_cherry_wood	-1	-1	-1	89
+block	90	minecraft:stripped_dark_oak_wood	-1	-1	-1	90
+block	91	minecraft:stripped_pale_oak_wood	-1	-1	-1	91
+block	92	minecraft:stripped_mangrove_wood	-1	-1	-1	92
+block	93	minecraft:stripped_poplar_wood	-1	-1	-1	93
+block	94	minecraft:oak_leaves	-1	-1	-1	94
+block	95	minecraft:spruce_leaves	-1	-1	-1	95
+block	96	minecraft:birch_leaves	-1	-1	-1	96
+block	97	minecraft:jungle_leaves	-1	-1	-1	97
+block	98	minecraft:acacia_leaves	-1	-1	-1	98
+block	99	minecraft:cherry_leaves	-1	-1	-1	99
+block	100	minecraft:dark_oak_leaves	-1	-1	-1	100
+block	101	minecraft:pale_oak_leaves	-1	-1	-1	101
+block	102	minecraft:mangrove_leaves	-1	-1	-1	102
+block	103	minecraft:red_poplar_leaves	-1	-1	-1	103
+block	104	minecraft:orange_poplar_leaves	-1	-1	-1	104
+block	105	minecraft:yellow_poplar_leaves	-1	-1	-1	105
+block	106	minecraft:azalea_leaves	-1	-1	-1	106
+block	107	minecraft:flowering_azalea_leaves	-1	-1	-1	107
+block	108	minecraft:sponge	-1	-1	-1	108
+block	109	minecraft:wet_sponge	-1	-1	-1	109
+block	110	minecraft:glass	-1	-1	-1	110
+block	111	minecraft:lapis_ore	-1	-1	-1	111
+block	112	minecraft:deepslate_lapis_ore	-1	-1	-1	112
+block	113	minecraft:lapis_block	-1	-1	-1	113
+block	114	minecraft:dispenser	-1	-1	-1	114
+block	115	minecraft:sandstone	-1	-1	-1	115
+block	116	minecraft:chiseled_sandstone	-1	-1	-1	116
+block	117	minecraft:cut_sandstone	-1	-1	-1	117
+block	118	minecraft:note_block	-1	-1	-1	118
+block	119	minecraft:white_bed	-1	-1	-1	119
+block	120	minecraft:orange_bed	-1	-1	-1	120
+block	121	minecraft:magenta_bed	-1	-1	-1	121
+block	122	minecraft:light_blue_bed	-1	-1	-1	122
+block	123	minecraft:yellow_bed	-1	-1	-1	123
+block	124	minecraft:lime_bed	-1	-1	-1	124
+block	125	minecraft:pink_bed	-1	-1	-1	125
+block	126	minecraft:gray_bed	-1	-1	-1	126
+block	127	minecraft:light_gray_bed	-1	-1	-1	127
+block	128	minecraft:cyan_bed	-1	-1	-1	128
+block	129	minecraft:purple_bed	-1	-1	-1	129
+block	130	minecraft:blue_bed	-1	-1	-1	130
+block	131	minecraft:brown_bed	-1	-1	-1	131
+block	132	minecraft:green_bed	-1	-1	-1	132
+block	133	minecraft:red_bed	-1	-1	-1	133
+block	134	minecraft:black_bed	-1	-1	-1	134
+block	135	minecraft:straw_bed	-1	-1	-1	135
+block	136	minecraft:powered_rail	-1	-1	-1	136
+block	137	minecraft:detector_rail	-1	-1	-1	137
+block	138	minecraft:sticky_piston	-1	-1	-1	138
+block	139	minecraft:cobweb	-1	-1	-1	139
+block	140	minecraft:short_grass	-1	-1	-1	140
+block	141	minecraft:fern	-1	-1	-1	141
+block	142	minecraft:dead_bush	-1	-1	-1	142
+block	143	minecraft:bush	-1	-1	-1	143
+block	144	minecraft:red_shrub	-1	-1	-1	144
+block	145	minecraft:short_dry_grass	-1	-1	-1	145
+block	146	minecraft:tall_dry_grass	-1	-1	-1	146
+block	147	minecraft:seagrass	-1	-1	-1	147
+block	148	minecraft:tall_seagrass	-1	-1	-1	148
+block	149	minecraft:piston	-1	-1	-1	149
+block	150	minecraft:piston_head	-1	-1	-1	150
+block	151	minecraft:white_wool	-1	-1	-1	151
+block	152	minecraft:orange_wool	-1	-1	-1	152
+block	153	minecraft:magenta_wool	-1	-1	-1	153
+block	154	minecraft:light_blue_wool	-1	-1	-1	154
+block	155	minecraft:yellow_wool	-1	-1	-1	155
+block	156	minecraft:lime_wool	-1	-1	-1	156
+block	157	minecraft:pink_wool	-1	-1	-1	157
+block	158	minecraft:gray_wool	-1	-1	-1	158
+block	159	minecraft:light_gray_wool	-1	-1	-1	159
+block	160	minecraft:cyan_wool	-1	-1	-1	160
+block	161	minecraft:purple_wool	-1	-1	-1	161
+block	162	minecraft:blue_wool	-1	-1	-1	162
+block	163	minecraft:brown_wool	-1	-1	-1	163
+block	164	minecraft:green_wool	-1	-1	-1	164
+block	165	minecraft:red_wool	-1	-1	-1	165
+block	166	minecraft:black_wool	-1	-1	-1	166
+block	167	minecraft:white_wool_stairs	-1	-1	-1	167
+block	168	minecraft:orange_wool_stairs	-1	-1	-1	168
+block	169	minecraft:magenta_wool_stairs	-1	-1	-1	169
+block	170	minecraft:light_blue_wool_stairs	-1	-1	-1	170
+block	171	minecraft:yellow_wool_stairs	-1	-1	-1	171
+block	172	minecraft:lime_wool_stairs	-1	-1	-1	172
+block	173	minecraft:pink_wool_stairs	-1	-1	-1	173
+block	174	minecraft:gray_wool_stairs	-1	-1	-1	174
+block	175	minecraft:light_gray_wool_stairs	-1	-1	-1	175
+block	176	minecraft:cyan_wool_stairs	-1	-1	-1	176
+block	177	minecraft:purple_wool_stairs	-1	-1	-1	177
+block	178	minecraft:blue_wool_stairs	-1	-1	-1	178
+block	179	minecraft:brown_wool_stairs	-1	-1	-1	179
+block	180	minecraft:green_wool_stairs	-1	-1	-1	180
+block	181	minecraft:red_wool_stairs	-1	-1	-1	181
+block	182	minecraft:black_wool_stairs	-1	-1	-1	182
+block	183	minecraft:white_wool_slab	-1	-1	-1	183
+block	184	minecraft:orange_wool_slab	-1	-1	-1	184
+block	185	minecraft:magenta_wool_slab	-1	-1	-1	185
+block	186	minecraft:light_blue_wool_slab	-1	-1	-1	186
+block	187	minecraft:yellow_wool_slab	-1	-1	-1	187
+block	188	minecraft:lime_wool_slab	-1	-1	-1	188
+block	189	minecraft:pink_wool_slab	-1	-1	-1	189
+block	190	minecraft:gray_wool_slab	-1	-1	-1	190
+block	191	minecraft:light_gray_wool_slab	-1	-1	-1	191
+block	192	minecraft:cyan_wool_slab	-1	-1	-1	192
+block	193	minecraft:purple_wool_slab	-1	-1	-1	193
+block	194	minecraft:blue_wool_slab	-1	-1	-1	194
+block	195	minecraft:brown_wool_slab	-1	-1	-1	195
+block	196	minecraft:green_wool_slab	-1	-1	-1	196
+block	197	minecraft:red_wool_slab	-1	-1	-1	197
+block	198	minecraft:black_wool_slab	-1	-1	-1	198
+block	199	minecraft:moving_piston	-1	-1	-1	199
+block	200	minecraft:dandelion	-1	-1	-1	200
+block	201	minecraft:golden_dandelion	-1	-1	-1	201
+block	202	minecraft:torchflower	-1	-1	-1	202
+block	203	minecraft:poppy	-1	-1	-1	203
+block	204	minecraft:blue_orchid	-1	-1	-1	204
+block	205	minecraft:allium	-1	-1	-1	205
+block	206	minecraft:azure_bluet	-1	-1	-1	206
+block	207	minecraft:red_tulip	-1	-1	-1	207
+block	208	minecraft:orange_tulip	-1	-1	-1	208
+block	209	minecraft:white_tulip	-1	-1	-1	209
+block	210	minecraft:pink_tulip	-1	-1	-1	210
+block	211	minecraft:oxeye_daisy	-1	-1	-1	211
+block	212	minecraft:cornflower	-1	-1	-1	212
+block	213	minecraft:wither_rose	-1	-1	-1	213
+block	214	minecraft:lily_of_the_valley	-1	-1	-1	214
+block	215	minecraft:brown_mushroom	-1	-1	-1	215
+block	216	minecraft:red_mushroom	-1	-1	-1	216
+block	217	minecraft:gold_block	-1	-1	-1	217
+block	218	minecraft:iron_block	-1	-1	-1	218
+block	219	minecraft:bricks	-1	-1	-1	219
+block	220	minecraft:tnt	-1	-1	-1	220
+block	221	minecraft:bookshelf	-1	-1	-1	221
+block	222	minecraft:chiseled_bookshelf	-1	-1	-1	222
+block	223	minecraft:acacia_shelf	-1	-1	-1	223
+block	224	minecraft:bamboo_shelf	-1	-1	-1	224
+block	225	minecraft:birch_shelf	-1	-1	-1	225
+block	226	minecraft:cherry_shelf	-1	-1	-1	226
+block	227	minecraft:crimson_shelf	-1	-1	-1	227
+block	228	minecraft:dark_oak_shelf	-1	-1	-1	228
+block	229	minecraft:jungle_shelf	-1	-1	-1	229
+block	230	minecraft:mangrove_shelf	-1	-1	-1	230
+block	231	minecraft:oak_shelf	-1	-1	-1	231
+block	232	minecraft:pale_oak_shelf	-1	-1	-1	232
+block	233	minecraft:poplar_shelf	-1	-1	-1	233
+block	234	minecraft:spruce_shelf	-1	-1	-1	234
+block	235	minecraft:warped_shelf	-1	-1	-1	235
+block	236	minecraft:mossy_cobblestone	-1	-1	-1	236
+block	237	minecraft:obsidian	-1	-1	-1	237
+block	238	minecraft:torch	-1	-1	-1	238
+block	239	minecraft:wall_torch	-1	-1	-1	239
+block	240	minecraft:fire	-1	-1	-1	240
+block	241	minecraft:soul_fire	-1	-1	-1	241
+block	242	minecraft:spawner	-1	-1	-1	242
+block	243	minecraft:creaking_heart	-1	-1	-1	243
+block	244	minecraft:oak_stairs	-1	-1	-1	244
+block	245	minecraft:chest	-1	-1	-1	245
+block	246	minecraft:redstone_wire	-1	-1	-1	246
+block	247	minecraft:diamond_ore	-1	-1	-1	247
+block	248	minecraft:deepslate_diamond_ore	-1	-1	-1	248
+block	249	minecraft:diamond_block	-1	-1	-1	249
+block	250	minecraft:crafting_table	-1	-1	-1	250
+block	251	minecraft:wheat	-1	-1	-1	251
+block	252	minecraft:farmland	-1	-1	-1	252
+block	253	minecraft:furnace	-1	-1	-1	253
+block	254	minecraft:oak_sign	-1	-1	-1	254
+block	255	minecraft:spruce_sign	-1	-1	-1	255
+block	256	minecraft:birch_sign	-1	-1	-1	256
+block	257	minecraft:acacia_sign	-1	-1	-1	257
+block	258	minecraft:cherry_sign	-1	-1	-1	258
+block	259	minecraft:jungle_sign	-1	-1	-1	259
+block	260	minecraft:dark_oak_sign	-1	-1	-1	260
+block	261	minecraft:pale_oak_sign	-1	-1	-1	261
+block	262	minecraft:mangrove_sign	-1	-1	-1	262
+block	263	minecraft:poplar_sign	-1	-1	-1	263
+block	264	minecraft:bamboo_sign	-1	-1	-1	264
+block	265	minecraft:oak_door	-1	-1	-1	265
+block	266	minecraft:ladder	-1	-1	-1	266
+block	267	minecraft:rail	-1	-1	-1	267
+block	268	minecraft:cobblestone_stairs	-1	-1	-1	268
+block	269	minecraft:oak_wall_sign	-1	-1	-1	269
+block	270	minecraft:spruce_wall_sign	-1	-1	-1	270
+block	271	minecraft:birch_wall_sign	-1	-1	-1	271
+block	272	minecraft:acacia_wall_sign	-1	-1	-1	272
+block	273	minecraft:cherry_wall_sign	-1	-1	-1	273
+block	274	minecraft:jungle_wall_sign	-1	-1	-1	274
+block	275	minecraft:dark_oak_wall_sign	-1	-1	-1	275
+block	276	minecraft:pale_oak_wall_sign	-1	-1	-1	276
+block	277	minecraft:mangrove_wall_sign	-1	-1	-1	277
+block	278	minecraft:poplar_wall_sign	-1	-1	-1	278
+block	279	minecraft:bamboo_wall_sign	-1	-1	-1	279
+block	280	minecraft:oak_hanging_sign	-1	-1	-1	280
+block	281	minecraft:spruce_hanging_sign	-1	-1	-1	281
+block	282	minecraft:birch_hanging_sign	-1	-1	-1	282
+block	283	minecraft:acacia_hanging_sign	-1	-1	-1	283
+block	284	minecraft:cherry_hanging_sign	-1	-1	-1	284
+block	285	minecraft:jungle_hanging_sign	-1	-1	-1	285
+block	286	minecraft:dark_oak_hanging_sign	-1	-1	-1	286
+block	287	minecraft:pale_oak_hanging_sign	-1	-1	-1	287
+block	288	minecraft:crimson_hanging_sign	-1	-1	-1	288
+block	289	minecraft:warped_hanging_sign	-1	-1	-1	289
+block	290	minecraft:mangrove_hanging_sign	-1	-1	-1	290
+block	291	minecraft:poplar_hanging_sign	-1	-1	-1	291
+block	292	minecraft:bamboo_hanging_sign	-1	-1	-1	292
+block	293	minecraft:oak_wall_hanging_sign	-1	-1	-1	293
+block	294	minecraft:spruce_wall_hanging_sign	-1	-1	-1	294
+block	295	minecraft:birch_wall_hanging_sign	-1	-1	-1	295
+block	296	minecraft:acacia_wall_hanging_sign	-1	-1	-1	296
+block	297	minecraft:cherry_wall_hanging_sign	-1	-1	-1	297
+block	298	minecraft:jungle_wall_hanging_sign	-1	-1	-1	298
+block	299	minecraft:dark_oak_wall_hanging_sign	-1	-1	-1	299
+block	300	minecraft:pale_oak_wall_hanging_sign	-1	-1	-1	300
+block	301	minecraft:mangrove_wall_hanging_sign	-1	-1	-1	301
+block	302	minecraft:poplar_wall_hanging_sign	-1	-1	-1	302
+block	303	minecraft:crimson_wall_hanging_sign	-1	-1	-1	303
+block	304	minecraft:warped_wall_hanging_sign	-1	-1	-1	304
+block	305	minecraft:bamboo_wall_hanging_sign	-1	-1	-1	305
+block	306	minecraft:lever	-1	-1	-1	306
+block	307	minecraft:stone_pressure_plate	-1	-1	-1	307
+block	308	minecraft:iron_door	-1	-1	-1	308
+block	309	minecraft:oak_pressure_plate	-1	-1	-1	309
+block	310	minecraft:spruce_pressure_plate	-1	-1	-1	310
+block	311	minecraft:birch_pressure_plate	-1	-1	-1	311
+block	312	minecraft:jungle_pressure_plate	-1	-1	-1	312
+block	313	minecraft:acacia_pressure_plate	-1	-1	-1	313
+block	314	minecraft:cherry_pressure_plate	-1	-1	-1	314
+block	315	minecraft:dark_oak_pressure_plate	-1	-1	-1	315
+block	316	minecraft:pale_oak_pressure_plate	-1	-1	-1	316
+block	317	minecraft:mangrove_pressure_plate	-1	-1	-1	317
+block	318	minecraft:poplar_pressure_plate	-1	-1	-1	318
+block	319	minecraft:bamboo_pressure_plate	-1	-1	-1	319
+block	320	minecraft:redstone_ore	-1	-1	-1	320
+block	321	minecraft:deepslate_redstone_ore	-1	-1	-1	321
+block	322	minecraft:redstone_torch	-1	-1	-1	322
+block	323	minecraft:redstone_wall_torch	-1	-1	-1	323
+block	324	minecraft:stone_button	-1	-1	-1	324
+block	325	minecraft:snow	-1	-1	-1	325
+block	326	minecraft:ice	-1	-1	-1	326
+block	327	minecraft:snow_block	-1	-1	-1	327
+block	328	minecraft:cactus	-1	-1	-1	328
+block	329	minecraft:cactus_flower	-1	-1	-1	329
+block	330	minecraft:clay	-1	-1	-1	330
+block	331	minecraft:sugar_cane	-1	-1	-1	331
+block	332	minecraft:jukebox	-1	-1	-1	332
+block	333	minecraft:oak_fence	-1	-1	-1	333
+block	334	minecraft:netherrack	-1	-1	-1	334
+block	335	minecraft:soul_sand	-1	-1	-1	335
+block	336	minecraft:soul_soil	-1	-1	-1	336
+block	337	minecraft:basalt	-1	-1	-1	337
+block	338	minecraft:polished_basalt	-1	-1	-1	338
+block	339	minecraft:soul_torch	-1	-1	-1	339
+block	340	minecraft:soul_wall_torch	-1	-1	-1	340
+block	341	minecraft:copper_torch	-1	-1	-1	341
+block	342	minecraft:copper_wall_torch	-1	-1	-1	342
+block	343	minecraft:glowstone	-1	-1	-1	343
+block	344	minecraft:nether_portal	-1	-1	-1	344
+block	345	minecraft:carved_pumpkin	-1	-1	-1	345
+block	346	minecraft:jack_o_lantern	-1	-1	-1	346
+block	347	minecraft:cake	-1	-1	-1	347
+block	348	minecraft:repeater	-1	-1	-1	348
+block	349	minecraft:white_stained_glass	-1	-1	-1	349
+block	350	minecraft:orange_stained_glass	-1	-1	-1	350
+block	351	minecraft:magenta_stained_glass	-1	-1	-1	351
+block	352	minecraft:light_blue_stained_glass	-1	-1	-1	352
+block	353	minecraft:yellow_stained_glass	-1	-1	-1	353
+block	354	minecraft:lime_stained_glass	-1	-1	-1	354
+block	355	minecraft:pink_stained_glass	-1	-1	-1	355
+block	356	minecraft:gray_stained_glass	-1	-1	-1	356
+block	357	minecraft:light_gray_stained_glass	-1	-1	-1	357
+block	358	minecraft:cyan_stained_glass	-1	-1	-1	358
+block	359	minecraft:purple_stained_glass	-1	-1	-1	359
+block	360	minecraft:blue_stained_glass	-1	-1	-1	360
+block	361	minecraft:brown_stained_glass	-1	-1	-1	361
+block	362	minecraft:green_stained_glass	-1	-1	-1	362
+block	363	minecraft:red_stained_glass	-1	-1	-1	363
+block	364	minecraft:black_stained_glass	-1	-1	-1	364
+block	365	minecraft:oak_trapdoor	-1	-1	-1	365
+block	366	minecraft:spruce_trapdoor	-1	-1	-1	366
+block	367	minecraft:birch_trapdoor	-1	-1	-1	367
+block	368	minecraft:jungle_trapdoor	-1	-1	-1	368
+block	369	minecraft:acacia_trapdoor	-1	-1	-1	369
+block	370	minecraft:cherry_trapdoor	-1	-1	-1	370
+block	371	minecraft:dark_oak_trapdoor	-1	-1	-1	371
+block	372	minecraft:pale_oak_trapdoor	-1	-1	-1	372
+block	373	minecraft:mangrove_trapdoor	-1	-1	-1	373
+block	374	minecraft:poplar_trapdoor	-1	-1	-1	374
+block	375	minecraft:bamboo_trapdoor	-1	-1	-1	375
+block	376	minecraft:stone_bricks	-1	-1	-1	376
+block	377	minecraft:mossy_stone_bricks	-1	-1	-1	377
+block	378	minecraft:cracked_stone_bricks	-1	-1	-1	378
+block	379	minecraft:chiseled_stone_bricks	-1	-1	-1	379
+block	380	minecraft:packed_mud	-1	-1	-1	380
+block	381	minecraft:mud_bricks	-1	-1	-1	381
+block	382	minecraft:infested_stone	-1	-1	-1	382
+block	383	minecraft:infested_cobblestone	-1	-1	-1	383
+block	384	minecraft:infested_stone_bricks	-1	-1	-1	384
+block	385	minecraft:infested_mossy_stone_bricks	-1	-1	-1	385
+block	386	minecraft:infested_cracked_stone_bricks	-1	-1	-1	386
+block	387	minecraft:infested_chiseled_stone_bricks	-1	-1	-1	387
+block	388	minecraft:brown_mushroom_block	-1	-1	-1	388
+block	389	minecraft:red_mushroom_block	-1	-1	-1	389
+block	390	minecraft:mushroom_stem	-1	-1	-1	390
+block	391	minecraft:iron_bars	-1	-1	-1	391
+block	392	minecraft:copper_bars	0	393	-1	392
+state	9724	9756	-1	9724	true
+state	9725	9757	-1	9725	true
+state	9726	9758	-1	9726	true
+state	9727	9759	-1	9727	true
+state	9728	9760	-1	9728	true
+state	9729	9761	-1	9729	true
+state	9730	9762	-1	9730	true
+state	9731	9763	-1	9731	true
+state	9732	9764	-1	9732	true
+state	9733	9765	-1	9733	true
+state	9734	9766	-1	9734	true
+state	9735	9767	-1	9735	true
+state	9736	9768	-1	9736	true
+state	9737	9769	-1	9737	true
+state	9738	9770	-1	9738	true
+state	9739	9771	-1	9739	true
+state	9740	9772	-1	9740	true
+state	9741	9773	-1	9741	true
+state	9742	9774	-1	9742	true
+state	9743	9775	-1	9743	true
+state	9744	9776	-1	9744	true
+state	9745	9777	-1	9745	true
+state	9746	9778	-1	9746	true
+state	9747	9779	-1	9747	true
+state	9748	9780	-1	9748	true
+state	9749	9781	-1	9749	true
+state	9750	9782	-1	9750	true
+state	9751	9783	-1	9751	true
+state	9752	9784	-1	9752	true
+state	9753	9785	-1	9753	true
+state	9754	9786	-1	9754	true
+state	9755	9787	-1	9755	true
+block	393	minecraft:exposed_copper_bars	1	394	392	392
+state	9756	9788	9724	9724	true
+state	9757	9789	9725	9725	true
+state	9758	9790	9726	9726	true
+state	9759	9791	9727	9727	true
+state	9760	9792	9728	9728	true
+state	9761	9793	9729	9729	true
+state	9762	9794	9730	9730	true
+state	9763	9795	9731	9731	true
+state	9764	9796	9732	9732	true
+state	9765	9797	9733	9733	true
+state	9766	9798	9734	9734	true
+state	9767	9799	9735	9735	true
+state	9768	9800	9736	9736	true
+state	9769	9801	9737	9737	true
+state	9770	9802	9738	9738	true
+state	9771	9803	9739	9739	true
+state	9772	9804	9740	9740	true
+state	9773	9805	9741	9741	true
+state	9774	9806	9742	9742	true
+state	9775	9807	9743	9743	true
+state	9776	9808	9744	9744	true
+state	9777	9809	9745	9745	true
+state	9778	9810	9746	9746	true
+state	9779	9811	9747	9747	true
+state	9780	9812	9748	9748	true
+state	9781	9813	9749	9749	true
+state	9782	9814	9750	9750	true
+state	9783	9815	9751	9751	true
+state	9784	9816	9752	9752	true
+state	9785	9817	9753	9753	true
+state	9786	9818	9754	9754	true
+state	9787	9819	9755	9755	true
+block	394	minecraft:weathered_copper_bars	2	395	393	392
+state	9788	9820	9756	9724	true
+state	9789	9821	9757	9725	true
+state	9790	9822	9758	9726	true
+state	9791	9823	9759	9727	true
+state	9792	9824	9760	9728	true
+state	9793	9825	9761	9729	true
+state	9794	9826	9762	9730	true
+state	9795	9827	9763	9731	true
+state	9796	9828	9764	9732	true
+state	9797	9829	9765	9733	true
+state	9798	9830	9766	9734	true
+state	9799	9831	9767	9735	true
+state	9800	9832	9768	9736	true
+state	9801	9833	9769	9737	true
+state	9802	9834	9770	9738	true
+state	9803	9835	9771	9739	true
+state	9804	9836	9772	9740	true
+state	9805	9837	9773	9741	true
+state	9806	9838	9774	9742	true
+state	9807	9839	9775	9743	true
+state	9808	9840	9776	9744	true
+state	9809	9841	9777	9745	true
+state	9810	9842	9778	9746	true
+state	9811	9843	9779	9747	true
+state	9812	9844	9780	9748	true
+state	9813	9845	9781	9749	true
+state	9814	9846	9782	9750	true
+state	9815	9847	9783	9751	true
+state	9816	9848	9784	9752	true
+state	9817	9849	9785	9753	true
+state	9818	9850	9786	9754	true
+state	9819	9851	9787	9755	true
+block	395	minecraft:oxidized_copper_bars	3	-1	394	392
+state	9820	-1	9788	9724	false
+state	9821	-1	9789	9725	false
+state	9822	-1	9790	9726	false
+state	9823	-1	9791	9727	false
+state	9824	-1	9792	9728	false
+state	9825	-1	9793	9729	false
+state	9826	-1	9794	9730	false
+state	9827	-1	9795	9731	false
+state	9828	-1	9796	9732	false
+state	9829	-1	9797	9733	false
+state	9830	-1	9798	9734	false
+state	9831	-1	9799	9735	false
+state	9832	-1	9800	9736	false
+state	9833	-1	9801	9737	false
+state	9834	-1	9802	9738	false
+state	9835	-1	9803	9739	false
+state	9836	-1	9804	9740	false
+state	9837	-1	9805	9741	false
+state	9838	-1	9806	9742	false
+state	9839	-1	9807	9743	false
+state	9840	-1	9808	9744	false
+state	9841	-1	9809	9745	false
+state	9842	-1	9810	9746	false
+state	9843	-1	9811	9747	false
+state	9844	-1	9812	9748	false
+state	9845	-1	9813	9749	false
+state	9846	-1	9814	9750	false
+state	9847	-1	9815	9751	false
+state	9848	-1	9816	9752	false
+state	9849	-1	9817	9753	false
+state	9850	-1	9818	9754	false
+state	9851	-1	9819	9755	false
+block	396	minecraft:waxed_copper_bars	-1	-1	-1	396
+block	397	minecraft:waxed_exposed_copper_bars	-1	-1	-1	397
+block	398	minecraft:waxed_weathered_copper_bars	-1	-1	-1	398
+block	399	minecraft:waxed_oxidized_copper_bars	-1	-1	-1	399
+block	400	minecraft:iron_chain	-1	-1	-1	400
+block	401	minecraft:copper_chain	0	402	-1	401
+state	9986	9992	-1	9986	true
+state	9987	9993	-1	9987	true
+state	9988	9994	-1	9988	true
+state	9989	9995	-1	9989	true
+state	9990	9996	-1	9990	true
+state	9991	9997	-1	9991	true
+block	402	minecraft:exposed_copper_chain	1	403	401	401
+state	9992	9998	9986	9986	true
+state	9993	9999	9987	9987	true
+state	9994	10000	9988	9988	true
+state	9995	10001	9989	9989	true
+state	9996	10002	9990	9990	true
+state	9997	10003	9991	9991	true
+block	403	minecraft:weathered_copper_chain	2	404	402	401
+state	9998	10004	9992	9986	true
+state	9999	10005	9993	9987	true
+state	10000	10006	9994	9988	true
+state	10001	10007	9995	9989	true
+state	10002	10008	9996	9990	true
+state	10003	10009	9997	9991	true
+block	404	minecraft:oxidized_copper_chain	3	-1	403	401
+state	10004	-1	9998	9986	false
+state	10005	-1	9999	9987	false
+state	10006	-1	10000	9988	false
+state	10007	-1	10001	9989	false
+state	10008	-1	10002	9990	false
+state	10009	-1	10003	9991	false
+block	405	minecraft:waxed_copper_chain	-1	-1	-1	405
+block	406	minecraft:waxed_exposed_copper_chain	-1	-1	-1	406
+block	407	minecraft:waxed_weathered_copper_chain	-1	-1	-1	407
+block	408	minecraft:waxed_oxidized_copper_chain	-1	-1	-1	408
+block	409	minecraft:glass_pane	-1	-1	-1	409
+block	410	minecraft:pumpkin	-1	-1	-1	410
+block	411	minecraft:melon	-1	-1	-1	411
+block	412	minecraft:attached_pumpkin_stem	-1	-1	-1	412
+block	413	minecraft:attached_melon_stem	-1	-1	-1	413
+block	414	minecraft:pumpkin_stem	-1	-1	-1	414
+block	415	minecraft:melon_stem	-1	-1	-1	415
+block	416	minecraft:vine	-1	-1	-1	416
+block	417	minecraft:glow_lichen	-1	-1	-1	417
+block	418	minecraft:resin_clump	-1	-1	-1	418
+block	419	minecraft:oak_fence_gate	-1	-1	-1	419
+block	420	minecraft:brick_stairs	-1	-1	-1	420
+block	421	minecraft:stone_brick_stairs	-1	-1	-1	421
+block	422	minecraft:mud_brick_stairs	-1	-1	-1	422
+block	423	minecraft:mycelium	-1	-1	-1	423
+block	424	minecraft:lily_pad	-1	-1	-1	424
+block	425	minecraft:resin_block	-1	-1	-1	425
+block	426	minecraft:resin_bricks	-1	-1	-1	426
+block	427	minecraft:resin_brick_stairs	-1	-1	-1	427
+block	428	minecraft:resin_brick_slab	-1	-1	-1	428
+block	429	minecraft:resin_brick_wall	-1	-1	-1	429
+block	430	minecraft:chiseled_resin_bricks	-1	-1	-1	430
+block	431	minecraft:nether_bricks	-1	-1	-1	431
+block	432	minecraft:nether_brick_fence	-1	-1	-1	432
+block	433	minecraft:nether_brick_stairs	-1	-1	-1	433
+block	434	minecraft:nether_wart	-1	-1	-1	434
+block	435	minecraft:enchanting_table	-1	-1	-1	435
+block	436	minecraft:brewing_stand	-1	-1	-1	436
+block	437	minecraft:cauldron	-1	-1	-1	437
+block	438	minecraft:water_cauldron	-1	-1	-1	438
+block	439	minecraft:lava_cauldron	-1	-1	-1	439
+block	440	minecraft:powder_snow_cauldron	-1	-1	-1	440
+block	441	minecraft:end_portal	-1	-1	-1	441
+block	442	minecraft:end_portal_frame	-1	-1	-1	442
+block	443	minecraft:end_stone	-1	-1	-1	443
+block	444	minecraft:dragon_egg	-1	-1	-1	444
+block	445	minecraft:redstone_lamp	-1	-1	-1	445
+block	446	minecraft:cocoa	-1	-1	-1	446
+block	447	minecraft:shelf_mushroom	-1	-1	-1	447
+block	448	minecraft:sandstone_stairs	-1	-1	-1	448
+block	449	minecraft:emerald_ore	-1	-1	-1	449
+block	450	minecraft:deepslate_emerald_ore	-1	-1	-1	450
+block	451	minecraft:ender_chest	-1	-1	-1	451
+block	452	minecraft:tripwire_hook	-1	-1	-1	452
+block	453	minecraft:tripwire	-1	-1	-1	453
+block	454	minecraft:emerald_block	-1	-1	-1	454
+block	455	minecraft:spruce_stairs	-1	-1	-1	455
+block	456	minecraft:birch_stairs	-1	-1	-1	456
+block	457	minecraft:jungle_stairs	-1	-1	-1	457
+block	458	minecraft:command_block	-1	-1	-1	458
+block	459	minecraft:beacon	-1	-1	-1	459
+block	460	minecraft:cobblestone_wall	-1	-1	-1	460
+block	461	minecraft:mossy_cobblestone_wall	-1	-1	-1	461
+block	462	minecraft:flower_pot	-1	-1	-1	462
+block	463	minecraft:potted_torchflower	-1	-1	-1	463
+block	464	minecraft:potted_oak_sapling	-1	-1	-1	464
+block	465	minecraft:potted_spruce_sapling	-1	-1	-1	465
+block	466	minecraft:potted_birch_sapling	-1	-1	-1	466
+block	467	minecraft:potted_jungle_sapling	-1	-1	-1	467
+block	468	minecraft:potted_acacia_sapling	-1	-1	-1	468
+block	469	minecraft:potted_cherry_sapling	-1	-1	-1	469
+block	470	minecraft:potted_dark_oak_sapling	-1	-1	-1	470
+block	471	minecraft:potted_pale_oak_sapling	-1	-1	-1	471
+block	472	minecraft:potted_poplar_sapling	-1	-1	-1	472
+block	473	minecraft:potted_mangrove_propagule	-1	-1	-1	473
+block	474	minecraft:potted_fern	-1	-1	-1	474
+block	475	minecraft:potted_dandelion	-1	-1	-1	475
+block	476	minecraft:potted_golden_dandelion	-1	-1	-1	476
+block	477	minecraft:potted_poppy	-1	-1	-1	477
+block	478	minecraft:potted_blue_orchid	-1	-1	-1	478
+block	479	minecraft:potted_allium	-1	-1	-1	479
+block	480	minecraft:potted_azure_bluet	-1	-1	-1	480
+block	481	minecraft:potted_red_tulip	-1	-1	-1	481
+block	482	minecraft:potted_orange_tulip	-1	-1	-1	482
+block	483	minecraft:potted_white_tulip	-1	-1	-1	483
+block	484	minecraft:potted_pink_tulip	-1	-1	-1	484
+block	485	minecraft:potted_oxeye_daisy	-1	-1	-1	485
+block	486	minecraft:potted_cornflower	-1	-1	-1	486
+block	487	minecraft:potted_lily_of_the_valley	-1	-1	-1	487
+block	488	minecraft:potted_wither_rose	-1	-1	-1	488
+block	489	minecraft:potted_red_mushroom	-1	-1	-1	489
+block	490	minecraft:potted_brown_mushroom	-1	-1	-1	490
+block	491	minecraft:potted_dead_bush	-1	-1	-1	491
+block	492	minecraft:potted_cactus	-1	-1	-1	492
+block	493	minecraft:carrots	-1	-1	-1	493
+block	494	minecraft:potatoes	-1	-1	-1	494
+block	495	minecraft:oak_button	-1	-1	-1	495
+block	496	minecraft:spruce_button	-1	-1	-1	496
+block	497	minecraft:birch_button	-1	-1	-1	497
+block	498	minecraft:jungle_button	-1	-1	-1	498
+block	499	minecraft:acacia_button	-1	-1	-1	499
+block	500	minecraft:cherry_button	-1	-1	-1	500
+block	501	minecraft:dark_oak_button	-1	-1	-1	501
+block	502	minecraft:pale_oak_button	-1	-1	-1	502
+block	503	minecraft:mangrove_button	-1	-1	-1	503
+block	504	minecraft:poplar_button	-1	-1	-1	504
+block	505	minecraft:bamboo_button	-1	-1	-1	505
+block	506	minecraft:skeleton_skull	-1	-1	-1	506
+block	507	minecraft:skeleton_wall_skull	-1	-1	-1	507
+block	508	minecraft:wither_skeleton_skull	-1	-1	-1	508
+block	509	minecraft:wither_skeleton_wall_skull	-1	-1	-1	509
+block	510	minecraft:zombie_head	-1	-1	-1	510
+block	511	minecraft:zombie_wall_head	-1	-1	-1	511
+block	512	minecraft:player_head	-1	-1	-1	512
+block	513	minecraft:player_wall_head	-1	-1	-1	513
+block	514	minecraft:creeper_head	-1	-1	-1	514
+block	515	minecraft:creeper_wall_head	-1	-1	-1	515
+block	516	minecraft:dragon_head	-1	-1	-1	516
+block	517	minecraft:dragon_wall_head	-1	-1	-1	517
+block	518	minecraft:piglin_head	-1	-1	-1	518
+block	519	minecraft:piglin_wall_head	-1	-1	-1	519
+block	520	minecraft:anvil	-1	-1	-1	520
+block	521	minecraft:chipped_anvil	-1	-1	-1	521
+block	522	minecraft:damaged_anvil	-1	-1	-1	522
+block	523	minecraft:trapped_chest	-1	-1	-1	523
+block	524	minecraft:light_weighted_pressure_plate	-1	-1	-1	524
+block	525	minecraft:heavy_weighted_pressure_plate	-1	-1	-1	525
+block	526	minecraft:comparator	-1	-1	-1	526
+block	527	minecraft:daylight_detector	-1	-1	-1	527
+block	528	minecraft:redstone_block	-1	-1	-1	528
+block	529	minecraft:nether_quartz_ore	-1	-1	-1	529
+block	530	minecraft:hopper	-1	-1	-1	530
+block	531	minecraft:quartz_block	-1	-1	-1	531
+block	532	minecraft:chiseled_quartz_block	-1	-1	-1	532
+block	533	minecraft:quartz_pillar	-1	-1	-1	533
+block	534	minecraft:quartz_stairs	-1	-1	-1	534
+block	535	minecraft:activator_rail	-1	-1	-1	535
+block	536	minecraft:dropper	-1	-1	-1	536
+block	537	minecraft:white_terracotta	-1	-1	-1	537
+block	538	minecraft:orange_terracotta	-1	-1	-1	538
+block	539	minecraft:magenta_terracotta	-1	-1	-1	539
+block	540	minecraft:light_blue_terracotta	-1	-1	-1	540
+block	541	minecraft:yellow_terracotta	-1	-1	-1	541
+block	542	minecraft:lime_terracotta	-1	-1	-1	542
+block	543	minecraft:pink_terracotta	-1	-1	-1	543
+block	544	minecraft:gray_terracotta	-1	-1	-1	544
+block	545	minecraft:light_gray_terracotta	-1	-1	-1	545
+block	546	minecraft:cyan_terracotta	-1	-1	-1	546
+block	547	minecraft:purple_terracotta	-1	-1	-1	547
+block	548	minecraft:blue_terracotta	-1	-1	-1	548
+block	549	minecraft:brown_terracotta	-1	-1	-1	549
+block	550	minecraft:green_terracotta	-1	-1	-1	550
+block	551	minecraft:red_terracotta	-1	-1	-1	551
+block	552	minecraft:black_terracotta	-1	-1	-1	552
+block	553	minecraft:white_stained_glass_pane	-1	-1	-1	553
+block	554	minecraft:orange_stained_glass_pane	-1	-1	-1	554
+block	555	minecraft:magenta_stained_glass_pane	-1	-1	-1	555
+block	556	minecraft:light_blue_stained_glass_pane	-1	-1	-1	556
+block	557	minecraft:yellow_stained_glass_pane	-1	-1	-1	557
+block	558	minecraft:lime_stained_glass_pane	-1	-1	-1	558
+block	559	minecraft:pink_stained_glass_pane	-1	-1	-1	559
+block	560	minecraft:gray_stained_glass_pane	-1	-1	-1	560
+block	561	minecraft:light_gray_stained_glass_pane	-1	-1	-1	561
+block	562	minecraft:cyan_stained_glass_pane	-1	-1	-1	562
+block	563	minecraft:purple_stained_glass_pane	-1	-1	-1	563
+block	564	minecraft:blue_stained_glass_pane	-1	-1	-1	564
+block	565	minecraft:brown_stained_glass_pane	-1	-1	-1	565
+block	566	minecraft:green_stained_glass_pane	-1	-1	-1	566
+block	567	minecraft:red_stained_glass_pane	-1	-1	-1	567
+block	568	minecraft:black_stained_glass_pane	-1	-1	-1	568
+block	569	minecraft:acacia_stairs	-1	-1	-1	569
+block	570	minecraft:cherry_stairs	-1	-1	-1	570
+block	571	minecraft:dark_oak_stairs	-1	-1	-1	571
+block	572	minecraft:pale_oak_stairs	-1	-1	-1	572
+block	573	minecraft:mangrove_stairs	-1	-1	-1	573
+block	574	minecraft:poplar_stairs	-1	-1	-1	574
+block	575	minecraft:bamboo_stairs	-1	-1	-1	575
+block	576	minecraft:bamboo_mosaic_stairs	-1	-1	-1	576
+block	577	minecraft:slime_block	-1	-1	-1	577
+block	578	minecraft:barrier	-1	-1	-1	578
+block	579	minecraft:light	-1	-1	-1	579
+block	580	minecraft:iron_trapdoor	-1	-1	-1	580
+block	581	minecraft:prismarine	-1	-1	-1	581
+block	582	minecraft:prismarine_bricks	-1	-1	-1	582
+block	583	minecraft:dark_prismarine	-1	-1	-1	583
+block	584	minecraft:prismarine_stairs	-1	-1	-1	584
+block	585	minecraft:prismarine_brick_stairs	-1	-1	-1	585
+block	586	minecraft:dark_prismarine_stairs	-1	-1	-1	586
+block	587	minecraft:prismarine_slab	-1	-1	-1	587
+block	588	minecraft:prismarine_brick_slab	-1	-1	-1	588
+block	589	minecraft:dark_prismarine_slab	-1	-1	-1	589
+block	590	minecraft:sea_lantern	-1	-1	-1	590
+block	591	minecraft:hay_block	-1	-1	-1	591
+block	592	minecraft:white_carpet	-1	-1	-1	592
+block	593	minecraft:orange_carpet	-1	-1	-1	593
+block	594	minecraft:magenta_carpet	-1	-1	-1	594
+block	595	minecraft:light_blue_carpet	-1	-1	-1	595
+block	596	minecraft:yellow_carpet	-1	-1	-1	596
+block	597	minecraft:lime_carpet	-1	-1	-1	597
+block	598	minecraft:pink_carpet	-1	-1	-1	598
+block	599	minecraft:gray_carpet	-1	-1	-1	599
+block	600	minecraft:light_gray_carpet	-1	-1	-1	600
+block	601	minecraft:cyan_carpet	-1	-1	-1	601
+block	602	minecraft:purple_carpet	-1	-1	-1	602
+block	603	minecraft:blue_carpet	-1	-1	-1	603
+block	604	minecraft:brown_carpet	-1	-1	-1	604
+block	605	minecraft:green_carpet	-1	-1	-1	605
+block	606	minecraft:red_carpet	-1	-1	-1	606
+block	607	minecraft:black_carpet	-1	-1	-1	607
+block	608	minecraft:terracotta	-1	-1	-1	608
+block	609	minecraft:coal_block	-1	-1	-1	609
+block	610	minecraft:packed_ice	-1	-1	-1	610
+block	611	minecraft:sunflower	-1	-1	-1	611
+block	612	minecraft:lilac	-1	-1	-1	612
+block	613	minecraft:rose_bush	-1	-1	-1	613
+block	614	minecraft:peony	-1	-1	-1	614
+block	615	minecraft:tall_grass	-1	-1	-1	615
+block	616	minecraft:large_fern	-1	-1	-1	616
+block	617	minecraft:white_banner	-1	-1	-1	617
+block	618	minecraft:orange_banner	-1	-1	-1	618
+block	619	minecraft:magenta_banner	-1	-1	-1	619
+block	620	minecraft:light_blue_banner	-1	-1	-1	620
+block	621	minecraft:yellow_banner	-1	-1	-1	621
+block	622	minecraft:lime_banner	-1	-1	-1	622
+block	623	minecraft:pink_banner	-1	-1	-1	623
+block	624	minecraft:gray_banner	-1	-1	-1	624
+block	625	minecraft:light_gray_banner	-1	-1	-1	625
+block	626	minecraft:cyan_banner	-1	-1	-1	626
+block	627	minecraft:purple_banner	-1	-1	-1	627
+block	628	minecraft:blue_banner	-1	-1	-1	628
+block	629	minecraft:brown_banner	-1	-1	-1	629
+block	630	minecraft:green_banner	-1	-1	-1	630
+block	631	minecraft:red_banner	-1	-1	-1	631
+block	632	minecraft:black_banner	-1	-1	-1	632
+block	633	minecraft:white_wall_banner	-1	-1	-1	633
+block	634	minecraft:orange_wall_banner	-1	-1	-1	634
+block	635	minecraft:magenta_wall_banner	-1	-1	-1	635
+block	636	minecraft:light_blue_wall_banner	-1	-1	-1	636
+block	637	minecraft:yellow_wall_banner	-1	-1	-1	637
+block	638	minecraft:lime_wall_banner	-1	-1	-1	638
+block	639	minecraft:pink_wall_banner	-1	-1	-1	639
+block	640	minecraft:gray_wall_banner	-1	-1	-1	640
+block	641	minecraft:light_gray_wall_banner	-1	-1	-1	641
+block	642	minecraft:cyan_wall_banner	-1	-1	-1	642
+block	643	minecraft:purple_wall_banner	-1	-1	-1	643
+block	644	minecraft:blue_wall_banner	-1	-1	-1	644
+block	645	minecraft:brown_wall_banner	-1	-1	-1	645
+block	646	minecraft:green_wall_banner	-1	-1	-1	646
+block	647	minecraft:red_wall_banner	-1	-1	-1	647
+block	648	minecraft:black_wall_banner	-1	-1	-1	648
+block	649	minecraft:red_sandstone	-1	-1	-1	649
+block	650	minecraft:chiseled_red_sandstone	-1	-1	-1	650
+block	651	minecraft:cut_red_sandstone	-1	-1	-1	651
+block	652	minecraft:red_sandstone_stairs	-1	-1	-1	652
+block	653	minecraft:oak_slab	-1	-1	-1	653
+block	654	minecraft:spruce_slab	-1	-1	-1	654
+block	655	minecraft:birch_slab	-1	-1	-1	655
+block	656	minecraft:jungle_slab	-1	-1	-1	656
+block	657	minecraft:acacia_slab	-1	-1	-1	657
+block	658	minecraft:cherry_slab	-1	-1	-1	658
+block	659	minecraft:dark_oak_slab	-1	-1	-1	659
+block	660	minecraft:pale_oak_slab	-1	-1	-1	660
+block	661	minecraft:mangrove_slab	-1	-1	-1	661
+block	662	minecraft:poplar_slab	-1	-1	-1	662
+block	663	minecraft:bamboo_slab	-1	-1	-1	663
+block	664	minecraft:bamboo_mosaic_slab	-1	-1	-1	664
+block	665	minecraft:stone_slab	-1	-1	-1	665
+block	666	minecraft:sandstone_slab	-1	-1	-1	666
+block	667	minecraft:cut_sandstone_slab	-1	-1	-1	667
+block	668	minecraft:petrified_oak_slab	-1	-1	-1	668
+block	669	minecraft:cobblestone_slab	-1	-1	-1	669
+block	670	minecraft:brick_slab	-1	-1	-1	670
+block	671	minecraft:stone_brick_slab	-1	-1	-1	671
+block	672	minecraft:mud_brick_slab	-1	-1	-1	672
+block	673	minecraft:nether_brick_slab	-1	-1	-1	673
+block	674	minecraft:quartz_slab	-1	-1	-1	674
+block	675	minecraft:red_sandstone_slab	-1	-1	-1	675
+block	676	minecraft:cut_red_sandstone_slab	-1	-1	-1	676
+block	677	minecraft:smooth_stone	-1	-1	-1	677
+block	678	minecraft:smooth_stone_slab	-1	-1	-1	678
+block	679	minecraft:smooth_sandstone	-1	-1	-1	679
+block	680	minecraft:smooth_quartz	-1	-1	-1	680
+block	681	minecraft:smooth_red_sandstone	-1	-1	-1	681
+block	682	minecraft:spruce_fence_gate	-1	-1	-1	682
+block	683	minecraft:birch_fence_gate	-1	-1	-1	683
+block	684	minecraft:jungle_fence_gate	-1	-1	-1	684
+block	685	minecraft:acacia_fence_gate	-1	-1	-1	685
+block	686	minecraft:cherry_fence_gate	-1	-1	-1	686
+block	687	minecraft:dark_oak_fence_gate	-1	-1	-1	687
+block	688	minecraft:pale_oak_fence_gate	-1	-1	-1	688
+block	689	minecraft:mangrove_fence_gate	-1	-1	-1	689
+block	690	minecraft:poplar_fence_gate	-1	-1	-1	690
+block	691	minecraft:bamboo_fence_gate	-1	-1	-1	691
+block	692	minecraft:spruce_fence	-1	-1	-1	692
+block	693	minecraft:birch_fence	-1	-1	-1	693
+block	694	minecraft:jungle_fence	-1	-1	-1	694
+block	695	minecraft:acacia_fence	-1	-1	-1	695
+block	696	minecraft:cherry_fence	-1	-1	-1	696
+block	697	minecraft:dark_oak_fence	-1	-1	-1	697
+block	698	minecraft:pale_oak_fence	-1	-1	-1	698
+block	699	minecraft:mangrove_fence	-1	-1	-1	699
+block	700	minecraft:poplar_fence	-1	-1	-1	700
+block	701	minecraft:bamboo_fence	-1	-1	-1	701
+block	702	minecraft:spruce_door	-1	-1	-1	702
+block	703	minecraft:birch_door	-1	-1	-1	703
+block	704	minecraft:jungle_door	-1	-1	-1	704
+block	705	minecraft:acacia_door	-1	-1	-1	705
+block	706	minecraft:cherry_door	-1	-1	-1	706
+block	707	minecraft:dark_oak_door	-1	-1	-1	707
+block	708	minecraft:pale_oak_door	-1	-1	-1	708
+block	709	minecraft:mangrove_door	-1	-1	-1	709
+block	710	minecraft:poplar_door	-1	-1	-1	710
+block	711	minecraft:bamboo_door	-1	-1	-1	711
+block	712	minecraft:end_rod	-1	-1	-1	712
+block	713	minecraft:chorus_plant	-1	-1	-1	713
+block	714	minecraft:chorus_flower	-1	-1	-1	714
+block	715	minecraft:purpur_block	-1	-1	-1	715
+block	716	minecraft:purpur_slab	-1	-1	-1	716
+block	717	minecraft:purpur_pillar	-1	-1	-1	717
+block	718	minecraft:purpur_stairs	-1	-1	-1	718
+block	719	minecraft:end_stone_bricks	-1	-1	-1	719
+block	720	minecraft:torchflower_crop	-1	-1	-1	720
+block	721	minecraft:pitcher_crop	-1	-1	-1	721
+block	722	minecraft:pitcher_plant	-1	-1	-1	722
+block	723	minecraft:beetroots	-1	-1	-1	723
+block	724	minecraft:dirt_path	-1	-1	-1	724
+block	725	minecraft:end_gateway	-1	-1	-1	725
+block	726	minecraft:repeating_command_block	-1	-1	-1	726
+block	727	minecraft:chain_command_block	-1	-1	-1	727
+block	728	minecraft:frosted_ice	-1	-1	-1	728
+block	729	minecraft:magma_block	-1	-1	-1	729
+block	730	minecraft:nether_wart_block	-1	-1	-1	730
+block	731	minecraft:red_nether_bricks	-1	-1	-1	731
+block	732	minecraft:bone_block	-1	-1	-1	732
+block	733	minecraft:structure_void	-1	-1	-1	733
+block	734	minecraft:observer	-1	-1	-1	734
+block	735	minecraft:shulker_box	-1	-1	-1	735
+block	736	minecraft:white_shulker_box	-1	-1	-1	736
+block	737	minecraft:orange_shulker_box	-1	-1	-1	737
+block	738	minecraft:magenta_shulker_box	-1	-1	-1	738
+block	739	minecraft:light_blue_shulker_box	-1	-1	-1	739
+block	740	minecraft:yellow_shulker_box	-1	-1	-1	740
+block	741	minecraft:lime_shulker_box	-1	-1	-1	741
+block	742	minecraft:pink_shulker_box	-1	-1	-1	742
+block	743	minecraft:gray_shulker_box	-1	-1	-1	743
+block	744	minecraft:light_gray_shulker_box	-1	-1	-1	744
+block	745	minecraft:cyan_shulker_box	-1	-1	-1	745
+block	746	minecraft:purple_shulker_box	-1	-1	-1	746
+block	747	minecraft:blue_shulker_box	-1	-1	-1	747
+block	748	minecraft:brown_shulker_box	-1	-1	-1	748
+block	749	minecraft:green_shulker_box	-1	-1	-1	749
+block	750	minecraft:red_shulker_box	-1	-1	-1	750
+block	751	minecraft:black_shulker_box	-1	-1	-1	751
+block	752	minecraft:white_glazed_terracotta	-1	-1	-1	752
+block	753	minecraft:orange_glazed_terracotta	-1	-1	-1	753
+block	754	minecraft:magenta_glazed_terracotta	-1	-1	-1	754
+block	755	minecraft:light_blue_glazed_terracotta	-1	-1	-1	755
+block	756	minecraft:yellow_glazed_terracotta	-1	-1	-1	756
+block	757	minecraft:lime_glazed_terracotta	-1	-1	-1	757
+block	758	minecraft:pink_glazed_terracotta	-1	-1	-1	758
+block	759	minecraft:gray_glazed_terracotta	-1	-1	-1	759
+block	760	minecraft:light_gray_glazed_terracotta	-1	-1	-1	760
+block	761	minecraft:cyan_glazed_terracotta	-1	-1	-1	761
+block	762	minecraft:purple_glazed_terracotta	-1	-1	-1	762
+block	763	minecraft:blue_glazed_terracotta	-1	-1	-1	763
+block	764	minecraft:brown_glazed_terracotta	-1	-1	-1	764
+block	765	minecraft:green_glazed_terracotta	-1	-1	-1	765
+block	766	minecraft:red_glazed_terracotta	-1	-1	-1	766
+block	767	minecraft:black_glazed_terracotta	-1	-1	-1	767
+block	768	minecraft:white_concrete	-1	-1	-1	768
+block	769	minecraft:orange_concrete	-1	-1	-1	769
+block	770	minecraft:magenta_concrete	-1	-1	-1	770
+block	771	minecraft:light_blue_concrete	-1	-1	-1	771
+block	772	minecraft:yellow_concrete	-1	-1	-1	772
+block	773	minecraft:lime_concrete	-1	-1	-1	773
+block	774	minecraft:pink_concrete	-1	-1	-1	774
+block	775	minecraft:gray_concrete	-1	-1	-1	775
+block	776	minecraft:light_gray_concrete	-1	-1	-1	776
+block	777	minecraft:cyan_concrete	-1	-1	-1	777
+block	778	minecraft:purple_concrete	-1	-1	-1	778
+block	779	minecraft:blue_concrete	-1	-1	-1	779
+block	780	minecraft:brown_concrete	-1	-1	-1	780
+block	781	minecraft:green_concrete	-1	-1	-1	781
+block	782	minecraft:red_concrete	-1	-1	-1	782
+block	783	minecraft:black_concrete	-1	-1	-1	783
+block	784	minecraft:white_concrete_stairs	-1	-1	-1	784
+block	785	minecraft:orange_concrete_stairs	-1	-1	-1	785
+block	786	minecraft:magenta_concrete_stairs	-1	-1	-1	786
+block	787	minecraft:light_blue_concrete_stairs	-1	-1	-1	787
+block	788	minecraft:yellow_concrete_stairs	-1	-1	-1	788
+block	789	minecraft:lime_concrete_stairs	-1	-1	-1	789
+block	790	minecraft:pink_concrete_stairs	-1	-1	-1	790
+block	791	minecraft:gray_concrete_stairs	-1	-1	-1	791
+block	792	minecraft:light_gray_concrete_stairs	-1	-1	-1	792
+block	793	minecraft:cyan_concrete_stairs	-1	-1	-1	793
+block	794	minecraft:purple_concrete_stairs	-1	-1	-1	794
+block	795	minecraft:blue_concrete_stairs	-1	-1	-1	795
+block	796	minecraft:brown_concrete_stairs	-1	-1	-1	796
+block	797	minecraft:green_concrete_stairs	-1	-1	-1	797
+block	798	minecraft:red_concrete_stairs	-1	-1	-1	798
+block	799	minecraft:black_concrete_stairs	-1	-1	-1	799
+block	800	minecraft:white_concrete_slab	-1	-1	-1	800
+block	801	minecraft:orange_concrete_slab	-1	-1	-1	801
+block	802	minecraft:magenta_concrete_slab	-1	-1	-1	802
+block	803	minecraft:light_blue_concrete_slab	-1	-1	-1	803
+block	804	minecraft:yellow_concrete_slab	-1	-1	-1	804
+block	805	minecraft:lime_concrete_slab	-1	-1	-1	805
+block	806	minecraft:pink_concrete_slab	-1	-1	-1	806
+block	807	minecraft:gray_concrete_slab	-1	-1	-1	807
+block	808	minecraft:light_gray_concrete_slab	-1	-1	-1	808
+block	809	minecraft:cyan_concrete_slab	-1	-1	-1	809
+block	810	minecraft:purple_concrete_slab	-1	-1	-1	810
+block	811	minecraft:blue_concrete_slab	-1	-1	-1	811
+block	812	minecraft:brown_concrete_slab	-1	-1	-1	812
+block	813	minecraft:green_concrete_slab	-1	-1	-1	813
+block	814	minecraft:red_concrete_slab	-1	-1	-1	814
+block	815	minecraft:black_concrete_slab	-1	-1	-1	815
+block	816	minecraft:white_concrete_powder	-1	-1	-1	816
+block	817	minecraft:orange_concrete_powder	-1	-1	-1	817
+block	818	minecraft:magenta_concrete_powder	-1	-1	-1	818
+block	819	minecraft:light_blue_concrete_powder	-1	-1	-1	819
+block	820	minecraft:yellow_concrete_powder	-1	-1	-1	820
+block	821	minecraft:lime_concrete_powder	-1	-1	-1	821
+block	822	minecraft:pink_concrete_powder	-1	-1	-1	822
+block	823	minecraft:gray_concrete_powder	-1	-1	-1	823
+block	824	minecraft:light_gray_concrete_powder	-1	-1	-1	824
+block	825	minecraft:cyan_concrete_powder	-1	-1	-1	825
+block	826	minecraft:purple_concrete_powder	-1	-1	-1	826
+block	827	minecraft:blue_concrete_powder	-1	-1	-1	827
+block	828	minecraft:brown_concrete_powder	-1	-1	-1	828
+block	829	minecraft:green_concrete_powder	-1	-1	-1	829
+block	830	minecraft:red_concrete_powder	-1	-1	-1	830
+block	831	minecraft:black_concrete_powder	-1	-1	-1	831
+block	832	minecraft:kelp	-1	-1	-1	832
+block	833	minecraft:kelp_plant	-1	-1	-1	833
+block	834	minecraft:dried_kelp_block	-1	-1	-1	834
+block	835	minecraft:turtle_egg	-1	-1	-1	835
+block	836	minecraft:sniffer_egg	-1	-1	-1	836
+block	837	minecraft:dried_ghast	-1	-1	-1	837
+block	838	minecraft:dead_tube_coral_block	-1	-1	-1	838
+block	839	minecraft:dead_brain_coral_block	-1	-1	-1	839
+block	840	minecraft:dead_bubble_coral_block	-1	-1	-1	840
+block	841	minecraft:dead_fire_coral_block	-1	-1	-1	841
+block	842	minecraft:dead_horn_coral_block	-1	-1	-1	842
+block	843	minecraft:tube_coral_block	-1	-1	-1	843
+block	844	minecraft:brain_coral_block	-1	-1	-1	844
+block	845	minecraft:bubble_coral_block	-1	-1	-1	845
+block	846	minecraft:fire_coral_block	-1	-1	-1	846
+block	847	minecraft:horn_coral_block	-1	-1	-1	847
+block	848	minecraft:dead_tube_coral	-1	-1	-1	848
+block	849	minecraft:dead_brain_coral	-1	-1	-1	849
+block	850	minecraft:dead_bubble_coral	-1	-1	-1	850
+block	851	minecraft:dead_fire_coral	-1	-1	-1	851
+block	852	minecraft:dead_horn_coral	-1	-1	-1	852
+block	853	minecraft:tube_coral	-1	-1	-1	853
+block	854	minecraft:brain_coral	-1	-1	-1	854
+block	855	minecraft:bubble_coral	-1	-1	-1	855
+block	856	minecraft:fire_coral	-1	-1	-1	856
+block	857	minecraft:horn_coral	-1	-1	-1	857
+block	858	minecraft:dead_tube_coral_fan	-1	-1	-1	858
+block	859	minecraft:dead_brain_coral_fan	-1	-1	-1	859
+block	860	minecraft:dead_bubble_coral_fan	-1	-1	-1	860
+block	861	minecraft:dead_fire_coral_fan	-1	-1	-1	861
+block	862	minecraft:dead_horn_coral_fan	-1	-1	-1	862
+block	863	minecraft:tube_coral_fan	-1	-1	-1	863
+block	864	minecraft:brain_coral_fan	-1	-1	-1	864
+block	865	minecraft:bubble_coral_fan	-1	-1	-1	865
+block	866	minecraft:fire_coral_fan	-1	-1	-1	866
+block	867	minecraft:horn_coral_fan	-1	-1	-1	867
+block	868	minecraft:dead_tube_coral_wall_fan	-1	-1	-1	868
+block	869	minecraft:dead_brain_coral_wall_fan	-1	-1	-1	869
+block	870	minecraft:dead_bubble_coral_wall_fan	-1	-1	-1	870
+block	871	minecraft:dead_fire_coral_wall_fan	-1	-1	-1	871
+block	872	minecraft:dead_horn_coral_wall_fan	-1	-1	-1	872
+block	873	minecraft:tube_coral_wall_fan	-1	-1	-1	873
+block	874	minecraft:brain_coral_wall_fan	-1	-1	-1	874
+block	875	minecraft:bubble_coral_wall_fan	-1	-1	-1	875
+block	876	minecraft:fire_coral_wall_fan	-1	-1	-1	876
+block	877	minecraft:horn_coral_wall_fan	-1	-1	-1	877
+block	878	minecraft:sea_pickle	-1	-1	-1	878
+block	879	minecraft:blue_ice	-1	-1	-1	879
+block	880	minecraft:conduit	-1	-1	-1	880
+block	881	minecraft:bamboo_sapling	-1	-1	-1	881
+block	882	minecraft:bamboo	-1	-1	-1	882
+block	883	minecraft:potted_bamboo	-1	-1	-1	883
+block	884	minecraft:void_air	-1	-1	-1	884
+block	885	minecraft:cave_air	-1	-1	-1	885
+block	886	minecraft:bubble_column	-1	-1	-1	886
+block	887	minecraft:polished_granite_stairs	-1	-1	-1	887
+block	888	minecraft:smooth_red_sandstone_stairs	-1	-1	-1	888
+block	889	minecraft:mossy_stone_brick_stairs	-1	-1	-1	889
+block	890	minecraft:polished_diorite_stairs	-1	-1	-1	890
+block	891	minecraft:mossy_cobblestone_stairs	-1	-1	-1	891
+block	892	minecraft:end_stone_brick_stairs	-1	-1	-1	892
+block	893	minecraft:stone_stairs	-1	-1	-1	893
+block	894	minecraft:smooth_sandstone_stairs	-1	-1	-1	894
+block	895	minecraft:smooth_quartz_stairs	-1	-1	-1	895
+block	896	minecraft:granite_stairs	-1	-1	-1	896
+block	897	minecraft:andesite_stairs	-1	-1	-1	897
+block	898	minecraft:red_nether_brick_stairs	-1	-1	-1	898
+block	899	minecraft:polished_andesite_stairs	-1	-1	-1	899
+block	900	minecraft:diorite_stairs	-1	-1	-1	900
+block	901	minecraft:polished_granite_slab	-1	-1	-1	901
+block	902	minecraft:smooth_red_sandstone_slab	-1	-1	-1	902
+block	903	minecraft:mossy_stone_brick_slab	-1	-1	-1	903
+block	904	minecraft:polished_diorite_slab	-1	-1	-1	904
+block	905	minecraft:mossy_cobblestone_slab	-1	-1	-1	905
+block	906	minecraft:end_stone_brick_slab	-1	-1	-1	906
+block	907	minecraft:smooth_sandstone_slab	-1	-1	-1	907
+block	908	minecraft:smooth_quartz_slab	-1	-1	-1	908
+block	909	minecraft:granite_slab	-1	-1	-1	909
+block	910	minecraft:andesite_slab	-1	-1	-1	910
+block	911	minecraft:red_nether_brick_slab	-1	-1	-1	911
+block	912	minecraft:polished_andesite_slab	-1	-1	-1	912
+block	913	minecraft:diorite_slab	-1	-1	-1	913
+block	914	minecraft:brick_wall	-1	-1	-1	914
+block	915	minecraft:prismarine_wall	-1	-1	-1	915
+block	916	minecraft:red_sandstone_wall	-1	-1	-1	916
+block	917	minecraft:mossy_stone_brick_wall	-1	-1	-1	917
+block	918	minecraft:granite_wall	-1	-1	-1	918
+block	919	minecraft:stone_brick_wall	-1	-1	-1	919
+block	920	minecraft:mud_brick_wall	-1	-1	-1	920
+block	921	minecraft:nether_brick_wall	-1	-1	-1	921
+block	922	minecraft:andesite_wall	-1	-1	-1	922
+block	923	minecraft:red_nether_brick_wall	-1	-1	-1	923
+block	924	minecraft:sandstone_wall	-1	-1	-1	924
+block	925	minecraft:end_stone_brick_wall	-1	-1	-1	925
+block	926	minecraft:diorite_wall	-1	-1	-1	926
+block	927	minecraft:scaffolding	-1	-1	-1	927
+block	928	minecraft:loom	-1	-1	-1	928
+block	929	minecraft:barrel	-1	-1	-1	929
+block	930	minecraft:smoker	-1	-1	-1	930
+block	931	minecraft:blast_furnace	-1	-1	-1	931
+block	932	minecraft:cartography_table	-1	-1	-1	932
+block	933	minecraft:fletching_table	-1	-1	-1	933
+block	934	minecraft:grindstone	-1	-1	-1	934
+block	935	minecraft:lectern	-1	-1	-1	935
+block	936	minecraft:smithing_table	-1	-1	-1	936
+block	937	minecraft:stonecutter	-1	-1	-1	937
+block	938	minecraft:bell	-1	-1	-1	938
+block	939	minecraft:lantern	-1	-1	-1	939
+block	940	minecraft:soul_lantern	-1	-1	-1	940
+block	941	minecraft:copper_lantern	0	942	-1	941
+state	24202	24206	-1	24202	true
+state	24203	24207	-1	24203	true
+state	24204	24208	-1	24204	true
+state	24205	24209	-1	24205	true
+block	942	minecraft:exposed_copper_lantern	1	943	941	941
+state	24206	24210	24202	24202	true
+state	24207	24211	24203	24203	true
+state	24208	24212	24204	24204	true
+state	24209	24213	24205	24205	true
+block	943	minecraft:weathered_copper_lantern	2	944	942	941
+state	24210	24214	24206	24202	true
+state	24211	24215	24207	24203	true
+state	24212	24216	24208	24204	true
+state	24213	24217	24209	24205	true
+block	944	minecraft:oxidized_copper_lantern	3	-1	943	941
+state	24214	-1	24210	24202	false
+state	24215	-1	24211	24203	false
+state	24216	-1	24212	24204	false
+state	24217	-1	24213	24205	false
+block	945	minecraft:waxed_copper_lantern	-1	-1	-1	945
+block	946	minecraft:waxed_exposed_copper_lantern	-1	-1	-1	946
+block	947	minecraft:waxed_weathered_copper_lantern	-1	-1	-1	947
+block	948	minecraft:waxed_oxidized_copper_lantern	-1	-1	-1	948
+block	949	minecraft:campfire	-1	-1	-1	949
+block	950	minecraft:soul_campfire	-1	-1	-1	950
+block	951	minecraft:sweet_berry_bush	-1	-1	-1	951
+block	952	minecraft:warped_stem	-1	-1	-1	952
+block	953	minecraft:stripped_warped_stem	-1	-1	-1	953
+block	954	minecraft:warped_hyphae	-1	-1	-1	954
+block	955	minecraft:stripped_warped_hyphae	-1	-1	-1	955
+block	956	minecraft:warped_nylium	-1	-1	-1	956
+block	957	minecraft:warped_fungus	-1	-1	-1	957
+block	958	minecraft:warped_wart_block	-1	-1	-1	958
+block	959	minecraft:warped_roots	-1	-1	-1	959
+block	960	minecraft:nether_sprouts	-1	-1	-1	960
+block	961	minecraft:crimson_stem	-1	-1	-1	961
+block	962	minecraft:stripped_crimson_stem	-1	-1	-1	962
+block	963	minecraft:crimson_hyphae	-1	-1	-1	963
+block	964	minecraft:stripped_crimson_hyphae	-1	-1	-1	964
+block	965	minecraft:crimson_nylium	-1	-1	-1	965
+block	966	minecraft:crimson_fungus	-1	-1	-1	966
+block	967	minecraft:shroomlight	-1	-1	-1	967
+block	968	minecraft:weeping_vines	-1	-1	-1	968
+block	969	minecraft:weeping_vines_plant	-1	-1	-1	969
+block	970	minecraft:twisting_vines	-1	-1	-1	970
+block	971	minecraft:twisting_vines_plant	-1	-1	-1	971
+block	972	minecraft:crimson_roots	-1	-1	-1	972
+block	973	minecraft:crimson_planks	-1	-1	-1	973
+block	974	minecraft:warped_planks	-1	-1	-1	974
+block	975	minecraft:crimson_slab	-1	-1	-1	975
+block	976	minecraft:warped_slab	-1	-1	-1	976
+block	977	minecraft:crimson_pressure_plate	-1	-1	-1	977
+block	978	minecraft:warped_pressure_plate	-1	-1	-1	978
+block	979	minecraft:crimson_fence	-1	-1	-1	979
+block	980	minecraft:warped_fence	-1	-1	-1	980
+block	981	minecraft:crimson_trapdoor	-1	-1	-1	981
+block	982	minecraft:warped_trapdoor	-1	-1	-1	982
+block	983	minecraft:crimson_fence_gate	-1	-1	-1	983
+block	984	minecraft:warped_fence_gate	-1	-1	-1	984
+block	985	minecraft:crimson_stairs	-1	-1	-1	985
+block	986	minecraft:warped_stairs	-1	-1	-1	986
+block	987	minecraft:crimson_button	-1	-1	-1	987
+block	988	minecraft:warped_button	-1	-1	-1	988
+block	989	minecraft:crimson_door	-1	-1	-1	989
+block	990	minecraft:warped_door	-1	-1	-1	990
+block	991	minecraft:crimson_sign	-1	-1	-1	991
+block	992	minecraft:warped_sign	-1	-1	-1	992
+block	993	minecraft:crimson_wall_sign	-1	-1	-1	993
+block	994	minecraft:warped_wall_sign	-1	-1	-1	994
+block	995	minecraft:structure_block	-1	-1	-1	995
+block	996	minecraft:jigsaw	-1	-1	-1	996
+block	997	minecraft:test_block	-1	-1	-1	997
+block	998	minecraft:test_instance_block	-1	-1	-1	998
+block	999	minecraft:composter	-1	-1	-1	999
+block	1000	minecraft:target	-1	-1	-1	1000
+block	1001	minecraft:bee_nest	-1	-1	-1	1001
+block	1002	minecraft:beehive	-1	-1	-1	1002
+block	1003	minecraft:honey_block	-1	-1	-1	1003
+block	1004	minecraft:honeycomb_block	-1	-1	-1	1004
+block	1005	minecraft:netherite_block	-1	-1	-1	1005
+block	1006	minecraft:ancient_debris	-1	-1	-1	1006
+block	1007	minecraft:crying_obsidian	-1	-1	-1	1007
+block	1008	minecraft:respawn_anchor	-1	-1	-1	1008
+block	1009	minecraft:potted_crimson_fungus	-1	-1	-1	1009
+block	1010	minecraft:potted_warped_fungus	-1	-1	-1	1010
+block	1011	minecraft:potted_crimson_roots	-1	-1	-1	1011
+block	1012	minecraft:potted_warped_roots	-1	-1	-1	1012
+block	1013	minecraft:lodestone	-1	-1	-1	1013
+block	1014	minecraft:blackstone	-1	-1	-1	1014
+block	1015	minecraft:blackstone_stairs	-1	-1	-1	1015
+block	1016	minecraft:blackstone_wall	-1	-1	-1	1016
+block	1017	minecraft:blackstone_slab	-1	-1	-1	1017
+block	1018	minecraft:polished_blackstone	-1	-1	-1	1018
+block	1019	minecraft:polished_blackstone_bricks	-1	-1	-1	1019
+block	1020	minecraft:cracked_polished_blackstone_bricks	-1	-1	-1	1020
+block	1021	minecraft:chiseled_polished_blackstone	-1	-1	-1	1021
+block	1022	minecraft:polished_blackstone_brick_slab	-1	-1	-1	1022
+block	1023	minecraft:polished_blackstone_brick_stairs	-1	-1	-1	1023
+block	1024	minecraft:polished_blackstone_brick_wall	-1	-1	-1	1024
+block	1025	minecraft:gilded_blackstone	-1	-1	-1	1025
+block	1026	minecraft:polished_blackstone_stairs	-1	-1	-1	1026
+block	1027	minecraft:polished_blackstone_slab	-1	-1	-1	1027
+block	1028	minecraft:polished_blackstone_pressure_plate	-1	-1	-1	1028
+block	1029	minecraft:polished_blackstone_button	-1	-1	-1	1029
+block	1030	minecraft:polished_blackstone_wall	-1	-1	-1	1030
+block	1031	minecraft:chiseled_nether_bricks	-1	-1	-1	1031
+block	1032	minecraft:cracked_nether_bricks	-1	-1	-1	1032
+block	1033	minecraft:quartz_bricks	-1	-1	-1	1033
+block	1034	minecraft:candle	-1	-1	-1	1034
+block	1035	minecraft:white_candle	-1	-1	-1	1035
+block	1036	minecraft:orange_candle	-1	-1	-1	1036
+block	1037	minecraft:magenta_candle	-1	-1	-1	1037
+block	1038	minecraft:light_blue_candle	-1	-1	-1	1038
+block	1039	minecraft:yellow_candle	-1	-1	-1	1039
+block	1040	minecraft:lime_candle	-1	-1	-1	1040
+block	1041	minecraft:pink_candle	-1	-1	-1	1041
+block	1042	minecraft:gray_candle	-1	-1	-1	1042
+block	1043	minecraft:light_gray_candle	-1	-1	-1	1043
+block	1044	minecraft:cyan_candle	-1	-1	-1	1044
+block	1045	minecraft:purple_candle	-1	-1	-1	1045
+block	1046	minecraft:blue_candle	-1	-1	-1	1046
+block	1047	minecraft:brown_candle	-1	-1	-1	1047
+block	1048	minecraft:green_candle	-1	-1	-1	1048
+block	1049	minecraft:red_candle	-1	-1	-1	1049
+block	1050	minecraft:black_candle	-1	-1	-1	1050
+block	1051	minecraft:candle_cake	-1	-1	-1	1051
+block	1052	minecraft:white_candle_cake	-1	-1	-1	1052
+block	1053	minecraft:orange_candle_cake	-1	-1	-1	1053
+block	1054	minecraft:magenta_candle_cake	-1	-1	-1	1054
+block	1055	minecraft:light_blue_candle_cake	-1	-1	-1	1055
+block	1056	minecraft:yellow_candle_cake	-1	-1	-1	1056
+block	1057	minecraft:lime_candle_cake	-1	-1	-1	1057
+block	1058	minecraft:pink_candle_cake	-1	-1	-1	1058
+block	1059	minecraft:gray_candle_cake	-1	-1	-1	1059
+block	1060	minecraft:light_gray_candle_cake	-1	-1	-1	1060
+block	1061	minecraft:cyan_candle_cake	-1	-1	-1	1061
+block	1062	minecraft:purple_candle_cake	-1	-1	-1	1062
+block	1063	minecraft:blue_candle_cake	-1	-1	-1	1063
+block	1064	minecraft:brown_candle_cake	-1	-1	-1	1064
+block	1065	minecraft:green_candle_cake	-1	-1	-1	1065
+block	1066	minecraft:red_candle_cake	-1	-1	-1	1066
+block	1067	minecraft:black_candle_cake	-1	-1	-1	1067
+block	1068	minecraft:amethyst_block	-1	-1	-1	1068
+block	1069	minecraft:budding_amethyst	-1	-1	-1	1069
+block	1070	minecraft:amethyst_cluster	-1	-1	-1	1070
+block	1071	minecraft:large_amethyst_bud	-1	-1	-1	1071
+block	1072	minecraft:medium_amethyst_bud	-1	-1	-1	1072
+block	1073	minecraft:small_amethyst_bud	-1	-1	-1	1073
+block	1074	minecraft:tuff	-1	-1	-1	1074
+block	1075	minecraft:tuff_slab	-1	-1	-1	1075
+block	1076	minecraft:tuff_stairs	-1	-1	-1	1076
+block	1077	minecraft:tuff_wall	-1	-1	-1	1077
+block	1078	minecraft:polished_tuff	-1	-1	-1	1078
+block	1079	minecraft:polished_tuff_slab	-1	-1	-1	1079
+block	1080	minecraft:polished_tuff_stairs	-1	-1	-1	1080
+block	1081	minecraft:polished_tuff_wall	-1	-1	-1	1081
+block	1082	minecraft:chiseled_tuff	-1	-1	-1	1082
+block	1083	minecraft:tuff_bricks	-1	-1	-1	1083
+block	1084	minecraft:tuff_brick_slab	-1	-1	-1	1084
+block	1085	minecraft:tuff_brick_stairs	-1	-1	-1	1085
+block	1086	minecraft:tuff_brick_wall	-1	-1	-1	1086
+block	1087	minecraft:chiseled_tuff_bricks	-1	-1	-1	1087
+block	1088	minecraft:sulfur	-1	-1	-1	1088
+block	1089	minecraft:potent_sulfur	-1	-1	-1	1089
+block	1090	minecraft:sulfur_slab	-1	-1	-1	1090
+block	1091	minecraft:sulfur_stairs	-1	-1	-1	1091
+block	1092	minecraft:sulfur_wall	-1	-1	-1	1092
+block	1093	minecraft:polished_sulfur	-1	-1	-1	1093
+block	1094	minecraft:polished_sulfur_slab	-1	-1	-1	1094
+block	1095	minecraft:polished_sulfur_stairs	-1	-1	-1	1095
+block	1096	minecraft:polished_sulfur_wall	-1	-1	-1	1096
+block	1097	minecraft:sulfur_bricks	-1	-1	-1	1097
+block	1098	minecraft:sulfur_brick_slab	-1	-1	-1	1098
+block	1099	minecraft:sulfur_brick_stairs	-1	-1	-1	1099
+block	1100	minecraft:sulfur_brick_wall	-1	-1	-1	1100
+block	1101	minecraft:chiseled_sulfur	-1	-1	-1	1101
+block	1102	minecraft:cinnabar	-1	-1	-1	1102
+block	1103	minecraft:cinnabar_slab	-1	-1	-1	1103
+block	1104	minecraft:cinnabar_stairs	-1	-1	-1	1104
+block	1105	minecraft:cinnabar_wall	-1	-1	-1	1105
+block	1106	minecraft:polished_cinnabar	-1	-1	-1	1106
+block	1107	minecraft:polished_cinnabar_slab	-1	-1	-1	1107
+block	1108	minecraft:polished_cinnabar_stairs	-1	-1	-1	1108
+block	1109	minecraft:polished_cinnabar_wall	-1	-1	-1	1109
+block	1110	minecraft:cinnabar_bricks	-1	-1	-1	1110
+block	1111	minecraft:cinnabar_brick_slab	-1	-1	-1	1111
+block	1112	minecraft:cinnabar_brick_stairs	-1	-1	-1	1112
+block	1113	minecraft:cinnabar_brick_wall	-1	-1	-1	1113
+block	1114	minecraft:chiseled_cinnabar	-1	-1	-1	1114
+block	1115	minecraft:calcite	-1	-1	-1	1115
+block	1116	minecraft:tinted_glass	-1	-1	-1	1116
+block	1117	minecraft:powder_snow	-1	-1	-1	1117
+block	1118	minecraft:sculk_sensor	-1	-1	-1	1118
+block	1119	minecraft:calibrated_sculk_sensor	-1	-1	-1	1119
+block	1120	minecraft:sculk	-1	-1	-1	1120
+block	1121	minecraft:sculk_vein	-1	-1	-1	1121
+block	1122	minecraft:sculk_catalyst	-1	-1	-1	1122
+block	1123	minecraft:sculk_shrieker	-1	-1	-1	1123
+block	1124	minecraft:copper_block	0	1125	-1	1124
+state	31139	31140	-1	31139	true
+block	1125	minecraft:exposed_copper	1	1126	1124	1124
+state	31140	31141	31139	31139	true
+block	1126	minecraft:weathered_copper	2	1127	1125	1124
+state	31141	31142	31140	31139	true
+block	1127	minecraft:oxidized_copper	3	-1	1126	1124
+state	31142	-1	31141	31139	false
+block	1128	minecraft:waxed_copper_block	-1	-1	-1	1128
+block	1129	minecraft:waxed_exposed_copper	-1	-1	-1	1129
+block	1130	minecraft:waxed_weathered_copper	-1	-1	-1	1130
+block	1131	minecraft:waxed_oxidized_copper	-1	-1	-1	1131
+block	1132	minecraft:copper_ore	-1	-1	-1	1132
+block	1133	minecraft:deepslate_copper_ore	-1	-1	-1	1133
+block	1134	minecraft:cut_copper	0	1135	-1	1134
+state	31149	31150	-1	31149	true
+block	1135	minecraft:exposed_cut_copper	1	1136	1134	1134
+state	31150	31151	31149	31149	true
+block	1136	minecraft:weathered_cut_copper	2	1137	1135	1134
+state	31151	31152	31150	31149	true
+block	1137	minecraft:oxidized_cut_copper	3	-1	1136	1134
+state	31152	-1	31151	31149	false
+block	1138	minecraft:waxed_cut_copper	-1	-1	-1	1138
+block	1139	minecraft:waxed_exposed_cut_copper	-1	-1	-1	1139
+block	1140	minecraft:waxed_weathered_cut_copper	-1	-1	-1	1140
+block	1141	minecraft:waxed_oxidized_cut_copper	-1	-1	-1	1141
+block	1142	minecraft:chiseled_copper	0	1143	-1	1142
+state	31157	31158	-1	31157	true
+block	1143	minecraft:exposed_chiseled_copper	1	1144	1142	1142
+state	31158	31159	31157	31157	true
+block	1144	minecraft:weathered_chiseled_copper	2	1145	1143	1142
+state	31159	31160	31158	31157	true
+block	1145	minecraft:oxidized_chiseled_copper	3	-1	1144	1142
+state	31160	-1	31159	31157	false
+block	1146	minecraft:waxed_chiseled_copper	-1	-1	-1	1146
+block	1147	minecraft:waxed_exposed_chiseled_copper	-1	-1	-1	1147
+block	1148	minecraft:waxed_weathered_chiseled_copper	-1	-1	-1	1148
+block	1149	minecraft:waxed_oxidized_chiseled_copper	-1	-1	-1	1149
+block	1150	minecraft:cut_copper_stairs	0	1151	-1	1150
+state	31165	31245	-1	31165	true
+state	31166	31246	-1	31166	true
+state	31167	31247	-1	31167	true
+state	31168	31248	-1	31168	true
+state	31169	31249	-1	31169	true
+state	31170	31250	-1	31170	true
+state	31171	31251	-1	31171	true
+state	31172	31252	-1	31172	true
+state	31173	31253	-1	31173	true
+state	31174	31254	-1	31174	true
+state	31175	31255	-1	31175	true
+state	31176	31256	-1	31176	true
+state	31177	31257	-1	31177	true
+state	31178	31258	-1	31178	true
+state	31179	31259	-1	31179	true
+state	31180	31260	-1	31180	true
+state	31181	31261	-1	31181	true
+state	31182	31262	-1	31182	true
+state	31183	31263	-1	31183	true
+state	31184	31264	-1	31184	true
+state	31185	31265	-1	31185	true
+state	31186	31266	-1	31186	true
+state	31187	31267	-1	31187	true
+state	31188	31268	-1	31188	true
+state	31189	31269	-1	31189	true
+state	31190	31270	-1	31190	true
+state	31191	31271	-1	31191	true
+state	31192	31272	-1	31192	true
+state	31193	31273	-1	31193	true
+state	31194	31274	-1	31194	true
+state	31195	31275	-1	31195	true
+state	31196	31276	-1	31196	true
+state	31197	31277	-1	31197	true
+state	31198	31278	-1	31198	true
+state	31199	31279	-1	31199	true
+state	31200	31280	-1	31200	true
+state	31201	31281	-1	31201	true
+state	31202	31282	-1	31202	true
+state	31203	31283	-1	31203	true
+state	31204	31284	-1	31204	true
+state	31205	31285	-1	31205	true
+state	31206	31286	-1	31206	true
+state	31207	31287	-1	31207	true
+state	31208	31288	-1	31208	true
+state	31209	31289	-1	31209	true
+state	31210	31290	-1	31210	true
+state	31211	31291	-1	31211	true
+state	31212	31292	-1	31212	true
+state	31213	31293	-1	31213	true
+state	31214	31294	-1	31214	true
+state	31215	31295	-1	31215	true
+state	31216	31296	-1	31216	true
+state	31217	31297	-1	31217	true
+state	31218	31298	-1	31218	true
+state	31219	31299	-1	31219	true
+state	31220	31300	-1	31220	true
+state	31221	31301	-1	31221	true
+state	31222	31302	-1	31222	true
+state	31223	31303	-1	31223	true
+state	31224	31304	-1	31224	true
+state	31225	31305	-1	31225	true
+state	31226	31306	-1	31226	true
+state	31227	31307	-1	31227	true
+state	31228	31308	-1	31228	true
+state	31229	31309	-1	31229	true
+state	31230	31310	-1	31230	true
+state	31231	31311	-1	31231	true
+state	31232	31312	-1	31232	true
+state	31233	31313	-1	31233	true
+state	31234	31314	-1	31234	true
+state	31235	31315	-1	31235	true
+state	31236	31316	-1	31236	true
+state	31237	31317	-1	31237	true
+state	31238	31318	-1	31238	true
+state	31239	31319	-1	31239	true
+state	31240	31320	-1	31240	true
+state	31241	31321	-1	31241	true
+state	31242	31322	-1	31242	true
+state	31243	31323	-1	31243	true
+state	31244	31324	-1	31244	true
+block	1151	minecraft:exposed_cut_copper_stairs	1	1152	1150	1150
+state	31245	31325	31165	31165	true
+state	31246	31326	31166	31166	true
+state	31247	31327	31167	31167	true
+state	31248	31328	31168	31168	true
+state	31249	31329	31169	31169	true
+state	31250	31330	31170	31170	true
+state	31251	31331	31171	31171	true
+state	31252	31332	31172	31172	true
+state	31253	31333	31173	31173	true
+state	31254	31334	31174	31174	true
+state	31255	31335	31175	31175	true
+state	31256	31336	31176	31176	true
+state	31257	31337	31177	31177	true
+state	31258	31338	31178	31178	true
+state	31259	31339	31179	31179	true
+state	31260	31340	31180	31180	true
+state	31261	31341	31181	31181	true
+state	31262	31342	31182	31182	true
+state	31263	31343	31183	31183	true
+state	31264	31344	31184	31184	true
+state	31265	31345	31185	31185	true
+state	31266	31346	31186	31186	true
+state	31267	31347	31187	31187	true
+state	31268	31348	31188	31188	true
+state	31269	31349	31189	31189	true
+state	31270	31350	31190	31190	true
+state	31271	31351	31191	31191	true
+state	31272	31352	31192	31192	true
+state	31273	31353	31193	31193	true
+state	31274	31354	31194	31194	true
+state	31275	31355	31195	31195	true
+state	31276	31356	31196	31196	true
+state	31277	31357	31197	31197	true
+state	31278	31358	31198	31198	true
+state	31279	31359	31199	31199	true
+state	31280	31360	31200	31200	true
+state	31281	31361	31201	31201	true
+state	31282	31362	31202	31202	true
+state	31283	31363	31203	31203	true
+state	31284	31364	31204	31204	true
+state	31285	31365	31205	31205	true
+state	31286	31366	31206	31206	true
+state	31287	31367	31207	31207	true
+state	31288	31368	31208	31208	true
+state	31289	31369	31209	31209	true
+state	31290	31370	31210	31210	true
+state	31291	31371	31211	31211	true
+state	31292	31372	31212	31212	true
+state	31293	31373	31213	31213	true
+state	31294	31374	31214	31214	true
+state	31295	31375	31215	31215	true
+state	31296	31376	31216	31216	true
+state	31297	31377	31217	31217	true
+state	31298	31378	31218	31218	true
+state	31299	31379	31219	31219	true
+state	31300	31380	31220	31220	true
+state	31301	31381	31221	31221	true
+state	31302	31382	31222	31222	true
+state	31303	31383	31223	31223	true
+state	31304	31384	31224	31224	true
+state	31305	31385	31225	31225	true
+state	31306	31386	31226	31226	true
+state	31307	31387	31227	31227	true
+state	31308	31388	31228	31228	true
+state	31309	31389	31229	31229	true
+state	31310	31390	31230	31230	true
+state	31311	31391	31231	31231	true
+state	31312	31392	31232	31232	true
+state	31313	31393	31233	31233	true
+state	31314	31394	31234	31234	true
+state	31315	31395	31235	31235	true
+state	31316	31396	31236	31236	true
+state	31317	31397	31237	31237	true
+state	31318	31398	31238	31238	true
+state	31319	31399	31239	31239	true
+state	31320	31400	31240	31240	true
+state	31321	31401	31241	31241	true
+state	31322	31402	31242	31242	true
+state	31323	31403	31243	31243	true
+state	31324	31404	31244	31244	true
+block	1152	minecraft:weathered_cut_copper_stairs	2	1153	1151	1150
+state	31325	31405	31245	31165	true
+state	31326	31406	31246	31166	true
+state	31327	31407	31247	31167	true
+state	31328	31408	31248	31168	true
+state	31329	31409	31249	31169	true
+state	31330	31410	31250	31170	true
+state	31331	31411	31251	31171	true
+state	31332	31412	31252	31172	true
+state	31333	31413	31253	31173	true
+state	31334	31414	31254	31174	true
+state	31335	31415	31255	31175	true
+state	31336	31416	31256	31176	true
+state	31337	31417	31257	31177	true
+state	31338	31418	31258	31178	true
+state	31339	31419	31259	31179	true
+state	31340	31420	31260	31180	true
+state	31341	31421	31261	31181	true
+state	31342	31422	31262	31182	true
+state	31343	31423	31263	31183	true
+state	31344	31424	31264	31184	true
+state	31345	31425	31265	31185	true
+state	31346	31426	31266	31186	true
+state	31347	31427	31267	31187	true
+state	31348	31428	31268	31188	true
+state	31349	31429	31269	31189	true
+state	31350	31430	31270	31190	true
+state	31351	31431	31271	31191	true
+state	31352	31432	31272	31192	true
+state	31353	31433	31273	31193	true
+state	31354	31434	31274	31194	true
+state	31355	31435	31275	31195	true
+state	31356	31436	31276	31196	true
+state	31357	31437	31277	31197	true
+state	31358	31438	31278	31198	true
+state	31359	31439	31279	31199	true
+state	31360	31440	31280	31200	true
+state	31361	31441	31281	31201	true
+state	31362	31442	31282	31202	true
+state	31363	31443	31283	31203	true
+state	31364	31444	31284	31204	true
+state	31365	31445	31285	31205	true
+state	31366	31446	31286	31206	true
+state	31367	31447	31287	31207	true
+state	31368	31448	31288	31208	true
+state	31369	31449	31289	31209	true
+state	31370	31450	31290	31210	true
+state	31371	31451	31291	31211	true
+state	31372	31452	31292	31212	true
+state	31373	31453	31293	31213	true
+state	31374	31454	31294	31214	true
+state	31375	31455	31295	31215	true
+state	31376	31456	31296	31216	true
+state	31377	31457	31297	31217	true
+state	31378	31458	31298	31218	true
+state	31379	31459	31299	31219	true
+state	31380	31460	31300	31220	true
+state	31381	31461	31301	31221	true
+state	31382	31462	31302	31222	true
+state	31383	31463	31303	31223	true
+state	31384	31464	31304	31224	true
+state	31385	31465	31305	31225	true
+state	31386	31466	31306	31226	true
+state	31387	31467	31307	31227	true
+state	31388	31468	31308	31228	true
+state	31389	31469	31309	31229	true
+state	31390	31470	31310	31230	true
+state	31391	31471	31311	31231	true
+state	31392	31472	31312	31232	true
+state	31393	31473	31313	31233	true
+state	31394	31474	31314	31234	true
+state	31395	31475	31315	31235	true
+state	31396	31476	31316	31236	true
+state	31397	31477	31317	31237	true
+state	31398	31478	31318	31238	true
+state	31399	31479	31319	31239	true
+state	31400	31480	31320	31240	true
+state	31401	31481	31321	31241	true
+state	31402	31482	31322	31242	true
+state	31403	31483	31323	31243	true
+state	31404	31484	31324	31244	true
+block	1153	minecraft:oxidized_cut_copper_stairs	3	-1	1152	1150
+state	31405	-1	31325	31165	false
+state	31406	-1	31326	31166	false
+state	31407	-1	31327	31167	false
+state	31408	-1	31328	31168	false
+state	31409	-1	31329	31169	false
+state	31410	-1	31330	31170	false
+state	31411	-1	31331	31171	false
+state	31412	-1	31332	31172	false
+state	31413	-1	31333	31173	false
+state	31414	-1	31334	31174	false
+state	31415	-1	31335	31175	false
+state	31416	-1	31336	31176	false
+state	31417	-1	31337	31177	false
+state	31418	-1	31338	31178	false
+state	31419	-1	31339	31179	false
+state	31420	-1	31340	31180	false
+state	31421	-1	31341	31181	false
+state	31422	-1	31342	31182	false
+state	31423	-1	31343	31183	false
+state	31424	-1	31344	31184	false
+state	31425	-1	31345	31185	false
+state	31426	-1	31346	31186	false
+state	31427	-1	31347	31187	false
+state	31428	-1	31348	31188	false
+state	31429	-1	31349	31189	false
+state	31430	-1	31350	31190	false
+state	31431	-1	31351	31191	false
+state	31432	-1	31352	31192	false
+state	31433	-1	31353	31193	false
+state	31434	-1	31354	31194	false
+state	31435	-1	31355	31195	false
+state	31436	-1	31356	31196	false
+state	31437	-1	31357	31197	false
+state	31438	-1	31358	31198	false
+state	31439	-1	31359	31199	false
+state	31440	-1	31360	31200	false
+state	31441	-1	31361	31201	false
+state	31442	-1	31362	31202	false
+state	31443	-1	31363	31203	false
+state	31444	-1	31364	31204	false
+state	31445	-1	31365	31205	false
+state	31446	-1	31366	31206	false
+state	31447	-1	31367	31207	false
+state	31448	-1	31368	31208	false
+state	31449	-1	31369	31209	false
+state	31450	-1	31370	31210	false
+state	31451	-1	31371	31211	false
+state	31452	-1	31372	31212	false
+state	31453	-1	31373	31213	false
+state	31454	-1	31374	31214	false
+state	31455	-1	31375	31215	false
+state	31456	-1	31376	31216	false
+state	31457	-1	31377	31217	false
+state	31458	-1	31378	31218	false
+state	31459	-1	31379	31219	false
+state	31460	-1	31380	31220	false
+state	31461	-1	31381	31221	false
+state	31462	-1	31382	31222	false
+state	31463	-1	31383	31223	false
+state	31464	-1	31384	31224	false
+state	31465	-1	31385	31225	false
+state	31466	-1	31386	31226	false
+state	31467	-1	31387	31227	false
+state	31468	-1	31388	31228	false
+state	31469	-1	31389	31229	false
+state	31470	-1	31390	31230	false
+state	31471	-1	31391	31231	false
+state	31472	-1	31392	31232	false
+state	31473	-1	31393	31233	false
+state	31474	-1	31394	31234	false
+state	31475	-1	31395	31235	false
+state	31476	-1	31396	31236	false
+state	31477	-1	31397	31237	false
+state	31478	-1	31398	31238	false
+state	31479	-1	31399	31239	false
+state	31480	-1	31400	31240	false
+state	31481	-1	31401	31241	false
+state	31482	-1	31402	31242	false
+state	31483	-1	31403	31243	false
+state	31484	-1	31404	31244	false
+block	1154	minecraft:waxed_cut_copper_stairs	-1	-1	-1	1154
+block	1155	minecraft:waxed_exposed_cut_copper_stairs	-1	-1	-1	1155
+block	1156	minecraft:waxed_weathered_cut_copper_stairs	-1	-1	-1	1156
+block	1157	minecraft:waxed_oxidized_cut_copper_stairs	-1	-1	-1	1157
+block	1158	minecraft:cut_copper_slab	0	1159	-1	1158
+state	31805	31811	-1	31805	true
+state	31806	31812	-1	31806	true
+state	31807	31813	-1	31807	true
+state	31808	31814	-1	31808	true
+state	31809	31815	-1	31809	true
+state	31810	31816	-1	31810	true
+block	1159	minecraft:exposed_cut_copper_slab	1	1160	1158	1158
+state	31811	31817	31805	31805	true
+state	31812	31818	31806	31806	true
+state	31813	31819	31807	31807	true
+state	31814	31820	31808	31808	true
+state	31815	31821	31809	31809	true
+state	31816	31822	31810	31810	true
+block	1160	minecraft:weathered_cut_copper_slab	2	1161	1159	1158
+state	31817	31823	31811	31805	true
+state	31818	31824	31812	31806	true
+state	31819	31825	31813	31807	true
+state	31820	31826	31814	31808	true
+state	31821	31827	31815	31809	true
+state	31822	31828	31816	31810	true
+block	1161	minecraft:oxidized_cut_copper_slab	3	-1	1160	1158
+state	31823	-1	31817	31805	false
+state	31824	-1	31818	31806	false
+state	31825	-1	31819	31807	false
+state	31826	-1	31820	31808	false
+state	31827	-1	31821	31809	false
+state	31828	-1	31822	31810	false
+block	1162	minecraft:waxed_cut_copper_slab	-1	-1	-1	1162
+block	1163	minecraft:waxed_exposed_cut_copper_slab	-1	-1	-1	1163
+block	1164	minecraft:waxed_weathered_cut_copper_slab	-1	-1	-1	1164
+block	1165	minecraft:waxed_oxidized_cut_copper_slab	-1	-1	-1	1165
+block	1166	minecraft:copper_door	0	1167	-1	1166
+state	31853	31917	-1	31853	true
+state	31854	31918	-1	31854	true
+state	31855	31919	-1	31855	true
+state	31856	31920	-1	31856	true
+state	31857	31921	-1	31857	true
+state	31858	31922	-1	31858	true
+state	31859	31923	-1	31859	true
+state	31860	31924	-1	31860	true
+state	31861	31925	-1	31861	true
+state	31862	31926	-1	31862	true
+state	31863	31927	-1	31863	true
+state	31864	31928	-1	31864	true
+state	31865	31929	-1	31865	true
+state	31866	31930	-1	31866	true
+state	31867	31931	-1	31867	true
+state	31868	31932	-1	31868	true
+state	31869	31933	-1	31869	true
+state	31870	31934	-1	31870	true
+state	31871	31935	-1	31871	true
+state	31872	31936	-1	31872	true
+state	31873	31937	-1	31873	true
+state	31874	31938	-1	31874	true
+state	31875	31939	-1	31875	true
+state	31876	31940	-1	31876	true
+state	31877	31941	-1	31877	true
+state	31878	31942	-1	31878	true
+state	31879	31943	-1	31879	true
+state	31880	31944	-1	31880	true
+state	31881	31945	-1	31881	true
+state	31882	31946	-1	31882	true
+state	31883	31947	-1	31883	true
+state	31884	31948	-1	31884	true
+state	31885	31949	-1	31885	true
+state	31886	31950	-1	31886	true
+state	31887	31951	-1	31887	true
+state	31888	31952	-1	31888	true
+state	31889	31953	-1	31889	true
+state	31890	31954	-1	31890	true
+state	31891	31955	-1	31891	true
+state	31892	31956	-1	31892	true
+state	31893	31957	-1	31893	true
+state	31894	31958	-1	31894	true
+state	31895	31959	-1	31895	true
+state	31896	31960	-1	31896	true
+state	31897	31961	-1	31897	true
+state	31898	31962	-1	31898	true
+state	31899	31963	-1	31899	true
+state	31900	31964	-1	31900	true
+state	31901	31965	-1	31901	true
+state	31902	31966	-1	31902	true
+state	31903	31967	-1	31903	true
+state	31904	31968	-1	31904	true
+state	31905	31969	-1	31905	true
+state	31906	31970	-1	31906	true
+state	31907	31971	-1	31907	true
+state	31908	31972	-1	31908	true
+state	31909	31973	-1	31909	true
+state	31910	31974	-1	31910	true
+state	31911	31975	-1	31911	true
+state	31912	31976	-1	31912	true
+state	31913	31977	-1	31913	true
+state	31914	31978	-1	31914	true
+state	31915	31979	-1	31915	true
+state	31916	31980	-1	31916	true
+block	1167	minecraft:exposed_copper_door	1	1168	1166	1166
+state	31917	31981	31853	31853	true
+state	31918	31982	31854	31854	true
+state	31919	31983	31855	31855	true
+state	31920	31984	31856	31856	true
+state	31921	31985	31857	31857	true
+state	31922	31986	31858	31858	true
+state	31923	31987	31859	31859	true
+state	31924	31988	31860	31860	true
+state	31925	31989	31861	31861	true
+state	31926	31990	31862	31862	true
+state	31927	31991	31863	31863	true
+state	31928	31992	31864	31864	true
+state	31929	31993	31865	31865	true
+state	31930	31994	31866	31866	true
+state	31931	31995	31867	31867	true
+state	31932	31996	31868	31868	true
+state	31933	31997	31869	31869	true
+state	31934	31998	31870	31870	true
+state	31935	31999	31871	31871	true
+state	31936	32000	31872	31872	true
+state	31937	32001	31873	31873	true
+state	31938	32002	31874	31874	true
+state	31939	32003	31875	31875	true
+state	31940	32004	31876	31876	true
+state	31941	32005	31877	31877	true
+state	31942	32006	31878	31878	true
+state	31943	32007	31879	31879	true
+state	31944	32008	31880	31880	true
+state	31945	32009	31881	31881	true
+state	31946	32010	31882	31882	true
+state	31947	32011	31883	31883	true
+state	31948	32012	31884	31884	true
+state	31949	32013	31885	31885	true
+state	31950	32014	31886	31886	true
+state	31951	32015	31887	31887	true
+state	31952	32016	31888	31888	true
+state	31953	32017	31889	31889	true
+state	31954	32018	31890	31890	true
+state	31955	32019	31891	31891	true
+state	31956	32020	31892	31892	true
+state	31957	32021	31893	31893	true
+state	31958	32022	31894	31894	true
+state	31959	32023	31895	31895	true
+state	31960	32024	31896	31896	true
+state	31961	32025	31897	31897	true
+state	31962	32026	31898	31898	true
+state	31963	32027	31899	31899	true
+state	31964	32028	31900	31900	true
+state	31965	32029	31901	31901	true
+state	31966	32030	31902	31902	true
+state	31967	32031	31903	31903	true
+state	31968	32032	31904	31904	true
+state	31969	32033	31905	31905	true
+state	31970	32034	31906	31906	true
+state	31971	32035	31907	31907	true
+state	31972	32036	31908	31908	true
+state	31973	32037	31909	31909	true
+state	31974	32038	31910	31910	true
+state	31975	32039	31911	31911	true
+state	31976	32040	31912	31912	true
+state	31977	32041	31913	31913	true
+state	31978	32042	31914	31914	true
+state	31979	32043	31915	31915	true
+state	31980	32044	31916	31916	true
+block	1168	minecraft:weathered_copper_door	2	1169	1167	1166
+state	31981	32045	31917	31853	true
+state	31982	32046	31918	31854	true
+state	31983	32047	31919	31855	true
+state	31984	32048	31920	31856	true
+state	31985	32049	31921	31857	true
+state	31986	32050	31922	31858	true
+state	31987	32051	31923	31859	true
+state	31988	32052	31924	31860	true
+state	31989	32053	31925	31861	true
+state	31990	32054	31926	31862	true
+state	31991	32055	31927	31863	true
+state	31992	32056	31928	31864	true
+state	31993	32057	31929	31865	true
+state	31994	32058	31930	31866	true
+state	31995	32059	31931	31867	true
+state	31996	32060	31932	31868	true
+state	31997	32061	31933	31869	true
+state	31998	32062	31934	31870	true
+state	31999	32063	31935	31871	true
+state	32000	32064	31936	31872	true
+state	32001	32065	31937	31873	true
+state	32002	32066	31938	31874	true
+state	32003	32067	31939	31875	true
+state	32004	32068	31940	31876	true
+state	32005	32069	31941	31877	true
+state	32006	32070	31942	31878	true
+state	32007	32071	31943	31879	true
+state	32008	32072	31944	31880	true
+state	32009	32073	31945	31881	true
+state	32010	32074	31946	31882	true
+state	32011	32075	31947	31883	true
+state	32012	32076	31948	31884	true
+state	32013	32077	31949	31885	true
+state	32014	32078	31950	31886	true
+state	32015	32079	31951	31887	true
+state	32016	32080	31952	31888	true
+state	32017	32081	31953	31889	true
+state	32018	32082	31954	31890	true
+state	32019	32083	31955	31891	true
+state	32020	32084	31956	31892	true
+state	32021	32085	31957	31893	true
+state	32022	32086	31958	31894	true
+state	32023	32087	31959	31895	true
+state	32024	32088	31960	31896	true
+state	32025	32089	31961	31897	true
+state	32026	32090	31962	31898	true
+state	32027	32091	31963	31899	true
+state	32028	32092	31964	31900	true
+state	32029	32093	31965	31901	true
+state	32030	32094	31966	31902	true
+state	32031	32095	31967	31903	true
+state	32032	32096	31968	31904	true
+state	32033	32097	31969	31905	true
+state	32034	32098	31970	31906	true
+state	32035	32099	31971	31907	true
+state	32036	32100	31972	31908	true
+state	32037	32101	31973	31909	true
+state	32038	32102	31974	31910	true
+state	32039	32103	31975	31911	true
+state	32040	32104	31976	31912	true
+state	32041	32105	31977	31913	true
+state	32042	32106	31978	31914	true
+state	32043	32107	31979	31915	true
+state	32044	32108	31980	31916	true
+block	1169	minecraft:oxidized_copper_door	3	-1	1168	1166
+state	32045	-1	31981	31853	false
+state	32046	-1	31982	31854	false
+state	32047	-1	31983	31855	false
+state	32048	-1	31984	31856	false
+state	32049	-1	31985	31857	false
+state	32050	-1	31986	31858	false
+state	32051	-1	31987	31859	false
+state	32052	-1	31988	31860	false
+state	32053	-1	31989	31861	false
+state	32054	-1	31990	31862	false
+state	32055	-1	31991	31863	false
+state	32056	-1	31992	31864	false
+state	32057	-1	31993	31865	false
+state	32058	-1	31994	31866	false
+state	32059	-1	31995	31867	false
+state	32060	-1	31996	31868	false
+state	32061	-1	31997	31869	false
+state	32062	-1	31998	31870	false
+state	32063	-1	31999	31871	false
+state	32064	-1	32000	31872	false
+state	32065	-1	32001	31873	false
+state	32066	-1	32002	31874	false
+state	32067	-1	32003	31875	false
+state	32068	-1	32004	31876	false
+state	32069	-1	32005	31877	false
+state	32070	-1	32006	31878	false
+state	32071	-1	32007	31879	false
+state	32072	-1	32008	31880	false
+state	32073	-1	32009	31881	false
+state	32074	-1	32010	31882	false
+state	32075	-1	32011	31883	false
+state	32076	-1	32012	31884	false
+state	32077	-1	32013	31885	false
+state	32078	-1	32014	31886	false
+state	32079	-1	32015	31887	false
+state	32080	-1	32016	31888	false
+state	32081	-1	32017	31889	false
+state	32082	-1	32018	31890	false
+state	32083	-1	32019	31891	false
+state	32084	-1	32020	31892	false
+state	32085	-1	32021	31893	false
+state	32086	-1	32022	31894	false
+state	32087	-1	32023	31895	false
+state	32088	-1	32024	31896	false
+state	32089	-1	32025	31897	false
+state	32090	-1	32026	31898	false
+state	32091	-1	32027	31899	false
+state	32092	-1	32028	31900	false
+state	32093	-1	32029	31901	false
+state	32094	-1	32030	31902	false
+state	32095	-1	32031	31903	false
+state	32096	-1	32032	31904	false
+state	32097	-1	32033	31905	false
+state	32098	-1	32034	31906	false
+state	32099	-1	32035	31907	false
+state	32100	-1	32036	31908	false
+state	32101	-1	32037	31909	false
+state	32102	-1	32038	31910	false
+state	32103	-1	32039	31911	false
+state	32104	-1	32040	31912	false
+state	32105	-1	32041	31913	false
+state	32106	-1	32042	31914	false
+state	32107	-1	32043	31915	false
+state	32108	-1	32044	31916	false
+block	1170	minecraft:waxed_copper_door	-1	-1	-1	1170
+block	1171	minecraft:waxed_exposed_copper_door	-1	-1	-1	1171
+block	1172	minecraft:waxed_weathered_copper_door	-1	-1	-1	1172
+block	1173	minecraft:waxed_oxidized_copper_door	-1	-1	-1	1173
+block	1174	minecraft:copper_trapdoor	0	1175	-1	1174
+state	32365	32429	-1	32365	true
+state	32366	32430	-1	32366	true
+state	32367	32431	-1	32367	true
+state	32368	32432	-1	32368	true
+state	32369	32433	-1	32369	true
+state	32370	32434	-1	32370	true
+state	32371	32435	-1	32371	true
+state	32372	32436	-1	32372	true
+state	32373	32437	-1	32373	true
+state	32374	32438	-1	32374	true
+state	32375	32439	-1	32375	true
+state	32376	32440	-1	32376	true
+state	32377	32441	-1	32377	true
+state	32378	32442	-1	32378	true
+state	32379	32443	-1	32379	true
+state	32380	32444	-1	32380	true
+state	32381	32445	-1	32381	true
+state	32382	32446	-1	32382	true
+state	32383	32447	-1	32383	true
+state	32384	32448	-1	32384	true
+state	32385	32449	-1	32385	true
+state	32386	32450	-1	32386	true
+state	32387	32451	-1	32387	true
+state	32388	32452	-1	32388	true
+state	32389	32453	-1	32389	true
+state	32390	32454	-1	32390	true
+state	32391	32455	-1	32391	true
+state	32392	32456	-1	32392	true
+state	32393	32457	-1	32393	true
+state	32394	32458	-1	32394	true
+state	32395	32459	-1	32395	true
+state	32396	32460	-1	32396	true
+state	32397	32461	-1	32397	true
+state	32398	32462	-1	32398	true
+state	32399	32463	-1	32399	true
+state	32400	32464	-1	32400	true
+state	32401	32465	-1	32401	true
+state	32402	32466	-1	32402	true
+state	32403	32467	-1	32403	true
+state	32404	32468	-1	32404	true
+state	32405	32469	-1	32405	true
+state	32406	32470	-1	32406	true
+state	32407	32471	-1	32407	true
+state	32408	32472	-1	32408	true
+state	32409	32473	-1	32409	true
+state	32410	32474	-1	32410	true
+state	32411	32475	-1	32411	true
+state	32412	32476	-1	32412	true
+state	32413	32477	-1	32413	true
+state	32414	32478	-1	32414	true
+state	32415	32479	-1	32415	true
+state	32416	32480	-1	32416	true
+state	32417	32481	-1	32417	true
+state	32418	32482	-1	32418	true
+state	32419	32483	-1	32419	true
+state	32420	32484	-1	32420	true
+state	32421	32485	-1	32421	true
+state	32422	32486	-1	32422	true
+state	32423	32487	-1	32423	true
+state	32424	32488	-1	32424	true
+state	32425	32489	-1	32425	true
+state	32426	32490	-1	32426	true
+state	32427	32491	-1	32427	true
+state	32428	32492	-1	32428	true
+block	1175	minecraft:exposed_copper_trapdoor	1	1176	1174	1174
+state	32429	32493	32365	32365	true
+state	32430	32494	32366	32366	true
+state	32431	32495	32367	32367	true
+state	32432	32496	32368	32368	true
+state	32433	32497	32369	32369	true
+state	32434	32498	32370	32370	true
+state	32435	32499	32371	32371	true
+state	32436	32500	32372	32372	true
+state	32437	32501	32373	32373	true
+state	32438	32502	32374	32374	true
+state	32439	32503	32375	32375	true
+state	32440	32504	32376	32376	true
+state	32441	32505	32377	32377	true
+state	32442	32506	32378	32378	true
+state	32443	32507	32379	32379	true
+state	32444	32508	32380	32380	true
+state	32445	32509	32381	32381	true
+state	32446	32510	32382	32382	true
+state	32447	32511	32383	32383	true
+state	32448	32512	32384	32384	true
+state	32449	32513	32385	32385	true
+state	32450	32514	32386	32386	true
+state	32451	32515	32387	32387	true
+state	32452	32516	32388	32388	true
+state	32453	32517	32389	32389	true
+state	32454	32518	32390	32390	true
+state	32455	32519	32391	32391	true
+state	32456	32520	32392	32392	true
+state	32457	32521	32393	32393	true
+state	32458	32522	32394	32394	true
+state	32459	32523	32395	32395	true
+state	32460	32524	32396	32396	true
+state	32461	32525	32397	32397	true
+state	32462	32526	32398	32398	true
+state	32463	32527	32399	32399	true
+state	32464	32528	32400	32400	true
+state	32465	32529	32401	32401	true
+state	32466	32530	32402	32402	true
+state	32467	32531	32403	32403	true
+state	32468	32532	32404	32404	true
+state	32469	32533	32405	32405	true
+state	32470	32534	32406	32406	true
+state	32471	32535	32407	32407	true
+state	32472	32536	32408	32408	true
+state	32473	32537	32409	32409	true
+state	32474	32538	32410	32410	true
+state	32475	32539	32411	32411	true
+state	32476	32540	32412	32412	true
+state	32477	32541	32413	32413	true
+state	32478	32542	32414	32414	true
+state	32479	32543	32415	32415	true
+state	32480	32544	32416	32416	true
+state	32481	32545	32417	32417	true
+state	32482	32546	32418	32418	true
+state	32483	32547	32419	32419	true
+state	32484	32548	32420	32420	true
+state	32485	32549	32421	32421	true
+state	32486	32550	32422	32422	true
+state	32487	32551	32423	32423	true
+state	32488	32552	32424	32424	true
+state	32489	32553	32425	32425	true
+state	32490	32554	32426	32426	true
+state	32491	32555	32427	32427	true
+state	32492	32556	32428	32428	true
+block	1176	minecraft:weathered_copper_trapdoor	2	1177	1175	1174
+state	32493	32557	32429	32365	true
+state	32494	32558	32430	32366	true
+state	32495	32559	32431	32367	true
+state	32496	32560	32432	32368	true
+state	32497	32561	32433	32369	true
+state	32498	32562	32434	32370	true
+state	32499	32563	32435	32371	true
+state	32500	32564	32436	32372	true
+state	32501	32565	32437	32373	true
+state	32502	32566	32438	32374	true
+state	32503	32567	32439	32375	true
+state	32504	32568	32440	32376	true
+state	32505	32569	32441	32377	true
+state	32506	32570	32442	32378	true
+state	32507	32571	32443	32379	true
+state	32508	32572	32444	32380	true
+state	32509	32573	32445	32381	true
+state	32510	32574	32446	32382	true
+state	32511	32575	32447	32383	true
+state	32512	32576	32448	32384	true
+state	32513	32577	32449	32385	true
+state	32514	32578	32450	32386	true
+state	32515	32579	32451	32387	true
+state	32516	32580	32452	32388	true
+state	32517	32581	32453	32389	true
+state	32518	32582	32454	32390	true
+state	32519	32583	32455	32391	true
+state	32520	32584	32456	32392	true
+state	32521	32585	32457	32393	true
+state	32522	32586	32458	32394	true
+state	32523	32587	32459	32395	true
+state	32524	32588	32460	32396	true
+state	32525	32589	32461	32397	true
+state	32526	32590	32462	32398	true
+state	32527	32591	32463	32399	true
+state	32528	32592	32464	32400	true
+state	32529	32593	32465	32401	true
+state	32530	32594	32466	32402	true
+state	32531	32595	32467	32403	true
+state	32532	32596	32468	32404	true
+state	32533	32597	32469	32405	true
+state	32534	32598	32470	32406	true
+state	32535	32599	32471	32407	true
+state	32536	32600	32472	32408	true
+state	32537	32601	32473	32409	true
+state	32538	32602	32474	32410	true
+state	32539	32603	32475	32411	true
+state	32540	32604	32476	32412	true
+state	32541	32605	32477	32413	true
+state	32542	32606	32478	32414	true
+state	32543	32607	32479	32415	true
+state	32544	32608	32480	32416	true
+state	32545	32609	32481	32417	true
+state	32546	32610	32482	32418	true
+state	32547	32611	32483	32419	true
+state	32548	32612	32484	32420	true
+state	32549	32613	32485	32421	true
+state	32550	32614	32486	32422	true
+state	32551	32615	32487	32423	true
+state	32552	32616	32488	32424	true
+state	32553	32617	32489	32425	true
+state	32554	32618	32490	32426	true
+state	32555	32619	32491	32427	true
+state	32556	32620	32492	32428	true
+block	1177	minecraft:oxidized_copper_trapdoor	3	-1	1176	1174
+state	32557	-1	32493	32365	false
+state	32558	-1	32494	32366	false
+state	32559	-1	32495	32367	false
+state	32560	-1	32496	32368	false
+state	32561	-1	32497	32369	false
+state	32562	-1	32498	32370	false
+state	32563	-1	32499	32371	false
+state	32564	-1	32500	32372	false
+state	32565	-1	32501	32373	false
+state	32566	-1	32502	32374	false
+state	32567	-1	32503	32375	false
+state	32568	-1	32504	32376	false
+state	32569	-1	32505	32377	false
+state	32570	-1	32506	32378	false
+state	32571	-1	32507	32379	false
+state	32572	-1	32508	32380	false
+state	32573	-1	32509	32381	false
+state	32574	-1	32510	32382	false
+state	32575	-1	32511	32383	false
+state	32576	-1	32512	32384	false
+state	32577	-1	32513	32385	false
+state	32578	-1	32514	32386	false
+state	32579	-1	32515	32387	false
+state	32580	-1	32516	32388	false
+state	32581	-1	32517	32389	false
+state	32582	-1	32518	32390	false
+state	32583	-1	32519	32391	false
+state	32584	-1	32520	32392	false
+state	32585	-1	32521	32393	false
+state	32586	-1	32522	32394	false
+state	32587	-1	32523	32395	false
+state	32588	-1	32524	32396	false
+state	32589	-1	32525	32397	false
+state	32590	-1	32526	32398	false
+state	32591	-1	32527	32399	false
+state	32592	-1	32528	32400	false
+state	32593	-1	32529	32401	false
+state	32594	-1	32530	32402	false
+state	32595	-1	32531	32403	false
+state	32596	-1	32532	32404	false
+state	32597	-1	32533	32405	false
+state	32598	-1	32534	32406	false
+state	32599	-1	32535	32407	false
+state	32600	-1	32536	32408	false
+state	32601	-1	32537	32409	false
+state	32602	-1	32538	32410	false
+state	32603	-1	32539	32411	false
+state	32604	-1	32540	32412	false
+state	32605	-1	32541	32413	false
+state	32606	-1	32542	32414	false
+state	32607	-1	32543	32415	false
+state	32608	-1	32544	32416	false
+state	32609	-1	32545	32417	false
+state	32610	-1	32546	32418	false
+state	32611	-1	32547	32419	false
+state	32612	-1	32548	32420	false
+state	32613	-1	32549	32421	false
+state	32614	-1	32550	32422	false
+state	32615	-1	32551	32423	false
+state	32616	-1	32552	32424	false
+state	32617	-1	32553	32425	false
+state	32618	-1	32554	32426	false
+state	32619	-1	32555	32427	false
+state	32620	-1	32556	32428	false
+block	1178	minecraft:waxed_copper_trapdoor	-1	-1	-1	1178
+block	1179	minecraft:waxed_exposed_copper_trapdoor	-1	-1	-1	1179
+block	1180	minecraft:waxed_weathered_copper_trapdoor	-1	-1	-1	1180
+block	1181	minecraft:waxed_oxidized_copper_trapdoor	-1	-1	-1	1181
+block	1182	minecraft:copper_grate	0	1183	-1	1182
+state	32877	32879	-1	32877	true
+state	32878	32880	-1	32878	true
+block	1183	minecraft:exposed_copper_grate	1	1184	1182	1182
+state	32879	32881	32877	32877	true
+state	32880	32882	32878	32878	true
+block	1184	minecraft:weathered_copper_grate	2	1185	1183	1182
+state	32881	32883	32879	32877	true
+state	32882	32884	32880	32878	true
+block	1185	minecraft:oxidized_copper_grate	3	-1	1184	1182
+state	32883	-1	32881	32877	false
+state	32884	-1	32882	32878	false
+block	1186	minecraft:waxed_copper_grate	-1	-1	-1	1186
+block	1187	minecraft:waxed_exposed_copper_grate	-1	-1	-1	1187
+block	1188	minecraft:waxed_weathered_copper_grate	-1	-1	-1	1188
+block	1189	minecraft:waxed_oxidized_copper_grate	-1	-1	-1	1189
+block	1190	minecraft:copper_bulb	0	1191	-1	1190
+state	32893	32897	-1	32893	true
+state	32894	32898	-1	32894	true
+state	32895	32899	-1	32895	true
+state	32896	32900	-1	32896	true
+block	1191	minecraft:exposed_copper_bulb	1	1192	1190	1190
+state	32897	32901	32893	32893	true
+state	32898	32902	32894	32894	true
+state	32899	32903	32895	32895	true
+state	32900	32904	32896	32896	true
+block	1192	minecraft:weathered_copper_bulb	2	1193	1191	1190
+state	32901	32905	32897	32893	true
+state	32902	32906	32898	32894	true
+state	32903	32907	32899	32895	true
+state	32904	32908	32900	32896	true
+block	1193	minecraft:oxidized_copper_bulb	3	-1	1192	1190
+state	32905	-1	32901	32893	false
+state	32906	-1	32902	32894	false
+state	32907	-1	32903	32895	false
+state	32908	-1	32904	32896	false
+block	1194	minecraft:waxed_copper_bulb	-1	-1	-1	1194
+block	1195	minecraft:waxed_exposed_copper_bulb	-1	-1	-1	1195
+block	1196	minecraft:waxed_weathered_copper_bulb	-1	-1	-1	1196
+block	1197	minecraft:waxed_oxidized_copper_bulb	-1	-1	-1	1197
+block	1198	minecraft:copper_chest	0	1199	-1	1198
+state	32925	32949	-1	32925	true
+state	32926	32950	-1	32926	true
+state	32927	32951	-1	32927	true
+state	32928	32952	-1	32928	true
+state	32929	32953	-1	32929	true
+state	32930	32954	-1	32930	true
+state	32931	32955	-1	32931	true
+state	32932	32956	-1	32932	true
+state	32933	32957	-1	32933	true
+state	32934	32958	-1	32934	true
+state	32935	32959	-1	32935	true
+state	32936	32960	-1	32936	true
+state	32937	32961	-1	32937	true
+state	32938	32962	-1	32938	true
+state	32939	32963	-1	32939	true
+state	32940	32964	-1	32940	true
+state	32941	32965	-1	32941	true
+state	32942	32966	-1	32942	true
+state	32943	32967	-1	32943	true
+state	32944	32968	-1	32944	true
+state	32945	32969	-1	32945	true
+state	32946	32970	-1	32946	true
+state	32947	32971	-1	32947	true
+state	32948	32972	-1	32948	true
+block	1199	minecraft:exposed_copper_chest	1	1200	1198	1198
+state	32949	32973	32925	32925	true
+state	32950	32974	32926	32926	true
+state	32951	32975	32927	32927	true
+state	32952	32976	32928	32928	true
+state	32953	32977	32929	32929	true
+state	32954	32978	32930	32930	true
+state	32955	32979	32931	32931	true
+state	32956	32980	32932	32932	true
+state	32957	32981	32933	32933	true
+state	32958	32982	32934	32934	true
+state	32959	32983	32935	32935	true
+state	32960	32984	32936	32936	true
+state	32961	32985	32937	32937	true
+state	32962	32986	32938	32938	true
+state	32963	32987	32939	32939	true
+state	32964	32988	32940	32940	true
+state	32965	32989	32941	32941	true
+state	32966	32990	32942	32942	true
+state	32967	32991	32943	32943	true
+state	32968	32992	32944	32944	true
+state	32969	32993	32945	32945	true
+state	32970	32994	32946	32946	true
+state	32971	32995	32947	32947	true
+state	32972	32996	32948	32948	true
+block	1200	minecraft:weathered_copper_chest	2	1201	1199	1198
+state	32973	32997	32949	32925	true
+state	32974	32998	32950	32926	true
+state	32975	32999	32951	32927	true
+state	32976	33000	32952	32928	true
+state	32977	33001	32953	32929	true
+state	32978	33002	32954	32930	true
+state	32979	33003	32955	32931	true
+state	32980	33004	32956	32932	true
+state	32981	33005	32957	32933	true
+state	32982	33006	32958	32934	true
+state	32983	33007	32959	32935	true
+state	32984	33008	32960	32936	true
+state	32985	33009	32961	32937	true
+state	32986	33010	32962	32938	true
+state	32987	33011	32963	32939	true
+state	32988	33012	32964	32940	true
+state	32989	33013	32965	32941	true
+state	32990	33014	32966	32942	true
+state	32991	33015	32967	32943	true
+state	32992	33016	32968	32944	true
+state	32993	33017	32969	32945	true
+state	32994	33018	32970	32946	true
+state	32995	33019	32971	32947	true
+state	32996	33020	32972	32948	true
+block	1201	minecraft:oxidized_copper_chest	3	-1	1200	1198
+state	32997	-1	32973	32925	false
+state	32998	-1	32974	32926	false
+state	32999	-1	32975	32927	false
+state	33000	-1	32976	32928	false
+state	33001	-1	32977	32929	false
+state	33002	-1	32978	32930	false
+state	33003	-1	32979	32931	false
+state	33004	-1	32980	32932	false
+state	33005	-1	32981	32933	false
+state	33006	-1	32982	32934	false
+state	33007	-1	32983	32935	false
+state	33008	-1	32984	32936	false
+state	33009	-1	32985	32937	false
+state	33010	-1	32986	32938	false
+state	33011	-1	32987	32939	false
+state	33012	-1	32988	32940	false
+state	33013	-1	32989	32941	false
+state	33014	-1	32990	32942	false
+state	33015	-1	32991	32943	false
+state	33016	-1	32992	32944	false
+state	33017	-1	32993	32945	false
+state	33018	-1	32994	32946	false
+state	33019	-1	32995	32947	false
+state	33020	-1	32996	32948	false
+block	1202	minecraft:waxed_copper_chest	-1	-1	-1	1202
+block	1203	minecraft:waxed_exposed_copper_chest	-1	-1	-1	1203
+block	1204	minecraft:waxed_weathered_copper_chest	-1	-1	-1	1204
+block	1205	minecraft:waxed_oxidized_copper_chest	-1	-1	-1	1205
+block	1206	minecraft:copper_golem_statue	0	1207	-1	1206
+state	33117	33149	-1	33117	true
+state	33118	33150	-1	33118	true
+state	33119	33151	-1	33119	true
+state	33120	33152	-1	33120	true
+state	33121	33153	-1	33121	true
+state	33122	33154	-1	33122	true
+state	33123	33155	-1	33123	true
+state	33124	33156	-1	33124	true
+state	33125	33157	-1	33125	true
+state	33126	33158	-1	33126	true
+state	33127	33159	-1	33127	true
+state	33128	33160	-1	33128	true
+state	33129	33161	-1	33129	true
+state	33130	33162	-1	33130	true
+state	33131	33163	-1	33131	true
+state	33132	33164	-1	33132	true
+state	33133	33165	-1	33133	true
+state	33134	33166	-1	33134	true
+state	33135	33167	-1	33135	true
+state	33136	33168	-1	33136	true
+state	33137	33169	-1	33137	true
+state	33138	33170	-1	33138	true
+state	33139	33171	-1	33139	true
+state	33140	33172	-1	33140	true
+state	33141	33173	-1	33141	true
+state	33142	33174	-1	33142	true
+state	33143	33175	-1	33143	true
+state	33144	33176	-1	33144	true
+state	33145	33177	-1	33145	true
+state	33146	33178	-1	33146	true
+state	33147	33179	-1	33147	true
+state	33148	33180	-1	33148	true
+block	1207	minecraft:exposed_copper_golem_statue	1	1208	1206	1206
+state	33149	33181	33117	33117	true
+state	33150	33182	33118	33118	true
+state	33151	33183	33119	33119	true
+state	33152	33184	33120	33120	true
+state	33153	33185	33121	33121	true
+state	33154	33186	33122	33122	true
+state	33155	33187	33123	33123	true
+state	33156	33188	33124	33124	true
+state	33157	33189	33125	33125	true
+state	33158	33190	33126	33126	true
+state	33159	33191	33127	33127	true
+state	33160	33192	33128	33128	true
+state	33161	33193	33129	33129	true
+state	33162	33194	33130	33130	true
+state	33163	33195	33131	33131	true
+state	33164	33196	33132	33132	true
+state	33165	33197	33133	33133	true
+state	33166	33198	33134	33134	true
+state	33167	33199	33135	33135	true
+state	33168	33200	33136	33136	true
+state	33169	33201	33137	33137	true
+state	33170	33202	33138	33138	true
+state	33171	33203	33139	33139	true
+state	33172	33204	33140	33140	true
+state	33173	33205	33141	33141	true
+state	33174	33206	33142	33142	true
+state	33175	33207	33143	33143	true
+state	33176	33208	33144	33144	true
+state	33177	33209	33145	33145	true
+state	33178	33210	33146	33146	true
+state	33179	33211	33147	33147	true
+state	33180	33212	33148	33148	true
+block	1208	minecraft:weathered_copper_golem_statue	2	1209	1207	1206
+state	33181	33213	33149	33117	true
+state	33182	33214	33150	33118	true
+state	33183	33215	33151	33119	true
+state	33184	33216	33152	33120	true
+state	33185	33217	33153	33121	true
+state	33186	33218	33154	33122	true
+state	33187	33219	33155	33123	true
+state	33188	33220	33156	33124	true
+state	33189	33221	33157	33125	true
+state	33190	33222	33158	33126	true
+state	33191	33223	33159	33127	true
+state	33192	33224	33160	33128	true
+state	33193	33225	33161	33129	true
+state	33194	33226	33162	33130	true
+state	33195	33227	33163	33131	true
+state	33196	33228	33164	33132	true
+state	33197	33229	33165	33133	true
+state	33198	33230	33166	33134	true
+state	33199	33231	33167	33135	true
+state	33200	33232	33168	33136	true
+state	33201	33233	33169	33137	true
+state	33202	33234	33170	33138	true
+state	33203	33235	33171	33139	true
+state	33204	33236	33172	33140	true
+state	33205	33237	33173	33141	true
+state	33206	33238	33174	33142	true
+state	33207	33239	33175	33143	true
+state	33208	33240	33176	33144	true
+state	33209	33241	33177	33145	true
+state	33210	33242	33178	33146	true
+state	33211	33243	33179	33147	true
+state	33212	33244	33180	33148	true
+block	1209	minecraft:oxidized_copper_golem_statue	3	-1	1208	1206
+state	33213	-1	33181	33117	false
+state	33214	-1	33182	33118	false
+state	33215	-1	33183	33119	false
+state	33216	-1	33184	33120	false
+state	33217	-1	33185	33121	false
+state	33218	-1	33186	33122	false
+state	33219	-1	33187	33123	false
+state	33220	-1	33188	33124	false
+state	33221	-1	33189	33125	false
+state	33222	-1	33190	33126	false
+state	33223	-1	33191	33127	false
+state	33224	-1	33192	33128	false
+state	33225	-1	33193	33129	false
+state	33226	-1	33194	33130	false
+state	33227	-1	33195	33131	false
+state	33228	-1	33196	33132	false
+state	33229	-1	33197	33133	false
+state	33230	-1	33198	33134	false
+state	33231	-1	33199	33135	false
+state	33232	-1	33200	33136	false
+state	33233	-1	33201	33137	false
+state	33234	-1	33202	33138	false
+state	33235	-1	33203	33139	false
+state	33236	-1	33204	33140	false
+state	33237	-1	33205	33141	false
+state	33238	-1	33206	33142	false
+state	33239	-1	33207	33143	false
+state	33240	-1	33208	33144	false
+state	33241	-1	33209	33145	false
+state	33242	-1	33210	33146	false
+state	33243	-1	33211	33147	false
+state	33244	-1	33212	33148	false
+block	1210	minecraft:waxed_copper_golem_statue	-1	-1	-1	1210
+block	1211	minecraft:waxed_exposed_copper_golem_statue	-1	-1	-1	1211
+block	1212	minecraft:waxed_weathered_copper_golem_statue	-1	-1	-1	1212
+block	1213	minecraft:waxed_oxidized_copper_golem_statue	-1	-1	-1	1213
+block	1214	minecraft:lightning_rod	0	1215	-1	1214
+state	33373	33397	-1	33373	true
+state	33374	33398	-1	33374	true
+state	33375	33399	-1	33375	true
+state	33376	33400	-1	33376	true
+state	33377	33401	-1	33377	true
+state	33378	33402	-1	33378	true
+state	33379	33403	-1	33379	true
+state	33380	33404	-1	33380	true
+state	33381	33405	-1	33381	true
+state	33382	33406	-1	33382	true
+state	33383	33407	-1	33383	true
+state	33384	33408	-1	33384	true
+state	33385	33409	-1	33385	true
+state	33386	33410	-1	33386	true
+state	33387	33411	-1	33387	true
+state	33388	33412	-1	33388	true
+state	33389	33413	-1	33389	true
+state	33390	33414	-1	33390	true
+state	33391	33415	-1	33391	true
+state	33392	33416	-1	33392	true
+state	33393	33417	-1	33393	true
+state	33394	33418	-1	33394	true
+state	33395	33419	-1	33395	true
+state	33396	33420	-1	33396	true
+block	1215	minecraft:exposed_lightning_rod	1	1216	1214	1214
+state	33397	33421	33373	33373	true
+state	33398	33422	33374	33374	true
+state	33399	33423	33375	33375	true
+state	33400	33424	33376	33376	true
+state	33401	33425	33377	33377	true
+state	33402	33426	33378	33378	true
+state	33403	33427	33379	33379	true
+state	33404	33428	33380	33380	true
+state	33405	33429	33381	33381	true
+state	33406	33430	33382	33382	true
+state	33407	33431	33383	33383	true
+state	33408	33432	33384	33384	true
+state	33409	33433	33385	33385	true
+state	33410	33434	33386	33386	true
+state	33411	33435	33387	33387	true
+state	33412	33436	33388	33388	true
+state	33413	33437	33389	33389	true
+state	33414	33438	33390	33390	true
+state	33415	33439	33391	33391	true
+state	33416	33440	33392	33392	true
+state	33417	33441	33393	33393	true
+state	33418	33442	33394	33394	true
+state	33419	33443	33395	33395	true
+state	33420	33444	33396	33396	true
+block	1216	minecraft:weathered_lightning_rod	2	1217	1215	1214
+state	33421	33445	33397	33373	true
+state	33422	33446	33398	33374	true
+state	33423	33447	33399	33375	true
+state	33424	33448	33400	33376	true
+state	33425	33449	33401	33377	true
+state	33426	33450	33402	33378	true
+state	33427	33451	33403	33379	true
+state	33428	33452	33404	33380	true
+state	33429	33453	33405	33381	true
+state	33430	33454	33406	33382	true
+state	33431	33455	33407	33383	true
+state	33432	33456	33408	33384	true
+state	33433	33457	33409	33385	true
+state	33434	33458	33410	33386	true
+state	33435	33459	33411	33387	true
+state	33436	33460	33412	33388	true
+state	33437	33461	33413	33389	true
+state	33438	33462	33414	33390	true
+state	33439	33463	33415	33391	true
+state	33440	33464	33416	33392	true
+state	33441	33465	33417	33393	true
+state	33442	33466	33418	33394	true
+state	33443	33467	33419	33395	true
+state	33444	33468	33420	33396	true
+block	1217	minecraft:oxidized_lightning_rod	3	-1	1216	1214
+state	33445	-1	33421	33373	false
+state	33446	-1	33422	33374	false
+state	33447	-1	33423	33375	false
+state	33448	-1	33424	33376	false
+state	33449	-1	33425	33377	false
+state	33450	-1	33426	33378	false
+state	33451	-1	33427	33379	false
+state	33452	-1	33428	33380	false
+state	33453	-1	33429	33381	false
+state	33454	-1	33430	33382	false
+state	33455	-1	33431	33383	false
+state	33456	-1	33432	33384	false
+state	33457	-1	33433	33385	false
+state	33458	-1	33434	33386	false
+state	33459	-1	33435	33387	false
+state	33460	-1	33436	33388	false
+state	33461	-1	33437	33389	false
+state	33462	-1	33438	33390	false
+state	33463	-1	33439	33391	false
+state	33464	-1	33440	33392	false
+state	33465	-1	33441	33393	false
+state	33466	-1	33442	33394	false
+state	33467	-1	33443	33395	false
+state	33468	-1	33444	33396	false
+block	1218	minecraft:waxed_lightning_rod	-1	-1	-1	1218
+block	1219	minecraft:waxed_exposed_lightning_rod	-1	-1	-1	1219
+block	1220	minecraft:waxed_weathered_lightning_rod	-1	-1	-1	1220
+block	1221	minecraft:waxed_oxidized_lightning_rod	-1	-1	-1	1221
+block	1222	minecraft:dripstone_block	-1	-1	-1	1222
+block	1223	minecraft:pointed_dripstone	-1	-1	-1	1223
+block	1224	minecraft:sulfur_spike	-1	-1	-1	1224
+block	1225	minecraft:cave_vines	-1	-1	-1	1225
+block	1226	minecraft:cave_vines_plant	-1	-1	-1	1226
+block	1227	minecraft:spore_blossom	-1	-1	-1	1227
+block	1228	minecraft:azalea	-1	-1	-1	1228
+block	1229	minecraft:flowering_azalea	-1	-1	-1	1229
+block	1230	minecraft:moss_carpet	-1	-1	-1	1230
+block	1231	minecraft:pink_petals	-1	-1	-1	1231
+block	1232	minecraft:wildflowers	-1	-1	-1	1232
+block	1233	minecraft:leaf_litter	-1	-1	-1	1233
+block	1234	minecraft:moss_block	-1	-1	-1	1234
+block	1235	minecraft:big_dripleaf	-1	-1	-1	1235
+block	1236	minecraft:big_dripleaf_stem	-1	-1	-1	1236
+block	1237	minecraft:small_dripleaf	-1	-1	-1	1237
+block	1238	minecraft:hanging_roots	-1	-1	-1	1238
+block	1239	minecraft:rooted_dirt	-1	-1	-1	1239
+block	1240	minecraft:mud	-1	-1	-1	1240
+block	1241	minecraft:deepslate	-1	-1	-1	1241
+block	1242	minecraft:cobbled_deepslate	-1	-1	-1	1242
+block	1243	minecraft:cobbled_deepslate_stairs	-1	-1	-1	1243
+block	1244	minecraft:cobbled_deepslate_slab	-1	-1	-1	1244
+block	1245	minecraft:cobbled_deepslate_wall	-1	-1	-1	1245
+block	1246	minecraft:polished_deepslate	-1	-1	-1	1246
+block	1247	minecraft:polished_deepslate_stairs	-1	-1	-1	1247
+block	1248	minecraft:polished_deepslate_slab	-1	-1	-1	1248
+block	1249	minecraft:polished_deepslate_wall	-1	-1	-1	1249
+block	1250	minecraft:deepslate_tiles	-1	-1	-1	1250
+block	1251	minecraft:deepslate_tile_stairs	-1	-1	-1	1251
+block	1252	minecraft:deepslate_tile_slab	-1	-1	-1	1252
+block	1253	minecraft:deepslate_tile_wall	-1	-1	-1	1253
+block	1254	minecraft:deepslate_bricks	-1	-1	-1	1254
+block	1255	minecraft:deepslate_brick_stairs	-1	-1	-1	1255
+block	1256	minecraft:deepslate_brick_slab	-1	-1	-1	1256
+block	1257	minecraft:deepslate_brick_wall	-1	-1	-1	1257
+block	1258	minecraft:chiseled_deepslate	-1	-1	-1	1258
+block	1259	minecraft:cracked_deepslate_bricks	-1	-1	-1	1259
+block	1260	minecraft:cracked_deepslate_tiles	-1	-1	-1	1260
+block	1261	minecraft:infested_deepslate	-1	-1	-1	1261
+block	1262	minecraft:smooth_basalt	-1	-1	-1	1262
+block	1263	minecraft:raw_iron_block	-1	-1	-1	1263
+block	1264	minecraft:raw_copper_block	-1	-1	-1	1264
+block	1265	minecraft:raw_gold_block	-1	-1	-1	1265
+block	1266	minecraft:potted_azalea_bush	-1	-1	-1	1266
+block	1267	minecraft:potted_flowering_azalea_bush	-1	-1	-1	1267
+block	1268	minecraft:ochre_froglight	-1	-1	-1	1268
+block	1269	minecraft:verdant_froglight	-1	-1	-1	1269
+block	1270	minecraft:pearlescent_froglight	-1	-1	-1	1270
+block	1271	minecraft:frogspawn	-1	-1	-1	1271
+block	1272	minecraft:reinforced_deepslate	-1	-1	-1	1272
+block	1273	minecraft:decorated_pot	-1	-1	-1	1273
+block	1274	minecraft:crafter	-1	-1	-1	1274
+block	1275	minecraft:trial_spawner	-1	-1	-1	1275
+block	1276	minecraft:vault	-1	-1	-1	1276
+block	1277	minecraft:heavy_core	-1	-1	-1	1277
+block	1278	minecraft:pale_moss_block	-1	-1	-1	1278
+block	1279	minecraft:pale_moss_carpet	-1	-1	-1	1279
+block	1280	minecraft:pale_hanging_moss	-1	-1	-1	1280
+block	1281	minecraft:open_eyeblossom	-1	-1	-1	1281
+block	1282	minecraft:closed_eyeblossom	-1	-1	-1	1282
+block	1283	minecraft:potted_open_eyeblossom	-1	-1	-1	1283
+block	1284	minecraft:potted_closed_eyeblossom	-1	-1	-1	1284
+block	1285	minecraft:firefly_bush	-1	-1	-1	1285

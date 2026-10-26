@@ -20,6 +20,7 @@ mod item_names;
 pub mod note_properties;
 pub mod redstone_properties;
 mod sound_events;
+pub mod weathering_copper;
 pub use block_methods::BlockMethod;
 pub use copper_chest_properties::CopperChestProperties;
 pub use environment_attributes::EnvironmentAttributeData;

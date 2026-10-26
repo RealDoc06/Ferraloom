@@ -19,6 +19,8 @@ mod feature_requirements;
 mod game_events;
 #[path = "build/item_methods.rs"]
 mod item_methods;
+#[path = "build/weathering_copper.rs"]
+mod weathering_copper;
 
 #[path = "build/dispenser_properties.rs"]
 mod dispenser_properties;
@@ -964,6 +966,17 @@ fn main() {
     std::fs::write(
         Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("copper_chest_properties.rs"),
         copper,
+    )
+    .unwrap();
+    let mut weathering = String::new();
+    weathering_copper::generate(
+        &mut weathering,
+        &load(root, "weathering_copper"),
+        block_report.as_object().unwrap().len(),
+    );
+    std::fs::write(
+        Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("weathering_copper.rs"),
+        weathering,
     )
     .unwrap();
     let fluid_random_ticking = load(root, "fluid_random_ticking");
