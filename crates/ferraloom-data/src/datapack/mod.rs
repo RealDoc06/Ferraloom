@@ -2,7 +2,9 @@
 
 use serde_json::Value;
 mod block_state;
+mod config;
 pub use block_state::decode_block_state;
+pub use config::{DataPackConfig, FeatureFlags, WorldDataConfiguration};
 pub mod tags;
 pub use tags::{StaticTagElement, TagElement, TagId, TagKey, TagSet};
 
