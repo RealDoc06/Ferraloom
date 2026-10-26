@@ -182,7 +182,7 @@ impl BlockBehavior for ComparatorObserver {
         assert!(!moved);
         // Reset after every notification: the next callback requires another
         // real setChanged, even though chunk dirty flags ordinarily deduplicate.
-        assert!(level.chunk_mut(CHUNK).unwrap().try_mark_saved());
+        assert!(level.try_mark_chunk_saved(CHUNK).unwrap());
         // Synchronous consumption proves blockEvent was already queued before
         // the comparator notification, rather than appended after it.
         deliver_pending_events(level)?;
@@ -261,7 +261,7 @@ fn native_bound_end_gateway_ticker_and_pending_event_order_match() {
                 .is_ok()
         );
         level.take_effects();
-        level.chunk_mut(CHUNK).unwrap().try_mark_saved();
+        level.try_mark_chunk_saved(CHUNK).unwrap();
         TRACE.with_borrow_mut(Vec::clear);
         level.tick_block_entities(true).unwrap();
         deliver_pending_events(&mut level).unwrap();
