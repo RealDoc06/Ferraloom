@@ -116,7 +116,9 @@ impl BlockEntity for CampfireBehavior {
         level: &mut Level,
     ) -> Result<(), LevelError> {
         let entity = level.block_entity::<CampfireBlockEntity>(handle)?;
-        if entity.parent.has_level && entity.items.iter().any(|item| !item.is_empty()) {
+        // Containers#dropItemStack draws three offsets even for each empty
+        // slot, so an attached empty campfire is not a no-effect removal.
+        if entity.parent.has_level {
             return Err(LevelError::UnsupportedBlockEntity(
                 entity.parent.block_state.block(),
             ));

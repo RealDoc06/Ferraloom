@@ -256,6 +256,12 @@ fn live_lectern_resolution_and_unported_server_tickers_are_required() {
             behavior.tick(handle, &mut level),
             Err(LevelError::UnsupportedBlockEntity(block))
         );
+        if block != Block::BELL {
+            assert_eq!(
+                behavior.pre_remove_side_effects(handle, &mut level),
+                Err(LevelError::UnsupportedBlockEntity(block))
+            );
+        }
     }
     level
         .set_block_state(POS, Block::LECTERN.default_state())
