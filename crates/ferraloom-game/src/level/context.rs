@@ -229,7 +229,7 @@ impl ferraloom_protocol::codec::RegistryContext for FixtureRegistryContext {
             .get(
                 &ferraloom_data::datapack::Identifier::new(
                     key.namespace(),
-                    &format!("{}/{}.json", registry.path(), key.path()),
+                    format!("{}/{}.json", registry.path(), key.path()),
                 )
                 .ok()?,
             )?
