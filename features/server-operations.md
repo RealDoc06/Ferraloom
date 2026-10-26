@@ -30,6 +30,7 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | server-operations.pause.empty | Autosave once and pause simulation while continuing connection ticks when empty | `MinecraftServer#tickServer` | | - | todo |
 | server-operations.players.idle-kick | Disconnect idle players after configured timeout | `ServerGamePacketListenerImpl#tick` | | - | todo |
 | server-operations.players.spawn-protection | Apply operator-sensitive spawn protection in the spawn dimension | `DedicatedServer#isUnderSpawnProtection` | | - | todo |
+| server-operations.players.join-continuations | Keep packet processing and ticks running while configuring players wait for all 49 spawn entity chunks and player IO; allocate only after entity readiness and finish disconnect saves before removal | `PrepareSpawnTask.Ready#spawn; ServerLevel#waitForEntities; PlayerList#remove` | `recipe_advancements::non_recipe::physical::parity_non_recipe_physical_advancements` (eight-player regression pending); `server::player_io::tests::pending_player_io_yields_and_keeps_its_owned_result_or_error` | pass | partial |
 | server-operations.players.difficulty | Apply and persist world difficulty and locking; hardcore difficulty constraints | `MinecraftServer#setDifficulty; PrimaryLevelData` | | - | todo |
 | server-operations.cli.bonus-chest | Dedicated-server option `--bonusChest` | `net.minecraft.server.Main#main` | | - | todo |
 | server-operations.cli.demo | Dedicated-server option `--demo` | `net.minecraft.server.Main#main` | | - | todo |

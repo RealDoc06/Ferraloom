@@ -74,6 +74,9 @@ impl MinecraftServer {
                     close: false,
                     information: client_information(),
                     spawn: None,
+                    spawn_input: None,
+                    player_load: None,
+                    player_save: None,
                     last_keepalive: Instant::now(),
                     keepalive: None,
                     last_action: Instant::now(),
@@ -183,7 +186,7 @@ impl MinecraftServer {
                         _ => crate::registries::id("overworld"),
                     };
                     let lent = self.lend_server_shared_to(&dimension)?;
-                    let result = self.remove_player(id).await;
+                    let result = self.remove_player(id);
                     self.return_server_shared(lent);
                     result?;
                 }
@@ -227,7 +230,7 @@ impl MinecraftServer {
             None => false,
         };
         let result = match packet {
-            Incoming::Configuration(p) => self.configuration(id, p).await,
+            Incoming::Configuration(p) => self.configuration(id, p),
             Incoming::Play(p) => self.play_packet(id, *p).await,
         };
         self.return_server_shared(lent);

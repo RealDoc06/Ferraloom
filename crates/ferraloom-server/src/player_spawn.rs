@@ -30,6 +30,15 @@ pub(super) struct PreparedPlayerSpawn {
 
 pub(super) struct PrepareSpawnTask {
     state: SpawnState,
+    pending_entities: Option<Vec<PendingSpawnChunk>>,
+}
+#[derive(Debug, Eq, PartialEq)]
+struct PendingSpawnChunk {
+    pos: ChunkPos,
+    entities: ferraloom_game::level::entity::ChunkLoadStatus,
+    ticket_level: Option<i32>,
+    generated: Option<ChunkStatus>,
+    full: Option<ferraloom_game::level::distance_manager::FullChunkStatus>,
 }
 enum SpawnState {
     Searching {
@@ -105,7 +114,16 @@ impl PrepareSpawnTask {
                 }
             }
         };
-        let mut task = Self { state };
+        eprintln!(
+            "Spawn prepare: dimension={dimension_key} search_radius={radius} suggested={:?} saved={:?}",
+            respawn.position,
+            saved.position,
+            dimension_key = live.dimension
+        );
+        let mut task = Self {
+            state,
+            pending_entities: None,
+        };
         if let SpawnState::Searching { search, .. } = &mut task.state {
             search.schedule_candidate(live)?;
         }
@@ -173,6 +191,54 @@ impl PrepareSpawnTask {
             .with_tickets_mut(|tickets| tickets.add_player_spawn(chunk(spawn.position), tick));
         Ok(())
     }
+
+    /// ServerLevel#waitForEntities' predicate, resumed by the connection tick.
+    /// Native managedBlock pumps owner work; a pending predicate must not park
+    /// Ferraloom's packet/tick owner behind a sleep or a generation-only loop.
+    pub(super) fn poll_entities(&mut self, live: &mut LiveLevel) -> Result<bool> {
+        let spawn = self.ready()?.clone();
+        live.level
+            .poll_chunk_acquisition_mut()
+            .map_err(game_error)?;
+        live.poll_entity_loads_for_wait()?;
+        let center = chunk(spawn.position);
+        let mut pending = Vec::new();
+        for z in -3..=3 {
+            for x in -3..=3 {
+                let pos = ChunkPos::new(center.x + x, center.z + z);
+                if live.level.are_entities_loaded(pos) {
+                    continue;
+                }
+                let holder = live.generation().with_chunks(|chunks| {
+                    chunks.holders.get(&pos.pack()).map(|holder| {
+                        (
+                            holder.ticket_level,
+                            holder.generation.latest_completed_status(),
+                            holder.confirmed_full_status(),
+                        )
+                    })
+                });
+                pending.push(PendingSpawnChunk {
+                    pos,
+                    entities: live.level.entity_chunk_load_status(pos),
+                    ticket_level: holder.map(|h| h.0),
+                    generated: holder.and_then(|h| h.1),
+                    full: holder.map(|h| h.2),
+                });
+            }
+        }
+        let ready = pending.is_empty();
+        if self.pending_entities.as_ref() != Some(&pending) {
+            eprintln!(
+                "Spawn entities: dimension={} position={:?} center={center:?} radius=3 pending={}/49 statuses={pending:?}",
+                live.dimension,
+                spawn.position,
+                pending.len()
+            );
+            self.pending_entities = Some(pending);
+        }
+        Ok(ready)
+    }
 }
 
 struct SpawnSearch {
@@ -188,6 +254,10 @@ impl SpawnSearch {
     fn schedule_candidate(&mut self, live: &mut LiveLevel) -> Result<()> {
         let position = self.finder.next_candidate();
         let [x, z] = position.unwrap_or([self.suggestion.x, self.suggestion.z]);
+        eprintln!(
+            "Spawn candidate: dimension={} position={position:?} fallback={:?}",
+            live.dimension, self.suggestion
+        );
         let futures = request_ticketed_full(
             live,
             TicketType::SpawnSearch,
@@ -247,6 +317,10 @@ fn request_ticketed_full(
     center: ChunkPos,
     radius: i32,
 ) -> Result<Vec<AcquireHandle>> {
+    eprintln!(
+        "Spawn chunks: dimension={} ticket={kind:?} center={center:?} radius={radius} status=FULL",
+        live.dimension
+    );
     live.generation().with_tickets_mut(|tickets| {
         tickets.add(
             center,
