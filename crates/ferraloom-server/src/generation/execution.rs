@@ -150,7 +150,6 @@ struct GenerationExecution {
     pool: Arc<JobPool>,
     done: oneshot::Sender<GenerationCompletion>,
     job_timing: profile::Span,
-    executor: tokio::runtime::Handle,
     reads: VecDeque<PendingChunkRead>,
 }
 pub(crate) fn dispatch_generation(
@@ -161,8 +160,6 @@ pub(crate) fn dispatch_generation(
     io: Arc<IoWorker>,
     pool: Arc<JobPool>,
 ) -> Result<oneshot::Receiver<GenerationCompletion>> {
-    let executor = tokio::runtime::Handle::try_current()
-        .context("generation dispatch requires the server executor")?;
     let progress = state.begin_generation(request.id, request.pos, request.status)?;
     let job_timing = profile::Span::new("generation_job", Some((request.id, request.pos)))
         .status(request.status);
@@ -177,7 +174,6 @@ pub(crate) fn dispatch_generation(
         pool,
         done,
         job_timing,
-        executor,
         reads: VecDeque::new(),
     }
     .dispatch_next();
@@ -209,7 +205,7 @@ impl GenerationExecution {
         }
     }
     /// Read ahead only inside the current EMPTY layer. IO runs on its existing
-    /// actor; waiting yields the server executor rather than occupying a worker.
+    /// actor; completion queues work without relying on the parked server executor.
     /// Decode/publication still follow the layer's X-major/Z-minor order.
     fn dispatch_read(mut self, step: GenerationStep) {
         const READ_WINDOW: usize = 8;
@@ -231,14 +227,10 @@ impl GenerationExecution {
         }
         let (position, read) = self.reads.pop_front().expect("current read");
         assert_eq!(position, step.position);
-        let executor = self.executor.clone();
-        executor.spawn(async move {
-            let mut timing = self.progress.take_step_timing();
-            let loaded = {
-                let _wait =
-                    profile::Span::new("chunk_read_wait", Some((self.request.id, position)));
-                read.await
-            };
+        let mut timing = self.progress.take_step_timing();
+        let wait = profile::Span::new("chunk_read_wait", Some((self.request.id, position)));
+        read.on_complete(move |loaded| {
+            drop(wait);
             let pool = self.pool.clone();
             drop(pool.submit(move || {
                 let _work =
@@ -255,6 +247,7 @@ impl GenerationExecution {
             }));
         });
     }
+
     fn execute(mut self, step: GenerationStep) -> (Self, GenerationStepResult) {
         let _work = profile::Span::new("generation_step", Some((self.request.id, step.position)))
             .status(step.status);
@@ -281,15 +274,12 @@ impl GenerationExecution {
         }
     }
     fn queue_finish(mut self, failure: Option<anyhow::Error>) {
-        if !self.reads.is_empty() {
-            let executor = self.executor.clone();
-            executor.spawn(async move {
-                // Issued reads stay reachable until settled, including failure
-                // cleanup. Never publish a later read ahead of the failed one.
-                while let Some((_, read)) = self.reads.pop_front() {
-                    let _ = read.await;
-                }
-                self.queue_finish(failure);
+        if let Some((_, read)) = self.reads.pop_front() {
+            read.on_complete(move |_| {
+                // Schedule even ready completions rather than recursively
+                // executing cleanup on the IO actor or registering thread.
+                let pool = self.pool.clone();
+                drop(pool.submit(move || self.queue_finish(failure)));
             });
             return;
         }
@@ -307,7 +297,6 @@ impl GenerationExecution {
             pool,
             done,
             job_timing,
-            executor: _,
             reads: _,
         } = self;
         let result = match failure {
@@ -372,8 +361,6 @@ mod tests {
     }
     #[test]
     fn step_resubmission_yields_the_worker_and_preserves_chunk_bytes() {
-        let runtime = tokio::runtime::Runtime::new().unwrap();
-        let _entered = runtime.enter();
         let (mut inline, registry) = super::super::relight_tests::fixture();
         let state = GenerationState::new(inline.context.clone(), inline.light_pool.clone());
         let registry = Arc::new(registry);
@@ -449,8 +436,6 @@ mod tests {
     }
     #[test]
     fn cancellation_finishes_the_started_layer_and_returns_the_owned_cache() {
-        let runtime = tokio::runtime::Runtime::new().unwrap();
-        let _entered = runtime.enter();
         let (state, registry) = super::super::relight_tests::fixture();
         let directory = tempfile::tempdir().unwrap();
         let mut io =
