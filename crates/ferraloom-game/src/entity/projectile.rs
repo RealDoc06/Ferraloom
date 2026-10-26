@@ -91,8 +91,8 @@ impl Projectile {
     }
     pub fn read_additional_save_data(&mut self, tag: &CompoundTag) {
         self.owner = super::living::damage_state::read_reference(tag, "Owner");
-        self.left_owner = tag.get_bool_or("LeftOwner", false);
-        self.has_been_shot = tag.get_bool_or("HasBeenShot", false);
+        self.left_owner = tag.get_boolean_or("LeftOwner", false);
+        self.has_been_shot = tag.get_boolean_or("HasBeenShot", false);
         self.can_break = tag
             .get("can_break")
             .and_then(|tag| AdventureModePredicate::from_nbt(tag).ok());
