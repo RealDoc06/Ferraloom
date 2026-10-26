@@ -45,6 +45,7 @@ pub mod path_navigation_region;
 mod post_processing;
 pub mod publication;
 mod random;
+pub(crate) use random::get_millis;
 pub mod redstone;
 mod saved_ticks;
 pub mod server_level;
