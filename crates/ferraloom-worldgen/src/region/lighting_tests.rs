@@ -59,7 +59,7 @@ fn generated(position: [i32; 2]) -> GeneratedChunk {
     });
     GENERATOR
         .0
-        .build_terrain(position, GENERATOR.1, None)
+        .build_terrain(position, GENERATOR.1.clone(), None)
         .unwrap()
 }
 fn point(value: &Value) -> [i32; 3] {

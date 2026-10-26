@@ -988,7 +988,7 @@ impl MinecraftServer {
         let dimension = saved.resolve_dimension(&respawn.dimension.parse()?, |key| {
             self.get_level(key).is_some()
         });
-        let dimension_type = self.world_root.stem(&dimension)?.dimension;
+        let dimension_type = self.world_root.stem(&dimension)?.dimension.clone();
         let game_type = self.default_game_mode;
         let radius = self
             .game_rules
@@ -2689,7 +2689,7 @@ impl MinecraftServer {
                         .context("spawn not prepared")?
                         .dimension()
                         .clone();
-                    let dimension_type = self.world_root.stem(&dimension)?.dimension;
+                    let dimension_type = self.world_root.stem(&dimension)?.dimension.clone();
                     let lent = self.lend_server_shared_to(&dimension)?;
                     let result = {
                         let task = self

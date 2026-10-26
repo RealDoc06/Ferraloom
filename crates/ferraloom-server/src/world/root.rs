@@ -440,6 +440,10 @@ mod tests {
             assert_eq!(context.seed, 1234);
             assert_eq!(context.sea_level, stem.generator.sea_level());
             assert!(Arc::ptr_eq(&context.generator, &stem.generator));
+            assert_eq!(
+                context.dimension_type().unwrap().infiniburn,
+                stem.dimension.infiniburn
+            );
             static EMPTY: Behaviors = Behaviors::EMPTY;
             let mut level = Level::new(Region::new(&EMPTY), context);
             world.configure_live_rules(&mut level);

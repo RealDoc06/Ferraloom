@@ -1,0 +1,6 @@
+infiniburn	overworld	"#minecraft:infiniburn_overworld"	minecraft:magma_block,minecraft:netherrack
+infiniburn	the_nether	"#minecraft:infiniburn_nether"	minecraft:magma_block,minecraft:netherrack
+infiniburn	the_end	"#minecraft:infiniburn_end"	minecraft:bedrock,minecraft:magma_block,minecraft:netherrack
+infiniburn	direct	"minecraft:stone"	minecraft:stone
+infiniburn	direct	[]	
+infiniburn	direct	["minecraft:stone","minecraft:bedrock"]	minecraft:bedrock,minecraft:stone

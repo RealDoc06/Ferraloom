@@ -317,7 +317,7 @@ impl LiveSpawnWorld<'_> {
 }
 impl SpawnWorld for LiveSpawnWorld<'_> {
     fn dimension(&self) -> DimensionType {
-        self.dimension
+        self.dimension.clone()
     }
     fn ensure_chunk(&mut self, position: [i32; 2]) -> std::result::Result<(), SpawnError> {
         let pos = ChunkPos::new(position[0], position[1]);
@@ -462,6 +462,9 @@ mod tests {
             has_skylight: true,
             fast_lava: false,
             coordinate_scale: 1.0,
+            infiniburn: ferraloom_worldgen::structure::processor::BlockSet::Tag(
+                "minecraft:infiniburn_overworld".parse().unwrap(),
+            ),
         }
     }
     fn level() -> Level {

@@ -136,6 +136,9 @@ fn chunks(
                     has_skylight: true,
                     fast_lava: false,
                     coordinate_scale: 1.0,
+                    infiniburn: crate::structure::processor::BlockSet::Tag(
+                        "minecraft:infiniburn_overworld".parse().unwrap(),
+                    ),
                 },
             );
             for y in -64..64 {
