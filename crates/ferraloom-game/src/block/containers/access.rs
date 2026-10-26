@@ -151,31 +151,35 @@ pub fn can_take_item(
     ) {
         return Ok(true);
     }
-    let mut operation = StackOperation::new(level);
-    operation.pin_existing(item).map_err(stack_error)?;
-    for slot in 0..into.size(operation.level)? {
-        let (handle, local) = into.slot(slot, operation.level)?;
-        let destination = operation
-            .pin(ContainerSlot {
-                container: ContainerHandle::BlockEntity(handle),
-                slot: local,
-            })
-            .map_err(stack_error)?;
-        let target = operation.level.stack(destination).map_err(stack_error)?;
-        if target.is_empty() {
-            return Ok(true);
+    // The native Container argument holds both halves of a compound receiver
+    // before the first getItem can lazily unpack loot or run criteria callbacks.
+    into.with_callback(level, |level| {
+        let mut operation = StackOperation::new(level);
+        operation.pin_existing(item).map_err(stack_error)?;
+        for slot in 0..into.size(operation.level)? {
+            let (handle, local) = into.slot(slot, operation.level)?;
+            let destination = operation
+                .pin(ContainerSlot {
+                    container: ContainerHandle::BlockEntity(handle),
+                    slot: local,
+                })
+                .map_err(stack_error)?;
+            let target = operation.level.stack(destination).map_err(stack_error)?;
+            if target.is_empty() {
+                return Ok(true);
+            }
+            let held = operation.level.stack(item).map_err(stack_error)?;
+            if crate::entity::player::inventory::is_same_item_same_components(held, target)
+                && count(target).wrapping_add(count(held))
+                    <= into
+                        .max_stack_size(operation.level)?
+                        .min(max_stack_size(target))
+            {
+                return Ok(true);
+            }
         }
-        let held = operation.level.stack(item).map_err(stack_error)?;
-        if crate::entity::player::inventory::is_same_item_same_components(held, target)
-            && count(target).wrapping_add(count(held))
-                <= into
-                    .max_stack_size(operation.level)?
-                    .min(max_stack_size(target))
-        {
-            return Ok(true);
-        }
-    }
-    Ok(false)
+        Ok(false)
+    })
 }
 
 /// Port of Container#removeItem, preserving a ListBackedContainer's whole
