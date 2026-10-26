@@ -14,7 +14,6 @@ use ferraloom_worldgen::{
     region::{ProtoChunkLightEngine, RegionChunk, WorldGenRegion},
     settings::DimensionType,
     structure::{
-        Beardifier,
         decoration::RegionStructureDecoration,
         generation::StructureGenerationContext,
         pipeline,
@@ -299,56 +298,9 @@ impl WorldGenContext {
                 })?;
                 chunks[index].structures.references = references;
             }
-            ChunkStatusTask::GenerateBiomes => {
-                if let ChunkGenerator::Noise(noise) = self.generator.as_ref() {
-                    noise.create_biomes(&mut chunks[index].chunk);
-                }
-            }
-            ChunkStatusTask::BuildTerrain => {
-                let region = self.region(chunks, center, step)?;
-                let order = self
-                    .registries
-                    .structure_steps
-                    .iter()
-                    .map(|s| s.id.clone())
-                    .collect::<Vec<_>>();
-                let beardifier = Beardifier::from_region(&region, &order)?;
-                let mut generated = match self.generator.as_ref() {
-                    ChunkGenerator::Noise(noise) => {
-                        let mut generated = chunks[index].chunk.clone();
-                        let mut noise_chunk = noise.noise_chunk(&generated);
-                        noise_chunk
-                            .samplers
-                            .set_beardifier(Some(Arc::new(beardifier)));
-                        noise.fill_from_noise(&mut generated, &mut noise_chunk);
-                        noise.build_surface(&mut generated, &mut noise_chunk);
-                        noise.generate_carvers(&mut generated, &mut noise_chunk, false)?;
-                        generated
-                    }
-                    _ => self.generator.build_terrain(
-                        center,
-                        self.dimension.clone(),
-                        Some(Arc::new(beardifier)),
-                    )?,
-                };
-                for (section, previous) in generated
-                    .sections
-                    .iter_mut()
-                    .zip(&chunks[index].chunk.sections)
-                {
-                    *section.biomes_mut() = previous.biomes().clone();
-                }
-                let previous = std::mem::replace(
-                    &mut chunks[index],
-                    RegionChunk::new(generated, ChunkStatus::Terrain),
-                );
-                chunks[index].structures = previous.structures;
-                chunks[index].block_entities = previous.block_entities;
-                chunks[index].instantiated_block_entities = previous.instantiated_block_entities;
-                chunks[index].entities = previous.entities;
-                chunks[index].block_ticks = previous.block_ticks;
-                chunks[index].fluid_ticks = previous.fluid_ticks;
-                chunks[index].poi_changes = previous.poi_changes;
+            ChunkStatusTask::GenerateBiomes | ChunkStatusTask::BuildTerrain => {
+                let inputs = self.prepare_center_step(chunks, center, step)?;
+                inputs.apply(self, &mut chunks[index])?;
             }
             ChunkStatusTask::GenerateFeatures => {
                 let mut region = self.region(chunks, center, step)?;
