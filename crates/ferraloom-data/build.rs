@@ -311,6 +311,17 @@ fn blocks(
     assert_eq!(states.len(), render_shapes.len());
     assert!(states.len() <= u16::MAX as usize + 1);
     assert_eq!(blocks.len(), reports.as_object().unwrap().len());
+    let descriptions: Vec<_> = blocks
+        .iter()
+        .map(|block| string(&block["description_id"]))
+        .collect();
+    writeln!(
+        out,
+        "static BLOCK_DESCRIPTION_IDS: [&str; {}] = {:?};",
+        descriptions.len(),
+        descriptions
+    )
+    .unwrap();
     out.push_str("pub const BLOCKS: &[BlockData] = &[\n");
     for (id, block) in blocks.iter().enumerate() {
         assert_eq!(id as u64, number(&block["id"]));

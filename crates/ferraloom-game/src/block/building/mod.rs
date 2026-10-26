@@ -20,10 +20,15 @@ mod decorative_tests;
 mod environmental;
 #[cfg(test)]
 mod environmental_tests;
+mod fire;
 mod fire_powder;
+#[cfg(test)]
+mod fire_tests;
+pub(crate) use fire::lava_random_tick;
 #[cfg(test)]
 mod fire_powder_tests;
 mod orientation;
+mod portal_shape;
 mod scaffolding;
 pub use scaffolding::scaffolding_distance;
 mod slab;
@@ -43,6 +48,9 @@ pub(crate) fn ported_behavior(
     block: Block,
     method: BlockMethod,
 ) -> Option<&'static dyn BlockBehavior> {
+    if fire::supports(block, method) {
+        return Some(&fire::FIRE);
+    }
     if let Some(behavior) = workstations::ported_behavior(block, method) {
         return Some(behavior);
     }

@@ -1,6 +1,6 @@
 use super::{POS, expect, put, redstone_support, state, use_block};
-use ferraloom_data::{Block, BlockState};
-use ferraloom_parity::{Bot, ObservationLog, Result, Session};
+use ferraloom_data::{Block, BlockState, EntityType};
+use ferraloom_parity::{Bot, ObservationLog, Result, Session, Ticks};
 use ferraloom_util::Direction;
 
 const COLORS: [(Block, Block); 16] = [
@@ -47,8 +47,8 @@ async fn clear(bot: &mut Bot) -> Result<()> {
 }
 
 async fn place(bot: &mut Bot, powder: Block, expected: BlockState, from_below: bool) -> Result<()> {
-    // All cases remain frozen: unsupported falling-entity execution cannot be
-    // reached by the below-water placement controls or scheduled fluid changes.
+    // Placement controls remain frozen so source/neighbor fluid states retain
+    // their exact masks. Real falling is exercised separately after these cases.
     if from_below {
         bot.teleport([8.5, -59.0, 10.5]).await?;
     } else {
@@ -168,6 +168,36 @@ pub(super) async fn record(session: &mut Session) -> Result<ObservationLog> {
                 super::level_support::block(bot, POS)?.id(),
             )?;
         }
+    }
+    clear(bot).await?;
+    for (powder, _) in COLORS {
+        clear(bot).await?;
+        let source = POS.above(4);
+        put(bot, source, powder.default_state()).await?;
+        redstone_support::step(bot, 24).await?;
+        expect(bot, source, Block::AIR.default_state()).await?;
+        expect(bot, POS, powder.default_state()).await?;
+        let no_falling = |snapshot: &ferraloom_parity::BotState| {
+            snapshot.entities.values().all(|entity| {
+                entity.entity_type != i32::from(EntityType::FALLING_BLOCK.protocol_id())
+            })
+        };
+        if !no_falling(&bot.snapshot()) {
+            bot.wait_for(
+                "settled powder entity removal",
+                Ticks::DEFAULT,
+                |snapshot, _| no_falling(snapshot),
+            )
+            .await?;
+        }
+        log.record(
+            format!("{}.dry_fall", powder.name()),
+            [
+                super::level_support::block(bot, source)?.id(),
+                super::level_support::block(bot, POS)?.id(),
+                super::level_support::block(bot, POS.below(1))?.id(),
+            ],
+        )?;
     }
     clear(bot).await?;
     Ok(log)

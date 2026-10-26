@@ -27,6 +27,48 @@ fn action_name() -> Component {
 }
 
 #[test]
+fn falling_block_names_and_hover_use_native_carried_block_descriptions() {
+    use crate::entity::item::FallingBlockEntity;
+    use ferraloom_data::BlockState;
+    static BEHAVIORS: Behaviors = Behaviors::EMPTY;
+    let mut checked = 0;
+    for row in include_str!("../../../tests/java/entity/falling_name/vectors.tsv").lines() {
+        let fields: Vec<_> = row.split('\t').collect();
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        let mut falling = FallingBlockEntity::new(1, 0);
+        falling.block_state = BlockState::from_id(fields[1].parse().unwrap()).unwrap();
+        falling.parent.uuid = Uuid::new(1, 2);
+        if fields[2] == "true" {
+            falling.parent.entity_data.set(
+                synched_data::CUSTOM_NAME,
+                Some(Box::new(Component::literal("custom falling"))),
+            );
+        }
+        let entity = level.next_entity_ref();
+        level
+            .add_entity(entity, EntityState::FallingBlock(Box::new(falling)))
+            .unwrap();
+        assert_eq!(
+            level.entity_name(entity).unwrap(),
+            Component::from_json(fields[3]).unwrap(),
+            "name {row}"
+        );
+        assert_eq!(
+            level
+                .entity_display_name_with_scoreboard(entity, &Scoreboard::default())
+                .unwrap(),
+            Component::from_json(fields[4]).unwrap(),
+            "display {row}"
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, 14);
+}
+
+#[test]
 fn virtual_names_team_formatting_and_hover_decorations_match_native_components() {
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
     let mut count = 0;

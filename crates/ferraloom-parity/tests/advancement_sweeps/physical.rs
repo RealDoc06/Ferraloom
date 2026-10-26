@@ -1,4 +1,6 @@
 //! Real use-on, result-slot take and survival movement into the native criteria producers.
+//! Pending: heart_transplanter and read_power_of_chiseled_bookshelf, BE factory not ported.
+//! Their native fixtures match, but Strict cannot construct the two canonical receivers yet.
 use super::*;
 use ferraloom_protocol::{
     codec::VarInt,
@@ -10,8 +12,6 @@ use std::time::Duration;
 #[derive(Clone, Copy)]
 enum Action {
     Fall,
-    Heart,
-    Bookshelf,
     DriedGhast,
     SnifferSeed,
     Seed,
@@ -20,13 +20,8 @@ enum Action {
     WaxOff,
     Pot,
 }
-const ACTIONS: [(&str, Action); 10] = [
+const ACTIONS: [(&str, Action); 8] = [
     ("adventure/fall_from_world_height", Action::Fall),
-    ("adventure/heart_transplanter", Action::Heart),
-    (
-        "adventure/read_power_of_chiseled_bookshelf",
-        Action::Bookshelf,
-    ),
     ("husbandry/place_dried_ghast_in_water", Action::DriedGhast),
     ("husbandry/plant_any_sniffer_seed", Action::SnifferSeed),
     ("husbandry/plant_seed", Action::Seed),
@@ -201,26 +196,6 @@ async fn block_action(
 ) -> Result<()> {
     let below = BlockPos::new(pos.x, pos.y - 1, pos.z);
     let (item, clicked) = match action {
-        Action::Heart => {
-            set_block(
-                bot,
-                BlockPos::new(pos.x, pos.y - 2, pos.z),
-                "minecraft:pale_oak_log[axis=y]",
-            )
-            .await?;
-            set_block(bot, below, "minecraft:creaking_heart[axis=y]").await?;
-            (Item::PALE_OAK_LOG, below)
-        }
-        Action::Bookshelf => {
-            set_block(bot, below, "minecraft:stone").await?;
-            set_block(
-                bot,
-                BlockPos::new(pos.x, pos.y, pos.z - 1),
-                "minecraft:chiseled_bookshelf",
-            )
-            .await?;
-            (Item::COMPARATOR, below)
-        }
         Action::DriedGhast => {
             set_block(bot, below, "minecraft:stone").await?;
             set_block(bot, pos, "minecraft:water").await?;
@@ -269,9 +244,6 @@ async fn block_action(
         "commands.scoreboard.players.get.success",
     )
     .await?;
-    // The default player's yaw points south; ComparatorBlock placement selects
-    // the opposite NORTH facing used by the adjacent bookshelf fixture.
-    bot.look(0.0, 0.0).await?;
     let mut capture = Capture::new(case, bot)?;
     use_on(bot, clicked).await?;
     flush(bot, &mut capture, true).await?;
@@ -280,7 +252,7 @@ async fn block_action(
 async fn sweep(session: &mut Session, cases: &[Case]) -> Result<ObservationLog> {
     let mut log = ObservationLog::default();
     // Fall runs first, before freezing or scheduling any other fixture work.
-    // Only players keep ticking after freeze; no unrelated heart/fluid/crop work
+    // Only players keep ticking after freeze; no unrelated fluid/crop work
     // is stepped to force an advancement update.
     for (index, (case, (_, action))) in cases.iter().zip(ACTIONS).enumerate() {
         let player = session.join(&name("Act", index)).await?;

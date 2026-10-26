@@ -4,9 +4,9 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 
 | Area | Rows | Ferraloom todo | Ferraloom partial | Ferraloom pass | Ferraloom fail |
 |---|---:|---:|---:|---:|---:|
-| [Advancements](features/advancements.md) | 1958 | 4 | 195 | 1759 | 0 |
-| [Block entities](features/block-entities.md) | 144 | 45 | 44 | 55 | 0 |
-| [Blocks](features/blocks.md) | 448 | 245 | 129 | 74 | 0 |
+| [Advancements](features/advancements.md) | 1958 | 4 | 193 | 1761 | 0 |
+| [Block entities](features/block-entities.md) | 144 | 41 | 45 | 58 | 0 |
+| [Blocks](features/blocks.md) | 453 | 243 | 136 | 74 | 0 |
 | [Chat and text components](features/chat.md) | 23 | 21 | 2 | 0 | 0 |
 | [Chunks and tickets](features/chunks.md) | 59 | 20 | 38 | 1 | 0 |
 | [Combat and damage](features/combat-damage.md) | 204 | 204 | 0 | 0 | 0 |
@@ -14,7 +14,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Crafting and recipes](features/crafting-recipes.md) | 2137 | 2 | 29 | 2106 | 0 |
 | [Datapacks and resource reload](features/datapacks-reload.md) | 57 | 57 | 0 | 0 | 0 |
 | [Enchantments](features/enchantments.md) | 139 | 107 | 32 | 0 | 0 |
-| [Entities and AI](features/entities.md) | 799 | 672 | 111 | 16 | 0 |
+| [Entities and AI](features/entities.md) | 802 | 672 | 114 | 16 | 0 |
 | [Fluids](features/fluids.md) | 32 | 25 | 6 | 1 | 0 |
 | [Binary data, geometry and randomness](features/foundations.md) | 64 | 18 | 18 | 28 | 0 |
 | [Functions and macros](features/functions-macros.md) | 10 | 10 | 0 | 0 | 0 |
@@ -50,4 +50,4 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 308 | 305 | 3 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3116 | 2640 | 176 | 300 | 0 |
-| **Total** | **19640** | **8222** | **2845** | **8573** | **0** |
+| **Total** | **19648** | **8216** | **2854** | **8578** | **0** |
