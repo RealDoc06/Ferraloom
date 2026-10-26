@@ -36,11 +36,12 @@ use ferraloom_worldgen::{
     structure::pipeline::ChunkStructures,
 };
 use serde::Deserialize;
+#[cfg(test)]
+use std::path::Path;
 use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet, VecDeque},
     future::Future,
-    path::Path,
     pin::Pin,
     sync::{
         Arc,

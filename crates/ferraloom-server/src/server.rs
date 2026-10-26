@@ -33,6 +33,8 @@ use crate::{
     world::{ChunkLight, World, WorldRoot, heightmap},
 };
 use anyhow::{Context, Result, bail, ensure};
+#[cfg(test)]
+use ferraloom_data::datapack::Pack;
 use ferraloom_data::{
     Block, EntityType,
     datapack::{ResourceManager, TagSet},
