@@ -606,6 +606,9 @@ thread_local! {
 /// collector run normally, including freeze clearing and the ignition mutation.
 struct ContactProbe;
 impl crate::entity::Entity for ContactProbe {
+    fn trace_entity_refs(&self, state: &EntityState, references: &mut Vec<EntityRef>) {
+        crate::entity::player::PlayerBehavior.trace_entity_refs(state, references);
+    }
     fn ignite_for_ticks(
         &self,
         entity: EntityRef,
