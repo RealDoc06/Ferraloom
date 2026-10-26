@@ -49,6 +49,37 @@ impl BeehiveBlockEntity {
 pub(super) struct BeehiveBehavior;
 pub(super) static BEEHIVE_ENTITY: BeehiveBehavior = BeehiveBehavior;
 impl BlockEntity for BeehiveBehavior {
+    /// Port of BeehiveBlockEntity#setChanged. Emergency release precedes the
+    /// superclass notification; a live Bee release is still a required service.
+    fn set_changed_live(
+        &self,
+        receiver: BlockEntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        use crate::level::blockscan::BlockMatcher;
+        let data = level.block_entity::<BlockEntityData>(receiver)?;
+        if data.has_level
+            && level
+                .find_blocks_between(
+                    receiver.pos.offset(-1, -1, -1),
+                    receiver.pos.offset(1, 1, 1),
+                )
+                .filter_state(|state| state.block() == Block::FIRE)
+                .any_matched()?
+        {
+            // Native reads the current block state even when the release loop
+            // is empty. FireBlock's class check deliberately excludes soul fire.
+            level.get_block_state(receiver.pos)?;
+            if !level
+                .block_entity::<BeehiveBlockEntity>(receiver)?
+                .stored
+                .is_empty()
+            {
+                return Err(LevelError::UnsupportedEntity(EntityType::BEE));
+            }
+        }
+        receiver.set_changed_base(level)
+    }
     fn has_server_ticker(&self) -> bool {
         true
     }
@@ -129,3 +160,6 @@ impl BlockEntity for BeehiveBehavior {
         tag.remove("bees");
     }
 }
+
+#[cfg(test)]
+mod changed_tests;
