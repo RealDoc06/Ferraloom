@@ -49,6 +49,25 @@ pub enum SelectorKind {
     Goal,
     Target,
 }
+
+/// Port of GoalSelector#tick's live Mob entry point; the canonical adapter is pending.
+pub fn tick_selector(
+    entity: EntityRef,
+    selector: SelectorKind,
+    level: &mut crate::level::Level,
+) -> Result<(), crate::level::LevelError> {
+    super::pending(entity, AiOperation::TickSelector(selector), level)
+}
+
+/// Port of GoalSelector#tickRunningGoals's live Mob entry point; adapter pending.
+pub fn tick_running_goals(
+    entity: EntityRef,
+    selector: SelectorKind,
+    _force: bool,
+    level: &mut crate::level::Level,
+) -> Result<(), crate::level::LevelError> {
+    super::pending(entity, AiOperation::TickRunningGoals(selector), level)
+}
 /// Port of WrappedGoal. Wrapper identity is separate from the wrapped Goal:
 /// removing and re-adding a Goal creates a new wrapper, while old flag locks live.
 #[derive(Debug)]

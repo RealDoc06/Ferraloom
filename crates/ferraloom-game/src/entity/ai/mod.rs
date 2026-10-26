@@ -1,6 +1,9 @@
 pub mod attributes;
+pub mod control;
 pub mod goal;
+pub mod navigation;
 pub mod pathfinder;
+pub mod sensing;
 
 /// Port of Mob#createNavigation's family-selected concrete implementation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
@@ -22,8 +25,12 @@ pub enum MoveControlKind {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum AiOperation {
     Goal(&'static str),
+    TickSelector(goal::SelectorKind),
+    TickRunningGoals(goal::SelectorKind),
     GoalSelectorMutation,
+    NavigationTick,
     Navigation(NavigationKind),
+    MoveControlTick,
     MoveControl(MoveControlKind),
     LookControl,
     JumpControl,
@@ -34,13 +41,17 @@ impl AiOperation {
     pub const fn name(self) -> &'static str {
         match self {
             Self::Goal(name) => name,
+            Self::TickSelector(_) => "GoalSelector#tick",
+            Self::TickRunningGoals(_) => "GoalSelector#tickRunningGoals",
             Self::GoalSelectorMutation => "GoalSelector structural mutation during a goal callback",
+            Self::NavigationTick => "PathNavigation#tick",
             Self::Navigation(NavigationKind::Ground) => "GroundPathNavigation#tick",
             Self::Navigation(NavigationKind::Water) => "WaterBoundPathNavigation#tick",
             Self::Navigation(NavigationKind::Flying) => "FlyingPathNavigation#tick",
             Self::Navigation(NavigationKind::WallClimber) => "WallClimberNavigation#tick",
             Self::Navigation(NavigationKind::Amphibious) => "AmphibiousPathNavigation#tick",
             Self::MoveControl(MoveControlKind::Ground) => "MoveControl#tick",
+            Self::MoveControlTick => "MoveControl#tick",
             Self::MoveControl(MoveControlKind::Drowned) => "DrownedMoveControl#tick",
             Self::MoveControl(MoveControlKind::AbstractCube) => {
                 "AbstractCubeMob.CubeMobMoveControl#tick"
@@ -48,9 +59,24 @@ impl AiOperation {
             Self::LookControl => "LookControl#tick",
             Self::JumpControl => "JumpControl#tick",
             Self::BodyRotationControl => "BodyRotationControl#clientTick",
-            Self::Sensing => "Sensing#hasLineOfSight",
+            Self::Sensing => "Sensing#tick",
         }
     }
+}
+
+/// Required dispatch until the live Mob-owned subsystem adapter is released.
+/// Capture the receiver's type now, so the error can outlive the Level.
+pub(crate) fn pending(
+    entity: crate::entity::EntityRef,
+    operation: AiOperation,
+    level: &crate::level::Level,
+) -> Result<(), crate::level::LevelError> {
+    let entity_type = level.entity_state(entity)?.entity_type();
+    Err(crate::level::LevelError::UnsupportedMobAi {
+        entity,
+        entity_type,
+        operation,
+    })
 }
 /// An unavailable native implementation, never an empty successful subsystem.
 #[derive(Debug)]
@@ -127,5 +153,70 @@ impl Default for MobAi {
     /// Port of Mob constructor defaults; unavailable native bodies stay required.
     fn default() -> Self {
         Self::new(NavigationKind::Ground)
+    }
+}
+
+#[cfg(test)]
+mod pending_tests {
+    use super::*;
+    use crate::{
+        Behaviors,
+        entity::{EntityRef, EntityState, animal::Cow},
+        level::{Level, LevelContext, LevelError, Region},
+    };
+
+    #[test]
+    fn pending_entries_preserve_receiver_type_and_display_without_a_live_level() {
+        let mut level = Level::new(Region::new(&Behaviors::EMPTY), LevelContext::fixture(0, 63));
+        let entity = level.next_entity_ref();
+        let mut cow = Cow::default();
+        cow.as_living_mut().parent.network_id = 9;
+        cow.as_living_mut().parent.network_id_allocated = true;
+        level
+            .add_entity(entity, EntityState::Cow(Box::new(cow)))
+            .unwrap();
+        type Entry = fn(EntityRef, &mut Level) -> Result<(), LevelError>;
+        let entries: [(AiOperation, Entry); 9] = [
+            (AiOperation::Sensing, sensing::tick),
+            (
+                AiOperation::TickSelector(goal::SelectorKind::Goal),
+                |id, l| goal::tick_selector(id, goal::SelectorKind::Goal, l),
+            ),
+            (
+                AiOperation::TickSelector(goal::SelectorKind::Target),
+                |id, l| goal::tick_selector(id, goal::SelectorKind::Target, l),
+            ),
+            (
+                AiOperation::TickRunningGoals(goal::SelectorKind::Goal),
+                |id, l| goal::tick_running_goals(id, goal::SelectorKind::Goal, true, l),
+            ),
+            (
+                AiOperation::TickRunningGoals(goal::SelectorKind::Target),
+                |id, l| goal::tick_running_goals(id, goal::SelectorKind::Target, false, l),
+            ),
+            (AiOperation::NavigationTick, navigation::tick),
+            (AiOperation::MoveControlTick, control::tick_move),
+            (AiOperation::LookControl, control::tick_look),
+            (AiOperation::JumpControl, control::tick_jump),
+        ];
+        let mut captured = Vec::new();
+        for (operation, entry) in entries {
+            let error = entry(entity, &mut level).unwrap_err();
+            assert!(
+                matches!(error,LevelError::UnsupportedMobAi{entity:actual,entity_type,operation:actual_operation}
+                if actual==entity && entity_type==ferraloom_data::EntityType::COW && actual_operation==operation)
+            );
+            captured.push((operation, error));
+        }
+        drop(level);
+        for (operation, error) in captured {
+            assert_eq!(
+                error.to_string(),
+                format!(
+                    "unsupported mob AI {} for minecraft:cow ({entity:?})",
+                    operation.name()
+                )
+            );
+        }
     }
 }
