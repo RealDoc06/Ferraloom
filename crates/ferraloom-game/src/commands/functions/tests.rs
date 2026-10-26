@@ -1,6 +1,7 @@
 use super::*;
 use crate::commands::{CommandSourceStack, Commands};
 use serde::Deserialize;
+use std::sync::Arc;
 
 #[derive(Deserialize)]
 struct Vector {
