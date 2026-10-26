@@ -220,7 +220,7 @@ pub fn queue_command<H: CommandExecutionHost>(
 ) {
     context.queue_next(CommandQueueEntry::new(
         frame,
-        move |context, frame, host| {
+        move |context, frame, host: &mut H| {
             if command.command == "return" {
                 if let Some(continuation) = command.continuation.take() {
                     context.discard(frame);
@@ -243,7 +243,7 @@ pub fn queue_command<H: CommandExecutionHost>(
                 }
                 context.queue_next(CommandQueueEntry::new(
                     frame.clone(),
-                    move |context, frame, host| {
+                    move |context, frame, host: &mut H| {
                         // FunctionCommand is a custom executor. CallFunction,
                         // rather than ExecuteCommand, consumes its native quota.
                         if command.command != "function" {
@@ -512,31 +512,6 @@ mod command_tests {
     use crate::commands::{CommandSourceStack, Commands};
     use ferraloom_util::Vec3;
     use std::sync::{Arc, Mutex};
-    impl CommandCallbackHost for Vec<i32> {
-        fn send_success(
-            &mut self,
-            _: &super::super::CommandSourceStack,
-            _: ferraloom_protocol::chat::Component,
-            _: bool,
-        ) {
-            panic!("queue control vectors do not send feedback");
-        }
-    }
-    impl CommandCallbackHost for Option<PendingCommand> {
-        fn send_success(
-            &mut self,
-            _: &super::super::CommandSourceStack,
-            _: ferraloom_protocol::chat::Component,
-            _: bool,
-        ) {
-            panic!("return vectors do not send feedback");
-        }
-    }
-    impl CommandExecutionHost for Option<PendingCommand> {
-        fn emit_command(&mut self, command: PendingCommand) {
-            *self = Some(command);
-        }
-    }
     #[test]
     fn return_commands_share_the_live_queue_and_compose_callbacks() {
         let commands = Commands::default();
@@ -558,7 +533,7 @@ mod command_tests {
                 }),
             );
             let command = commands.prepare(input, source).unwrap();
-            let mut context = ExecutionContext::new(10, 10);
+            let mut context = ExecutionContext::<Option<PendingCommand>>::new(10, 10);
             let frame =
                 context.top_frame(CommandResultCallback::new(move |_host, success, value| {
                     frame_results
