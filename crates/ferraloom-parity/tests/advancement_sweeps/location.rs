@@ -77,6 +77,15 @@ async fn sweep(session: &mut Session, case: &Case) -> Result<ObservationLog> {
         .await?;
     }
     bot.teleport([8.5, 80.0, 8.5]).await?;
+    // Complete the initial biome LOCATION tail before recording this fixture's
+    // inputs; join and generation latency must not move it into a later phase.
+    let time = bot.snapshot().game_time.context("joined game time")?;
+    bot.wait_for(
+        "initial LOCATION tail",
+        Ticks::DEFAULT,
+        |_, packet| matches!(packet, cb::Packet::SetTime(packet) if packet.game_time > time + 20),
+    )
+    .await?;
     let teleports = bot.snapshot().teleports;
     let mut capture = Capture::new(case, bot)?;
     let mut log = ObservationLog::default();
