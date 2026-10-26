@@ -45,6 +45,7 @@ pub mod path_navigation_region;
 mod post_processing;
 pub mod publication;
 mod random;
+pub(crate) use random::get_millis;
 pub mod redstone;
 mod saved_ticks;
 pub mod server_level;
@@ -91,6 +92,11 @@ pub enum LevelError {
     },
     UnsupportedPortalUse(Block),
     UnsupportedEntityMethod(EntityType, crate::entity::EntityMethod),
+    UnsupportedMobAi {
+        entity: crate::entity::EntityRef,
+        entity_type: EntityType,
+        operation: crate::entity::ai::AiOperation,
+    },
     UnsupportedAdvancementCriterion(crate::advancements::criteria::Trigger),
     UnsupportedAdvancementPredicate {
         trigger: crate::advancements::criteria::Trigger,
@@ -212,6 +218,16 @@ impl std::fmt::Display for LevelError {
             Self::UnsupportedAdvancementPredicate { trigger, source } => {
                 write!(formatter, "{}: {source}", trigger.name())
             }
+            Self::UnsupportedMobAi {
+                entity,
+                entity_type,
+                operation,
+            } => write!(
+                formatter,
+                "unsupported mob AI {} for {} ({entity:?})",
+                operation.name(),
+                entity_type.name()
+            ),
             Self::EnchantmentEffect {
                 enchantment,
                 source,

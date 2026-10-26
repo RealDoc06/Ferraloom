@@ -16,6 +16,7 @@ pub mod item;
 pub mod mob;
 pub mod monster;
 pub mod player;
+pub mod projectile;
 pub mod pushing;
 mod stuck;
 pub mod variant;
@@ -192,6 +193,30 @@ impl EntityState {
         }
     }
 
+    /// Native instanceof Projectile classification. Every current concrete
+    /// variant is explicitly non-projectile; a new variant must supply its
+    /// embedded Projectile here rather than silently inheriting a false result.
+    pub fn as_projectile(&self) -> Option<&projectile::Projectile> {
+        match self {
+            Self::Cow(_)
+            | Self::Player(_)
+            | Self::PrimedTnt(_)
+            | Self::Item(_)
+            | Self::FallingBlock(_)
+            | Self::ExperienceOrb(_) => None,
+        }
+    }
+    pub fn as_projectile_mut(&mut self) -> Option<&mut projectile::Projectile> {
+        match self {
+            Self::Cow(_)
+            | Self::Player(_)
+            | Self::PrimedTnt(_)
+            | Self::Item(_)
+            | Self::FallingBlock(_)
+            | Self::ExperienceOrb(_) => None,
+        }
+    }
+
     pub fn as_mob(&self) -> Option<&Mob> {
         match self {
             Self::Cow(cow) => Some(cow.as_mob()),
@@ -319,6 +344,11 @@ pub enum EntityMethod {
     StopSleeping,
     CheckTotemDeathProtection,
     Die,
+    DropAllDeathLoot,
+    AwardKillScore,
+    KilledEntity,
+    DeathMessage,
+    ProcessMobExperience,
     LoadSleepingPosition,
     LoadBrain,
     CowVariantBehavior,
@@ -348,6 +378,11 @@ impl EntityMethod {
             Self::CowVariantBehavior => "Cow#getSoundSet",
             Self::FinalizeSpawn => "Mob#finalizeSpawn",
             Self::Die => "LivingEntity#die",
+            Self::DropAllDeathLoot => "LivingEntity#dropAllDeathLoot",
+            Self::AwardKillScore => "awardKillScore",
+            Self::KilledEntity => "Player#killedEntity",
+            Self::DeathMessage => "CombatTracker#getDeathMessage",
+            Self::ProcessMobExperience => "EnchantmentHelper#processMobExperience",
         }
     }
 }
@@ -362,6 +397,27 @@ pub fn trace_base_entity_refs(base: &EntityData, references: &mut Vec<EntityRef>
 ///
 /// Dispatch objects are stateless. Never hold a state borrow across a world call.
 pub trait Entity: Sync {
+    /// TraceableEntity#getOwner. Non-traceable base entities have no owner;
+    /// ItemEntity and PrimedTnt retain their respective native typed overrides.
+    fn get_owner(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+    ) -> Result<Option<EntityRef>, LevelError> {
+        if level.entity_state(entity)?.as_projectile().is_some() {
+            projectile::get_owner(entity, level)
+        } else {
+            Ok(None)
+        }
+    }
+    /// Port of Projectile#getEffectSource, using its owner when resolvable.
+    fn effect_source(&self, entity: EntityRef, level: &mut Level) -> Result<EntityRef, LevelError> {
+        if level.entity_state(entity)?.as_projectile().is_some() {
+            Ok(self.get_owner(entity, level)?.unwrap_or(entity))
+        } else {
+            Ok(entity)
+        }
+    }
     /// Port of Entity#rotate. Returns the transformed angle without changing yaw.
     fn rotate(
         &self,
@@ -1584,7 +1640,67 @@ pub trait Entity: Sync {
     fn voice_pitch(&self, entity: EntityRef, level: &mut Level) -> Result<f32, LevelError> {
         living::hurt::voice_pitch(self, entity, level)
     }
-    fn die(
+    /// Port of LivingEntity#shouldDropExperience, including the baby virtual.
+    fn should_drop_experience(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        level.entity::<LivingEntity>(entity)?;
+        Ok(!self.is_baby(entity, level)?)
+    }
+    /// LivingEntity#getBaseExperienceReward's parent returns zero.
+    fn base_experience_reward(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+    ) -> Result<i32, LevelError> {
+        level.entity::<LivingEntity>(entity)?;
+        Ok(0)
+    }
+    fn get_experience_reward(
+        &self,
+        entity: EntityRef,
+        killer: Option<EntityRef>,
+        level: &mut Level,
+    ) -> Result<i32, LevelError> {
+        living::death::experience_reward(self, entity, killer, level)
+    }
+    fn award_kill_score(
+        &self,
+        entity: EntityRef,
+        victim: EntityRef,
+        _source: &DamageSource,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        if matches!(level.entity_state(entity)?, EntityState::Player(_))
+            || matches!(level.entity_state(victim)?, EntityState::Player(_))
+        {
+            return Err(LevelError::UnsupportedEntityMethod(
+                level.entity_state(entity)?.entity_type(),
+                EntityMethod::AwardKillScore,
+            ));
+        }
+        Ok(())
+    }
+    /// Entity#killedEntity is true; Player's statistic-producing override remains required.
+    fn killed_entity(
+        &self,
+        entity: EntityRef,
+        _victim: EntityRef,
+        _source: &DamageSource,
+        level: &mut Level,
+    ) -> Result<bool, LevelError> {
+        if matches!(level.entity_state(entity)?, EntityState::Player(_)) {
+            return Err(LevelError::UnsupportedEntityMethod(
+                level.entity_state(entity)?.entity_type(),
+                EntityMethod::KilledEntity,
+            ));
+        }
+        Ok(true)
+    }
+    /// Port of LivingEntity#handleKillingBlow's native virtual boundary.
+    fn handle_killing_blow(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        level.entity_mut::<LivingEntity>(entity)?.dead = true;
+        Ok(())
+    }
+    fn drop_all_death_loot(
         &self,
         entity: EntityRef,
         _source: &DamageSource,
@@ -1592,8 +1708,23 @@ pub trait Entity: Sync {
     ) -> Result<(), LevelError> {
         Err(LevelError::UnsupportedEntityMethod(
             level.entity_state(entity)?.entity_type(),
-            EntityMethod::Die,
+            EntityMethod::DropAllDeathLoot,
         ))
+    }
+    fn die(
+        &self,
+        entity: EntityRef,
+        source: &DamageSource,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        if level.entity_state(entity)?.as_living().is_some() {
+            living::death::die_parent(self, entity, source, level)
+        } else {
+            Err(LevelError::UnsupportedEntityMethod(
+                level.entity_state(entity)?.entity_type(),
+                EntityMethod::Die,
+            ))
+        }
     }
     fn hurt_server(
         &self,

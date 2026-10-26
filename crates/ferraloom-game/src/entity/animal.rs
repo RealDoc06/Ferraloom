@@ -100,6 +100,19 @@ impl Cow {
 /// Shared Cow dispatcher for the foundation's Entity/LivingEntity primitives.
 pub struct CowBehavior;
 impl Entity for CowBehavior {
+    /// Port of Animal#getBaseExperienceReward, evaluated even for babies.
+    fn base_experience_reward(
+        &self,
+        entity: super::EntityRef,
+        level: &mut crate::level::Level,
+    ) -> Result<i32, crate::level::LevelError> {
+        use ferraloom_util::random::RandomSource;
+        Ok(1 + level
+            .entity_mut::<LivingEntity>(entity)?
+            .random
+            .next_int_bound(3))
+    }
+
     fn tick(
         &self,
         entity: super::EntityRef,

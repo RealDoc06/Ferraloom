@@ -782,6 +782,26 @@ impl crate::entity::Entity for PlayerBehavior {
         )
     }
 
+    fn base_experience_reward(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+    ) -> Result<i32, LevelError> {
+        super::living::death::player_base_experience_reward(entity, level)
+    }
+    /// ServerPlayer has a distinct death body, not LivingEntity's parent prefix.
+    fn die(
+        &self,
+        entity: EntityRef,
+        _source: &crate::entity::DamageSource,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Err(LevelError::UnsupportedEntityMethod(
+            level.entity_state(entity)?.entity_type(),
+            crate::entity::EntityMethod::Die,
+        ))
+    }
+
     fn get_slot(
         &self,
         entity: EntityRef,

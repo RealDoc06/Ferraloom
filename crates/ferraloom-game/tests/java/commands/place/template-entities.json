@@ -1,0 +1,338 @@
+[
+  {
+    "rotation": "NONE",
+    "mirror": "NONE",
+    "tag": "{Passengers:[{id:\"minecraft:zombie\"}],Pos:[9.25d,82.5d,11.75d],Rotation:[35.5f,-12.5f],id:\"minecraft:tnt\"}",
+    "reason": "STRUCTURE",
+    "ignore_checks": false,
+    "position": [
+      9.25,
+      82.5,
+      11.75
+    ],
+    "yaw_bits": 1108213760,
+    "pitch_bits": 3242721280
+  },
+  {
+    "rotation": "NONE",
+    "mirror": "LEFT_RIGHT",
+    "tag": "{Passengers:[{id:\"minecraft:zombie\"}],Pos:[9.25d,82.5d,5.25d],Rotation:[35.5f,-12.5f],id:\"minecraft:tnt\"}",
+    "reason": "STRUCTURE",
+    "ignore_checks": false,
+    "position": [
+      9.25,
+      82.5,
+      5.25
+    ],
+    "yaw_bits": 1125154816,
+    "pitch_bits": 3242721280
+  },
+  {
+    "rotation": "NONE",
+    "mirror": "FRONT_BACK",
+    "tag": "{Passengers:[{id:\"minecraft:zombie\"}],Pos:[7.75d,82.5d,11.75d],Rotation:[35.5f,-12.5f],id:\"minecraft:tnt\"}",
+    "reason": "STRUCTURE",
+    "ignore_checks": false,
+    "position": [
+      7.75,
+      82.5,
+      11.75
+    ],
+    "yaw_bits": 3255697408,
+    "pitch_bits": 3242721280
+  },
+  {
+    "rotation": "CLOCKWISE_90",
+    "mirror": "NONE",
+    "tag": "{Passengers:[{id:\"minecraft:zombie\"}],Pos:[5.25d,82.5d,9.25d],Rotation:[35.5f,-12.5f],id:\"minecraft:tnt\"}",
+    "reason": "STRUCTURE",
+    "ignore_checks": false,
+    "position": [
+      5.25,
+      82.5,
+      9.25
+    ],
+    "yaw_bits": 1123745792,
+    "pitch_bits": 3242721280
+  },
+  {
+    "rotation": "CLOCKWISE_90",
+    "mirror": "LEFT_RIGHT",
+    "tag": "{Passengers:[{id:\"minecraft:zombie\"}],Pos:[11.75d,82.5d,9.25d],Rotation:[35.5f,-12.5f],id:\"minecraft:tnt\"}",
+    "reason": "STRUCTURE",
+    "ignore_checks": false,
+    "position": [
+      11.75,
+      82.5,
+      9.25
+    ],
+    "yaw_bits": 1131053056,
+    "pitch_bits": 3242721280
+  },
+  {
+    "rotation": "CLOCKWISE_90",
+    "mirror": "FRONT_BACK",
+    "tag": "{Passengers:[{id:\"minecraft:zombie\"}],Pos:[5.25d,82.5d,7.75d],Rotation:[35.5f,-12.5f],id:\"minecraft:tnt\"}",
+    "reason": "STRUCTURE",
+    "ignore_checks": false,
+    "position": [
+      5.25,
+      82.5,
+      7.75
+    ],
+    "yaw_bits": 1113194496,
+    "pitch_bits": 3242721280
+  },
+  {
+    "rotation": "CLOCKWISE_180",
+    "mirror": "NONE",
+    "tag": "{Passengers:[{id:\"minecraft:zombie\"}],Pos:[7.75d,82.5d,5.25d],Rotation:[35.5f,-12.5f],id:\"minecraft:tnt\"}",
+    "reason": "STRUCTURE",
+    "ignore_checks": false,
+    "position": [
+      7.75,
+      82.5,
+      5.25
+    ],
+    "yaw_bits": 1129807872,
+    "pitch_bits": 3242721280
+  },
+  {
+    "rotation": "CLOCKWISE_180",
+    "mirror": "LEFT_RIGHT",
+    "tag": "{Passengers:[{id:\"minecraft:zombie\"}],Pos:[7.75d,82.5d,11.75d],Rotation:[35.5f,-12.5f],id:\"minecraft:tnt\"}",
+    "reason": "STRUCTURE",
+    "ignore_checks": false,
+    "position": [
+      7.75,
+      82.5,
+      11.75
+    ],
+    "yaw_bits": 1134706688,
+    "pitch_bits": 3242721280
+  },
+  {
+    "rotation": "CLOCKWISE_180",
+    "mirror": "FRONT_BACK",
+    "tag": "{Passengers:[{id:\"minecraft:zombie\"}],Pos:[9.25d,82.5d,5.25d],Rotation:[35.5f,-12.5f],id:\"minecraft:tnt\"}",
+    "reason": "STRUCTURE",
+    "ignore_checks": false,
+    "position": [
+      9.25,
+      82.5,
+      5.25
+    ],
+    "yaw_bits": 1125154816,
+    "pitch_bits": 3242721280
+  },
+  {
+    "rotation": "COUNTERCLOCKWISE_90",
+    "mirror": "NONE",
+    "tag": "{Passengers:[{id:\"minecraft:zombie\"}],Pos:[11.75d,82.5d,7.75d],Rotation:[35.5f,-12.5f],id:\"minecraft:tnt\"}",
+    "reason": "STRUCTURE",
+    "ignore_checks": false,
+    "position": [
+      11.75,
+      82.5,
+      7.75
+    ],
+    "yaw_bits": 1134084096,
+    "pitch_bits": 3242721280
+  },
+  {
+    "rotation": "COUNTERCLOCKWISE_90",
+    "mirror": "LEFT_RIGHT",
+    "tag": "{Passengers:[{id:\"minecraft:zombie\"}],Pos:[5.25d,82.5d,7.75d],Rotation:[35.5f,-12.5f],id:\"minecraft:tnt\"}",
+    "reason": "STRUCTURE",
+    "ignore_checks": false,
+    "position": [
+      5.25,
+      82.5,
+      7.75
+    ],
+    "yaw_bits": 1137655808,
+    "pitch_bits": 3242721280
+  },
+  {
+    "rotation": "COUNTERCLOCKWISE_90",
+    "mirror": "FRONT_BACK",
+    "tag": "{Passengers:[{id:\"minecraft:zombie\"}],Pos:[11.75d,82.5d,9.25d],Rotation:[35.5f,-12.5f],id:\"minecraft:tnt\"}",
+    "reason": "STRUCTURE",
+    "ignore_checks": false,
+    "position": [
+      11.75,
+      82.5,
+      9.25
+    ],
+    "yaw_bits": 1131053056,
+    "pitch_bits": 3242721280
+  },
+  {
+    "rotation": "NONE",
+    "mirror": "NONE",
+    "tag": "{Passengers:[{id:\"minecraft:zombie\"}],Pos:[9.25d,82.5d,11.75d],Rotation:[-140.25f,-12.5f],id:\"minecraft:tnt\"}",
+    "reason": "STRUCTURE",
+    "ignore_checks": false,
+    "position": [
+      9.25,
+      82.5,
+      11.75
+    ],
+    "yaw_bits": 3272359936,
+    "pitch_bits": 3242721280
+  },
+  {
+    "rotation": "NONE",
+    "mirror": "LEFT_RIGHT",
+    "tag": "{Passengers:[{id:\"minecraft:zombie\"}],Pos:[9.25d,82.5d,5.25d],Rotation:[-140.25f,-12.5f],id:\"minecraft:tnt\"}",
+    "reason": "STRUCTURE",
+    "ignore_checks": false,
+    "position": [
+      9.25,
+      82.5,
+      5.25
+    ],
+    "yaw_bits": 1134567424,
+    "pitch_bits": 3242721280
+  },
+  {
+    "rotation": "NONE",
+    "mirror": "FRONT_BACK",
+    "tag": "{Passengers:[{id:\"minecraft:zombie\"}],Pos:[7.75d,82.5d,11.75d],Rotation:[-140.25f,-12.5f],id:\"minecraft:tnt\"}",
+    "reason": "STRUCTURE",
+    "ignore_checks": false,
+    "position": [
+      7.75,
+      82.5,
+      11.75
+    ],
+    "yaw_bits": 1124876288,
+    "pitch_bits": 3242721280
+  },
+  {
+    "rotation": "CLOCKWISE_90",
+    "mirror": "NONE",
+    "tag": "{Passengers:[{id:\"minecraft:zombie\"}],Pos:[5.25d,82.5d,9.25d],Rotation:[-140.25f,-12.5f],id:\"minecraft:tnt\"}",
+    "reason": "STRUCTURE",
+    "ignore_checks": false,
+    "position": [
+      5.25,
+      82.5,
+      9.25
+    ],
+    "yaw_bits": 3259564032,
+    "pitch_bits": 3242721280
+  },
+  {
+    "rotation": "CLOCKWISE_90",
+    "mirror": "LEFT_RIGHT",
+    "tag": "{Passengers:[{id:\"minecraft:zombie\"}],Pos:[11.75d,82.5d,9.25d],Rotation:[-140.25f,-12.5f],id:\"minecraft:tnt\"}",
+    "reason": "STRUCTURE",
+    "ignore_checks": false,
+    "position": [
+      11.75,
+      82.5,
+      9.25
+    ],
+    "yaw_bits": 1137516544,
+    "pitch_bits": 3242721280
+  },
+  {
+    "rotation": "CLOCKWISE_90",
+    "mirror": "FRONT_BACK",
+    "tag": "{Passengers:[{id:\"minecraft:zombie\"}],Pos:[5.25d,82.5d,7.75d],Rotation:[-140.25f,-12.5f],id:\"minecraft:tnt\"}",
+    "reason": "STRUCTURE",
+    "ignore_checks": false,
+    "position": [
+      5.25,
+      82.5,
+      7.75
+    ],
+    "yaw_bits": 1130774528,
+    "pitch_bits": 3242721280
+  },
+  {
+    "rotation": "CLOCKWISE_180",
+    "mirror": "NONE",
+    "tag": "{Passengers:[{id:\"minecraft:zombie\"}],Pos:[7.75d,82.5d,5.25d],Rotation:[-140.25f,-12.5f],id:\"minecraft:tnt\"}",
+    "reason": "STRUCTURE",
+    "ignore_checks": false,
+    "position": [
+      7.75,
+      82.5,
+      5.25
+    ],
+    "yaw_bits": 1109327872,
+    "pitch_bits": 3242721280
+  },
+  {
+    "rotation": "CLOCKWISE_180",
+    "mirror": "LEFT_RIGHT",
+    "tag": "{Passengers:[{id:\"minecraft:zombie\"}],Pos:[7.75d,82.5d,11.75d],Rotation:[-140.25f,-12.5f],id:\"minecraft:tnt\"}",
+    "reason": "STRUCTURE",
+    "ignore_checks": false,
+    "position": [
+      7.75,
+      82.5,
+      11.75
+    ],
+    "yaw_bits": 1140465664,
+    "pitch_bits": 3242721280
+  },
+  {
+    "rotation": "CLOCKWISE_180",
+    "mirror": "FRONT_BACK",
+    "tag": "{Passengers:[{id:\"minecraft:zombie\"}],Pos:[9.25d,82.5d,5.25d],Rotation:[-140.25f,-12.5f],id:\"minecraft:tnt\"}",
+    "reason": "STRUCTURE",
+    "ignore_checks": false,
+    "position": [
+      9.25,
+      82.5,
+      5.25
+    ],
+    "yaw_bits": 1134567424,
+    "pitch_bits": 3242721280
+  },
+  {
+    "rotation": "COUNTERCLOCKWISE_90",
+    "mirror": "NONE",
+    "tag": "{Passengers:[{id:\"minecraft:zombie\"}],Pos:[11.75d,82.5d,7.75d],Rotation:[-140.25f,-12.5f],id:\"minecraft:tnt\"}",
+    "reason": "STRUCTURE",
+    "ignore_checks": false,
+    "position": [
+      11.75,
+      82.5,
+      7.75
+    ],
+    "yaw_bits": 1124188160,
+    "pitch_bits": 3242721280
+  },
+  {
+    "rotation": "COUNTERCLOCKWISE_90",
+    "mirror": "LEFT_RIGHT",
+    "tag": "{Passengers:[{id:\"minecraft:zombie\"}],Pos:[5.25d,82.5d,7.75d],Rotation:[-140.25f,-12.5f],id:\"minecraft:tnt\"}",
+    "reason": "STRUCTURE",
+    "ignore_checks": false,
+    "position": [
+      5.25,
+      82.5,
+      7.75
+    ],
+    "yaw_bits": 1142132736,
+    "pitch_bits": 3242721280
+  },
+  {
+    "rotation": "COUNTERCLOCKWISE_90",
+    "mirror": "FRONT_BACK",
+    "tag": "{Passengers:[{id:\"minecraft:zombie\"}],Pos:[11.75d,82.5d,9.25d],Rotation:[-140.25f,-12.5f],id:\"minecraft:tnt\"}",
+    "reason": "STRUCTURE",
+    "ignore_checks": false,
+    "position": [
+      11.75,
+      82.5,
+      9.25
+    ],
+    "yaw_bits": 1137516544,
+    "pitch_bits": 3242721280
+  }
+]

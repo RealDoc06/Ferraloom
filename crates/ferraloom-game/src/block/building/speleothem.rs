@@ -25,7 +25,7 @@ pub(super) fn supports(block: Block, method: BlockMethod) -> bool {
             | BlockMethod::IsCollisionShapeFullBlock
     )
 }
-fn tip(state: BlockState) -> Direction {
+pub(super) fn tip(state: BlockState) -> Direction {
     match state
         .get(p::VERTICAL_DIRECTION)
         .expect("tagged speleothem vertical direction")
@@ -34,7 +34,7 @@ fn tip(state: BlockState) -> Direction {
         p::VerticalDirection::Down => Direction::Down,
     }
 }
-fn with_tip(state: BlockState, direction: Direction) -> BlockState {
+pub(super) fn with_tip(state: BlockState, direction: Direction) -> BlockState {
     state
         .with(
             p::VERTICAL_DIRECTION,
@@ -46,7 +46,7 @@ fn with_tip(state: BlockState, direction: Direction) -> BlockState {
         )
         .unwrap()
 }
-fn with_direction(
+pub(super) fn with_direction(
     state: BlockState,
     direction: Direction,
     level: &LevelReaderRef<'_, '_>,
@@ -56,7 +56,7 @@ fn with_direction(
         .contains_key(BlockTags::SPELEOTHEMS, state.block())
         && tip(state) == direction)
 }
-fn valid(
+pub(super) fn valid(
     block: Block,
     pos: BlockPos,
     direction: Direction,
