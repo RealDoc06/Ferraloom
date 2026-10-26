@@ -44,7 +44,7 @@ fn implicit_summon_uuid_aliases_match_two_independent_native_jvms() -> Result<()
 mod live;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[ignore = "requires the canonical summon construction release and both Strict disposable servers"]
+#[ignore = "requires both Strict disposable servers"]
 async fn parity_summon_construction_pairing_passengers_and_uuid_failures() -> Result<()> {
     live::run().await
 }
