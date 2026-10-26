@@ -217,6 +217,24 @@ pub fn set_on_ground(
     check_supporting_block(entity, on_ground, movement, level)
 }
 
+/// Port of Entity#recordMovement. Current Cow and Player movement modes do not
+/// simulate SELF on both client and server; external movers predict movement.
+pub(crate) fn record_movement(
+    entity: EntityRef,
+    mover: MoverType,
+    movement: Vec3,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    if mover.is_server_and_client_simulated()
+        && let Some(living) = level.entity_state_mut(entity)?.as_living_mut()
+    {
+        living
+            .interpolation_tracker
+            .apply_predicted_movement(movement);
+    }
+    Ok(())
+}
+
 pub fn move_entity<E: Entity + ?Sized>(
     behavior: &E,
     entity: EntityRef,
@@ -227,6 +245,7 @@ pub fn move_entity<E: Entity + ?Sized>(
     if level.entity::<EntityData>(entity)?.no_physics {
         let position = level.entity::<EntityData>(entity)?.position + delta;
         level.set_entity_pos(entity, position)?;
+        record_movement(entity, mover, delta, level)?;
         let base = level.entity_mut::<EntityData>(entity)?;
         base.horizontal_collision = false;
         base.vertical_collision = false;
@@ -272,6 +291,7 @@ pub fn move_entity<E: Entity + ?Sized>(
                 axis_dependent_original_movement: Some(delta),
             });
         level.set_entity_pos(entity, position + movement)?;
+        record_movement(entity, mover, movement, level)?;
     }
     let x_collision = !mth::equal(delta.x, movement.x);
     let z_collision = !mth::equal(delta.z, movement.z);

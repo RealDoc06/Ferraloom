@@ -1,0 +1,41 @@
+pairing	default	spawn:0,0,7|data:9:10.0
+pairing	equipment	spawn:0,0,7|data:9:10.0|attributes:minecraft:max_health=403e000000000000[]|equipment:mainhand=minecraft:stone:3,offhand=minecraft:shield:1,chest=minecraft:iron_chestplate:1
+pairing	passengers	spawn:0,0,7|data:9:10.0|passengers:9:12
+pairing	mounted	spawn:0,0,7|data:9:10.0|passengers:12:9
+pairing	leash	spawn:0,0,7|data:9:10.0|leash:9:12
+pairing	all	spawn:0,0,7|data:9:10.0|attributes:minecraft:max_health=403e000000000000[]|equipment:mainhand=minecraft:stone:3,offhand=minecraft:shield:1,chest=minecraft:iron_chestplate:1|passengers:9:12|leash:9:12
+pairing	delayed	spawn:0,0,7|data:9:10.0
+pairing	effect	spawn:0,0,7|data:9:10.0
+pairing	variant	spawn:0,0,7|data:9:10.0,18:minecraft:cold
+updates	false	0	T:move:true:false:0,0,0:0,0:false|S:data:9:10.0	false
+updates	false	1	-	false
+updates	false	2	-	false
+updates	false	3	T:move:true:false:1:512,0,0;1:512,512,0;1:0,0,0:0,0:false|T:head:16	false
+updates	false	4	S:data:9:7.5	false
+updates	false	5	-	false
+updates	false	6	T:motion:3fc0000000000000,0,0|S:data:0:-128|S:attributes:minecraft:max_health=4041800000000000[]	false
+updates	false	7	-	false
+updates	false	8	-	false
+updates	false	9	T:move:true:false:1:1536,0,0;2:0,0,0:0,0:false	false
+updates	false	10	T:sync:S:1:4022400000000000,4050080000000000,4021000000000000:0,0:true	false
+updates	false	11	T:sync:S:1:4022800000000000,4050080000000000,4021000000000000:0,0:true	false
+updates	false	12	T:motion:0,0,0|S:motion:0,0,0	false
+updates	false	13	-	false
+updates	false	14	-	false
+updates	false	15	-	false
+updates	true	0	T:move:true:false:0,0,0:0,0:false|S:data:9:10.0	false
+updates	true	1	-	false
+updates	true	2	-	false
+updates	true	3	T:move:true:false:1:512,0,0;1:512,512,0;1:0,0,0:0,0:false|T:head:16	false
+updates	true	4	S:data:9:7.5	false
+updates	true	5	-	false
+updates	true	6	T:motion:3fc0000000000000,0,0|S:data:0:-128|S:attributes:minecraft:max_health=4041800000000000[]	false
+updates	true	7	-	false
+updates	true	8	-	false
+updates	true	9	T:move:true:false:1:1536,0,0;2:0,0,0:0,0:false	false
+updates	true	10	T:sync:S:1:4022400000000000,4050080000000000,4021000000000000:0,0:true	false
+updates	true	11	T:sync:S:1:4022800000000000,4050080000000000,4021000000000000:0,0:true	false
+updates	true	12	T:motion:0,0,0|S:motion:0,0,0	false
+updates	true	13	-	false
+updates	true	14	-	false
+updates	true	15	-	false
