@@ -28,6 +28,7 @@ pub(crate) use fire::lava_random_tick;
 #[cfg(test)]
 mod fire_powder_tests;
 mod orientation;
+mod pointed_dripstone;
 mod portal_shape;
 mod scaffolding;
 pub use scaffolding::scaffolding_distance;
@@ -48,6 +49,9 @@ pub(crate) fn ported_behavior(
     block: Block,
     method: BlockMethod,
 ) -> Option<&'static dyn BlockBehavior> {
+    if block == Block::POINTED_DRIPSTONE && method == BlockMethod::RandomTick {
+        return Some(&pointed_dripstone::POINTED_DRIPSTONE);
+    }
     if fire::supports(block, method) {
         return Some(&fire::FIRE);
     }
