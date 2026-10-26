@@ -1,7 +1,8 @@
 //! Lectern persistence. Live book resolution and page/menu effects are required ports.
 use super::{BlockEntity, BlockEntityData, BlockEntityRef, BlockEntityState};
 use crate::{
-    inventory::{StackGenerations, component},
+    entity::player::inventory::component,
+    inventory::StackGenerations,
     level::{Level, LevelError},
 };
 use ferraloom_data::properties as p;
