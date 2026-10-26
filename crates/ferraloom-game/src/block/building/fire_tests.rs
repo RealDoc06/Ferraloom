@@ -449,10 +449,12 @@ fn compare_ticks(vectors: &str, rainy: bool) {
                 biome_zoom_seed: 0,
                 sea_level: 63,
             });
-            level.load_weather(crate::level::weather::WeatherData {
-                raining: true,
-                ..Default::default()
-            });
+            level
+                .load_weather(crate::level::weather::WeatherData {
+                    raining: true,
+                    ..Default::default()
+                })
+                .unwrap();
             for x in -1..=1 {
                 for z in -1..=1 {
                     let pos = ChunkPos::new(x, z);
