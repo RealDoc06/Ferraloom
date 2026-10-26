@@ -33,8 +33,10 @@ async fn interact(bot: &mut Bot, pos: BlockPos) -> Result<()> {
 }
 
 /// Capture at each packet wait rather than draining a separate output queue.
-/// Sound seed/pitch use the world's unsynchronized startup RNG: compare sound,
+/// Pitch uses Level.random's unseeded startup source: compare sound,
 /// position, source and volume, and assert the native pitch range on both sides.
+/// native/sound-pitch-two-jvms.json proves pitch alone differs across identical
+/// native calls; native/capture_sound_pitch.py repeats the two-JVM comparison.
 struct Capture {
     positions: Vec<BlockPos>,
     packets: Vec<Value>,
