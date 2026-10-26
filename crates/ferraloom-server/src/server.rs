@@ -13,6 +13,8 @@ mod interaction;
 mod level_tick;
 #[path = "levels.rs"]
 mod levels;
+#[path = "packet_processor.rs"]
+mod packet_processor;
 #[path = "player_spawn.rs"]
 mod player_spawn;
 use crate::{
@@ -70,7 +72,7 @@ use ferraloom_protocol::{
 use ferraloom_util::{BlockPos, ChunkPos, Vec3};
 use player_spawn::{PrepareSpawnTask, PreparedPlayerSpawn};
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashSet, VecDeque},
     net::SocketAddr,
     path::{Path, PathBuf},
     sync::Arc,
@@ -213,6 +215,8 @@ pub struct MinecraftServer {
     connections: BTreeMap<ConnectionId, Connection>,
     players: Vec<ConnectionId>,
     ingress: mpsc::Receiver<Ingress>,
+    packet_processor: VecDeque<packet_processor::PacketEvent>,
+    pending_tasks: VecDeque<packet_processor::TickTask>,
     status: watch::Sender<status::ServerStatus>,
     shutdown: watch::Sender<bool>,
     tick: u64,
@@ -597,6 +601,8 @@ impl MinecraftServer {
             connections: BTreeMap::new(),
             players: Vec::new(),
             ingress,
+            packet_processor: VecDeque::new(),
+            pending_tasks: VecDeque::new(),
             status,
             shutdown,
             tick: 0,
@@ -663,7 +669,11 @@ impl MinecraftServer {
             self.apply_tick_rate_events()?;
             self.process_packets().await?;
             self.tick_server().await?;
-            tokio::time::sleep_until(origin + Duration::from_nanos(next.max(0) as u64)).await;
+            self.wait_until_next_tick(
+                origin + Duration::from_nanos(next.max(0) as u64),
+                Duration::from_nanos(this_tick_nanos as u64),
+            )
+            .await?;
             if this_tick_nanos == 0 {
                 self.tick_rate_manager
                     .end_tick_work(origin.elapsed().as_nanos() as i64);
@@ -782,183 +792,6 @@ impl MinecraftServer {
                         report.message,
                         report.broadcast,
                     );
-                }
-            }
-        }
-        Ok(())
-    }
-    /// Port of MinecraftServer#processPacketsAndTick. No IO task applies play state.
-    async fn process_packets(&mut self) -> Result<()> {
-        self.process_packets_inner().await
-    }
-    async fn process_packets_inner(&mut self) -> Result<()> {
-        let count = self.ingress.len();
-        for _ in 0..count {
-            let Ok(event) = self.ingress.try_recv() else {
-                break;
-            };
-            match event {
-                Ingress::Admission {
-                    id,
-                    profile,
-                    address,
-                    reply,
-                } => {
-                    let full =
-                        self.players.len() >= self.properties.int("max-players").max(0) as usize;
-                    let reason = self.access.can_join(
-                        &profile,
-                        address.ip(),
-                        self.properties.boolean("white-list"),
-                        full,
-                        &self.shared().ops,
-                    );
-                    if reason.is_none() {
-                        let duplicates = self
-                            .connections
-                            .iter()
-                            .filter(|(other, c)| **other != id && c.profile.id == profile.id)
-                            .map(|(id, _)| *id)
-                            .collect::<Vec<_>>();
-                        for id in duplicates {
-                            self.connections
-                                .get_mut(&id)
-                                .unwrap()
-                                .disconnect("You logged in from another location");
-                        }
-                    }
-                    let _ = reply.send(reason);
-                }
-                Ingress::Connected {
-                    id,
-                    profile,
-                    address,
-                    outbound,
-                } => {
-                    let mut c = Connection {
-                        profile,
-                        address,
-                        outbound,
-                        phase: Phase::Configuration(ConfigTask::KnownPacks),
-                        incoming_sequence: 0,
-                        outgoing_sequence: 0,
-                        pending: Vec::new(),
-                        close: false,
-                        information: client_information(),
-                        spawn: None,
-                        last_keepalive: Instant::now(),
-                        keepalive: None,
-                        last_action: Instant::now(),
-                        chat_spam: 0,
-                        command_spam: 0,
-                        session: None,
-                        last_seen: LastSeenMessagesValidator::default(),
-                        signature_cache: MessageSignatureCache::default(),
-                        command_message: None,
-                        command_suggestion: None,
-                        next_chat_index: 0,
-                        network_ticks: 0,
-                        rate_packets: 0,
-                        average_packets: 0.,
-                        received_position_this_tick: false,
-                        received_movement_this_tick: false,
-                        ack_block_changes_up_to: -1,
-                    };
-                    c.push(cfg::ClientboundPacket::CustomPayload(
-                        common_cb::CustomPayload {
-                            payload: common::CustomPayload::Brand("Ferraloom".into()),
-                        },
-                    ));
-                    if !self.properties.get("bug-report-link").is_empty() {
-                        c.push(cfg::ClientboundPacket::ServerLinks(
-                            common_cb::ServerLinks {
-                                links: vec![common_cb::ServerLink {
-                                    link_type: protocol::codec::Either::Left(
-                                        common_cb::KnownLinkType::BugReport,
-                                    ),
-                                    link: self.properties.get("bug-report-link").into(),
-                                }],
-                            },
-                        ));
-                    }
-                    c.push(cfg::ClientboundPacket::UpdateEnabledFeatures(
-                        cfg::UpdateEnabledFeatures {
-                            features: vec![crate::registries::id("vanilla")],
-                        },
-                    ));
-                    c.push(cfg::ClientboundPacket::SelectKnownPacks(
-                        cfg::ClientboundSelectKnownPacks {
-                            known_packs: vec![core_pack()],
-                        },
-                    ));
-                    self.connections.insert(id, c);
-                }
-                Ingress::Packet {
-                    id,
-                    sequence,
-                    packet,
-                } => {
-                    let Some(c) = self.connections.get_mut(&id) else {
-                        continue;
-                    };
-                    if c.close {
-                        continue;
-                    }
-                    ensure!(
-                        sequence == c.incoming_sequence,
-                        "connection {id} ingress sequence mismatch"
-                    );
-                    c.incoming_sequence += 1;
-                    let phase = c.phase;
-                    let preparing_dimension =
-                        c.spawn.as_ref().map(|spawn| spawn.dimension().clone());
-                    let dimension = match phase {
-                        Phase::Play(entity) => Some(
-                            self.level_for_entity(entity)
-                                .map_err(game_error)?
-                                .dimension_key()
-                                .map_err(game_error)?
-                                .to_string()
-                                .parse::<protocol::Identifier>()?,
-                        ),
-                        Phase::Configuration(_) => preparing_dimension,
-                    };
-                    let lent = match &dimension {
-                        Some(dimension) => self.lend_server_shared_to(dimension)?,
-                        None => false,
-                    };
-                    let result = match packet {
-                        Incoming::Configuration(p) => self.configuration(id, p).await,
-                        Incoming::Play(p) => self.play_packet(id, *p).await,
-                    };
-                    self.return_server_shared(lent);
-                    if let Err(e) = result {
-                        eprintln!("Packet rejected for {id}: {e:#}");
-                        if let Some(c) = self.connections.get_mut(&id) {
-                            c.disconnect(e.to_string());
-                        }
-                    }
-                }
-                Ingress::Closed { id } => {
-                    let dimension = match self.connections.get(&id).map(|c| c.phase) {
-                        Some(Phase::Play(entity)) => self
-                            .level_for_entity(entity)
-                            .map_err(game_error)?
-                            .dimension_key()
-                            .map_err(game_error)?
-                            .to_string()
-                            .parse::<protocol::Identifier>()?,
-                        _ => crate::registries::id("overworld"),
-                    };
-                    let lent = self.lend_server_shared_to(&dimension)?;
-                    let result = self.remove_player(id).await;
-                    self.return_server_shared(lent);
-                    result?;
-                }
-                Ingress::Console(command) => {
-                    if let Err(e) = self.execute_command(None, &command).await {
-                        eprintln!("{e:#}");
-                    }
                 }
             }
         }
@@ -1155,7 +988,7 @@ impl MinecraftServer {
         let dimension = saved.resolve_dimension(&respawn.dimension.parse()?, |key| {
             self.get_level(key).is_some()
         });
-        let dimension_type = self.world_root.stem(&dimension)?.dimension;
+        let dimension_type = self.world_root.stem(&dimension)?.dimension.clone();
         let game_type = self.default_game_mode;
         let radius = self
             .game_rules
@@ -2856,7 +2689,7 @@ impl MinecraftServer {
                         .context("spawn not prepared")?
                         .dimension()
                         .clone();
-                    let dimension_type = self.world_root.stem(&dimension)?.dimension;
+                    let dimension_type = self.world_root.stem(&dimension)?.dimension.clone();
                     let lent = self.lend_server_shared_to(&dimension)?;
                     let result = {
                         let task = self

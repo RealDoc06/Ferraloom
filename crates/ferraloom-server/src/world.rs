@@ -484,7 +484,7 @@ impl SpawnChunks {
 }
 impl SpawnWorld for SpawnChunks {
     fn dimension(&self) -> DimensionType {
-        self.dimension
+        self.dimension.clone()
     }
     fn ensure_chunk(
         &mut self,
@@ -759,7 +759,7 @@ impl World {
             Arc::ptr_eq(&self.generator, &stem.generator),
             "World generator differs from its registered stem"
         );
-        let properties = |value: DimensionType| {
+        let properties = |value: &DimensionType| {
             (
                 value.min_y,
                 value.height,
@@ -768,10 +768,11 @@ impl World {
                 value.has_skylight,
                 value.fast_lava,
                 value.coordinate_scale.to_bits(),
+                value.infiniburn.clone(),
             )
         };
         ensure!(
-            properties(self.dimension) == properties(stem.dimension),
+            properties(&self.dimension) == properties(&stem.dimension),
             "World dimension properties differ from its registered stem"
         );
         ensure!(
@@ -792,7 +793,7 @@ impl World {
     ) -> Result<(Self, Option<StartupSpawn>)> {
         let mut timing = crate::generation::profile::Span::new("open_dimension", None);
         let stem = services.stem(&dimension_key)?;
-        let dimension = stem.dimension;
+        let dimension = stem.dimension.clone();
         let generator = stem.generator.clone();
         let access = services.access.clone();
         let seed = services.seed;
@@ -814,7 +815,7 @@ impl World {
         let mut context = ferraloom_game::level::generation::WorldGenContext::from_registries(
             services.worldgen.clone(),
             generator.clone(),
-            dimension,
+            dimension.clone(),
             seed,
             services.generate_structures,
             services.dimensions.environment.clone(),
@@ -830,6 +831,7 @@ impl World {
         let io = if initialize_spawn {
             let (reply, result) = mpsc::channel();
             let spawn_generator = generator.clone();
+            let spawn_dimension = dimension.clone();
             let bonus_chest = services.bonus_chest;
             let registry = registry.clone();
             let _task = generation.submit(move || {
@@ -837,7 +839,7 @@ impl World {
                     let mut world = SpawnChunks {
                         generator: spawn_generator,
                         registry,
-                        dimension,
+                        dimension: spawn_dimension,
                         state: generation_state,
                         io,
                         chunks: BTreeMap::new(),
@@ -997,6 +999,7 @@ impl World {
                 })?),
                 self.initial_difficulty,
             )
+            .with_dimension_type(self.dimension.clone())
             .with_registry_context(self.services.registry_context.clone())
             .with_structure_templates(self.services.worldgen.templates.clone())
             .with_block_transformers(Arc::new(timing.measure("block_transformers", || {

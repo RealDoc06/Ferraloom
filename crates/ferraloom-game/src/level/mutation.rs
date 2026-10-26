@@ -78,6 +78,18 @@ impl Level {
             .as_deref()
             .ok_or(LevelError::MissingBlockTags)
     }
+    /// Port of FireBlock#tick's BlockState#is(level.dimensionType().infiniburn()).
+    pub fn is_infiniburn(&self, state: BlockState) -> Result<bool, LevelError> {
+        use ferraloom_worldgen::structure::processor::BlockSet;
+        match &self.context().dimension_type()?.infiniburn {
+            BlockSet::Tag(name) => {
+                let tags = self.block_tags()?;
+                let tag = tags.resolve_name(name).ok_or(LevelError::MissingBlockTag)?;
+                Ok(tags.contains(tag, state.block()))
+            }
+            BlockSet::Direct(blocks) => Ok(blocks.contains(&state.block())),
+        }
+    }
     pub(crate) fn custom_block_behavior(&self, block: Block) -> Option<&'static dyn BlockBehavior> {
         self.region().behaviors.block(block)
     }
