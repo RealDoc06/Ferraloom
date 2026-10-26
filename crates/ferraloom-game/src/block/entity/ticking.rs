@@ -54,6 +54,13 @@ impl BlockEntityTickers {
             self.wrappers.get_mut(&id).expect("live wrapper").binding = None;
         }
     }
+    /// Native BoundTickingBlockEntity holds its original receiver until unbound,
+    /// including bindings queued or rebound during another callback frame.
+    pub(crate) fn bound_entities(&self) -> impl Iterator<Item = BlockEntityRef> + '_ {
+        self.wrappers
+            .values()
+            .filter_map(|wrapper| wrapper.binding.map(|binding| binding.entity))
+    }
     pub fn begin_phase(&mut self) {
         assert!(self.cursor.is_none(), "reentrant block entity phase");
         self.active.append(&mut self.pending);

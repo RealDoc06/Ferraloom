@@ -228,7 +228,8 @@ impl Level {
             return Err(LevelError::UnsupportedBlockEntity(block.block()));
         }
         state.data_mut().block_state = block;
-        let has_ticker = state.has_server_ticker(self.region().has_skylight)?;
+        // Validate required dimension facts before publishing this receiver.
+        state.has_server_ticker(self.region().has_skylight)?;
         let region = self.region_mut();
         let old = if let Some(old) = region
             .chunks
@@ -263,19 +264,25 @@ impl Level {
             .ok_or(LevelError::MissingChunk(key))?
             .block_entities
             .insert(state);
-        // Native puts the new receiver first; the previous receiver's class
-        // callback then observes the replacement through positional queries.
-        if let Some(old) = old {
-            old.set_removed_live(self)?;
-        }
-        super::game_event::register_block_entity_listener(reference, self)?;
-        let tickers = self.region_mut().block_entity_state.tickers.get_mut();
-        if has_ticker {
-            tickers.bind(reference, kind);
-        } else {
-            tickers.unbind(pos);
-        }
-        Ok(())
+        // Java's argument remains held across previous.setRemoved, even when a
+        // callback replaces this new receiver and collects detached generations.
+        self.with_block_entity_callback(reference, |level| {
+            if let Some(old) = old {
+                old.set_removed_live(level)?;
+            }
+            super::game_event::register_block_entity_listener(reference, level)?;
+            // updateBlockEntityTicker reads the original argument after callbacks.
+            let has_ticker = level
+                .block_entity_state(reference)?
+                .has_server_ticker(level.region().has_skylight)?;
+            let tickers = level.region_mut().block_entity_state.tickers.get_mut();
+            if has_ticker {
+                tickers.bind(reference, kind);
+            } else {
+                tickers.unbind(pos);
+            }
+            Ok(())
+        })
     }
     /// Port of LevelChunk#removeBlockEntity. It does not call preRemoveSideEffects;
     /// setBlockState invokes that virtual before this operation at its source slot.
@@ -617,8 +624,15 @@ impl Level {
     pub fn collect_detached_block_entities(&mut self) {
         let mut sources = Vec::new();
         let runtime = &mut self.region_mut().block_entity_state;
+        if runtime.detached.is_empty() {
+            return;
+        }
+        // BoundTickingBlockEntity owns its receiver even when an outer reentrant
+        // frame binds a generation that was removed by an inner callback.
+        let ticking: std::collections::HashSet<_> =
+            runtime.tickers.get_mut().bound_entities().collect();
         runtime.detached.retain(|handle, state| {
-            if runtime.roots.borrow().contains_key(handle) {
+            if runtime.roots.borrow().contains_key(handle) || ticking.contains(handle) {
                 true
             } else {
                 sources.extend(
@@ -940,6 +954,46 @@ mod tests {
             level.block_entity_state(handle),
             Err(LevelError::MissingBlockEntity(_))
         ));
+    }
+    #[test]
+    fn rebound_removed_ticker_retains_its_original_receiver_until_cleanup() {
+        let mut level = level();
+        let pos = BlockPos::new(1, 1, 1);
+        let state = Block::JUKEBOX
+            .default_state()
+            .with(ferraloom_data::properties::HAS_RECORD, true)
+            .unwrap();
+        level.set_block_state(pos, state).unwrap();
+        level.set_block_entity(create(pos, state).unwrap()).unwrap();
+        let removed = level.block_entity_ref(pos).unwrap().unwrap();
+        level.set_block_entity(create(pos, state).unwrap()).unwrap();
+        let current = level.block_entity_ref(pos).unwrap().unwrap();
+        assert_ne!(removed, current);
+        assert!(level.block_entity_state(removed).unwrap().data().removed);
+        assert!(
+            !level
+                .region()
+                .block_entity_state
+                .roots
+                .borrow()
+                .contains_key(&removed)
+        );
+        // Native outer updateBlockEntityTicker can rebind its still-held argument
+        // after an inner setRemoved callback has replaced/removed that object.
+        level
+            .region_mut()
+            .block_entity_state
+            .tickers
+            .get_mut()
+            .bind(removed, crate::block::entity::BlockEntityType::JUKEBOX);
+        level.collect_detached_block_entities();
+        assert!(level.block_entity_state(removed).is_ok());
+        level.tick_block_entities(false).unwrap();
+        assert!(
+            matches!(level.block_entity_state(removed), Err(LevelError::MissingBlockEntity(found)) if found == removed)
+        );
+        assert_eq!(level.block_entity_ref(pos).unwrap(), Some(current));
+        assert!(!level.block_entity_state(current).unwrap().data().removed);
     }
     #[test]
     fn reentrant_replacement_preserves_old_receiver_and_pinned_menu_roots() {
