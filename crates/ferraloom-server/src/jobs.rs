@@ -29,6 +29,9 @@ impl JobPool {
             next: AtomicUsize::new(0),
         })
     }
+    pub(crate) fn parallelism(&self) -> usize {
+        self.senders.len()
+    }
     pub fn submit<T: Send + 'static>(
         &self,
         job: impl FnOnce() -> T + Send + 'static,

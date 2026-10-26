@@ -1,8 +1,16 @@
 //! ChunkGenerationTask's resumable serial dispatch, separate from owned work.
+mod batch;
+#[cfg(test)]
+mod native_tests;
+use batch::OrderedBatch;
+
 use super::{GenerationCompletion, GenerationRevision, GenerationState, profile};
 use crate::{jobs::JobPool, world::RegistryAdapter};
 use anyhow::{Context, Result};
-use ferraloom_game::level::generation::{ChunkGenerationTask, ChunkStatus};
+use ferraloom_game::level::generation::{
+    ChunkGenerationTask, ChunkStatus, ChunkStatusTask, GenerationChunkHolder, PreparedCenterStep,
+    ProtoChunk,
+};
 use ferraloom_storage::IoWorker;
 use ferraloom_util::ChunkPos;
 use std::sync::Arc;
@@ -107,6 +115,52 @@ impl GenerationProgress {
     }
 }
 impl GenerationState {
+    fn prepare_center_inputs(
+        &mut self,
+        requested: GenerationStep,
+    ) -> (BTreeSet<i64>, Result<PreparedCenterStep>) {
+        let mut touched = BTreeSet::new();
+        let result = (|| {
+            let holder = self
+                .holders
+                .get(&requested.position.pack())
+                .context("generation holder missing")?;
+            if let Some(error) = &holder.failure {
+                anyhow::bail!("generation dependency failed: {error:?}");
+            }
+            let step = holder.step_to(requested.status).clone();
+            self.invalidate_step_terrain(requested.position, &step);
+            let neighborhood = self.step_neighborhood(requested.position, &step)?;
+            let mut owned = neighborhood
+                .iter()
+                .map(|position| {
+                    self.holders
+                        .remove(&position.pack())
+                        .expect("checked dependency")
+                })
+                .collect::<Vec<_>>();
+            let mut regions = owned
+                .iter_mut()
+                .map(|holder| std::mem::replace(&mut holder.chunk.region, self.placeholder.clone()))
+                .collect::<Vec<_>>();
+            let prepared = self
+                .context
+                .prepare_center_step(
+                    &mut regions,
+                    [requested.position.x, requested.position.z],
+                    &step,
+                )
+                .map_err(anyhow::Error::new);
+            for ((position, mut holder), region) in neighborhood.into_iter().zip(owned).zip(regions)
+            {
+                holder.chunk.region = region;
+                self.holders.insert(position.pack(), holder);
+                touched.insert(position.pack());
+            }
+            prepared
+        })();
+        (touched, result)
+    }
     pub(crate) fn begin_generation(
         &mut self,
         request: u64,
@@ -137,6 +191,53 @@ type PendingChunkRead = (
     ChunkPos,
     ferraloom_storage::IoTask<Option<ferraloom_nbt::CompoundTag>>,
 );
+
+struct CenterWork {
+    step: GenerationStep,
+    holder: GenerationChunkHolder<ProtoChunk>,
+    touched: BTreeSet<i64>,
+    input: Result<PreparedCenterStep>,
+}
+struct CenterOutput {
+    step: GenerationStep,
+    holder: GenerationChunkHolder<ProtoChunk>,
+    touched: BTreeSet<i64>,
+    result: Result<()>,
+    #[cfg(test)]
+    interval: (std::time::Instant, std::time::Instant),
+}
+impl CenterWork {
+    fn execute(
+        mut self,
+        context: &ferraloom_game::level::generation::WorldGenContext,
+        request: u64,
+    ) -> CenterOutput {
+        let mut timing = profile::Span::new("generation_step", Some((request, self.step.position)))
+            .status(self.step.status);
+        #[cfg(test)]
+        let started = std::time::Instant::now();
+        let result = timing
+            .measure("apply", || {
+                self.input?
+                    .apply(context, &mut self.holder.chunk.region)
+                    .map_err(anyhow::Error::new)
+            })
+            .with_context(|| {
+                format!(
+                    "generation chunk={:?} status={:?}",
+                    self.step.position, self.step.status
+                )
+            });
+        CenterOutput {
+            step: self.step,
+            holder: self.holder,
+            touched: self.touched,
+            result,
+            #[cfg(test)]
+            interval: (started, std::time::Instant::now()),
+        }
+    }
+}
 
 /// One serial request continuation, owned by exactly one queued/active unit.
 /// The FULL response remains reachable without requiring a tick between steps.
@@ -190,6 +291,10 @@ impl GenerationExecution {
                     && !self.state.failed_loads.contains_key(&step.position.pack()) =>
             {
                 self.dispatch_read(step);
+            }
+            Ok(Some(step)) if self.center_is_parallel(step) => {
+                let pool = self.pool.clone();
+                drop(pool.submit(move || self.dispatch_center_batch(step)));
             }
             Ok(Some(step)) => {
                 let pool = self.pool.clone();
@@ -248,6 +353,133 @@ impl GenerationExecution {
         });
     }
 
+    fn center_is_parallel(&self, step: GenerationStep) -> bool {
+        if self.pool.parallelism() < 2 {
+            return false;
+        }
+        let Some(holder) = self.state.holders.get(&step.position.pack()) else {
+            return false;
+        };
+        match holder.step_to(step.status).task {
+            ChunkStatusTask::GenerateBiomes => true,
+            ChunkStatusTask::BuildTerrain => matches!(
+                self.state.context.generator.as_ref(),
+                ferraloom_worldgen::generator::ChunkGenerator::Noise(_)
+            ),
+            _ => false,
+        }
+    }
+
+    fn dispatch_center_batch(mut self, first: GenerationStep) {
+        let mut steps = vec![first];
+        // Stay within this layer. No later status or synchronous feature visit
+        // can observe in-flight centers or mutable structure-piece geometry.
+        while steps.len() < self.pool.parallelism() {
+            let position = self
+                .progress
+                .layer
+                .as_ref()
+                .expect("center layer")
+                .positions
+                .as_slice()
+                .first()
+                .copied();
+            let Some(position) = position else { break };
+            let step = GenerationStep {
+                position,
+                status: first.status,
+            };
+            let completed = self
+                .state
+                .holders
+                .get(&position.pack())
+                .is_some_and(|holder| holder.completed >= first.status);
+            if !completed && !self.center_is_parallel(step) {
+                break;
+            }
+            self.progress.layer.as_mut().unwrap().positions.next();
+            if !completed {
+                steps.push(step);
+            }
+        }
+        // Freeze all read inputs before removing any writable center. Terrain
+        // jobs can share immutable geometry but never another center's payload.
+        let prepared = steps
+            .iter()
+            .map(|&step| self.state.prepare_center_inputs(step))
+            .collect::<Vec<_>>();
+        let mut work = Vec::new();
+        for (step, (touched, input)) in steps.into_iter().zip(prepared) {
+            let holder = self
+                .state
+                .holders
+                .remove(&step.position.pack())
+                .expect("ready center is resident");
+            work.push(CenterWork {
+                step,
+                holder,
+                touched,
+                input,
+            });
+        }
+        let context = self.state.context.clone();
+        let request = self.request.id;
+        let pool = self.pool.clone();
+        let batch = OrderedBatch::new(work.len(), self);
+        for (ordinal, work) in work.into_iter().enumerate() {
+            let batch = batch.clone();
+            let context = context.clone();
+            drop(pool.submit(move || {
+                let output = work.execute(&context, request);
+                if let Some((execution, outputs)) = batch.complete(ordinal, output) {
+                    execution.integrate_centers(outputs);
+                }
+            }));
+        }
+        if let Some((execution, outputs)) = batch.release() {
+            execution.integrate_centers(outputs);
+        }
+    }
+
+    fn integrate_centers(mut self, outputs: Vec<CenterOutput>) {
+        let mut first_failure = None;
+        for output in outputs {
+            #[cfg(test)]
+            self.state.center_intervals.push((
+                output.step.status,
+                output.interval.0,
+                output.interval.1,
+            ));
+            let CenterOutput {
+                step,
+                mut holder,
+                touched,
+                result,
+                #[cfg(test)]
+                    interval: _,
+            } = output;
+            self.progress.effects.touched.extend(touched);
+            match result {
+                Ok(()) => holder.complete(step.status),
+                Err(error) => {
+                    holder.failure =
+                        Some(ferraloom_game::level::generation::GenerationError::Failed {
+                            position: step.position,
+                            status: step.status,
+                            message: error.to_string(),
+                        });
+                    if first_failure.is_none() {
+                        first_failure = Some(error);
+                    }
+                }
+            }
+            self.state.holders.insert(step.position.pack(), holder);
+        }
+        match first_failure {
+            Some(error) => self.queue_finish(Some(error)),
+            None => self.dispatch_next(),
+        }
+    }
     fn execute(mut self, step: GenerationStep) -> (Self, GenerationStepResult) {
         let _work = profile::Span::new("generation_step", Some((self.request.id, step.position)))
             .status(step.status);

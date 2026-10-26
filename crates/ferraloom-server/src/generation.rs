@@ -153,6 +153,8 @@ pub struct GenerationState {
     structure_check: StructureCheck,
     revision: GenerationRevision,
     placeholder: ferraloom_worldgen::region::RegionChunk,
+    #[cfg(test)]
+    center_intervals: Vec<(ChunkStatus, std::time::Instant, std::time::Instant)>,
 }
 impl GenerationState {
     pub fn new(context: Arc<WorldGenContext>, light_pool: Arc<JobPool>) -> Self {
@@ -161,6 +163,8 @@ impl GenerationState {
             .expect("validated generation context");
         Self {
             placeholder,
+            #[cfg(test)]
+            center_intervals: Vec::new(),
             light_pool,
             light: LevelLightEngine::new(true, context.dimension.has_skylight),
             snapshots: SectionSnapshots::new(
@@ -349,6 +353,29 @@ impl GenerationState {
         self.finish_light(result)
     }
 
+    fn step_neighborhood(&self, position: ChunkPos, step: &ChunkStep) -> Result<Vec<ChunkPos>> {
+        let radius = step.direct.radius().unwrap_or(0) as i32;
+        let mut neighborhood = Vec::new();
+        for x in position.x - radius..=position.x + radius {
+            for z in position.z - radius..=position.z + radius {
+                let neighbor = ChunkPos::new(x, z);
+                let distance = x.abs_diff(position.x).max(z.abs_diff(position.z)) as usize;
+                let holder = self
+                    .holders
+                    .get(&neighbor.pack())
+                    .context("generation dependency missing")?;
+                if let Some(required) = step.direct.get(distance) {
+                    ensure!(
+                        holder.completed >= required,
+                        "dependency {neighbor:?} incomplete at {required:?}"
+                    );
+                }
+                neighborhood.push(neighbor);
+            }
+        }
+        Ok(neighborhood)
+    }
+
     /// Decode and publish one owned EMPTY result in logical submission order.
     /// IO completion does not grant permission to mutate the generation cache.
     pub(crate) fn integrate_chunk_read(
@@ -453,26 +480,7 @@ impl GenerationState {
                     proto.region.status = proto.region.status.max(ChunkStatus::Spawn);
                 }
                 _ => {
-                    let radius = step.direct.radius().unwrap_or(0) as i32;
-                    let mut neighborhood = Vec::new();
-                    for x in position.x - radius..=position.x + radius {
-                        for z in position.z - radius..=position.z + radius {
-                            let neighbor = ChunkPos::new(x, z);
-                            let distance =
-                                x.abs_diff(position.x).max(z.abs_diff(position.z)) as usize;
-                            let holder = self
-                                .holders
-                                .get(&neighbor.pack())
-                                .context("generation dependency missing")?;
-                            if let Some(required) = step.direct.get(distance) {
-                                ensure!(
-                                    holder.completed >= required,
-                                    "dependency {neighbor:?} incomplete at {required:?}"
-                                );
-                            }
-                            neighborhood.push(neighbor);
-                        }
-                    }
+                    let neighborhood = self.step_neighborhood(position, &step)?;
                     // Move the actual neighborhood out, never clone writable
                     // chunks. Restore every neighbor before propagating errors.
                     let mut owned = neighborhood
