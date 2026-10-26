@@ -5,13 +5,16 @@ use crate::{
         EntityData, EntityRef, EntityState,
         inside_block::{InsideBlockAction, InsideBlockEffectType},
     },
-    level::{Level, LevelError, environment::EnvironmentAttributes},
+    level::{Level, LevelError, environment::AttributeKey},
 };
 use ferraloom_data::{Block, BlockClass, BlockState, properties as p, tags::BlockTags};
 use ferraloom_util::{Axis, BlockPos, Direction, Vec3, VoxelShape, random::RandomSource};
 
 pub(super) struct Fire;
 pub(super) static FIRE: Fire = Fire;
+const INCREASED_FIRE_BURNOUT: AttributeKey<bool> = AttributeKey::new(
+    ferraloom_data::registries::environment_attribute::Id::GAMEPLAY_INCREASED_FIRE_BURNOUT,
+);
 pub(super) fn supports(block: Block, method: BlockMethod) -> bool {
     matches!(
         block.class(),
@@ -20,7 +23,7 @@ pub(super) fn supports(block: Block, method: BlockMethod) -> bool {
         method,
         BlockMethod::OnPlace
             | BlockMethod::EntityInside
-            | BlockMethod::GetShape
+            | BlockMethod::OutlineShape
             | BlockMethod::PlayerWillDestroy
     ) || method == BlockMethod::Tick && block.class() == BlockClass::FireBlock)
 }
@@ -223,7 +226,7 @@ impl BlockBehavior for Fire {
                 return Ok(());
             }
         }
-        let increased = level.get_value(EnvironmentAttributes::INCREASED_FIRE_BURNOUT, pos)?;
+        let increased = level.get_value(INCREASED_FIRE_BURNOUT, pos)?;
         let extra = if increased { -50 } else { 0 };
         for (side, chance) in [
             (Direction::East, 300),

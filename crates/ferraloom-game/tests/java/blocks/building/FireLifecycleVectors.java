@@ -129,23 +129,22 @@ public final class FireLifecycleVectors extends AnvilVectors {
         }
     }
     static final class ContactActor extends Player {
-        String hurt;
+        final List<String> trace=new ArrayList<>();
         ContactActor(Level level){super(level,new com.mojang.authlib.GameProfile(new UUID(1,2),"contact"));}
         @Override public GameType gameMode(){return GameType.SURVIVAL;}
-        @Override public boolean hurtServer(ServerLevel level,DamageSource source,float amount){hurt=source.typeHolder().unwrapKey().orElseThrow().identifier()+":"+Float.floatToRawIntBits(amount);return true;}
+        @Override public void igniteForTicks(int ticks){var before=getTicksFrozen()+":"+getRemainingFireTicks();super.igniteForTicks(ticks);trace.add("ignite:"+ticks+":"+before+":"+getTicksFrozen()+":"+getRemainingFireTicks());}
+        @Override public boolean hurtServer(ServerLevel level,DamageSource source,float amount){trace.add("hurt:"+source.typeHolder().unwrapKey().orElseThrow().identifier()+":"+Float.floatToRawIntBits(amount)+":"+getTicksFrozen()+":"+getRemainingFireTicks());return true;}
     }
     void contacts()throws Exception {
         begin(Blocks.AIR.defaultBlockState(),Blocks.AIR.defaultBlockState());
         var actor=new ContactActor(this);
         for(var block:List.of(Blocks.FIRE,Blocks.SOUL_FIRE))for(var state:block.getStateDefinition().getPossibleStates())for(boolean precise:new boolean[]{false,true}) {
-            var trace=new ArrayList<String>();
-            var effects=new InsideBlockEffectApplier(){
-                public void apply(InsideBlockEffectType type){trace.add("apply:"+type);}
-                public void runBefore(InsideBlockEffectType type,java.util.function.Consumer<Entity> effect){throw new AssertionError(type);}
-                public void runAfter(InsideBlockEffectType type,java.util.function.Consumer<Entity> effect){effect.accept(actor);trace.add("after:"+type+":"+actor.hurt);}
-            };
+            actor.trace.clear();actor.setTicksFrozen(40);actor.setRemainingFireTicks(-1);
+            var effects=new InsideBlockEffectApplier.StepBasedCollector();
             random.setSeed(42);state.entityInside(this,POS,actor,effects,precise);
-            out("contact",""+Block.getId(state),""+precise,String.join(";",trace),""+random.nextLong());
+            var before=actor.getTicksFrozen()+","+actor.getRemainingFireTicks();
+            effects.applyAndClear(actor);
+            out("contact",""+Block.getId(state),""+precise,before,String.join(";",actor.trace),""+random.nextLong());
         }
     }
     static void run(String family)throws Exception {

@@ -546,18 +546,18 @@ fn fire_on_place_matches_native_dimension_gate_same_block_guard_portals_and_tick
 
 #[test]
 fn fire_contact_queues_native_freeze_clear_ignition_and_distinct_damage_without_applying_early() {
-    use crate::entity::{
-        EntityData,
-        inside_block::{InsideBlockAction, InsideBlockEffectType},
-        synched_data,
-    };
+    use crate::entity::{EntityData, inside_block, synched_data};
     let mut level = level(false);
     let entity: EntityRef = level.next_entity_ref();
-    let receiver =
-        crate::entity::item::PrimedTnt::new_at(&mut level, Vec3::new(8.5, 64.0, 8.5), None)
-            .unwrap();
+    let receiver = ServerPlayer::new(
+        Uuid::new(1, 2),
+        "contact".into(),
+        1,
+        Vec3::new(8.5, 64.0, 8.5),
+        GameType::Survival,
+    );
     level
-        .add_entity(entity, EntityState::PrimedTnt(Box::new(receiver)))
+        .add_entity(entity, EntityState::Player(Box::new(receiver)))
         .unwrap();
     let mut matched = 0;
     for line in CONTACTS.lines() {
@@ -569,6 +569,7 @@ fn fire_contact_queues_native_freeze_clear_ignition_and_distinct_damage_without_
             ferraloom_protocol::codec::VarInt(40),
         );
         base.remaining_fire_ticks = -1;
+        CONTACT_TRACE.with(|trace| trace.borrow_mut().clear());
         level.set_random_streams(Random::Legacy(LegacyRandomSource::new(42)), 0);
         level
             .required_block_behavior(state.block(), BlockMethod::EntityInside)
@@ -577,35 +578,72 @@ fn fire_contact_queues_native_freeze_clear_ignition_and_distinct_damage_without_
             .unwrap();
         let base = level.entity_mut::<EntityData>(entity).unwrap();
         assert_eq!(
-            (base.ticks_frozen(), base.remaining_fire_ticks),
-            (40, -1),
+            format!("{},{}", base.ticks_frozen(), base.remaining_fire_ticks),
+            f[3],
             "{line}"
         );
-        let actions = base
-            .inside_effect_collector
-            .drain()
-            .into_iter()
-            .map(|action| match action {
-                InsideBlockAction::Effect(InsideBlockEffectType::ClearFreeze) => {
-                    "apply:CLEAR_FREEZE".into()
-                }
-                InsideBlockAction::Effect(InsideBlockEffectType::FireIgnite) => {
-                    "apply:FIRE_IGNITE".into()
-                }
-                InsideBlockAction::InFireHurt(damage) => {
-                    format!("after:FIRE_IGNITE:minecraft:in_fire:{}", damage.to_bits())
-                }
-                other => panic!("unexpected native fire action {other:?}"),
-            })
-            .collect::<Vec<_>>()
-            .join(";");
-        assert_eq!(actions, f[3], "{line}");
+        inside_block::apply_collected(&ContactProbe, entity, &mut level).unwrap();
+        assert_eq!(
+            CONTACT_TRACE.with(|trace| trace.borrow().join(";")),
+            f[4],
+            "{line}"
+        );
         assert_eq!(
             level.random().next_long(),
-            f[4].parse::<i64>().unwrap(),
+            f[5].parse::<i64>().unwrap(),
             "{line}"
         );
         matched += 1;
     }
     assert_eq!(matched, 1026);
+}
+
+thread_local! {
+    static CONTACT_TRACE: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+/// Observe only the native virtual consumers; the block and canonical effect
+/// collector run normally, including freeze clearing and the ignition mutation.
+struct ContactProbe;
+impl crate::entity::Entity for ContactProbe {
+    fn ignite_for_ticks(
+        &self,
+        entity: EntityRef,
+        ticks: i32,
+        level: &mut Level,
+    ) -> Result<(), crate::level::LevelError> {
+        let before = level.entity::<crate::entity::EntityData>(entity)?;
+        let frozen_before = before.ticks_frozen();
+        let fire_before = before.remaining_fire_ticks;
+        level
+            .entity_behavior(entity)?
+            .ignite_for_ticks(entity, ticks, level)?;
+        let base = level.entity::<crate::entity::EntityData>(entity)?;
+        CONTACT_TRACE.with(|trace| {
+            trace.borrow_mut().push(format!(
+                "ignite:{ticks}:{frozen_before}:{fire_before}:{}:{}",
+                base.ticks_frozen(),
+                base.remaining_fire_ticks
+            ))
+        });
+        Ok(())
+    }
+    fn hurt_server(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+        source: crate::entity::DamageSource,
+        damage: f32,
+    ) -> Result<bool, crate::level::LevelError> {
+        let base = level.entity::<crate::entity::EntityData>(entity)?;
+        CONTACT_TRACE.with(|trace| {
+            trace.borrow_mut().push(format!(
+                "hurt:{}:{}:{}:{}",
+                source.type_holder().name(),
+                damage.to_bits(),
+                base.ticks_frozen(),
+                base.remaining_fire_ticks
+            ))
+        });
+        Ok(true)
+    }
 }
