@@ -161,7 +161,7 @@ async fn weather(session: &mut Session) -> Result<ObservationLog> {
     for (label, command, key, ticks) in [
         (
             "rain.rule-disabled",
-            "weather rain 1",
+            "weather rain 20t",
             "commands.weather.set.rain",
             25,
         ),
@@ -179,7 +179,7 @@ async fn weather(session: &mut Session) -> Result<ObservationLog> {
         ),
         (
             "rain.timer-prepared",
-            "weather rain 1",
+            "weather rain 20t",
             "commands.weather.set.rain",
             25,
         ),
