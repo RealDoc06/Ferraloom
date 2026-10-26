@@ -78,6 +78,7 @@ fn powder_inherited_place_and_tick_match_native_creation_and_blocked_supports() 
         let tick = f[4].parse::<i64>().unwrap();
         if tick == 0 {
             let mut level = level();
+            level.install_shared(Box::default());
             crate::level::drop_fixtures::install(&mut level);
             let chunk = ChunkPos::containing(POS);
             level
