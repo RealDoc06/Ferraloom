@@ -1,4 +1,5 @@
 //! One Strict boot per backend for summon construction, ordered pairing and data writes.
+use anyhow::Context;
 use ferraloom_data::EntityType;
 use ferraloom_parity::{
     Bot, BotId, LaunchOptions, Normalization, ObservationLog, Result, RunMode, Session, Ticks,
@@ -41,7 +42,17 @@ async fn fence(bot: &mut Bot, id: i32) -> Result<()> {
     Ok(())
 }
 fn feedback_key(value: &Value) -> Option<&str> {
-    value.get("content")?.get("translate")?.as_str()
+    fn component_key(value: &Value) -> Option<&str> {
+        value.get("translate").and_then(Value::as_str).or_else(|| {
+            value
+                .get("extra")?
+                .as_array()?
+                .iter()
+                .find_map(component_key)
+        })
+    }
+    // CommandSourceStack#sendFailure wraps the native error in a red component.
+    component_key(value.get("content")?)
 }
 struct Capture {
     events: Vec<Value>,
@@ -182,9 +193,10 @@ async fn command(
                 && captured
                     .events
                     .iter()
-                    .any(|value| feedback_key(value) == Some(key)))
+                    .any(|value| value["kind"] == "feedback"))
     })
-    .await?;
+    .await
+    .with_context(|| format!("{text}: captured {:?}", captured.events))?;
     marker(bot, barrier + 2).await?;
     bot.wait_for(
         "post-feedback pairing fence",
@@ -199,6 +211,14 @@ async fn command(
         return Err(error);
     }
     ensure!(!captured.bundle, "unterminated pairing bundle");
+    ensure!(
+        captured
+            .events
+            .iter()
+            .any(|value| feedback_key(value) == Some(key)),
+        "missing {key} for {text}: {:?}",
+        captured.events
+    );
     ensure!(
         captured.ids.len() == expected.count,
         "wrong spawn count for {text}: {:?}",
@@ -278,7 +298,7 @@ pub async fn run() -> Result<()> {
             ("experience_orb","Value:7s,Count:3"),
             ("item","Item:{id:'minecraft:stone',count:3}"),
             ("tnt","fuse:120s"),
-            ("falling_block","BlockState:{Name:'minecraft:stone'},Time:11"),
+            ("falling_block","BlockState:'minecraft:stone',Time:11"),
             ("cow","NoAI:1b,Age:-20,CustomName:'named cow'"),
         ].into_iter().enumerate() {
             command(session,actor,&mut log,index,&format!("summon minecraft:{kind} 8.5 -60 8.5 {{UUID:[I;0,0,0,{}],{extra}}}",100+offset),"commands.summon.success",SpawnExpectation::fixed(1)).await?;

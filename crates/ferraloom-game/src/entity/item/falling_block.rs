@@ -313,6 +313,25 @@ fn send_landing_packets(
 
 pub struct FallingBlockBehavior;
 impl Entity for FallingBlockBehavior {
+    /// Port of FallingBlockEntity#getTypeName, using the carried block's name.
+    fn type_name(
+        &self,
+        entity: EntityRef,
+        level: &Level,
+    ) -> Result<ferraloom_protocol::chat::Component, LevelError> {
+        use ferraloom_protocol::chat::{Argument, Component};
+        let block = level
+            .entity::<FallingBlockEntity>(entity)?
+            .block_state
+            .block();
+        Ok(Component::translatable(
+            "entity.minecraft.falling_block_type",
+            vec![Argument::Component(Box::new(Component::translatable(
+                block.description_id(),
+                Vec::new(),
+            )))],
+        ))
+    }
     fn trace_entity_refs(
         &self,
         state: &crate::entity::EntityState,

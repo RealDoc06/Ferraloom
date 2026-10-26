@@ -20,7 +20,9 @@ pub(super) fn supports(block: Block, method: BlockMethod) -> bool {
             C::FireBlock | C::SoulFireBlock | C::ConcretePowderBlock
         ),
         BlockMethod::CanSurvive => matches!(block.class(), C::FireBlock | C::SoulFireBlock),
-        BlockMethod::OnLand => block.class() == C::ConcretePowderBlock,
+        BlockMethod::OnPlace | BlockMethod::Tick | BlockMethod::OnLand => {
+            block.class() == C::ConcretePowderBlock
+        }
         _ => false,
     }
 }
@@ -71,7 +73,10 @@ fn fire_placement(pos: BlockPos, level: &LevelReaderRef<'_, '_>) -> Result<Block
 }
 /// Port of BaseFireBlock#getState. Unlike FireBlock's placement override, this
 /// helper selects soul fire, including FireBlock#getStateWithAge's update path.
-fn fire_state(pos: BlockPos, level: &LevelReaderRef<'_, '_>) -> Result<BlockState, LevelError> {
+pub(super) fn fire_state(
+    pos: BlockPos,
+    level: &LevelReaderRef<'_, '_>,
+) -> Result<BlockState, LevelError> {
     if soul_base(level.get_block_state(pos.below(1))?, level)? {
         Ok(Block::SOUL_FIRE.default_state())
     } else {
@@ -103,6 +108,24 @@ fn touches_liquid(pos: BlockPos, level: &LevelReaderRef<'_, '_>) -> Result<bool,
     Ok(false)
 }
 impl BlockBehavior for FirePowder {
+    /// Port of ConcretePowderBlock's inherited FallingBlock#onPlace.
+    fn on_place(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        old: BlockState,
+        moved: bool,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        super::super::foundational::FALLING_BLOCK.on_place(state, pos, old, moved, level)
+    }
+
+    /// Port of the inherited FallingBlock#tick, sharing sand's real entity
+    /// creation path. Hydration during flight/landing belongs to that entity.
+    fn tick(&self, state: BlockState, pos: BlockPos, level: &mut Level) -> Result<(), LevelError> {
+        super::super::foundational::FALLING_BLOCK.tick(state, pos, level)
+    }
+
     /// Port of ConcretePowderBlock#onLand. Reuse the same native liquid-contact
     /// queries as placement, then end the reader borrow before flags-3 mutation.
     fn on_land(

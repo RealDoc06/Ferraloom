@@ -68,6 +68,7 @@ fn decorative_placement_preserves_native_stacking_and_fluid_direction_masks() {
 #[test]
 fn candle_and_egg_replacement_keep_secondary_use_empty_stack_and_limit_semantics() {
     let mut level = connected_level();
+    level.install_shared(Box::default());
     level
         .add_entity(
             EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
