@@ -40,7 +40,7 @@ impl PlayerEnderChestContainer {
 
     /// Port of PlayerEnderChestContainer#fromSlots. ItemStackWithSlot's optional
     /// Slot codec retains zero as its partial value for a malformed field too.
-    pub(crate) fn from_slots(&mut self, entries: &ListTag) {
+    pub(crate) fn load_slots(&mut self, entries: &ListTag) {
         for slot in 0..self.contents.size() {
             self.contents.set_item(slot, ItemStack::default());
         }
@@ -168,7 +168,7 @@ mod tests {
             };
             container.active_chest = Some(active);
             let before = container.contents.times_changed;
-            container.from_slots(input.get_list("EnderItems").unwrap_or(&ListTag::default()));
+            container.load_slots(input.get_list("EnderItems").unwrap_or(&ListTag::default()));
             let mut output = CompoundTag::new();
             output.insert("EnderItems", Tag::List(container.store_as_slots().unwrap()));
             assert_eq!(output, parse_compound(fields[3]).unwrap(), "{row}");

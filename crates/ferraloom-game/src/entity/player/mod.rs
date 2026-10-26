@@ -418,7 +418,7 @@ impl ServerPlayer {
         self.inventory.load(&inventory);
         self.inventory.set_selected_slot(selected as usize);
         self.ender_chest_inventory
-            .from_slots(&tag.get_list("EnderItems").cloned().unwrap_or_default());
+            .load_slots(&tag.get_list("EnderItems").cloned().unwrap_or_default());
         self.first_good = self.position;
         self.last_good = self.position;
         Ok(())
