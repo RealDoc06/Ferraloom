@@ -290,4 +290,14 @@ fn live_lectern_resolution_and_unported_server_tickers_are_required() {
             .unwrap()
             .has_book()
     );
+    level
+        .set_block_state(POS, Block::DECORATED_POT.default_state())
+        .unwrap();
+    level
+        .set_block_entity(create(POS, Block::DECORATED_POT.default_state()).unwrap())
+        .unwrap();
+    assert_eq!(
+        crate::block::containers::access::block_container_at(POS, &level),
+        Err(LevelError::UnsupportedBlockEntity(Block::DECORATED_POT))
+    );
 }

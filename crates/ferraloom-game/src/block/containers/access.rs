@@ -285,7 +285,10 @@ pub fn block_container_at(
         return Ok(None);
     };
     let receiver = level.block_entity_state(handle)?;
-    if matches!(receiver, BlockEntityState::ChiseledBookShelf(_)) {
+    if matches!(
+        receiver,
+        BlockEntityState::ChiseledBookShelf(_) | BlockEntityState::DecoratedPot(_)
+    ) {
         return Err(LevelError::UnsupportedBlockEntity(state.block()));
     }
     if matches!(receiver, BlockEntityState::BrewingStand(_)) {
