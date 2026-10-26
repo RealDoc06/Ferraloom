@@ -5,7 +5,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | Area | Rows | Ferraloom todo | Ferraloom partial | Ferraloom pass | Ferraloom fail |
 |---|---:|---:|---:|---:|---:|
 | [Advancements](features/advancements.md) | 1958 | 4 | 193 | 1761 | 0 |
-| [Block entities](features/block-entities.md) | 144 | 45 | 44 | 55 | 0 |
+| [Block entities](features/block-entities.md) | 144 | 41 | 45 | 58 | 0 |
 | [Blocks](features/blocks.md) | 453 | 243 | 136 | 74 | 0 |
 | [Chat and text components](features/chat.md) | 23 | 21 | 2 | 0 | 0 |
 | [Chunks and tickets](features/chunks.md) | 59 | 20 | 38 | 1 | 0 |
@@ -50,4 +50,4 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 308 | 305 | 3 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3116 | 2640 | 176 | 300 | 0 |
-| **Total** | **19648** | **8220** | **2853** | **8575** | **0** |
+| **Total** | **19648** | **8216** | **2854** | **8578** | **0** |

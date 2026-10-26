@@ -1,4 +1,4 @@
-//! Storage interactions share one Strict server lifetime per backend.
+//! Each storage scenario shares one Strict server lifetime per backend.
 use super::{block_nbt, level_support, nbt, options, set};
 use anyhow::Context;
 use ferraloom_data::{Block, EntityType, Item, properties as p};
@@ -17,7 +17,7 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 
 async fn interact(bot: &mut Bot, pos: BlockPos) -> Result<()> {
-    bot.use_item_on(
+    bot.use_item_on_and_await_ack(
         play::InteractionHand::MainHand,
         play::BlockHitResult {
             block_pos: pos,
@@ -33,8 +33,10 @@ async fn interact(bot: &mut Bot, pos: BlockPos) -> Result<()> {
 }
 
 /// Capture at each packet wait rather than draining a separate output queue.
-/// Sound seed/pitch use the world's unsynchronized startup RNG: compare sound,
+/// Pitch uses Level.random's unseeded startup source: compare sound,
 /// position, source and volume, and assert the native pitch range on both sides.
+/// native/sound-pitch-two-jvms.json proves pitch alone differs across identical
+/// native calls; native/capture_sound_pitch.py repeats the two-JVM comparison.
 struct Capture {
     positions: Vec<BlockPos>,
     packets: Vec<Value>,
@@ -66,8 +68,10 @@ impl Capture {
                         || name.contains("block.barrel.")
                         || name.contains("block.copper_chest.")
                 }) {
+                    // Native nextFloat()*0.1f+0.9f can round its largest
+                    // draw to exactly 1.0f, despite nextFloat's excluded end.
                     assert!(
-                        (0.9..1.0).contains(&sound.pitch),
+                        (0.9..=1.0).contains(&sound.pitch),
                         "native container sound pitch: {}",
                         sound.pitch
                     );
@@ -419,7 +423,15 @@ async fn storage_interactions(session: &mut Session) -> Result<ObservationLog> {
             set(bot, pos.east(1), Block::AIR).await?;
         }
     }
-    // One explicitly seeded native structure chest in the same server lifetime.
+    Ok(log)
+}
+
+async fn structure_loot(session: &mut Session) -> Result<ObservationLog> {
+    let player = session.join("ParityBot").await?;
+    let bot = session.bot(player)?;
+    level_support::freeze(bot).await?;
+    let mut log = ObservationLog::default();
+    // Keep the structure prerequisite separate from ordinary container use.
     level_support::command(
         bot,
         "place template minecraft:village/plains/houses/plains_weaponsmith_1 0 80 0",
@@ -462,6 +474,12 @@ async fn storage_interactions(session: &mut Session) -> Result<ObservationLog> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "live Strict storage group; one boot per backend"]
-async fn strict_chest_barrel_double_inventory_openers_and_structure_loot() -> Result<()> {
+async fn strict_chest_barrel_double_inventory_openers() -> Result<()> {
     ferraloom_parity::run(options(), RunMode::Both, storage_interactions).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "live Strict structure loot; requires /place template runtime"]
+async fn strict_generated_structure_loot_chest() -> Result<()> {
+    ferraloom_parity::run(options(), RunMode::Both, structure_loot).await
 }
