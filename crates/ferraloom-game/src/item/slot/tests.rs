@@ -437,10 +437,7 @@ fn native_equipping_gates_seeded_sound_before_game_event_and_preserves_rng() {
 
 #[test]
 fn native_equipment_callback_keeps_old_and_incoming_objects_after_nested_replacement_and_removal() {
-    use crate::{
-        Behaviors,
-        entity::{Entity, animal::CowBehavior},
-    };
+    use crate::{Behaviors, entity::animal::CowBehavior};
     use ferraloom_data::EntityType;
     use std::cell::RefCell;
     thread_local! { static OBSERVED:RefCell<Option<String>>=const {RefCell::new(None)}; }
