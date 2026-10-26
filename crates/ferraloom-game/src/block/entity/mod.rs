@@ -22,6 +22,7 @@ pub mod lectern;
 pub mod potent_sulfur;
 pub mod sculk;
 pub mod spawner;
+pub mod test_block;
 mod worldgen;
 use super::containers::{
     chest::{BarrelBlockEntity, ChestBlockEntity, ShulkerBoxBlockEntity},
@@ -214,6 +215,7 @@ static THE_END_PORTAL: TheEndPortal = TheEndPortal;
 /// Canonical concrete states. Extend this enum when porting a subclass, never Any.
 #[derive(Clone, Debug)]
 pub enum BlockEntityState {
+    TestBlock(Box<test_block::TestBlockEntity>),
     Campfire(Box<campfire::CampfireBlockEntity>),
     Bell(Box<bell::BellBlockEntity>),
     Lectern(Box<lectern::LecternBlockEntity>),
@@ -251,6 +253,7 @@ pub enum BlockEntityState {
 impl BlockEntityState {
     pub fn data(&self) -> &BlockEntityData {
         match self {
+            Self::TestBlock(entity) => &entity.parent,
             Self::Campfire(entity) => &entity.parent,
             Self::Bell(entity) => &entity.parent,
             Self::Lectern(entity) => &entity.parent,
@@ -288,6 +291,7 @@ impl BlockEntityState {
     }
     pub fn data_mut(&mut self) -> &mut BlockEntityData {
         match self {
+            Self::TestBlock(entity) => &mut entity.parent,
             Self::Campfire(entity) => &mut entity.parent,
             Self::Bell(entity) => &mut entity.parent,
             Self::Lectern(entity) => &mut entity.parent,
@@ -325,6 +329,7 @@ impl BlockEntityState {
     }
     pub fn behavior(&self) -> &'static dyn BlockEntity {
         match self {
+            Self::TestBlock(_) => &test_block::TEST_BLOCK_ENTITY,
             Self::Campfire(_) => &campfire::CAMPFIRE_ENTITY,
             Self::Bell(_) => &bell::BELL_ENTITY,
             Self::Lectern(_) => &lectern::LECTERN_ENTITY,
@@ -546,6 +551,9 @@ pub fn create(pos: BlockPos, state: BlockState) -> Result<BlockEntityState, Leve
         .ok_or(LevelError::UnsupportedBlockEntity(state.block()))?;
     let data = BlockEntityData::new(kind, pos, state)?;
     match kind {
+        BlockEntityType::TEST_BLOCK => Ok(BlockEntityState::TestBlock(Box::new(
+            test_block::TestBlockEntity::new(data),
+        ))),
         BlockEntityType::CAMPFIRE => Ok(BlockEntityState::Campfire(Box::new(
             campfire::CampfireBlockEntity::new(data),
         ))),
@@ -688,7 +696,8 @@ pub fn supports(block: Block) -> bool {
     matches!(
         registry::for_block(block),
         Some(
-            BlockEntityType::CAMPFIRE
+            BlockEntityType::TEST_BLOCK
+                | BlockEntityType::CAMPFIRE
                 | BlockEntityType::BELL
                 | BlockEntityType::LECTERN
                 | BlockEntityType::DECORATED_POT
@@ -751,6 +760,7 @@ macro_rules! projection {
         }
     };
 }
+projection!(test_block::TestBlockEntity, TestBlock);
 projection!(super::containers::command::CommandBlockEntity, Command);
 projection!(
     super::containers::structure::StructureBlockEntity,
