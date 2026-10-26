@@ -22,7 +22,8 @@ use std::sync::{Arc, LazyLock};
 
 const POS: BlockPos = BlockPos::new(8, 64, 8);
 static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-static TAGS: LazyLock<(Arc<TagSet<Block>>, Arc<TagSet<Item>>)> = LazyLock::new(|| {
+type ContainerTags = (Arc<TagSet<Block>>, Arc<TagSet<Item>>);
+static TAGS: LazyLock<ContainerTags> = LazyLock::new(|| {
     let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder vanilla jar");
     let resources =
         ResourceManager::new(vec![Pack::vanilla_jar(std::path::Path::new(&jar)).unwrap()]);
