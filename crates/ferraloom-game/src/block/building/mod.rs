@@ -5,6 +5,9 @@ use crate::level::LevelError;
 use ferraloom_data::{Block, BlockState, properties as p, registries::fluid::Id as Fluid};
 use ferraloom_util::{BlockPos, Direction};
 
+mod amethyst;
+#[cfg(test)]
+mod amethyst_tests;
 pub mod anvil;
 #[cfg(test)]
 mod anvil_tests;
@@ -48,6 +51,9 @@ pub(crate) fn ported_behavior(
     block: Block,
     method: BlockMethod,
 ) -> Option<&'static dyn BlockBehavior> {
+    if block == Block::BUDDING_AMETHYST && method == BlockMethod::RandomTick {
+        return Some(&amethyst::BUDDING_AMETHYST);
+    }
     if fire::supports(block, method) {
         return Some(&fire::FIRE);
     }
