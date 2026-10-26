@@ -4,6 +4,7 @@ pub mod arguments;
 pub mod bossbar;
 pub mod builtins;
 pub mod clocks;
+pub mod clone;
 pub mod components;
 pub mod context;
 pub mod data;
