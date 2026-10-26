@@ -15,6 +15,7 @@ mod notifications;
 pub mod shoulders;
 pub use notifications::{build_limit_packet, send_build_limit_message};
 mod spawn;
+pub use spawn::SavedPosition;
 mod stuck;
 mod tick;
 pub use tick::{award_stat, player_do_tick_with_tick_rate, reset_stat};
@@ -1637,10 +1638,14 @@ mod tests {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
         let biome = Strategy::biomes(Arc::new(IdMap::new(vec![BiomeId(0)]).unwrap()));
         let section = LevelChunkSection::new(Strategy::block_states(), biome, BiomeId(0));
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
+        let mut level = {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         crate::entity::tests::tags(&mut level);
         level
             .add_chunk(LevelChunk::new(ChunkPos::new(0, 0), 0..16, section))

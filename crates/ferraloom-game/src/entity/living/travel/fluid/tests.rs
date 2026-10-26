@@ -101,7 +101,7 @@ fn native_complete_water_lava_and_flying_bodies_preserve_bits_and_exit_probes() 
             let mut player = ServerPlayer::new(
                 Uuid::new(3, 4),
                 "travel".into(),
-                level.next_entity_id(),
+                level.next_entity_id().unwrap(),
                 vector(row[4]),
                 GameType::Survival,
             );

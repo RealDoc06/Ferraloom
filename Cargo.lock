@@ -483,6 +483,7 @@ dependencies = [
  "ferraloom-data",
  "ferraloom-light",
  "ferraloom-nbt",
+ "ferraloom-protocol",
  "ferraloom-storage",
  "ferraloom-util",
  "flate2",

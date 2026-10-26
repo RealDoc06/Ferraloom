@@ -16,17 +16,19 @@ impl GameEventListenerRef {
                     ))
             }
             #[cfg(test)]
-            Self::Test(id) => Ok(level.region().game_event_listeners.tests.listeners[id].behavior),
+            Self::Test(id) => {
+                Ok(level.region().game_event_listeners.borrow().tests.listeners[id].behavior)
+            }
         }
     }
-    fn retain(self, level: &mut Level) -> Result<(), LevelError> {
+    fn retain(self, level: &Level) -> Result<(), LevelError> {
         match self {
             Self::BlockEntity(entity) => level.retain_block_entity(entity),
             #[cfg(test)]
             Self::Test(_) => Ok(()),
         }
     }
-    pub(super) fn release(self, level: &mut Level) {
+    pub(super) fn release(self, level: &Level) {
         match self {
             Self::BlockEntity(entity) => level.release_block_entity(entity),
             #[cfg(test)]
@@ -55,20 +57,16 @@ impl GameEventListenerRef {
 }
 
 impl Level {
-    fn listener_owner(&mut self, chunk: ChunkPos) -> Result<ChunkListenerOwner, LevelError> {
-        let current = self
-            .chunk(chunk)
-            .ok_or(LevelError::MissingChunk(chunk))?
-            .game_event_listener_owner;
-        if let Some(owner) = current {
+    fn listener_owner(&self, chunk: ChunkPos) -> Result<ChunkListenerOwner, LevelError> {
+        let current = self.chunk(chunk).ok_or(LevelError::MissingChunk(chunk))?;
+        if let Some(owner) = current.game_event_listener_owner.get() {
             debug_assert_eq!(
-                self.region().game_event_listeners.owners[&owner.0].chunk,
+                self.region().game_event_listeners.borrow().owners[&owner.0].chunk,
                 chunk
             );
             return Ok(owner);
         }
-        let region = self.region_mut();
-        let store = &mut region.game_event_listeners;
+        let mut store = self.region().game_event_listeners.borrow_mut();
         let owner = ChunkListenerOwner(store.next_owner);
         store.next_owner = store
             .next_owner
@@ -83,19 +81,15 @@ impl Level {
                 sections: BTreeMap::new(),
             },
         );
-        region
-            .chunks
-            .get_mut(&chunk)
-            .expect("checked chunk")
-            .game_event_listener_owner = Some(owner);
+        current.game_event_listener_owner.set(Some(owner));
         Ok(owner)
     }
     pub(super) fn listener_registry(
-        &mut self,
+        &self,
         owner: ChunkListenerOwner,
         section: i32,
     ) -> ListenerRegistryRef {
-        let store = &mut self.region_mut().game_event_listeners;
+        let mut store = self.region().game_event_listeners.borrow_mut();
         if let Some(&registry) = store.owners[&owner.0].sections.get(&section) {
             return registry;
         }
@@ -119,16 +113,18 @@ impl Level {
             .insert(section, registry);
         registry
     }
-    pub(super) fn collect_listener_registry(&mut self, registry: ListenerRegistryRef) {
-        let store = &mut self.region_mut().game_event_listeners;
-        if store
-            .registries
-            .get(&registry.0)
-            .is_none_or(|state| state.attached || state.visits != 0)
-        {
-            return;
-        }
-        let state = store.registries.remove(&registry.0).unwrap();
+    pub(super) fn collect_listener_registry(&self, registry: ListenerRegistryRef) {
+        let state = {
+            let mut store = self.region().game_event_listeners.borrow_mut();
+            if store
+                .registries
+                .get(&registry.0)
+                .is_none_or(|state| state.attached || state.visits != 0)
+            {
+                return;
+            }
+            store.registries.remove(&registry.0).unwrap()
+        };
         for listener in state
             .listeners
             .into_iter()
@@ -138,21 +134,28 @@ impl Level {
             listener.release(self);
         }
     }
-    pub(super) fn release_listener_owner(&mut self, owner: ChunkListenerOwner) {
-        let store = &mut self.region_mut().game_event_listeners;
-        let state = store.owners.get_mut(&owner.0).unwrap();
-        state.posts -= 1;
+    pub(super) fn release_listener_owner(&self, owner: ChunkListenerOwner) {
+        self.region()
+            .game_event_listeners
+            .borrow_mut()
+            .owners
+            .get_mut(&owner.0)
+            .unwrap()
+            .posts -= 1;
         self.collect_listener_owner(owner);
     }
-    fn collect_listener_owner(&mut self, owner: ChunkListenerOwner) {
-        let store = &mut self.region_mut().game_event_listeners;
-        if store.owners[&owner.0].attached || store.owners[&owner.0].posts != 0 {
-            return;
-        }
-        let state = store.owners.remove(&owner.0).unwrap();
+    fn collect_listener_owner(&self, owner: ChunkListenerOwner) {
+        let state = {
+            let mut store = self.region().game_event_listeners.borrow_mut();
+            if store.owners[&owner.0].attached || store.owners[&owner.0].posts != 0 {
+                return;
+            }
+            store.owners.remove(&owner.0).unwrap()
+        };
         for registry in state.sections.into_values() {
-            self.region_mut()
+            self.region()
                 .game_event_listeners
+                .borrow_mut()
                 .registries
                 .get_mut(&registry.0)
                 .unwrap()
@@ -160,20 +163,18 @@ impl Level {
             self.collect_listener_registry(registry);
         }
     }
+    /// Callback-free metadata registration also serves shared FULL publication.
+    /// No cell guard spans listener dispatch or a mutable world callback.
     pub(super) fn register_listener(
-        &mut self,
+        &self,
         listener: GameEventListenerRef,
         pos: BlockPos,
     ) -> Result<(), LevelError> {
         let owner = self.listener_owner(ChunkPos::containing(pos))?;
         let registry = self.listener_registry(owner, pos.y >> 4);
         listener.retain(self)?;
-        let state = self
-            .region_mut()
-            .game_event_listeners
-            .registries
-            .get_mut(&registry.0)
-            .unwrap();
+        let mut store = self.region().game_event_listeners.borrow_mut();
+        let state = store.registries.get_mut(&registry.0).unwrap();
         if state.processing {
             state.listeners_to_add.push(listener);
         } else {
@@ -183,18 +184,26 @@ impl Level {
         Ok(())
     }
     pub(super) fn unregister_listener(
-        &mut self,
+        &self,
         listener: GameEventListenerRef,
         pos: BlockPos,
     ) -> Result<(), LevelError> {
         let owner = self.listener_owner(ChunkPos::containing(pos))?;
         let registry = self.listener_registry(owner, pos.y >> 4);
-        let state = &self.region().game_event_listeners.registries[&registry.0];
-        if state.processing {
-            if !state.listeners_to_remove.contains(&listener) {
+        let (processing, pending) = {
+            let store = self.region().game_event_listeners.borrow();
+            let state = &store.registries[&registry.0];
+            (
+                state.processing,
+                state.listeners_to_remove.contains(&listener),
+            )
+        };
+        if processing {
+            if !pending {
                 listener.retain(self)?;
-                self.region_mut()
+                self.region()
                     .game_event_listeners
+                    .borrow_mut()
                     .registries
                     .get_mut(&registry.0)
                     .unwrap()
@@ -202,48 +211,49 @@ impl Level {
                     .insert(listener);
             }
         } else {
-            let state = self
-                .region_mut()
-                .game_event_listeners
-                .registries
-                .get_mut(&registry.0)
-                .unwrap();
-            if let Some(index) = state.listeners.iter().position(|&value| value == listener) {
-                state.listeners.remove(index);
-                state.modification_count = state.modification_count.wrapping_add(1);
+            let removed = {
+                let mut store = self.region().game_event_listeners.borrow_mut();
+                let state = store.registries.get_mut(&registry.0).unwrap();
+                if let Some(index) = state.listeners.iter().position(|&value| value == listener) {
+                    state.listeners.remove(index);
+                    state.modification_count = state.modification_count.wrapping_add(1);
+                    true
+                } else {
+                    false
+                }
+            };
+            if removed {
                 listener.release(self);
             }
         }
-        // Native unregister invokes OnEmptyAction here, even during visitation;
-        // visitInRangeListeners does not invoke it after its deferred removals.
-        if self.region().game_event_listeners.registries[&registry.0]
+        // Native OnEmptyAction runs here, including during visitation, never
+        // after the deferred-removal flush performed by visitInRangeListeners.
+        let empty = self.region().game_event_listeners.borrow().registries[&registry.0]
             .listeners
-            .is_empty()
-        {
-            self.region_mut()
-                .game_event_listeners
-                .owners
-                .get_mut(&owner.0)
-                .unwrap()
-                .sections
-                .remove(&(pos.y >> 4));
-            self.region_mut()
-                .game_event_listeners
-                .registries
-                .get_mut(&registry.0)
-                .unwrap()
-                .attached = false;
+            .is_empty();
+        if empty {
+            {
+                let mut store = self.region().game_event_listeners.borrow_mut();
+                store
+                    .owners
+                    .get_mut(&owner.0)
+                    .unwrap()
+                    .sections
+                    .remove(&(pos.y >> 4));
+                store.registries.get_mut(&registry.0).unwrap().attached = false;
+            }
             self.collect_listener_registry(registry);
         }
         Ok(())
     }
     pub(super) fn capture_listener_owner(
-        &mut self,
+        &self,
         chunk: ChunkPos,
     ) -> Result<ChunkListenerOwner, LevelError> {
         let owner = self.listener_owner(chunk)?;
-        self.region_mut()
+        self.region()
             .game_event_listeners
+            .borrow_mut()
             .owners
             .get_mut(&owner.0)
             .unwrap()
@@ -252,15 +262,10 @@ impl Level {
     }
 }
 
-/// Port of LevelChunk#addGameEventListener. The lifecycle owner calls this at
-/// the native add/load slot, with the original block-entity generation.
-#[expect(
-    dead_code,
-    reason = "BE lifecycle owner wires this boundary after the dispatcher micro-landing"
-)]
+/// Port of LevelChunk#addGameEventListener at the native add/load slot.
 pub(crate) fn register_block_entity_listener(
     entity: BlockEntityRef,
-    level: &mut Level,
+    level: &Level,
 ) -> Result<(), LevelError> {
     if level
         .block_entity_state(entity)?
@@ -272,15 +277,10 @@ pub(crate) fn register_block_entity_listener(
     }
     Ok(())
 }
-/// Port of LevelChunk#removeGameEventListener. Direct setBlockEntity replacement
-/// does not call this helper; removal retains its original receiver.
-#[expect(
-    dead_code,
-    reason = "BE lifecycle owner wires this boundary after the dispatcher micro-landing"
-)]
+/// Port of LevelChunk#removeGameEventListener; direct replacement does not unregister.
 pub(crate) fn unregister_block_entity_listener(
     entity: BlockEntityRef,
-    level: &mut Level,
+    level: &Level,
 ) -> Result<(), LevelError> {
     if level
         .block_entity_state(entity)?
@@ -292,28 +292,19 @@ pub(crate) fn unregister_block_entity_listener(
     }
     Ok(())
 }
-/// Detach the chunk's registry ownership, without unregistering every listener.
-/// Active posts continue against the captured owner; queued deliveries hold
-/// their own listener roots until the complete post has returned.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "BE lifecycle owner wires this boundary after the dispatcher micro-landing"
-    )
-)]
-pub(crate) fn detach_chunk_listeners(chunk: ChunkPos, level: &mut Level) -> Result<(), LevelError> {
+/// Chunk-owned registries detach as a unit. Captured posts/deliveries retain
+/// their original registry/listener identities until their stack unwinds.
+pub(crate) fn detach_chunk_listeners(chunk: ChunkPos, level: &Level) -> Result<(), LevelError> {
     let owner = level
-        .region_mut()
-        .chunks
-        .get_mut(&chunk)
+        .chunk(chunk)
         .ok_or(LevelError::MissingChunk(chunk))?
         .game_event_listener_owner
         .take();
     if let Some(owner) = owner {
         level
-            .region_mut()
+            .region()
             .game_event_listeners
+            .borrow_mut()
             .owners
             .get_mut(&owner.0)
             .unwrap()

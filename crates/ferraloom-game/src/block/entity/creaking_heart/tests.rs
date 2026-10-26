@@ -111,7 +111,12 @@ fn native_creaking_heart_factory_load_save_updates_and_ticker_gate_match() {
                     );
                     entity = level.block_entity_state(handle).unwrap().clone();
                 } else {
-                    entity.load_with_components(&input);
+                    entity.load_with_components(
+                        &input,
+                        crate::level::LevelContext::fixture(0, 63)
+                            .registry_context()
+                            .unwrap(),
+                    );
                     assert!(fields[10].is_empty(), "{row}");
                 }
                 let saved = entity.save_with_full_metadata().unwrap();
@@ -133,12 +138,24 @@ fn native_creaking_heart_factory_load_save_updates_and_ticker_gate_match() {
                 );
                 assert_eq!(
                     entity.collect_components(),
-                    crate::block::entity::components::load(Some(
-                        &parse_compound(fields[8]).unwrap()
-                    )),
+                    crate::block::entity::components::load(
+                        Some(&parse_compound(fields[8]).unwrap()),
+                        crate::level::LevelContext::fixture(0, 63)
+                            .registry_context()
+                            .unwrap()
+                    ),
                     "{row}"
                 );
-                let reloaded = load_static(POS, state, &saved).unwrap().unwrap();
+                let reloaded = load_static(
+                    POS,
+                    state,
+                    &saved,
+                    crate::level::LevelContext::fixture(0, 63)
+                        .registry_context()
+                        .unwrap(),
+                )
+                .unwrap()
+                .unwrap();
                 assert_eq!(
                     reloaded.save_with_full_metadata().unwrap(),
                     parse_compound(fields[9]).unwrap(),
@@ -156,9 +173,12 @@ fn native_creaking_heart_factory_load_save_updates_and_ticker_gate_match() {
 fn live_heart_loading_keeps_the_original_generation_and_components() {
     let state = Block::CREAKING_HEART.default_state();
     let mut entity = create(POS, state).unwrap();
-    entity.data_mut().components = crate::block::entity::components::load(Some(
-        &parse_compound("{'minecraft:custom_name':'kept'}").unwrap(),
-    ));
+    entity.data_mut().components = crate::block::entity::components::load(
+        Some(&parse_compound("{'minecraft:custom_name':'kept'}").unwrap()),
+        crate::level::LevelContext::fixture(0, 63)
+            .registry_context()
+            .unwrap(),
+    );
     let mut level = level(state, entity);
     let original = level.block_entity_ref(POS).unwrap().unwrap();
     level.retain_block_entity(original).unwrap();
@@ -192,9 +212,12 @@ fn live_heart_loading_keeps_the_original_generation_and_components() {
             .unwrap()
             .data()
             .components,
-        crate::block::entity::components::load(Some(
-            &parse_compound("{'minecraft:custom_name':'kept'}").unwrap()
-        ))
+        crate::block::entity::components::load(
+            Some(&parse_compound("{'minecraft:custom_name':'kept'}").unwrap()),
+            crate::level::LevelContext::fixture(0, 63)
+                .registry_context()
+                .unwrap()
+        )
     );
     assert!(
         !level

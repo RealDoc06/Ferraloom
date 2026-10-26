@@ -974,11 +974,17 @@ fn live_fixture(manager: ServerAdvancementManager) -> (crate::level::Level, Enti
         .unwrap(),
     );
     let sync = Arc::new(RecipeSynchronization::new(&recipes, |_| true));
-    let mut level = Level::new(
-        Region::new(&BEHAVIORS),
-        crate::level::LevelContext::fixture(0, 63),
-    );
-    level.install_shared(Box::default());
+    let mut level = {
+        let mut fixture_level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
+    if level.shared().is_err() {
+        level.install_shared(Box::default());
+    }
     let player = level.next_entity_ref();
     let mut state = ServerPlayer::new(
         ferraloom_util::Uuid::NIL,

@@ -16,7 +16,7 @@ fn add_player(level: &mut Level, position: Vec3, mode: GameType) -> EntityRef {
     let player = ServerPlayer::new(
         Uuid::new(0, 1),
         "tick".into(),
-        level.next_entity_id(),
+        level.next_entity_id().unwrap(),
         position,
         mode,
     );
@@ -93,7 +93,11 @@ fn loaded_neighbor_guard_matches_native_expanded_bounds_at_chunk_edges() {
 #[test]
 fn spectator_without_loaded_chunks_still_syncs_xp_without_running_the_parent_tick() {
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-    let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+    let mut level = {
+        let mut fixture_level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     let player = add_player(&mut level, Vec3::new(8.5, 64.0, 8.5), GameType::Spectator);
     level.entity_mut::<ServerPlayer>(player).unwrap().tick_count = 1;
     level.take_effects();
@@ -187,7 +191,11 @@ fn native_do_tick_orders_health_scores_and_experience_for_each_connection() {
     use crate::scoreboard::{Objective, ObjectiveCriteria};
     use ferraloom_protocol::{chat::Component, play::DisplaySlot};
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-    let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+    let mut level = {
+        let mut fixture_level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     let id = add_player(&mut level, Vec3::new(8.5, 64.0, 8.5), GameType::Spectator);
     let slots = [
         DisplaySlot::List,

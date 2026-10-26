@@ -115,7 +115,12 @@ fn native_placement_entity_data_round_trips() {
         }
         let block = Block::from_protocol_id(f[1].parse().unwrap()).unwrap();
         let mut receiver = entity::create(POS, block.default_state()).unwrap();
-        receiver.load_with_components(&ferraloom_nbt::parse_compound(f[3]).unwrap());
+        receiver.load_with_components(
+            &ferraloom_nbt::parse_compound(f[3]).unwrap(),
+            crate::level::LevelContext::fixture(0, 63)
+                .registry_context()
+                .unwrap(),
+        );
         let expected = ferraloom_nbt::parse_compound(f[4]).unwrap();
         assert_eq!(
             receiver.save_without_metadata().unwrap(),
@@ -133,7 +138,12 @@ fn native_placement_entity_data_round_trips() {
             "{line}"
         );
         let mut loaded = entity::create(POS, block.default_state()).unwrap();
-        loaded.load_with_components(&expected);
+        loaded.load_with_components(
+            &expected,
+            crate::level::LevelContext::fixture(0, 63)
+                .registry_context()
+                .unwrap(),
+        );
         assert_eq!(loaded.save_without_metadata().unwrap(), expected, "{line}");
         // The fields represented by item components leave custom NBT only through
         // the native removeComponentsFromTag path.

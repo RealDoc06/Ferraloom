@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    Behaviors, ServerShared,
+    Behaviors,
     block::UnportedBehavior,
     entity::{animal::Cow, item::ItemEntityBehavior, synched_data::SynchedValue},
     inventory::{ContainerHandle, ContainerSlot},
@@ -63,7 +63,6 @@ fn base_snapshot(entity: EntityRef, level: &Level) -> String {
 fn fixture(kind: &str) -> (Level, EntityRef) {
     let mut level = crate::entity::tests::level(false);
     level.set_unported_behavior(UnportedBehavior::Strict);
-    level.install_shared(Box::<ServerShared>::default());
     level
         .shared_mut()
         .unwrap()

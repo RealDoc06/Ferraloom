@@ -141,7 +141,7 @@ fn location_enchantments_use_effective_equipment_and_the_existing_unit_policy() 
     let player = ServerPlayer::new(
         Uuid::new(3, 4),
         "landing".into(),
-        level.next_entity_id(),
+        level.next_entity_id().unwrap(),
         Vec3::ZERO,
         GameType::Survival,
     );
@@ -313,13 +313,15 @@ fn fall_receiver(player: bool, level: &mut Level) -> EntityRef {
         EntityState::Player(Box::new(ServerPlayer::new(
             ferraloom_util::Uuid::new(0, id.serial() as i64),
             "fall".into(),
-            level.next_entity_id(),
+            level.next_entity_id().unwrap(),
             Vec3::new(8.5, 64.0, 8.5),
             crate::entity::player::GameType::Survival,
         )))
     } else {
         let mut cow = crate::entity::animal::Cow::with_parent(
-            level.create_entity_data(ferraloom_data::EntityType::COW),
+            level
+                .create_entity_data(ferraloom_data::EntityType::COW)
+                .unwrap(),
         );
         cow.as_living_mut().set_pos(Vec3::new(8.5, 64.0, 8.5));
         EntityState::Cow(Box::new(cow))

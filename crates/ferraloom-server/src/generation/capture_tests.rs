@@ -28,7 +28,64 @@ fn assert_fresh(state: &mut GenerationState, pos: ChunkPos, registry: &RegistryA
         .capture(&state.context, registry)
         .unwrap();
     let cached = state.capture_proto(pos.pack(), registry).unwrap();
-    assert_eq!(cached.write().unwrap(), fresh.write().unwrap());
+    let bytes = |disk: &SerializableChunkData| {
+        let mut bytes = Vec::new();
+        ferraloom_nbt::NbtIo::write_compound(
+            &mut bytes,
+            ferraloom_nbt::Compression::None,
+            &disk.write().unwrap(),
+        )
+        .unwrap();
+        bytes
+    };
+    assert_eq!(bytes(&cached), bytes(&fresh));
+}
+
+#[test]
+fn light_only_updates_keep_packed_terrain_and_match_fresh_bytes() {
+    let (mut state, registry) = super::relight_tests::fixture();
+    let pos = ChunkPos::new(0, 0);
+    insert_terrain(&mut state, pos);
+    let proto = &mut state.holders.get_mut(&pos.pack()).unwrap().chunk;
+    proto.region.chunk.sections[0].set_block_state(0, 0, 0, Block::STONE.default_state());
+    let mut padding = storage::ChunkSection {
+        y: Some(-1),
+        sky_light: Some(storage::ByteArray(vec![-1; 2048])),
+        ..Default::default()
+    };
+    padding
+        .extra
+        .insert("future:padding", ferraloom_nbt::Tag::Long(42));
+    proto.disk.sections = Some(vec![padding]);
+    state.capture_proto(pos.pack(), &registry).unwrap();
+    // Include both build-height sections, existing and new padding on either
+    // side, explicit all-zero layers, and missing layers. None must stay
+    // distinct from a stored zero array, even on an otherwise empty padding.
+    for (y, layer, value) in [
+        (0, LightLayer::Sky, Some(7)),
+        (0, LightLayer::Block, Some(5)),
+        (-1, LightLayer::Sky, Some(0)),
+        (-2, LightLayer::Block, Some(9)),
+        (2, LightLayer::Sky, Some(15)),
+        (1, LightLayer::Block, Some(0)),
+        (0, LightLayer::Sky, None),
+        (0, LightLayer::Block, None),
+        (-2, LightLayer::Block, None),
+        (-1, LightLayer::Sky, None),
+        (2, LightLayer::Sky, None),
+        (3, LightLayer::Block, None),
+    ] {
+        state.apply_light_updates(LightUpdates {
+            sections: vec![ferraloom_light::LightSectionUpdate {
+                layer,
+                section: SectionPos::new(pos.x, y, pos.z),
+                data: value.map(|value| Arc::new(ferraloom_light::DataLayer::new(value))),
+            }],
+            ..Default::default()
+        });
+        assert!(state.captured_terrain[&pos.pack()].is_some());
+        assert_fresh(&mut state, pos, &registry);
+    }
 }
 
 #[test]

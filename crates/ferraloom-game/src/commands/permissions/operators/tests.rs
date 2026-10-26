@@ -20,7 +20,11 @@ struct Vector {
 }
 fn player_level(instabuild: bool, creative: bool) -> (Level, EntityRef) {
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-    let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+    let mut level = {
+        let mut fixture_level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     let entity = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     let mut player = ServerPlayer::new(
         Uuid::new(1, 2),
@@ -54,11 +58,7 @@ fn dedicated_permissions_entry_defaults_and_independent_abilities_match_java() {
             assert_eq!(serde_json::to_value(&entry).unwrap(), vector.saved.unwrap());
             entries.push(entry);
         }
-        let shared = crate::ServerShared {
-            ops: ServerOpList::from_entries(entries),
-            ..Default::default()
-        };
-        level.install_shared(Box::new(shared));
+        level.shared_mut().unwrap().ops = ServerOpList::from_entries(entries);
         let permissions = level.player_permissions(entity).unwrap();
         assert_eq!(
             (0..5)
@@ -83,6 +83,7 @@ fn dedicated_permissions_entry_defaults_and_independent_abilities_match_java() {
 #[test]
 fn same_phase_ops_mutations_are_live_and_command_sources_keep_captured_permissions() {
     let (mut level, entity) = player_level(true, false);
+    drop(level.take_shared().unwrap());
     assert!(matches!(
         level.player_permissions(entity),
         Err(LevelError::MissingServerShared)
@@ -91,7 +92,9 @@ fn same_phase_ops_mutations_are_live_and_command_sources_keep_captured_permissio
         level.can_use_game_master_blocks(entity),
         Err(LevelError::MissingServerShared)
     ));
-    level.install_shared(Box::default());
+    if level.shared().is_err() {
+        level.install_shared(Box::default());
+    }
     let profile = GameProfile {
         id: Uuid::new(1, 2),
         name: "metadata".into(),

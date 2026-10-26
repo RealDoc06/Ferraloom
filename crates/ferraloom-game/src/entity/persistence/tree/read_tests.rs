@@ -109,11 +109,12 @@ fn player_save_and_comparison_nbt_require_the_current_dimension_instead_of_saved
         Region::new(&BEHAVIORS),
         crate::level::LevelContext::fixture(0, 63),
     );
+    level.install_shared(Box::default());
     let entity = level.next_entity_ref();
     let mut player = ServerPlayer::new(
         Uuid::new(9, 10),
         "dimension".into(),
-        level.next_entity_id(),
+        level.next_entity_id().unwrap(),
         Vec3::ZERO,
         GameType::Survival,
     );

@@ -49,7 +49,12 @@ impl BlockEntityRef {
 pub(super) struct PotentSulfurBehavior;
 pub(super) static POTENT_SULFUR_ENTITY: PotentSulfurBehavior = PotentSulfurBehavior;
 impl BlockEntity for PotentSulfurBehavior {
-    fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
+    fn load_additional(
+        &self,
+        state: &mut BlockEntityState,
+        tag: &CompoundTag,
+        _registries: &dyn ferraloom_protocol::codec::RegistryContext,
+    ) {
         let BlockEntityState::PotentSulfur(entity) = state else {
             unreachable!()
         };
@@ -122,7 +127,12 @@ mod tests {
                     let receiver = PotentSulfurBlockEntity::view_mut(&mut entity).unwrap();
                     receiver.waiting_countdown = f[2].parse().unwrap();
                     receiver.eruption_tick = 123;
-                    entity.load_with_components(&ferraloom_nbt::parse_compound(f[3]).unwrap());
+                    entity.load_with_components(
+                        &ferraloom_nbt::parse_compound(f[3]).unwrap(),
+                        crate::level::LevelContext::fixture(0, 63)
+                            .registry_context()
+                            .unwrap(),
+                    );
                     assert_eq!(
                         PotentSulfurBlockEntity::view(&entity)
                             .unwrap()

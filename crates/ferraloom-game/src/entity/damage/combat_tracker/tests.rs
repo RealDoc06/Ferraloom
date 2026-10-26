@@ -18,7 +18,7 @@ fn fixture(terrain: bool) -> (Level, EntityRef, EntityRef) {
     let player = ServerPlayer::new(
         Uuid::new(7, 8),
         "combat".into(),
-        level.next_entity_id(),
+        level.next_entity_id().unwrap(),
         Vec3::ZERO,
         GameType::Survival,
     );
@@ -26,7 +26,7 @@ fn fixture(terrain: bool) -> (Level, EntityRef, EntityRef) {
         .add_entity(entity, EntityState::Player(Box::new(player)))
         .unwrap();
     let attacker = level.next_entity_ref();
-    let cow = Cow::with_parent(level.create_entity_data(EntityType::COW));
+    let cow = Cow::with_parent(level.create_entity_data(EntityType::COW).unwrap());
     level
         .add_entity(attacker, EntityState::Cow(Box::new(cow)))
         .unwrap();

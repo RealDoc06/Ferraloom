@@ -105,6 +105,67 @@ fn missing_enchantment(id: &Identifier) -> LevelError {
     }
 }
 
+/// Read the same matching-slot enchantments used by forEachModifier and
+/// stopLocationBasedEffects. Absent or empty effect lists are proven no-ops;
+/// nonempty unported cleanup remains required at the caller's native slot.
+pub(crate) fn has_matching_effect(
+    stack: &ItemStack,
+    slot: EquipmentSlot,
+    component: EffectComponent,
+    level: &crate::level::Level,
+) -> Result<bool, LevelError> {
+    let Some(DataComponent::Enchantments(enchantments)) =
+        inventory::component(stack, ComponentTypeId::ENCHANTMENTS)
+    else {
+        return Ok(false);
+    };
+    if enchantments.0.is_empty() {
+        return Ok(false);
+    }
+    let registry = level.context().enchantments()?;
+    for (id, _) in &enchantments.0 {
+        let enchantment = registry
+            .get(&id.0)
+            .ok_or_else(|| missing_enchantment(&id.0))?;
+        if enchantment.definition.matching_slot(slot) {
+            match enchantment.effect(component) {
+                None => {}
+                Some(super::registry::EnchantmentEffect::Unported(value))
+                    if value.as_array().is_some_and(Vec::is_empty) => {}
+                Some(_) => return Ok(true),
+            }
+        }
+    }
+    Ok(false)
+}
+
+/// Port of EnchantmentHelper#processDurabilityChange. Conditional ITEM_DAMAGE
+/// effects use Level.random and update a MutableFloat before Java's int cast.
+pub fn process_durability_change(
+    receiver: StackRef,
+    amount: i32,
+    operation: &mut StackOperation<'_>,
+) -> Result<i32, LevelError> {
+    let mut value = amount as f32;
+    run_iteration_on_item(receiver, operation, |id, level, operation| {
+        let registry = operation.level.context().enchantments()?.clone();
+        let enchantment = registry.get(id).ok_or_else(|| missing_enchantment(id))?;
+        let effects = match enchantment
+            .value_effect(EffectComponent::ITEM_DAMAGE)
+            .map_err(|error| LevelError::EnchantmentEffect {
+                enchantment: id.clone(),
+                source: error.to_string(),
+            })? {
+            Some(super::EnchantmentValueEffectComponent::ItemDamage(effects)) => effects.as_slice(),
+            Some(_) => unreachable!("typed enchantment component key"),
+            None => &[],
+        };
+        value = modify_item_filtered_count(id, effects, level, receiver, value, operation)?;
+        Ok(())
+    })?;
+    Ok(value as i32)
+}
+
 /// Port of EnchantmentHelper#modifyDurabilityToRepairFromXp, preserving all
 /// per-enchantment f32 updates before MutableFloat.intValue's saturated cast.
 pub fn modify_durability_to_repair_from_xp(

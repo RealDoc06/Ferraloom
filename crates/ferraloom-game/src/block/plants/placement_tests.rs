@@ -132,6 +132,7 @@ fn native_wall_plant_and_sculk_placement_matches_both_level_arms() {
         generator.new_chunk([0, 0]),
         ChunkStatus::Features,
     )];
+    let registry_context = crate::level::LevelContext::fixture(0, 63);
     let mut region = WorldGenRegion::new(
         &mut chunks,
         [0, 0],
@@ -143,6 +144,7 @@ fn native_wall_plant_and_sculk_placement_matches_both_level_arms() {
         63,
     )
     .unwrap();
+    region.set_registry_context(registry_context.registry_context().unwrap());
     region.set_block_tags(blocks);
     region.set_fluid_tags(fluids);
     region.set_random(Random::Legacy(LegacyRandomSource::new(1234)));

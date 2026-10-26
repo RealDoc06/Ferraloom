@@ -35,7 +35,9 @@ fn native_jump_power_ground_sync_and_liquid_impulse_preserve_bits() {
     {
         let row: Vec<_> = line.split('\t').collect();
         let mut level = crate::entity::tests::level(true);
-        level.install_shared(Box::default());
+        if level.shared().is_err() {
+            level.install_shared(Box::default());
+        }
         level
             .set_block_state(
                 BlockPos::new(8, 63, 8),
@@ -47,7 +49,7 @@ fn native_jump_power_ground_sync_and_liquid_impulse_preserve_bits() {
             EntityState::Player(Box::new(ServerPlayer::new(
                 Uuid::new(3, 4),
                 "jump".into(),
-                level.next_entity_id(),
+                level.next_entity_id().unwrap(),
                 Vec3::ZERO,
                 GameType::Survival,
             )))

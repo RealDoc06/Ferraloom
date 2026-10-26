@@ -125,7 +125,12 @@ fn value_and_retained_inventory_add_match_native_remainders_and_detached_sources
         let mut state = player(kind);
         state.menus.current_mut().set_carried(input(kind));
         let menu = state.menus.current_ref();
-        let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+        let mut level = {
+            let mut fixture_level =
+                Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         level
             .add_entity(player_id, EntityState::Player(Box::new(state)))
             .unwrap();

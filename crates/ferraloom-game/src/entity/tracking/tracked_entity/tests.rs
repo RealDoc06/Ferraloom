@@ -15,14 +15,18 @@ use std::sync::Arc;
 
 fn level() -> Level {
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-    Level::new(
-        Region::new(&BEHAVIORS),
-        crate::level::LevelContext::fixture(0, 63),
-    )
+    {
+        let mut fixture_level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    }
 }
 fn item(level: &mut Level) -> EntityRef {
     let id = level.next_entity_ref();
-    let mut item = ItemEntity::new(level.next_entity_id(), 1);
+    let mut item = ItemEntity::new(level.next_entity_id().unwrap(), 1);
     item.parent.set_pos(Vec3::new(0.0, 64.0, 0.0));
     item.set_item(ItemStack::new(
         ferraloom_data::Item::STONE,
@@ -39,7 +43,7 @@ fn player(level: &mut Level, position: Vec3) -> EntityRef {
     let mut player = ServerPlayer::new(
         Uuid::new(0, id.serial() as i64),
         "viewer".into(),
-        level.next_entity_id(),
+        level.next_entity_id().unwrap(),
         position,
         GameType::Spectator,
     );
@@ -123,7 +127,7 @@ fn tracking_range_includes_transitive_passengers_before_server_percentage_scalin
     let viewer = player(&mut level, Vec3::new(100.0, 64.0, 0.0));
     let rider = player(&mut level, Vec3::new(0.0, 64.0, 0.0));
     let mount = level.next_entity_ref();
-    let tnt = PrimedTnt::new(level.next_entity_id(), 2);
+    let tnt = PrimedTnt::new(level.next_entity_id().unwrap(), 2);
     level
         .add_entity(mount, EntityState::PrimedTnt(Box::new(tnt)))
         .unwrap();

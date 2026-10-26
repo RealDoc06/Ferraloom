@@ -118,7 +118,7 @@ fn native_player_ai_step_preserves_input_jump_travel_block_freeze_push_and_tail_
         let mut p = ServerPlayer::new(
             Uuid::new(3, 4),
             "ai".into(),
-            level.next_entity_id(),
+            level.next_entity_id().unwrap(),
             Vec3::new(8.5, 64.0, 8.5),
             GameType::Survival,
         );

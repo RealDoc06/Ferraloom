@@ -103,10 +103,10 @@ impl DataAccess for DataHost<'_> {
         match accessor {
             DataAccessor::Storage(id) => {
                 self.server.command_storage.set(id, value)?;
-                self.server
-                    .level
-                    .level
-                    .set_command_storage(self.server.command_storage.snapshot());
+                let snapshot = self.server.command_storage.snapshot();
+                for live in self.server.live_levels_mut() {
+                    live.level.set_command_storage(snapshot.clone());
+                }
             }
             DataAccessor::Block { entity, pos } => {
                 // BlockDataAccessor captures this state before either load callback.
@@ -133,10 +133,10 @@ impl DataAccess for DataHost<'_> {
             self.server
                 .command_storage
                 .publish_read_mutation(id, value)?;
-            self.server
-                .level
-                .level
-                .set_command_storage(self.server.command_storage.snapshot());
+            let snapshot = self.server.command_storage.snapshot();
+            for live in self.server.live_levels_mut() {
+                live.level.set_command_storage(snapshot.clone());
+            }
         }
         Ok(())
     }

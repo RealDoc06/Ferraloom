@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    Behaviors, ServerShared,
+    Behaviors,
     block::UnportedBehavior,
     entity::{
         Entity, EntityState, LivingEntity,
@@ -72,7 +72,6 @@ fn fixture(fields: &[&str]) -> (Level, EntityRef, EntityRef) {
     static BEHAVIORS: Behaviors = Behaviors::EMPTY.with_entity(EntityType::PLAYER, &TakeProbe);
     let mut level = crate::entity::tests::level_with_behaviors(false, &BEHAVIORS);
     level.set_unported_behavior(UnportedBehavior::Strict);
-    level.install_shared(Box::<ServerShared>::default());
     crate::level::drop_fixtures::install(&mut level);
     let player = level.next_entity_ref();
     let mut state = ServerPlayer::new(

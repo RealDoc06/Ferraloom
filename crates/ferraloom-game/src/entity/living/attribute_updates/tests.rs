@@ -24,14 +24,13 @@ fn set(level: &mut Level, entity: EntityRef, attribute: Attribute, value: f64) {
 }
 fn fixture() -> (Level, EntityRef, EntityRef) {
     let mut level = crate::entity::tests::level(false);
-    level.install_shared(Box::default());
     let mut players = Vec::new();
     for index in 1..=2 {
         let id = level.next_entity_ref();
         let mut player = ServerPlayer::new(
             Uuid::new(1, index),
             format!("observer{index}"),
-            level.next_entity_id(),
+            level.next_entity_id().unwrap(),
             Vec3::new(8.5 + index as f64, 64.0, 8.5),
             GameType::Survival,
         );

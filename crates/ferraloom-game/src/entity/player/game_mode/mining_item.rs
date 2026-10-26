@@ -1,10 +1,8 @@
-//! The ItemStack/Item mining path; full durability and enchantment effects are
-//! supplied by the shared item owner at the existing hurtAndBreak effect seam.
+//! The ItemStack/Item mining path with synchronous canonical durability.
 use super::{BlockBreakError, inventory};
 use crate::{
-    block::UnportedOperation,
     entity::{EntityRef, player::award_stat},
-    inventory::StackRef,
+    inventory::{StackOperation, StackRef},
     level::Level,
     stats::Stat,
 };
@@ -36,11 +34,14 @@ pub fn mine_block(
         state.data().destroy_time != 0.0
     };
     if damages_block && damage > 0 {
-        level.unported_operation(UnportedOperation::ItemHurtAndBreak {
-            item: used_item,
-            amount: damage,
-            slot: EquipmentSlot::Mainhand,
-        })?;
+        let mut operation = StackOperation::new(level);
+        crate::item::stack::hurt_and_break(
+            receiver,
+            damage,
+            player,
+            EquipmentSlot::Mainhand,
+            &mut operation,
+        )?;
     }
     award_stat(player, Stat::Used(used_item), 1, level)?;
     Ok(())

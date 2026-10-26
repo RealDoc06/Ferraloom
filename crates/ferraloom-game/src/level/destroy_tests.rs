@@ -20,7 +20,11 @@ use ferraloom_util::{
 const POS: BlockPos = BlockPos::new(8, 64, 8);
 static EMPTY: Behaviors = Behaviors::EMPTY;
 fn level(behaviors: &'static Behaviors) -> Level {
-    let mut level = Level::new(Region::new(behaviors), LevelContext::fixture(0, 63));
+    let mut level = {
+        let mut fixture_level = Level::new(Region::new(behaviors), LevelContext::fixture(0, 63));
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     for x in -1..=1 {
         for z in -1..=1 {
             let pos = ChunkPos::new(x, z);
@@ -230,7 +234,7 @@ fn destroy_particles_audience_matches_vanilla_and_breaker_is_only_game_event_con
             let player = ServerPlayer::new(
                 Uuid::offline_player(&name),
                 name,
-                level.next_entity_id(),
+                level.next_entity_id().unwrap(),
                 position,
                 GameType::Survival,
             );

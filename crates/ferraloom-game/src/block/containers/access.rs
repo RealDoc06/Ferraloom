@@ -288,6 +288,9 @@ pub fn block_container_at(
     if matches!(receiver, BlockEntityState::ChiseledBookShelf(_)) {
         return Err(LevelError::UnsupportedBlockEntity(state.block()));
     }
+    if matches!(receiver, BlockEntityState::BrewingStand(_)) {
+        return Err(LevelError::Inventory("BrewingStand worldly container"));
+    }
     if receiver.container().is_none() {
         return Ok(None);
     }

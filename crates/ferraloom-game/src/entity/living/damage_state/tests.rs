@@ -7,11 +7,13 @@ const VECTORS: &str = include_str!("../../../../tests/java/entity/vectors.tsv");
 fn fixture(player: bool) -> (Level, EntityRef) {
     let mut level = crate::entity::tests::persistence_level();
     let id = level.next_entity_ref();
-    let parent = level.create_entity_data(if player {
-        EntityType::PLAYER
-    } else {
-        EntityType::COW
-    });
+    let parent = level
+        .create_entity_data(if player {
+            EntityType::PLAYER
+        } else {
+            EntityType::COW
+        })
+        .unwrap();
     let state = if player {
         EntityState::Player(Box::new(ServerPlayer::new(
             Uuid::new(9, 9),
@@ -199,7 +201,7 @@ fn cached_damage_references_keep_removed_owners_and_save_current_uuid_until_inva
     let player = ServerPlayer::new(
         Uuid::new(1, 2),
         "attacker".into(),
-        level.next_entity_id(),
+        level.next_entity_id().unwrap(),
         Vec3::ZERO,
         GameType::Survival,
     );

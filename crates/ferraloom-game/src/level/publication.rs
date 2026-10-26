@@ -208,7 +208,7 @@ impl Level {
         if stage.step.get() == FullChunkFinalizationStep::Loaded {
             self.region()
                 .block_entity_state
-                .register_published_chunk(chunk, self.region().has_skylight)
+                .register_published_chunk(chunk, self.region().has_skylight, self)
                 .map_err(|source| {
                     error(
                         stage.step.get(),

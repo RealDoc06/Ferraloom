@@ -598,6 +598,7 @@ mod tests {
             Region::new(&BEHAVIORS),
             super::super::LevelContext::fixture(0, 63),
         );
+        level.install_shared(Box::default());
         let viewer = level.next_entity_ref();
         let mut player = ServerPlayer::new(
             Uuid::new(1, 2),
@@ -805,7 +806,7 @@ mod tests {
         let state = ServerPlayer::new(
             Uuid::new(3, 4),
             "observer".into(),
-            level.next_entity_id(),
+            level.next_entity_id().unwrap(),
             Vec3::new(0.0, 64.0, 0.0),
             GameType::Spectator,
         );

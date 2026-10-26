@@ -112,6 +112,7 @@ fn native_sculk_shapes_keep_water_schedules_state_rng_and_worldgen_dispatch() {
         assert_eq!(live.unported_behavior_stats().skipped_calls, 0);
 
         chunks[0].fluid_ticks = Default::default();
+        let registry_context = crate::level::LevelContext::fixture(0, 63);
         let mut region = WorldGenRegion::new(
             &mut chunks,
             [0, 0],
@@ -123,6 +124,7 @@ fn native_sculk_shapes_keep_water_schedules_state_rng_and_worldgen_dispatch() {
             63,
         )
         .unwrap();
+        region.set_registry_context(registry_context.registry_context().unwrap());
         update(&mut LevelAccessRef::Worldgen(&mut region), &fields);
         drop(region);
         let expected: Vec<_> = fields[5]

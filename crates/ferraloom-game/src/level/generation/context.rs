@@ -29,6 +29,7 @@ use std::sync::Arc;
 /// Port of WorldGenContext. Registries are immutable; samplers, region RNG and
 /// structure mutation stay inside one owned job neighborhood.
 pub struct WorldGenContext {
+    registry_context: Option<Arc<dyn ferraloom_protocol::codec::RegistryContext>>,
     pub generator: Arc<ChunkGenerator>,
     pub dimension: DimensionType,
     pub seed: i64,
@@ -123,6 +124,7 @@ impl WorldGenContext {
         let decoration =
             DecorationPlan::new(&features, &generator.biome_source().possible_biomes())?;
         Ok(Self {
+            registry_context: None,
             generator,
             dimension,
             seed,
@@ -142,6 +144,15 @@ impl WorldGenContext {
             unported_behavior: crate::block::UnportedBehavior::Strict,
         })
     }
+    /// The synchronized registry owner is shared with LevelContext, including
+    /// initial spawn generation before a live level has been constructed.
+    pub fn with_registry_context(
+        mut self,
+        registry: Arc<dyn ferraloom_protocol::codec::RegistryContext>,
+    ) -> Self {
+        self.registry_context = Some(registry);
+        self
+    }
     /// EMPTY owns empty sections. Flat's layer materialization is deferred until
     /// TERRAIN even though its biome palette can be created without noise.
     pub fn empty_chunk(&self, position: [i32; 2]) -> Result<RegionChunk, Error> {
@@ -153,7 +164,7 @@ impl WorldGenContext {
         Ok(RegionChunk::new(generated, ChunkStatus::Empty))
     }
     pub fn region<'a>(
-        &self,
+        &'a self,
         chunks: &'a mut [RegionChunk],
         center: [i32; 2],
         step: &'a ChunkStep,
@@ -168,6 +179,9 @@ impl WorldGenContext {
             self.seed,
             self.generator.sea_level(),
         )?;
+        if let Some(context) = self.registry_context.as_deref() {
+            region.set_registry_context(context);
+        }
         region.set_skip_unsupported(self.unported_behavior == crate::block::UnportedBehavior::Warn);
         region.set_has_skylight(self.dimension.has_skylight);
         region.set_fast_lava(self.dimension.fast_lava);
