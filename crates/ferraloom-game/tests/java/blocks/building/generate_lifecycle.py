@@ -12,12 +12,13 @@ JAVA = CACHE / 'toolchains/jdk-25.0.4.1+1/bin'
 VANILLA = CACHE / 'vanilla/26.3'
 CLASSPATH = os.pathsep.join(map(str, [VANILLA / 'versions/26.3/server-26.3.jar', *sorted((VANILLA / 'libraries').rglob('*.jar'))]))
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('family', nargs='?', choices=['anvil', 'powder-land', 'workstations'], default='anvil')
+parser.add_argument('family', nargs='?', choices=['anvil', 'powder-land', 'powder-falling', 'workstations'], default='anvil')
 parser.add_argument('--check', action='store_true')
 args = parser.parse_args()
 sources, entry, expected = {
     'anvil': (['AnvilVectors.java'], 'AnvilCapture', 645),
     'powder-land': (['AnvilVectors.java', 'PowderLandingVectors.java'], 'PowderLandingCapture', 5120),
+    'powder-falling': (['AnvilVectors.java', 'PowderFallingVectors.java'], 'PowderFallingCapture', 768),
     'workstations': (['WorkstationVectors.java'], 'WorkstationCapture', 245),
 }[args.family]
 with tempfile.TemporaryDirectory(dir=CACHE / 'tools', prefix='building-lifecycle-') as temporary:

@@ -70,7 +70,7 @@ fn recursive_load_and_fresh_add_match_native_constructor_callback_riding_and_uui
             Difficulty::Normal
         });
         let existing = level.next_entity_ref();
-        let mut state = PrimedTnt::with_parent(level.create_entity_data(EntityType::TNT));
+        let mut state = PrimedTnt::with_parent(level.create_entity_data(EntityType::TNT).unwrap());
         state.parent.uuid = Uuid::new(0, 99);
         level
             .add_entity(existing, EntityState::PrimedTnt(Box::new(state)))
@@ -167,7 +167,7 @@ fn recursive_load_and_fresh_add_match_native_constructor_callback_riding_and_uui
             "{scenario}: registration"
         );
         assert_eq!(
-            level.next_entity_id() - 1,
+            level.next_entity_id().unwrap() - 1,
             fields[8].parse::<i32>().unwrap(),
             "{scenario}: constructors"
         );

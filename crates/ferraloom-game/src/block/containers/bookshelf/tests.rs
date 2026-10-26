@@ -217,6 +217,9 @@ fn native_bookshelf_hit_pixels_and_analog_slot_values_match() {
                     .unwrap()
                     .load_custom_only(
                         &parse_compound(&format!("{{last_interacted_slot:{}}}", f[1])).unwrap(),
+                        crate::level::LevelContext::fixture(0, 63)
+                            .registry_context()
+                            .unwrap(),
                     );
                 assert_eq!(
                     BOOKSHELF_BLOCK

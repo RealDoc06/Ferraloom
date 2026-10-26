@@ -114,7 +114,7 @@ pub fn spawn_item(
     } else {
         0.15625
     };
-    let mut item = ItemEntity::new_at(level, position, stack);
+    let mut item = ItemEntity::new_at(level, position, stack)?;
     let random = level.random();
     let power = random.next_double() * 0.1 + 0.2;
     let spread = 0.0172275 * f64::from(accuracy);

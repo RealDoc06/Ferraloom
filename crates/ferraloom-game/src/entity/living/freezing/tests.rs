@@ -13,7 +13,7 @@ fn add_player(level: &mut Level, mode: GameType) -> EntityRef {
     let player = ServerPlayer::new(
         Uuid::new(0, 1),
         "freeze".into(),
-        level.next_entity_id(),
+        level.next_entity_id().unwrap(),
         Vec3::new(8.5, 64.0, 8.5),
         mode,
     );
@@ -227,10 +227,14 @@ fn powder_snow_modifiers_match_native_float_promotion_and_support_conditions() {
 #[test]
 fn zero_frozen_still_requires_the_supporting_block_and_spectators_skip_tag_reads() {
     static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
-    let mut level = Level::new(
-        crate::level::Region::new(&BEHAVIORS),
-        crate::level::LevelContext::fixture(0, 63),
-    );
+    let mut level = {
+        let mut fixture_level = Level::new(
+            crate::level::Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     let entity = add_player(&mut level, GameType::Spectator);
     let behavior = level.entity_behavior(entity).unwrap();
     assert!(!behavior.can_freeze(entity, &level).unwrap());

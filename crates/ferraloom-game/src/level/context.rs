@@ -19,6 +19,8 @@ pub struct LevelContext {
     enchantments: Option<Arc<crate::item::enchantment::EnchantmentRegistry>>,
     mob_variants: Option<Arc<crate::entity::variant::MobVariants>>,
     registry_context: Option<Arc<dyn ferraloom_protocol::codec::RegistryContext>>,
+    game_event_tags:
+        Option<Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::game_event::Id>>>,
 }
 
 impl LevelContext {
@@ -43,6 +45,7 @@ impl LevelContext {
             enchantments: None,
             mob_variants: None,
             registry_context: None,
+            game_event_tags: None,
         }
     }
 
@@ -92,6 +95,25 @@ impl LevelContext {
             .as_ref()
             .ok_or(super::LevelError::MissingMobVariants)
     }
+    /// Install the actual merged GameEventTags used by vibration listeners.
+    pub fn with_game_event_tags(
+        mut self,
+        tags: Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::game_event::Id>>,
+    ) -> Self {
+        self.game_event_tags = Some(tags);
+        self
+    }
+
+    pub fn game_event_tags(
+        &self,
+    ) -> Result<
+        &ferraloom_data::datapack::TagSet<ferraloom_data::registries::game_event::Id>,
+        super::LevelError,
+    > {
+        self.game_event_tags
+            .as_deref()
+            .ok_or(super::LevelError::MissingGameEventTags)
+    }
 
     /// Port of ServerLevel#registryAccess: the same immutable synchronized
     /// registry owner used by packet encoding.
@@ -139,6 +161,8 @@ impl LevelContext {
             enchantments: Arc<crate::item::enchantment::EnchantmentRegistry>,
             mob_variants: Arc<crate::entity::variant::MobVariants>,
             registry_context: Arc<dyn ferraloom_protocol::codec::RegistryContext>,
+            game_event_tags:
+                Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::game_event::Id>>,
         }
         static SERVICES: OnceLock<Services> = OnceLock::new();
         let services = SERVICES.get_or_init(|| {
@@ -164,6 +188,9 @@ impl LevelContext {
                 mob_variants: Arc::new(
                     crate::entity::variant::MobVariants::load(&resources).unwrap(),
                 ),
+                game_event_tags: Arc::new(
+                    ferraloom_data::datapack::TagSet::load(&resources).unwrap(),
+                ),
                 registry_context: Arc::new(FixtureRegistryContext(resources)),
             }
         });
@@ -180,7 +207,8 @@ impl LevelContext {
             .with_block_transformers(services.block_transformers.clone())
             .with_enchantments(services.enchantments.clone())
             .with_mob_variants(services.mob_variants.clone())
-            .with_registry_context(services.registry_context.clone()),
+            .with_registry_context(services.registry_context.clone())
+            .with_game_event_tags(services.game_event_tags.clone()),
         )
     }
 }

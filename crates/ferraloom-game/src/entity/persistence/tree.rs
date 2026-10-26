@@ -34,7 +34,15 @@ impl std::fmt::Display for EntityPersistenceError {
         write!(f, "{self:?}")
     }
 }
-impl std::error::Error for EntityPersistenceError {}
+impl std::error::Error for EntityPersistenceError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Level(error) => Some(error),
+            Self::Base(error) => Some(error),
+            _ => None,
+        }
+    }
+}
 
 /// Port of EntityType#loadEntitiesRecursive's pre-order constructor/stream order.
 /// The resulting owned states already contain riding links when added to Level.

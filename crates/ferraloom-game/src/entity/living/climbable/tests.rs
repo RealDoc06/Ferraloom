@@ -12,7 +12,7 @@ fn player(level: &mut Level, mode: GameType) -> EntityRef {
     let player = ServerPlayer::new(
         Uuid::new(5, 6),
         "climb".into(),
-        level.next_entity_id(),
+        level.next_entity_id().unwrap(),
         Vec3::new(8.5, 64.0, 8.5),
         mode,
     );

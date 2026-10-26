@@ -25,6 +25,7 @@ fn fixture(biome: &str) -> (Level, EntityRef) {
         sea_level: 63,
     };
     let mut level = Level::new(Region::new(&BEHAVIORS), context);
+    level.install_shared(Box::default());
     level.set_unported_behavior(UnportedBehavior::Strict);
     level.set_weather_environment(weather);
     level

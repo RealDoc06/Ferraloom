@@ -35,10 +35,14 @@ fn level() -> Level {
     level_with_behaviors(&BEHAVIORS)
 }
 fn level_with_behaviors(behaviors: &'static Behaviors) -> Level {
-    let mut level = Level::new(
-        Region::new(behaviors),
-        crate::level::LevelContext::fixture(0, 63),
-    );
+    let mut level = {
+        let mut fixture_level = Level::new(
+            Region::new(behaviors),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     level
         .add_chunk(LevelChunk::new(
             ChunkPos::ZERO,
@@ -126,7 +130,7 @@ fn add_player(level: &mut Level) -> EntityRef {
     let player = ServerPlayer::new(
         Uuid::new(1, id.serial() as i64),
         "fixture".into(),
-        level.next_entity_id(),
+        level.next_entity_id().unwrap(),
         Vec3::ZERO,
         GameType::Survival,
     );
@@ -214,16 +218,20 @@ fn vanilla_ride_tick_uses_the_vehicle_after_derived_tick_and_resets_living_fall_
         .filter(|row| row.starts_with("riding\t"))
     {
         let fields: Vec<_> = row.split('\t').collect();
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
+        let mut level = {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         level
             .update_entity_chunk_status(ChunkPos::ZERO, Visibility::Ticking)
             .unwrap();
         let mut add_mount = |seed| {
             let id = level.next_entity_ref();
-            let tnt = crate::entity::item::PrimedTnt::new(level.next_entity_id(), seed);
+            let tnt = crate::entity::item::PrimedTnt::new(level.next_entity_id().unwrap(), seed);
             level
                 .add_entity(id, EntityState::PrimedTnt(Box::new(tnt)))
                 .unwrap();

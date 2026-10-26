@@ -55,7 +55,7 @@ pub(crate) fn create_entity_state(
     if !has_entity_factory(kind) {
         return Err(EntityPersistenceError::UnsupportedType(kind.name().into()));
     }
-    let parent = level.create_entity_data(kind);
+    let parent = level.create_entity_data(kind)?;
     Ok(match kind {
         EntityType::COW => EntityState::Cow(Box::new(Cow::with_level(parent, level)?)),
         EntityType::ITEM => EntityState::Item(Box::new(ItemEntity::with_parent(parent))),

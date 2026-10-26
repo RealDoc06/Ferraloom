@@ -161,7 +161,6 @@ fn native_contact_bounds_section_order_health_guards_and_orb_rng() {
 #[test]
 fn orb_contact_awards_canonical_xp_and_sets_the_shared_pickup_delay() {
     let mut level = crate::entity::tests::level(false);
-    level.install_shared(Box::default());
     crate::level::drop_fixtures::install(&mut level);
     let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     level

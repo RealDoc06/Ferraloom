@@ -49,8 +49,12 @@ impl WorldgenBlockEntity for BlockEntityState {
         }
         Ok(())
     }
-    fn load_with_components(&mut self, tag: &CompoundTag) -> Result<(), Error> {
-        BlockEntityState::load_with_components(self, tag);
+    fn load_with_components(
+        &mut self,
+        tag: &CompoundTag,
+        registries: &dyn ferraloom_protocol::codec::RegistryContext,
+    ) -> Result<(), Error> {
+        BlockEntityState::load_with_components(self, tag, registries);
         Ok(())
     }
 }
@@ -122,6 +126,53 @@ mod tests {
     }
 
     #[test]
+    fn registry_context_is_required_only_when_loading_a_receiver() {
+        let mut generated = chunk();
+        generated.set_block(8, 64, 8, ferraloom_data::Block::CHEST.default_state());
+        let mut chunks = [RegionChunk::new(generated, ChunkStatus::Features)];
+        chunks[0]
+            .block_entities
+            .insert(POS, parse_compound("{id:'DUMMY'}").unwrap());
+        let context = crate::level::LevelContext::fixture(0, 63);
+        let mut region = WorldGenRegion::new(
+            &mut chunks,
+            [0, 0],
+            &[ChunkStatus::Features],
+            0,
+            None,
+            &GameWorldgenBlockBehavior,
+            0,
+            63,
+        )
+        .unwrap();
+        // An ordinary region read and an absent receiver need no RegistryOps.
+        assert_eq!(
+            region.block(POS).unwrap().block(),
+            ferraloom_data::Block::CHEST
+        );
+        assert!(
+            region
+                .get_or_create_block_entity([9, 64, 8])
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            region
+                .get_or_create_block_entity(POS)
+                .unwrap_err()
+                .0
+                .contains("registry context unavailable")
+        );
+        region.set_registry_context(context.registry_context().unwrap());
+        assert!(
+            region
+                .get_or_create_block_entity(POS)
+                .unwrap()
+                .unwrap()
+                .is_randomizable()
+        );
+    }
+    #[test]
     fn worldgen_materialization_rng_and_saved_nbt_match_vanilla() {
         let mut observations = 0;
         for line in VECTORS
@@ -143,6 +194,7 @@ mod tests {
                 chunks[0].block_entities.insert(POS, pending);
             }
             let mut random = WorldgenRandom::new(Algorithm::Legacy.new_instance(seed));
+            let registry_context = crate::level::LevelContext::fixture(0, 63);
             let mut region = WorldGenRegion::new(
                 &mut chunks,
                 [0, 0],
@@ -154,6 +206,7 @@ mod tests {
                 63,
             )
             .unwrap();
+            region.set_registry_context(registry_context.registry_context().unwrap());
             let table = "minecraft:chests/simple_dungeon".parse().unwrap();
             match fields[1] {
                 "loot" => region.set_loot_table(POS, &table, &mut random).unwrap(),
@@ -220,9 +273,16 @@ mod tests {
         {
             let fields: Vec<_> = line.split('\t').collect();
             let seed: i64 = fields[1].parse().unwrap();
-            let mut original = entity::load_static(pos, state, &parse_compound(fields[2]).unwrap())
-                .unwrap()
-                .unwrap();
+            let mut original = entity::load_static(
+                pos,
+                state,
+                &parse_compound(fields[2]).unwrap(),
+                crate::level::LevelContext::fixture(0, 63)
+                    .registry_context()
+                    .unwrap(),
+            )
+            .unwrap()
+            .unwrap();
             let mut prep = LegacyRandomSource::new(seed);
             let BlockEntityState::Spawner(spawner) = &mut original else {
                 unreachable!()
@@ -233,7 +293,16 @@ mod tests {
             // This is the current serialized FULL boundary. The actual native
             // LevelChunk constructor keeps original; both paths select the same
             // first SpawnData and consume the same RNG, before later mutation.
-            let mut loaded = entity::load_static(pos, state, &saved).unwrap().unwrap();
+            let mut loaded = entity::load_static(
+                pos,
+                state,
+                &saved,
+                crate::level::LevelContext::fixture(0, 63)
+                    .registry_context()
+                    .unwrap(),
+            )
+            .unwrap()
+            .unwrap();
             let mut native_random = LegacyRandomSource::new(seed + 1);
             let mut loaded_random = LegacyRandomSource::new(seed + 1);
             for (entity, random) in [
@@ -283,6 +352,7 @@ mod tests {
             chunks[0]
                 .block_entities
                 .insert(POS, parse_compound("{id:'DUMMY',x:8,y:64,z:8}").unwrap());
+            let registry_context = crate::level::LevelContext::fixture(0, 63);
             let mut region = WorldGenRegion::new(
                 &mut chunks,
                 [0, 0],
@@ -294,6 +364,7 @@ mod tests {
                 63,
             )
             .unwrap();
+            region.set_registry_context(registry_context.registry_context().unwrap());
             let mut random = WorldgenRandom::new(Algorithm::Legacy.new_instance(263777));
             let table = "minecraft:archaeology/desert_well".parse().unwrap();
             if f[2] == "random" {

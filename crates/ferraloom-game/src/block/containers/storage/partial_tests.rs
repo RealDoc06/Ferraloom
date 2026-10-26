@@ -12,10 +12,24 @@ fn native_chest_and_furnace_typed_list_count_partials_preserve_other_slots_and_c
         let fields: Vec<_> = row.split('\t').collect();
         let state = Block::from_name(fields[1]).unwrap().default_state();
         let mut receiver = create(pos, state).unwrap();
-        receiver.load_with_components(&parse_compound(fields[2]).unwrap());
+        receiver.load_with_components(
+            &parse_compound(fields[2]).unwrap(),
+            crate::level::LevelContext::fixture(0, 63)
+                .registry_context()
+                .unwrap(),
+        );
         let saved = receiver.save_with_full_metadata().unwrap();
         assert_eq!(saved, parse_compound(fields[3]).unwrap(), "{row}");
-        let again = load_static(pos, state, &saved).unwrap().unwrap();
+        let again = load_static(
+            pos,
+            state,
+            &saved,
+            crate::level::LevelContext::fixture(0, 63)
+                .registry_context()
+                .unwrap(),
+        )
+        .unwrap()
+        .unwrap();
         assert_eq!(
             again.save_with_full_metadata().unwrap(),
             parse_compound(fields[4]).unwrap(),

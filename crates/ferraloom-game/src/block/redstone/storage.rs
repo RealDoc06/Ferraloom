@@ -62,7 +62,12 @@ impl HopperBlockEntity {
 pub struct DispenserEntityBehavior;
 pub static DISPENSER_ENTITY: DispenserEntityBehavior = DispenserEntityBehavior;
 impl BlockEntity for DispenserEntityBehavior {
-    fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
+    fn load_additional(
+        &self,
+        state: &mut BlockEntityState,
+        tag: &CompoundTag,
+        _registries: &dyn ferraloom_protocol::codec::RegistryContext,
+    ) {
         if let Some(e) = DispenserBlockEntity::view_mut(state) {
             e.parent.load(tag);
         }
@@ -103,7 +108,12 @@ impl BlockEntity for DispenserEntityBehavior {
 pub struct HopperEntityBehavior;
 pub static HOPPER_ENTITY: HopperEntityBehavior = HopperEntityBehavior;
 impl BlockEntity for HopperEntityBehavior {
-    fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
+    fn load_additional(
+        &self,
+        state: &mut BlockEntityState,
+        tag: &CompoundTag,
+        _registries: &dyn ferraloom_protocol::codec::RegistryContext,
+    ) {
         if let Some(e) = HopperBlockEntity::view_mut(state) {
             e.parent.load(tag);
             e.cooldown_time = tag.get_int_or("TransferCooldown", -1);

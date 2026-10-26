@@ -173,7 +173,12 @@ impl BlockEntity for SignBehavior {
             tag.remove(key);
         }
     }
-    fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
+    fn load_additional(
+        &self,
+        state: &mut BlockEntityState,
+        tag: &CompoundTag,
+        _registries: &dyn ferraloom_protocol::codec::RegistryContext,
+    ) {
         let BlockEntityState::Sign(sign) = state else {
             unreachable!()
         };
@@ -274,10 +279,14 @@ mod tests {
             .filter(|line| line.starts_with("sign-editor-tick\t"))
         {
             let fields: Vec<_> = line.split('\t').collect();
-            let mut level = Level::new(
-                Region::new(&BEHAVIORS),
-                crate::level::LevelContext::fixture(0, 63),
-            );
+            let mut level = {
+                let mut fixture_level = Level::new(
+                    Region::new(&BEHAVIORS),
+                    crate::level::LevelContext::fixture(0, 63),
+                );
+                fixture_level.install_shared(Box::default());
+                fixture_level
+            };
             let biome = ferraloom_chunk::BiomeId(0);
             let section = ferraloom_chunk::LevelChunkSection::new(
                 ferraloom_chunk::Strategy::block_states(),

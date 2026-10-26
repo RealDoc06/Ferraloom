@@ -117,10 +117,14 @@ impl BlockBehavior for PendingBlockQueries {
 
 #[test]
 fn block_drops_requires_the_published_rule_and_observes_each_change() {
-    let mut level = Level::new(
-        Region::new(&EMPTY),
-        crate::level::LevelContext::fixture(0, 63),
-    );
+    let mut level = {
+        let mut fixture_level = Level::new(
+            Region::new(&EMPTY),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     for policy in [
         crate::block::UnportedBehavior::Strict,
         crate::block::UnportedBehavior::Warn,
@@ -141,10 +145,14 @@ static PLAIN: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &Trace { nes
 static NESTED: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &Trace { nested: true });
 #[test]
 fn inactive_entity_phase_stops_after_300_running_ticks_and_active_tickets_reset_it_during_freeze() {
-    let mut level = Level::new(
-        Region::new(&EMPTY),
-        crate::level::LevelContext::fixture(0, 63),
-    );
+    let mut level = {
+        let mut fixture_level = Level::new(
+            Region::new(&EMPTY),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     for _ in 1..300 {
         assert!(level.update_empty_time(false, true));
     }
@@ -173,7 +181,11 @@ fn empty_chunk(pos: ChunkPos) -> chunk::LevelChunk {
 #[test]
 fn shared_loading_status_changes_are_visible_to_an_existing_chunk_reader() {
     use distance_manager::FullChunkStatus;
-    let mut level = Level::new(Region::new(&EMPTY), LevelContext::fixture(0, 63));
+    let mut level = {
+        let mut fixture_level = Level::new(Region::new(&EMPTY), LevelContext::fixture(0, 63));
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     let pos = ChunkPos::ZERO;
     level.add_chunk(empty_chunk(pos)).unwrap();
     let reader = &level;
@@ -199,10 +211,14 @@ fn shared_loading_status_changes_are_visible_to_an_existing_chunk_reader() {
 }
 
 fn empty_level(behaviors: &'static Behaviors) -> Level {
-    let mut level = Level::new(
-        Region::new(behaviors),
-        crate::level::LevelContext::fixture(0, 63),
-    );
+    let mut level = {
+        let mut fixture_level = Level::new(
+            Region::new(behaviors),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     // Controlled test dimension: no timelines and native constant attributes.
     let resources = ferraloom_data::datapack::ResourceManager::new(vec![]);
     let environment = Arc::new(environment::EnvironmentDefinitions::load(&resources).unwrap());
@@ -591,7 +607,7 @@ fn block_event_audiences_capture_before_later_event_movement() {
         .unwrap();
     level.set_chunk_block_ticking(ChunkPos::ZERO, true).unwrap();
     let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1000);
-    let network_id = level.next_entity_id();
+    let network_id = level.next_entity_id().unwrap();
     level
         .add_entity(
             player,
@@ -714,16 +730,20 @@ fn flat_pool() -> Level {
                 .unwrap();
         }
     }
-    level.rules_mut().spread_fire = false;
+    level.rules_mut().fire_spread_radius_around_player = 0;
     level
 }
 #[test]
 fn scheduled_phases_wait_for_entity_load_integration_simulation_and_ticking_future() {
     use ferraloom_data::registries::fluid::Id as Fluid;
-    let mut level = Level::new(
-        Region::new(&EMPTY),
-        crate::level::LevelContext::fixture(0, 63),
-    );
+    let mut level = {
+        let mut fixture_level = Level::new(
+            Region::new(&EMPTY),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     let chunk = ChunkPos::ZERO;
     let pos = BlockPos::new(8, 0, 8);
     level.add_chunk(empty_chunk(chunk)).unwrap();
@@ -1293,11 +1313,8 @@ fn random_phase_uses_registered_callbacks_and_warn_counts_block_and_fluid_skips(
     }
     install_weather_environment(&mut level, "plains");
     assert_eq!(
-        level.tick_random_chunk(chunk),
-        Err(LevelError::UnsupportedBlockMethod(
-            state.block(),
-            BlockMethod::RandomTick
-        ))
+        level.tick_random_chunk(chunk).unwrap_err().root(),
+        &LevelError::UnsupportedBlockMethod(state.block(), BlockMethod::RandomTick)
     );
     level.set_unported_behavior(UnportedBehavior::Warn);
     level.tick_random_chunk(chunk).unwrap();
@@ -1741,11 +1758,16 @@ fn thunder_gate_and_position_draw_match_vanilla_before_the_pending_required_quer
                 0,
             );
             level.set_unported_behavior(policy);
-            level.load_weather(weather::WeatherData {
-                raining: weather != "0",
-                thundering: weather == "2",
-                ..weather::WeatherData::default()
-            });
+            if level.shared().is_err() {
+                level.install_shared(Box::default());
+            }
+            level
+                .load_weather(weather::WeatherData {
+                    raining: weather != "0",
+                    thundering: weather == "2",
+                    ..weather::WeatherData::default()
+                })
+                .unwrap();
             let strike = expected.starts_with("true|");
             assert_eq!(
                 level.tick_thunder(ChunkPos::new(0, 0)),
@@ -1891,10 +1913,14 @@ fn slab_waterlogging_matches_vanilla_interface_overrides_and_source_identity() {
 #[test]
 fn clone_item_query_matches_vanilla_base_and_rejects_unported_overrides() {
     use crate::block::{BlockMethod, UnportedBehavior};
-    let level = Level::new(
-        Region::new(&EMPTY),
-        crate::level::LevelContext::fixture(0, 63),
-    );
+    let level = {
+        let mut fixture_level = Level::new(
+            Region::new(&EMPTY),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     for line in include_str!("../../tests/java/level/clone-items.tsv").lines() {
         let (case, expected) = line.split_once('\t').unwrap();
         let (block, include_data) = case
@@ -2126,10 +2152,15 @@ fn snow_accumulation_wraps_unsupported_survival_without_inventing_a_query_result
         .set_block_state(p.below(1), Block::STONE.default_state())
         .unwrap();
     install_weather_environment(&mut level, "snowy_plains");
-    level.load_weather(weather::WeatherData {
-        raining: true,
-        ..Default::default()
-    });
+    if level.shared().is_err() {
+        level.install_shared(Box::default());
+    }
+    level
+        .load_weather(weather::WeatherData {
+            raining: true,
+            ..Default::default()
+        })
+        .unwrap();
     let biome = "snowy_plains".parse().unwrap();
     let unsupported = Err(LevelError::UnsupportedBlockMethod(
         Block::SNOW,
@@ -2151,10 +2182,15 @@ fn rain_queries_use_visible_sky_heightmap_and_zoomed_biome() {
     let mut level = empty_level(&EMPTY);
     let p = BlockPos::new(8, 0, 8);
     assert!(!level.is_raining_at(p).unwrap());
-    level.load_weather(weather::WeatherData {
-        raining: true,
-        ..Default::default()
-    });
+    if level.shared().is_err() {
+        level.install_shared(Box::default());
+    }
+    level
+        .load_weather(weather::WeatherData {
+            raining: true,
+            ..Default::default()
+        })
+        .unwrap();
     assert_eq!(
         level.is_raining_at(p),
         Err(LevelError::UnsupportedLightQuery)
@@ -2288,10 +2324,14 @@ fn pending_block_entity_nbt_survives_full_without_claiming_live_factory_readines
         block_chunk.pending_block_entity_nbt(),
         std::slice::from_ref(&tag)
     );
-    let mut level = Level::new(
-        Region::new(&EMPTY),
-        crate::level::LevelContext::fixture(0, 63),
-    );
+    let mut level = {
+        let mut fixture_level = Level::new(
+            Region::new(&EMPTY),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     level.add_chunk(block_chunk).unwrap();
     // Pending-state access is a required query even if its real factory has
     // since been ported. Do not activate the receiver in this storage test.
@@ -2346,10 +2386,14 @@ fn pending_block_entity_nbt_survives_full_without_claiming_live_factory_readines
 #[test]
 fn worldgen_skips_share_policy_counters_and_deduplicate_owned_unit_behavior_pairs() {
     use crate::block::{UnportedBehavior, UnportedOperation};
-    let mut level = Level::new(
-        Region::new(&EMPTY),
-        crate::level::LevelContext::fixture(0, 63),
-    );
+    let mut level = {
+        let mut fixture_level = Level::new(
+            Region::new(&EMPTY),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     let pair =
         crate::block::WorldgenSkip::from(("minecraft:oak".to_owned(), "canSurvive".to_owned()));
     level.record_worldgen_skips(Vec::new()).unwrap();
@@ -2506,4 +2550,76 @@ fn warn_post_processing_retains_skipped_units_and_continues_in_position_order() 
     level.post_process_generation(chunk).unwrap();
     assert_eq!(level.unported_behavior_stats().skipped_calls, 2);
     assert_eq!(level.unported_behavior_stats().distinct_calls, 1);
+}
+
+#[test]
+fn dispatch_error_context_keeps_the_root_cause_and_preceding_effects() {
+    use crate::block::BlockMethod;
+    use std::error::Error;
+
+    struct FailingTick;
+    impl BlockBehavior for FailingTick {
+        fn tick(
+            &self,
+            state: BlockState,
+            pos: BlockPos,
+            level: &mut Level,
+        ) -> Result<(), LevelError> {
+            level.emit(LevelEffect::LevelEvent {
+                pos,
+                id: 99,
+                data: 1,
+            });
+            Err(LevelError::UnsupportedBlockMethod(
+                state.block(),
+                BlockMethod::Tick,
+            ))
+        }
+    }
+    static BEHAVIORS: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &FailingTick);
+    let mut level = empty_level(&BEHAVIORS);
+    let pos = BlockPos::new(3, -2, 7);
+    level
+        .set_chunk_block_ticking(ChunkPos::containing(pos), true)
+        .unwrap();
+    level
+        .set_block_state(pos, Block::STONE.default_state())
+        .unwrap();
+    level
+        .schedule_block_tick_after(pos, Block::STONE, 0)
+        .unwrap();
+    level.take_effects();
+
+    let error = level.tick_block_phase(0, 65536).unwrap_err();
+    let cause = LevelError::UnsupportedBlockMethod(Block::STONE, BlockMethod::Tick);
+    assert_eq!(error.root(), &cause);
+    assert_eq!(
+        error.to_string(),
+        format!("scheduled block tick at {pos:?}: {cause}")
+    );
+    assert_eq!(error.clone(), error);
+    assert_eq!(
+        error.source().unwrap().downcast_ref::<LevelError>(),
+        Some(error.root())
+    );
+    assert!(matches!(level.take_effects().as_slice(),
+        [LevelEffect::LevelEvent { pos: actual, id: 99, data: 1 }] if *actual == pos));
+
+    let outer_pos = pos.above(1);
+    let nested = error.at(outer_pos, "block event");
+    assert_eq!(nested.root(), &cause);
+    assert_eq!(
+        nested.to_string(),
+        format!("block event at {outer_pos:?}: scheduled block tick at {pos:?}: {cause}")
+    );
+    assert_eq!(
+        nested
+            .source()
+            .unwrap()
+            .downcast_ref::<LevelError>()
+            .unwrap()
+            .root(),
+        &cause
+    );
+    assert!(std::ptr::eq(cause.root(), &cause));
 }

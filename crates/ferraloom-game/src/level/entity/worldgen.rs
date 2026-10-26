@@ -187,10 +187,14 @@ mod tests {
     }
     fn level() -> Level {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-        Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        )
+        {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        }
     }
     fn oracle(case: &str) -> Vec<&'static str> {
         include_str!("../../../tests/java/entity/vectors.tsv")
@@ -437,7 +441,7 @@ mod tests {
         ));
         assert_eq!(error.entities, entities);
         assert_eq!(error.stage, WorldgenEntityLoadStage::Preflight);
-        assert_eq!(level.next_entity_id(), 1);
+        assert_eq!(level.next_entity_id().unwrap(), 1);
         assert_eq!(
             level.next_entity_ref(),
             EntityRef::fixture(level.region_id(), 1)
@@ -539,7 +543,7 @@ mod tests {
             level.take_entity_management_events().len().to_string(),
             oracle("unknown-root")[2]
         );
-        assert_eq!(level.next_entity_id(), 1);
+        assert_eq!(level.next_entity_id().unwrap(), 1);
         assert_eq!(
             level.next_entity_ref(),
             EntityRef::fixture(level.region_id(), 1)
@@ -568,7 +572,7 @@ mod tests {
             matches!(error.source, EntityPersistenceError::UnsupportedType(name) if name == "minecraft:zombie")
         );
         assert!(level.take_entity_management_events().is_empty());
-        assert_eq!(level.next_entity_id(), 1);
+        assert_eq!(level.next_entity_id().unwrap(), 1);
         assert_eq!(
             level.next_entity_ref(),
             EntityRef::fixture(level.region_id(), 1)

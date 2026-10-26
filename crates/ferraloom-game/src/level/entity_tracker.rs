@@ -36,6 +36,31 @@ impl Default for EntityTracker {
     }
 }
 impl Level {
+    /// Port of ServerLevel#canSpreadFireAround and ChunkMap#anyPlayerCloseEnoughTo.
+    /// Distance is from the integer block corner, with a strict radius boundary;
+    /// ignored chunk-generation players still participate unless spectators.
+    pub fn can_spread_fire_around(
+        &self,
+        pos: ferraloom_util::BlockPos,
+    ) -> Result<bool, LevelError> {
+        let radius = self.rules().fire_spread_radius_around_player;
+        if radius == -1 {
+            return Ok(true);
+        }
+        for &player in self.region().entity_tracker.player_map.keys() {
+            if self.entity_behavior(player)?.is_spectator(player, self)? {
+                continue;
+            }
+            let at = self.entity::<EntityData>(player)?.position;
+            let x = at.x - f64::from(pos.x);
+            let y = at.y - f64::from(pos.y);
+            let z = at.z - f64::from(pos.z);
+            if (x * x + y * y + z * z).sqrt() < f64::from(radius) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
     /// Publish the canonical server properties before entities enter the level.
     pub fn configure_entity_tracking(&mut self, view_distance: i32, range_percentage: i32) {
         let tracker = &mut self.region_mut().entity_tracker;
@@ -573,6 +598,7 @@ mod tests {
             Region::new(&BEHAVIORS),
             super::super::LevelContext::fixture(0, 63),
         );
+        level.install_shared(Box::default());
         let viewer = level.next_entity_ref();
         let mut player = ServerPlayer::new(
             Uuid::new(1, 2),
@@ -780,7 +806,7 @@ mod tests {
         let state = ServerPlayer::new(
             Uuid::new(3, 4),
             "observer".into(),
-            level.next_entity_id(),
+            level.next_entity_id().unwrap(),
             Vec3::new(0.0, 64.0, 0.0),
             GameType::Spectator,
         );

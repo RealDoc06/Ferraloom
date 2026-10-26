@@ -22,10 +22,9 @@ fn fixture(state: BlockState) -> (Level, EntityRef) {
     let mut level = crate::entity::tests::level(false);
     level.set_unported_behavior(UnportedBehavior::Strict);
     crate::entity::tests::install_test_environment(&mut level, false, "minecraft:overworld");
-    level.install_shared(Box::new(crate::ServerShared::default()));
     level.set_block_state(POS, state).unwrap();
     let player = level.next_entity_ref();
-    let network_id = level.next_entity_id();
+    let network_id = level.next_entity_id().unwrap();
     level
         .add_entity(
             player,

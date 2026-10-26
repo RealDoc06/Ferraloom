@@ -534,7 +534,11 @@ fn feature_level(biome: &str, seed: i64) -> Level {
     let services = feature_services();
     let data = services.generator.access().data();
     let biome = data.biome_ids[&biome.parse().unwrap()];
-    let mut level = Level::new(Region::new(&EMPTY), services.clone());
+    let mut level = {
+        let mut fixture_level = Level::new(Region::new(&EMPTY), services.clone());
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     level.set_has_skylight(true);
     level.set_block_tags(data.block_tags.clone());
     level.set_fluid_tags(data.fluid_tags.clone());

@@ -58,6 +58,9 @@ impl Enchantment {
     pub fn has_effect(&self, component: EffectComponent) -> bool {
         self.effects.contains_key(&component)
     }
+    pub(crate) fn effect(&self, component: EffectComponent) -> Option<&EnchantmentEffect> {
+        self.effects.get(&component)
+    }
     pub fn effect_components(&self) -> impl Iterator<Item = EffectComponent> + '_ {
         self.effects.keys().copied()
     }

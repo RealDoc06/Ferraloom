@@ -572,7 +572,8 @@ mod tests {
             &mut level,
             Vec3::new(8.5, 64.0, 8.5),
             ItemStack::new(Item::STONE, 7, Default::default()),
-        );
+        )
+        .unwrap();
         let entity = level.next_entity_ref();
         let uuid = item.parent.uuid;
         level
@@ -623,10 +624,14 @@ mod tests {
             .filter(|line| line.starts_with("listener\toperation-"))
         {
             let fields: Vec<_> = line.split('\t').collect();
-            let mut level = Level::new(
-                Region::new(&BEHAVIORS),
-                crate::level::LevelContext::fixture(0, 63),
-            );
+            let mut level = {
+                let mut fixture_level = Level::new(
+                    Region::new(&BEHAVIORS),
+                    crate::level::LevelContext::fixture(0, 63),
+                );
+                fixture_level.install_shared(Box::default());
+                fixture_level
+            };
             let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
             let mut state = ServerPlayer::new(
                 Uuid::new(0, 1),
@@ -727,10 +732,14 @@ mod tests {
     #[test]
     fn hand_exchange_preserves_outer_roots_and_replaced_moved_receivers() {
         static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
+        let mut level = {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         level
             .add_entity(
@@ -846,10 +855,14 @@ mod tests {
         use ferraloom_util::{BlockPos, ChunkPos};
         use std::sync::Arc;
         static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
+        let mut level = {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         level
             .add_entity(

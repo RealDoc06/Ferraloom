@@ -164,7 +164,12 @@ fn replay(vector: Vector) {
     world.level.set_block_state(POS, input.state).unwrap();
     if vector.entity {
         let mut receiver = entity::create(POS, input.state).unwrap();
-        receiver.load_with_components(&ferraloom_nbt::parse_compound(&vector.initial).unwrap());
+        receiver.load_with_components(
+            &ferraloom_nbt::parse_compound(&vector.initial).unwrap(),
+            crate::level::LevelContext::fixture(0, 63)
+                .registry_context()
+                .unwrap(),
+        );
         assert_eq!(
             receiver.save_without_metadata().unwrap(),
             ferraloom_nbt::parse_compound(vector.before.as_ref().unwrap()).unwrap()

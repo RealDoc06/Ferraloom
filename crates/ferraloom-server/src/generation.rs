@@ -798,7 +798,6 @@ impl GenerationState {
                 continue;
             };
             self.light_changed.insert(key);
-            self.captured_terrain.remove(&key);
             let sections = holder.chunk.disk.sections.get_or_insert_default();
             let y = update.section.y as i8;
             let index =
@@ -817,6 +816,9 @@ impl GenerationState {
             match update.layer {
                 LightLayer::Sky => sections[index].sky_light = data,
                 LightLayer::Block => sections[index].block_light = data,
+            }
+            if let Some(Some(cached)) = self.captured_terrain.get_mut(&key) {
+                cached.sync_light_section(&sections[index]);
             }
         }
     }

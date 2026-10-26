@@ -80,7 +80,7 @@ fn fixture(row: &[&str]) -> (Level, EntityRef) {
     let mut player = ServerPlayer::new(
         Uuid::new(3, 4),
         "glide".into(),
-        level.next_entity_id(),
+        level.next_entity_id().unwrap(),
         Vec3::ZERO,
         GameType::Survival,
     );
@@ -172,7 +172,6 @@ fn native_glide_cadence_keeps_slot_order_rng_before_durability_and_event_after_i
             behavior.can_glide(entity, &level).unwrap().to_string(),
             row[6]
         );
-        level.set_unported_behavior(UnportedBehavior::Warn);
         update_fall_flying(behavior, entity, &mut level).unwrap();
         let base = level.entity::<EntityData>(entity).unwrap();
         assert_eq!(base.shared_flag(7).to_string(), row[7], "flag {row:?}");
@@ -208,31 +207,30 @@ fn native_glide_cadence_keeps_slot_order_rng_before_durability_and_event_after_i
         let durability = row[6] == "true" && ticks.wrapping_add(1) % 20 == 0;
         assert_eq!(
             level.unported_behavior_stats().skipped_calls,
-            u64::from(durability),
-            "warn {row:?}"
+            0,
+            "no skipped durability {row:?}"
         );
         if durability {
             let (mut strict, entity) = fixture(&row);
+            update_fall_flying(behavior, entity, &mut strict).unwrap();
             assert_eq!(
-                update_fall_flying(behavior, entity, &mut strict),
-                Err(LevelError::UnsupportedItemHurtAndBreak {
-                    item: Item::ELYTRA,
-                    amount: 1,
-                    slot: slot(row[10])
-                }),
-                "strict {row:?}"
-            );
-            assert!(
-                !game_events::take(&mut strict)
+                game_events::take(&mut strict)
                     .into_iter()
-                    .any(|observation| matches!(
+                    .filter(|observation| matches!(
                         observation,
                         Observation::GameEvent {
                             event: GameEvent::ELYTRA_GLIDE,
                             ..
                         }
                     ))
+                    .count(),
+                row[9].parse::<usize>().unwrap()
             );
+            let selected = behavior
+                .item_by_slot(entity, slot(row[10]), &strict)
+                .unwrap()
+                .unwrap();
+            assert_eq!(crate::item::durability::damage_value(selected), 1);
             assert_eq!(
                 strict
                     .entity_mut::<EntityData>(entity)
