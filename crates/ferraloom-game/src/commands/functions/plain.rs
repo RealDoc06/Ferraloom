@@ -40,40 +40,9 @@ fn failure(message: impl Into<String>) -> FunctionParseError {
     }
 }
 
-// Resource#openAsReader uses the JDK UTF-8 decoder's replacement policy.
-// An encoded surrogate (ED A0..BF xx) consumes its complete continuation prefix
-// as one malformed input; Rust's from_utf8_lossy instead replaces its bytes.
-fn decode_utf8(bytes: &[u8]) -> String {
-    let mut output = String::new();
-    let mut start = 0;
-    let mut index = 0;
-    while index < bytes.len() {
-        if bytes[index] == 0xed
-            && bytes
-                .get(index + 1)
-                .is_some_and(|byte| (0xa0..=0xbf).contains(byte))
-        {
-            output.push_str(&String::from_utf8_lossy(&bytes[start..index]));
-            output.push('\u{fffd}');
-            index += 2;
-            if bytes
-                .get(index)
-                .is_some_and(|byte| (0x80..=0xbf).contains(byte))
-            {
-                index += 1;
-            }
-            start = index;
-        } else {
-            index += 1;
-        }
-    }
-    output.push_str(&String::from_utf8_lossy(&bytes[start..]));
-    output
-}
-
 /// Port of BufferedReader#lines, including bare CR and the absent trailing empty line.
 pub fn read_lines(bytes: &[u8]) -> Vec<String> {
-    let text = decode_utf8(bytes);
+    let text = ferraloom_data::datapack::read_utf8(bytes);
     let bytes = text.as_bytes();
     let mut lines = Vec::new();
     let mut start = 0;

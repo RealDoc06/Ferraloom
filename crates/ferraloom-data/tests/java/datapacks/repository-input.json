@@ -1,0 +1,317 @@
+{
+  "packs": [
+    {
+      "name": "a_low",
+      "kind": "directory",
+      "metadata": {
+        "pack": {
+          "description": "fixture",
+          "min_format": 121,
+          "max_format": 121
+        },
+        "overlays": {
+          "entries": [
+            {
+              "directory": "active",
+              "min_format": 121,
+              "max_format": 121
+            },
+            {
+              "directory": "future",
+              "min_format": 122,
+              "max_format": 122
+            }
+          ]
+        }
+      },
+      "files": {
+        "data/test/function/ordered.mcfunction": "return 11\n",
+        "active/data/test/function/ordered.mcfunction": "return 33\n",
+        "future/data/test/function/ordered.mcfunction": "return 44\n"
+      }
+    },
+    {
+      "name": "z top.zip",
+      "kind": "zip",
+      "metadata": {
+        "pack": {
+          "description": "fixture",
+          "min_format": 121,
+          "max_format": 121
+        }
+      },
+      "files": {
+        "data/test/function/ordered.mcfunction": "return 22\n",
+        "data/test/function/top.mcfunction": "return 2\n"
+      }
+    },
+    {
+      "name": "feature_world",
+      "kind": "directory",
+      "metadata": {
+        "pack": {
+          "description": "fixture",
+          "min_format": 121,
+          "max_format": 121
+        },
+        "features": {
+          "enabled": [
+            "minecraft:minecart_improvements"
+          ]
+        }
+      },
+      "files": {
+        "data/test/function/feature.mcfunction": "return 8\n"
+      }
+    },
+    {
+      "name": "old",
+      "kind": "directory",
+      "metadata": {
+        "pack": {
+          "description": "old",
+          "pack_format": 81
+        }
+      },
+      "files": {
+        "data/test/function/old.mcfunction": "return 1\n"
+      }
+    },
+    {
+      "name": "bad",
+      "kind": "directory",
+      "metadata": {
+        "pack": {
+          "min_format": 121,
+          "max_format": 121
+        }
+      },
+      "files": {}
+    },
+    {
+      "name": "a\ue000",
+      "kind": "directory",
+      "metadata": {
+        "pack": {
+          "description": "fixture",
+          "min_format": 121,
+          "max_format": 121
+        }
+      },
+      "files": {}
+    },
+    {
+      "name": "a\ud800\udc00",
+      "kind": "directory",
+      "metadata": {
+        "pack": {
+          "description": "fixture",
+          "min_format": 121,
+          "max_format": 121
+        }
+      },
+      "files": {}
+    },
+    {
+      "name": "linked",
+      "kind": "symlink",
+      "target": "a_low"
+    },
+    {
+      "name": "nested_link",
+      "kind": "directory",
+      "metadata": {
+        "pack": {
+          "description": "fixture",
+          "min_format": 121,
+          "max_format": 121
+        }
+      },
+      "files": {},
+      "nested_link": "a_low"
+    },
+    {
+      "name": "noise.txt",
+      "kind": "ignored"
+    }
+  ],
+  "cases": [
+    {
+      "name": "new-default",
+      "enabled": [
+        "vanilla"
+      ],
+      "disabled": [],
+      "features": [
+        "vanilla"
+      ],
+      "init": true,
+      "safe": false
+    },
+    {
+      "name": "existing-default",
+      "enabled": [
+        "vanilla"
+      ],
+      "disabled": [],
+      "features": [
+        "vanilla"
+      ],
+      "init": false,
+      "safe": false
+    },
+    {
+      "name": "explicit-priority",
+      "enabled": [
+        "file/z top.zip",
+        "vanilla",
+        "file/a_low"
+      ],
+      "disabled": [
+        "file/feature_world"
+      ],
+      "features": [
+        "vanilla"
+      ],
+      "init": false,
+      "safe": false
+    },
+    {
+      "name": "duplicate-enabled",
+      "enabled": [
+        "vanilla",
+        "vanilla",
+        "file/a_low"
+      ],
+      "disabled": [
+        "file/z top.zip",
+        "file/feature_world"
+      ],
+      "features": [
+        "vanilla"
+      ],
+      "init": false,
+      "safe": false
+    },
+    {
+      "name": "missing-force-vanilla",
+      "enabled": [
+        "missing"
+      ],
+      "disabled": [
+        "file/a_low",
+        "file/z top.zip",
+        "file/feature_world",
+        "file/old",
+        "file/a\ue000",
+        "file/a\ud800\udc00",
+        "vanilla"
+      ],
+      "features": [
+        "vanilla"
+      ],
+      "init": false,
+      "safe": false
+    },
+    {
+      "name": "force-saved-feature",
+      "enabled": [
+        "vanilla"
+      ],
+      "disabled": [
+        "file/feature_world",
+        "minecart_improvements"
+      ],
+      "features": [
+        "vanilla",
+        "minecart_improvements"
+      ],
+      "init": false,
+      "safe": false
+    },
+    {
+      "name": "safe-forced-feature",
+      "enabled": [
+        "file/z top.zip"
+      ],
+      "disabled": [],
+      "features": [
+        "vanilla",
+        "minecart_improvements"
+      ],
+      "init": false,
+      "safe": true
+    },
+    {
+      "name": "new-explicit-experiment",
+      "enabled": [
+        "vanilla",
+        "trade_rebalance"
+      ],
+      "disabled": [
+        "file/feature_world"
+      ],
+      "features": [
+        "vanilla"
+      ],
+      "init": true,
+      "safe": false
+    },
+    {
+      "name": "existing-disallowed-experiment",
+      "enabled": [
+        "vanilla",
+        "trade_rebalance"
+      ],
+      "disabled": [],
+      "features": [
+        "vanilla"
+      ],
+      "init": false,
+      "safe": false
+    },
+    {
+      "name": "enabled-disabled-conflict",
+      "enabled": [
+        "vanilla",
+        "trade_rebalance"
+      ],
+      "disabled": [
+        "trade_rebalance",
+        "file/feature_world"
+      ],
+      "features": [
+        "vanilla"
+      ],
+      "init": false,
+      "safe": false
+    },
+    {
+      "name": "no-vanilla",
+      "enabled": [
+        "file/a_low"
+      ],
+      "disabled": [
+        "vanilla",
+        "file/feature_world"
+      ],
+      "features": [
+        "vanilla"
+      ],
+      "init": true,
+      "safe": false
+    },
+    {
+      "name": "safe-new",
+      "enabled": [
+        "vanilla"
+      ],
+      "disabled": [],
+      "features": [
+        "vanilla"
+      ],
+      "init": true,
+      "safe": true
+    }
+  ]
+}

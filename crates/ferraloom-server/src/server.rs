@@ -33,7 +33,7 @@ use crate::{
 use anyhow::{Context, Result, bail, ensure};
 use ferraloom_data::{
     Block, EntityType,
-    datapack::{Pack, ResourceManager, TagSet},
+    datapack::{ResourceManager, TagSet},
 };
 use ferraloom_game::{
     Behaviors,
@@ -203,6 +203,7 @@ pub struct MinecraftServer {
     level: crate::generation::runtime::LiveLevel,
     additional_levels: Vec<crate::generation::runtime::LiveLevel>,
     commands: Commands,
+    pack_repository: ferraloom_data::datapack::repository::PackRepository<Component>,
     functions: ferraloom_game::commands::functions::ServerFunctionManager,
     game_rules: ferraloom_game::gamerules::GameRules,
     shared: Option<Box<ferraloom_game::ServerShared>>,
@@ -248,6 +249,12 @@ struct PendingLevelHooks {
     game_events: u64,
 }
 impl MinecraftServer {
+    /// Port of MinecraftServer#getPackRepository.
+    pub fn pack_repository(
+        &self,
+    ) -> &ferraloom_data::datapack::repository::PackRepository<Component> {
+        &self.pack_repository
+    }
     pub async fn start(options: ServerOptions) -> Result<RunningServer> {
         let mut startup = crate::generation::profile::Span::new("server_startup", None);
         std::fs::create_dir_all(&options.root)?;
@@ -266,7 +273,9 @@ impl MinecraftServer {
             "Management, RCON and query listeners are not yet implemented"
         );
         let jar = assets::vanilla_jar(&options.cache).await?;
-        let resources = ResourceManager::new(vec![Pack::vanilla_jar(&jar)?]);
+        let mut world_startup = crate::datapacks::WorldStartup::read(&options.root, &properties)?;
+        let (pack_repository, resources) =
+            crate::datapacks::load_resources(&options.root, &jar, &mut world_startup)?;
         let registries = Arc::new(RegistrySet::load(&resources)?);
         let recipe_manager = Arc::new(RecipeManager::load(&resources, &TagSet::load(&resources)?)?);
         let recipe_synchronization =
@@ -282,7 +291,7 @@ impl MinecraftServer {
         startup.checkpoint("resources");
 
         let mut world_root = WorldRoot::open(
-            &options.root,
+            world_startup,
             &properties,
             &resources,
             &registries,
@@ -605,6 +614,7 @@ impl MinecraftServer {
             idle_timeout: properties.int("player-idle-timeout"),
             default_game_mode: game_type(properties.get("gamemode")),
             commands,
+            pack_repository,
             functions,
             connections: BTreeMap::new(),
             players: Vec::new(),
