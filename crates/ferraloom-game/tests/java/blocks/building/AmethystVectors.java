@@ -38,7 +38,9 @@ final class AmethystVectors extends AnvilVectors {
             } else if (block == Blocks.FIRE) neighbors.add(block.defaultBlockState());
             else neighbors.addAll(block.getStateDefinition().getPossibleStates());
         }
-        for (var origin : List.of(POS, new BlockPos(82,33,-24))) for (var neighbor : neighbors) for (int seed=0; seed<64; seed++) {
+        for (var origin : List.of(POS, new BlockPos(82,33,-24))) for (var neighbor : neighbors) for (int sample=0; sample<64; sample++) {
+            // Include seed64: successful growth draws otherwise miss EAST.
+            int seed = sample == 63 ? 64 : sample;
             prepare(Blocks.AIR.defaultBlockState(),Blocks.AIR.defaultBlockState());
             getChunkAt(origin).setBlockState(origin,Blocks.BUDDING_AMETHYST.defaultBlockState(),816);
             for (var side : Direction.values()) getChunkAt(origin.relative(side)).setBlockState(origin.relative(side),neighbor,816);

@@ -31,6 +31,14 @@ with tempfile.TemporaryDirectory(dir=CACHE / 'tools', prefix='amethyst-') as tem
             raise RuntimeError(log_path.read_text()[-8000:])
     lines = [line.removeprefix('BUILDING\t') for line in result.stdout.splitlines() if line.startswith('BUILDING\t')]
     assert sum(line.startswith('grow\t') for line in lines) == 11264
+    directions = set()
+    for line in lines:
+        fields = line.split('\t')
+        if fields[0] == 'grow' and fields[5]:
+            origin = list(map(int, fields[1].split(',')))
+            target = list(map(int, fields[5].split(':')[0].split(',')))
+            directions.add(tuple(a-b for a, b in zip(target, origin)))
+    assert len(directions) == 6, 'successful native rolls must cover every direction'
     output = ('\n'.join(lines) + '\n').encode()
     target = HERE / 'amethyst.tsv.gz'
     if args.check:
