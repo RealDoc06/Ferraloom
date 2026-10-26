@@ -61,7 +61,8 @@ impl LecternBlockEntity {
         .try_into()
         .expect("native book page count fits an int");
         // Mth.clamp uses min(max(value, 0), -1) for a book with zero pages.
-        self.page = tag.get_int_or("Page", 0).max(0).min(self.page_count - 1);
+        self.page =
+            ferraloom_util::mth::clamp_int(tag.get_int_or("Page", 0), 0, self.page_count - 1);
     }
 }
 fn read_book(tag: &CompoundTag) -> ItemStack {
