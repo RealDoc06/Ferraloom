@@ -52,7 +52,7 @@ impl Cow {
             "minecraft:cow_sound_variant",
             "minecraft:classic",
         )?;
-        let mob = Mob::with_parent_and_metadata(parent, context, |parent, _| {
+        let mut mob = Mob::with_parent_and_metadata(parent, context, |parent, _| {
             parent.entity_data.define(super::synched_data::BABY, false);
             parent
                 .entity_data
@@ -66,6 +66,10 @@ impl Cow {
             );
             Ok(())
         })?;
+        // Animal's constructor overrides these Mob pathfinding defaults.
+        use super::ai::pathfinder::PathType;
+        mob.pathfinding_malus[PathType::FireInNeighbor.id() as usize] = Some(16.0);
+        mob.pathfinding_malus[PathType::Fire.id() as usize] = Some(-1.0);
         Ok(Self {
             parent: AbstractCow {
                 parent: Animal {
