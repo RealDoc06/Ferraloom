@@ -714,7 +714,7 @@ fn flat_pool() -> Level {
                 .unwrap();
         }
     }
-    level.rules_mut().spread_fire = false;
+    level.rules_mut().fire_spread_radius_around_player = 0;
     level
 }
 #[test]
