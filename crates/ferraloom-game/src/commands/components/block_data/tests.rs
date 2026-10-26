@@ -68,7 +68,12 @@ fn loaded_block_entity_metadata_and_component_streams_match_java() {
     assert_eq!(vectors.len(), 12);
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
     for vector in vectors {
-        let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+        let mut level = {
+            let mut fixture_level =
+                Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         let [x, y, z] = vector.position;
         let pos = BlockPos::new(x, y, z);
         let chunk_pos = ChunkPos::containing(pos);

@@ -176,26 +176,25 @@ impl Entity for Probe {
 fn fixture(is_player: bool) -> (Level, EntityRef, EntityRef) {
     let mut level = crate::entity::tests::level(false);
     level.set_unported_behavior(UnportedBehavior::Strict);
-    level.install_shared(Box::default());
     let entity = level.next_entity_ref();
     let state = if is_player {
         let mut player = ServerPlayer::new(
             Uuid::new(5, 6),
             "hurt".into(),
-            level.next_entity_id(),
+            level.next_entity_id().unwrap(),
             Vec3::new(8.5, 64.0, 8.5),
             GameType::Survival,
         );
         player.loaded = true;
         EntityState::Player(Box::new(player))
     } else {
-        let mut parent = level.create_entity_data(EntityType::COW);
+        let mut parent = level.create_entity_data(EntityType::COW).unwrap();
         parent.set_pos(Vec3::new(8.5, 64.0, 8.5));
         EntityState::Cow(Box::new(Cow::with_parent(parent)))
     };
     level.add_entity(entity, state).unwrap();
     let attacker = level.next_entity_ref();
-    let mut parent = level.create_entity_data(EntityType::COW);
+    let mut parent = level.create_entity_data(EntityType::COW).unwrap();
     parent.set_pos(Vec3::new(10.5, 64.0, 8.5));
     level
         .add_entity(
@@ -583,7 +582,7 @@ fn native_damage_memory_tick_keeps_the_player_cooldown_and_expires_at_the_native
         let state = ServerPlayer::new(
             Uuid::new(10, 11),
             "remembered".into(),
-            level.next_entity_id(),
+            level.next_entity_id().unwrap(),
             Vec3::ZERO,
             GameType::Survival,
         );

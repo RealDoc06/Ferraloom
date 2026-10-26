@@ -36,10 +36,14 @@ fn virtual_names_team_formatting_and_hover_decorations_match_native_components()
     {
         let fields: Vec<_> = row.split('\t').collect();
         let scenario = fields[1];
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
+        let mut level = {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         let mut state = if scenario.starts_with("player") {
             EntityState::Player(Box::new(ServerPlayer::new(
                 Uuid::new(0, 1),
@@ -72,11 +76,12 @@ fn virtual_names_team_formatting_and_hover_decorations_match_native_components()
         }
         let entity = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         level.add_entity(entity, state).unwrap();
+        let shared = level.take_shared().unwrap();
         assert_eq!(
             level.entity_display_name(entity),
             Err(LevelError::MissingServerShared)
         );
-        level.install_shared(Box::default());
+        level.install_shared(shared);
         let before = level.entity_display_name(entity).unwrap();
         if fields[2] == "true" {
             let mut scoreboard = Scoreboard::default();

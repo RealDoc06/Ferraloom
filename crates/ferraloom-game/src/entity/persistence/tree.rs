@@ -2,12 +2,7 @@
 //! its caller controls root/passenger registration at the native load call site.
 use super::{EntityLoadError, vector_tag};
 use crate::{
-    entity::{
-        EntityData, EntityRef, EntityState,
-        animal::Cow,
-        experience_orb::ExperienceOrb,
-        item::{FallingBlockEntity, ItemEntity, PrimedTnt, falling_block::FallingBlockLoadError},
-    },
+    entity::{EntityData, EntityRef, EntityState, item::falling_block::FallingBlockLoadError},
     level::{Level, LevelError},
 };
 use ferraloom_data::EntityType;
@@ -39,7 +34,15 @@ impl std::fmt::Display for EntityPersistenceError {
         write!(f, "{self:?}")
     }
 }
-impl std::error::Error for EntityPersistenceError {}
+impl std::error::Error for EntityPersistenceError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Level(error) => Some(error),
+            Self::Base(error) => Some(error),
+            _ => None,
+        }
+    }
+}
 
 /// Port of EntityType#loadEntitiesRecursive's pre-order constructor/stream order.
 /// The resulting owned states already contain riding links when added to Level.
@@ -58,36 +61,23 @@ pub(crate) fn load_entity_tree(
     let name = name.as_str().to_owned();
     let kind = EntityType::from_name(&name)
         .ok_or_else(|| EntityPersistenceError::UnsupportedType(name.clone()))?;
-    // Reject unavailable factories before allocating, as EntityType#create does.
-    if !super::has_entity_factory(kind) {
-        return Err(EntityPersistenceError::UnsupportedType(name));
+    let mut state = super::create_entity_state(level, kind)?;
+    match &mut state {
+        EntityState::Cow(cow) => {
+            cow.as_living_mut().load_nbt(tag.clone())?;
+            cow.read_cold_data(&tag, level)?;
+        }
+        EntityState::Item(item) => item.load_nbt(tag)?,
+        EntityState::PrimedTnt(tnt) => tnt.load_nbt(tag)?,
+        EntityState::FallingBlock(falling) => {
+            falling.load_nbt(tag, level).map_err(|error| match error {
+                FallingBlockLoadError::Base(error) => EntityPersistenceError::Base(error),
+                FallingBlockLoadError::Level(error) => EntityPersistenceError::Level(error),
+            })?;
+        }
+        EntityState::ExperienceOrb(orb) => orb.load_nbt(tag)?,
+        EntityState::Player(_) => unreachable!("players have no NBT factory"),
     }
-    let parent = level.create_entity_data(kind);
-    let state = if kind == EntityType::COW {
-        let mut cow = Cow::with_level(parent, level)?;
-        cow.as_living_mut().load_nbt(tag.clone())?;
-        cow.read_cold_data(&tag, level)?;
-        EntityState::Cow(Box::new(cow))
-    } else if kind == EntityType::ITEM {
-        let mut item = ItemEntity::with_parent(parent);
-        item.load_nbt(tag)?;
-        EntityState::Item(Box::new(item))
-    } else if kind == EntityType::TNT {
-        let mut tnt = PrimedTnt::with_parent(parent);
-        tnt.load_nbt(tag)?;
-        EntityState::PrimedTnt(Box::new(tnt))
-    } else if kind == EntityType::FALLING_BLOCK {
-        let mut falling = FallingBlockEntity::with_parent(parent);
-        falling.load_nbt(tag, level).map_err(|error| match error {
-            FallingBlockLoadError::Base(error) => EntityPersistenceError::Base(error),
-            FallingBlockLoadError::Level(error) => EntityPersistenceError::Level(error),
-        })?;
-        EntityState::FallingBlock(Box::new(falling))
-    } else {
-        let mut orb = ExperienceOrb::with_parent(parent);
-        orb.load_nbt(tag)?;
-        EntityState::ExperienceOrb(Box::new(orb))
-    };
     let entity = level.next_entity_ref();
     let index = loaded.len();
     loaded.push((entity, state));

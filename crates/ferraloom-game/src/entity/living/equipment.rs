@@ -73,17 +73,26 @@ fn stop_location_based_effects(
             }
         }
     }
-    if matches!(component(broken, ComponentType::ENCHANTMENTS),
-        Some(DataComponent::Enchantments(enchantments)) if !enchantments.0.is_empty())
-    {
-        let kind = level.entity_state(owner)?.entity_type();
-        // ItemStack#forEachModifier visits component callbacks before enchantments.
+    use ferraloom_data::registries::enchantment_effect_component_type::Id as Effect;
+    let kind = level.entity_state(owner)?.entity_type();
+    // ItemStack#forEachModifier visits component callbacks before enchantments.
+    if crate::item::enchantment::helper::has_matching_effect(
+        broken,
+        slot,
+        Effect::ATTRIBUTES,
+        level,
+    )? {
         level.unported_operation(UnportedOperation::EntityMethod(
             kind,
             EntityMethod::EnchantmentAttributeModifiers,
         ))?;
-        // Reserved item::enchantment::helper::stop_location_based_effects consumes
-        // this same borrowed native copy when the canonical registry runtime lands.
+    }
+    if crate::item::enchantment::helper::has_matching_effect(
+        broken,
+        slot,
+        Effect::LOCATION_CHANGED,
+        level,
+    )? {
         level.unported_operation(UnportedOperation::EntityMethod(
             kind,
             EntityMethod::StopLocationBasedEffects,

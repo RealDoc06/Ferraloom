@@ -8,8 +8,20 @@ use crate::{
     level::{Level, LevelError},
 };
 use ferraloom_data::{Item, ItemMethod};
-use ferraloom_protocol::component::{ComponentTypeId, DataComponent};
+use ferraloom_protocol::component::{ComponentTypeId, DataComponent, ItemStack, ItemStackTemplate};
 pub use strict::{ValidationError, validate_strict};
+
+/// Port of ItemStackTemplate#create/validate. Invalid runtime stacks become
+/// EMPTY; codecs and the canonical strict validator retain their own contracts.
+pub fn create_from_template(template: &ItemStackTemplate) -> ItemStack {
+    let stack = ItemStack::new(template.item, template.count, template.components.clone());
+    if let Err(error) = validate_strict(&stack) {
+        eprintln!("Can't create item stack with properties {template:?}, error: {error}");
+        ItemStack::default()
+    } else {
+        stack
+    }
+}
 
 /// Port of ItemStack#useOn. Receiver and context.getItemInHand are distinct
 /// captured objects. Every returned stack handle is scoped to this operation.
@@ -129,27 +141,63 @@ fn has_infinite_materials(owner: Option<EntityRef>, level: &Level) -> Result<boo
     )
 }
 
-/// Port of ItemStack#hurtAndBreak's current required effect boundary. Slice C
-/// replaces this body for every caller while retaining the same receiver root.
+/// Port of ItemStack#hurtAndBreak(LivingEntity, EquipmentSlot), dispatching the
+/// same owned broken copy to the owner's native event, cleanup and stat hook.
 pub fn hurt_and_break(
     receiver: StackRef,
     damage: i32,
-    _player: EntityRef,
+    owner: EntityRef,
     slot: ferraloom_protocol::component::EquipmentSlot,
     operation: &mut StackOperation<'_>,
 ) -> Result<(), LevelError> {
-    let item = operation
-        .level
-        .stack(receiver)
-        .map_err(receiver_error)?
-        .item();
     operation
         .level
-        .unported_operation(UnportedOperation::ItemHurtAndBreak {
-            item,
-            amount: damage,
-            slot,
-        })
+        .entity::<crate::entity::LivingEntity>(owner)?;
+    let player =
+        matches!(operation.level.entity_state(owner)?, EntityState::Player(_)).then_some(owner);
+    operation.level.retain_entity(owner)?;
+    let result = super::durability::hurt_and_break(
+        receiver,
+        damage,
+        player,
+        operation,
+        |broken, operation| {
+            crate::entity::living::on_equipped_item_broken(owner, broken, slot, operation.level)
+        },
+    );
+    operation.level.release_entity(owner);
+    result
+}
+
+/// Resolve the canonical itemBySlot receiver at a living wear call site. Player
+/// mainhand lives in the selected inventory slot; all other slots use equipment.
+pub(crate) fn hurt_equipped_item(
+    owner: EntityRef,
+    damage: i32,
+    slot: ferraloom_protocol::component::EquipmentSlot,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    use crate::entity::player::{ServerPlayer, equipment::SLOTS};
+    use crate::inventory::{ContainerHandle, ContainerSlot};
+    let address = if slot == ferraloom_protocol::component::EquipmentSlot::Mainhand
+        && let Ok(player) = level.entity::<ServerPlayer>(owner)
+    {
+        ContainerSlot {
+            container: ContainerHandle::PlayerInventory(owner),
+            slot: player.inventory.selected_slot(),
+        }
+    } else {
+        ContainerSlot {
+            container: ContainerHandle::LivingEquipment(owner),
+            slot: SLOTS
+                .iter()
+                .position(|entry| *entry == slot)
+                .expect("EquipmentSlot.VALUES"),
+        }
+    };
+    let mut operation = StackOperation::new(level);
+    let receiver = operation.pin(address).map_err(receiver_error)?;
+    hurt_and_break(receiver, damage, owner, slot, &mut operation)
 }
 
 pub(super) fn unported_use_on(
@@ -162,7 +210,7 @@ pub(super) fn unported_use_on(
     Ok(None)
 }
 
-pub(super) fn receiver_error(error: MenuError) -> LevelError {
+pub(crate) fn receiver_error(error: MenuError) -> LevelError {
     match error {
         MenuError::Level(error) => error,
         _ => LevelError::Inventory("item use receiver"),

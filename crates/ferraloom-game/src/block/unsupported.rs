@@ -86,6 +86,9 @@ pub enum BlockMethod {
     Attack,
     Destroy,
     PlayerDestroy,
+    OnLand,
+    OnBrokenAfterFall,
+    GetFallDamageSource,
 }
 impl BlockMethod {
     pub(crate) const fn vanilla_method(self) -> Option<ferraloom_data::BlockMethod> {
@@ -136,6 +139,9 @@ impl BlockMethod {
             Self::Attack => Vanilla::Attack,
             Self::Destroy => Vanilla::Destroy,
             Self::PlayerDestroy => Vanilla::PlayerDestroy,
+            Self::OnLand => Vanilla::OnLand,
+            Self::OnBrokenAfterFall => Vanilla::OnBrokenAfterFall,
+            Self::GetFallDamageSource => Vanilla::GetFallDamageSource,
             Self::CanPlaceLiquid => Vanilla::CanPlaceLiquid,
             Self::PlaceLiquid => Vanilla::PlaceLiquid,
             Self::PickupBlock => Vanilla::PickupBlock,
@@ -146,6 +152,9 @@ impl BlockMethod {
         !matches!(
             self,
             Self::GetMenuProvider
+                | Self::OnLand
+                | Self::OnBrokenAfterFall
+                | Self::GetFallDamageSource
                 | Self::GetDestroyProgress
                 | Self::GetDrops
                 | Self::UseWithoutItem
@@ -231,6 +240,9 @@ impl BlockMethod {
             Self::Attack => "attack",
             Self::Destroy => "destroy",
             Self::PlayerDestroy => "playerDestroy",
+            Self::OnLand => "onLand",
+            Self::OnBrokenAfterFall => "onBrokenAfterFall",
+            Self::GetFallDamageSource => "getFallDamageSource",
         }
     }
 }
@@ -373,11 +385,11 @@ impl UnportedCalls {
 }
 impl Level {
     pub(crate) fn skip_post_processing(&mut self, error: LevelError) -> Result<(), LevelError> {
-        let (block, behavior) = match error {
-            LevelError::UnsupportedBlockMethod(block, method) => (block, method.name()),
+        let (block, behavior) = match error.root() {
+            LevelError::UnsupportedBlockMethod(block, method) => (*block, method.name()),
             LevelError::UnsupportedShape(state) => (state.block(), "getCollisionShape"),
-            LevelError::UnsupportedBlock(block) => (block, "Block.updateFromNeighbourShapes"),
-            LevelError::UnsupportedBlockEntity(block) => (block, "setBlockState block entity"),
+            LevelError::UnsupportedBlock(block) => (*block, "Block.updateFromNeighbourShapes"),
+            LevelError::UnsupportedBlockEntity(block) => (*block, "setBlockState block entity"),
             _ => return Err(error),
         };
         let calls = &mut self.region_mut().unported;
@@ -526,10 +538,10 @@ impl Level {
             Ok(value) => return Ok(Some(value)),
             Err(error) => error,
         };
-        let (block, method) = match error {
-            LevelError::UnsupportedBlock(block) => (block, method),
+        let (block, method) = match error.root() {
+            LevelError::UnsupportedBlock(block) => (*block, method),
             LevelError::UnsupportedBlockMethod(block, method) if method.can_skip() => {
-                (block, method)
+                (*block, *method)
             }
             LevelError::UnsupportedFluidRandomTick => (block, method),
             _ => return Err(error),

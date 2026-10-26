@@ -45,7 +45,11 @@ fn level() -> Level {
     let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
     let resources =
         ResourceManager::new(vec![Pack::vanilla_jar(std::path::Path::new(&jar)).unwrap()]);
-    let mut level = Level::new(Region::new(&EMPTY), LevelContext::fixture(0, 63));
+    let mut level = {
+        let mut fixture_level = Level::new(Region::new(&EMPTY), LevelContext::fixture(0, 63));
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     level.set_block_tags(Arc::new(TagSet::load(&resources).unwrap()));
     level.add_chunk(chunk(ORIGIN)).unwrap();
     level
@@ -368,7 +372,11 @@ fn driver_is_one_owned_runtime_and_cold_access_never_replaces_it() {
 
 #[test]
 fn installed_dimension_bounds_reject_a_wrong_first_chunk_without_changing_context() {
-    let mut level = Level::new(Region::new(&EMPTY), LevelContext::fixture(0, 63));
+    let mut level = {
+        let mut fixture_level = Level::new(Region::new(&EMPTY), LevelContext::fixture(0, 63));
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     level
         .install_acquire_driver(Box::new(PublishingDriver::new(None, true)), 0..16)
         .unwrap();
@@ -495,9 +503,9 @@ fn finalization_retry_keeps_entities_ticker_binding_and_both_tick_queues() {
     level.save_chunk_ticks(TARGET, &mut data).unwrap();
     assert_eq!(data.fluid_ticks.unwrap()[0].delay, Some(9));
     level.region_mut().fluid_ticks.remove_container(TARGET);
-    let next_id = level.next_entity_id();
+    let next_id = level.next_entity_id().unwrap();
     level.finalize_full_chunk(error.token).unwrap();
-    assert_eq!(level.next_entity_id(), next_id + 1);
+    assert_eq!(level.next_entity_id().unwrap(), next_id + 1);
     assert_eq!(level.entity::<EntityData>(entity).unwrap().network_id, id);
     assert_eq!(
         level

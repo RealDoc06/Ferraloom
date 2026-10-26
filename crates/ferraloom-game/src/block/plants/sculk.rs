@@ -1,6 +1,11 @@
 //! Ports of SculkSpreader, ChargeCursor and the participating SculkBehaviour methods.
 //! Both level arms use the same cursor algorithm and native caller random stream.
+pub(crate) mod catalyst;
+mod sensor;
 mod shapes;
+mod shrieker;
+pub(crate) mod vibration;
+pub(super) use sensor::SENSOR;
 pub(super) use shapes::WATERLOGGED_SCULK;
 
 use super::{multiface, multiface_spreader::SpreaderConfig};
@@ -55,68 +60,6 @@ impl ChargeCursor {
             facings: None,
         }
     }
-    fn update(
-        &mut self,
-        level: &mut LevelAccessRef<'_, '_>,
-        origin: BlockPos,
-        random: &mut FeatureRandomSelector<'_>,
-        settings: SpreadSettings,
-        spread_veins: bool,
-    ) -> Result<(), LevelError> {
-        if self.charge <= 0
-            || !settings.world_generation
-                && !matches!(level,
-            LevelAccessRef::Server(live) if live.should_tick_blocks_at(origin))
-        {
-            return Ok(());
-        }
-        if self.update_delay > 0 {
-            self.update_delay -= 1;
-            return Ok(());
-        }
-        let mut state = level.get_block_state(self.pos)?;
-        let mut behavior = SculkBehaviour::of(state);
-        if spread_veins
-            && behavior.attempt_spread_vein(
-                level,
-                self.pos,
-                state,
-                self.facings,
-                settings.world_generation,
-            )?
-        {
-            if behavior.can_change_block_state_on_spread() {
-                state = level.get_block_state(self.pos)?;
-                behavior = SculkBehaviour::of(state);
-            }
-            play_spread_sound(level, self.pos)?;
-        }
-        self.charge =
-            behavior.attempt_use_charge(self, level, origin, random, settings, spread_veins)?;
-        if self.charge <= 0 {
-            behavior.on_discharged(level, state, self.pos)?;
-        } else {
-            if let Some(next) = movement_pos(level, self.pos, origin, random, settings)? {
-                behavior.on_discharged(level, state, self.pos)?;
-                self.pos = next;
-                state = level.get_block_state(next)?;
-            } else if settings.world_generation {
-                behavior.on_discharged(level, state, self.pos)?;
-                self.charge = 0;
-                return Ok(());
-            }
-            if is_sculk_behavior(state) {
-                self.facings = Some(if state.block() == Block::SCULK_VEIN {
-                    face_mask(state)
-                } else {
-                    0
-                });
-            }
-            self.decay_delay = behavior.update_decay_delay(self.decay_delay);
-            self.update_delay = behavior.sculk_spread_delay();
-        }
-        Ok(())
-    }
 }
 
 /// Port of SculkSpreader. Cursor insertion and native fastutil event order matter.
@@ -124,6 +67,7 @@ impl ChargeCursor {
 pub struct SculkSpreader {
     pub settings: SpreadSettings,
     cursors: Vec<ChargeCursor>,
+    cursor_generation: u64,
 }
 impl SculkSpreader {
     pub fn create_level_spreader() -> Self {
@@ -148,23 +92,27 @@ impl SculkSpreader {
         Self {
             settings,
             cursors: Vec::new(),
+            cursor_generation: 0,
         }
     }
     pub fn cursors(&self) -> &[ChargeCursor] {
         &self.cursors
     }
     pub fn clear(&mut self) {
+        self.cursor_generation = self.cursor_generation.wrapping_add(1);
         self.cursors.clear();
     }
     /// Port of SculkSpreader#load's decoded-list installation. Preserve each
     /// cursor's charge, delays and optional facings; never split/reset it.
     pub(crate) fn replace_cursors(&mut self, cursors: Vec<ChargeCursor>) {
+        self.cursor_generation = self.cursor_generation.wrapping_add(1);
         self.cursors = cursors.into_iter().take(32).collect();
     }
     pub fn add_cursors(&mut self, pos: BlockPos, mut charge: i32) {
         while charge > 0 {
             let amount = charge.min(1000);
             if self.cursors.len() < 32 {
+                self.cursor_generation = self.cursor_generation.wrapping_add(1);
                 self.cursors.push(ChargeCursor::new(pos, amount));
             }
             charge -= amount;
@@ -177,62 +125,13 @@ impl SculkSpreader {
         random: &mut FeatureRandomSelector<'_>,
         spread_veins: bool,
     ) -> Result<(), LevelError> {
-        if self.cursors.is_empty() {
-            return Ok(());
-        }
-        let mut processed = Vec::new();
-        let mut mergeable = JavaHashMap::<BlockPos, usize>::new();
-        let mut charges = Object2IntOpenHashMap::<BlockPos>::new();
-        for index in 0..self.cursors.len() {
-            let cursor = &mut self.cursors[index];
-            if chessboard_distance(cursor.pos, origin) > 1024 {
-                continue;
-            }
-            cursor.update(level, origin, random, self.settings, spread_veins)?;
-            if cursor.charge <= 0 {
-                level_event(level, cursor.pos, 0)?;
-            } else {
-                let pos = cursor.pos;
-                let charge = cursor.charge;
-                let total = charges.get_or_insert_with(pos, || 0);
-                *total = total.wrapping_add(charge);
-                if let Some(&existing) = mergeable.get(&pos) {
-                    if !self.settings.world_generation
-                        && charge.wrapping_add(self.cursors[existing].charge) <= 1000
-                    {
-                        self.cursors[existing].charge =
-                            self.cursors[existing].charge.wrapping_add(charge);
-                        self.cursors[existing].update_delay = self.cursors[existing]
-                            .update_delay
-                            .min(self.cursors[index].update_delay);
-                        self.cursors[index].charge = 0;
-                    } else {
-                        processed.push(index);
-                        if charge < self.cursors[existing].charge {
-                            mergeable.insert(pos, index);
-                        }
-                    }
-                } else {
-                    mergeable.insert(pos, index);
-                    processed.push(index);
-                }
-            }
-        }
-        for (pos, charge) in charges.iter() {
-            if *charge > 0
-                && let Some(mask) = mergeable
-                    .get(pos)
-                    .and_then(|index| self.cursors[*index].facings)
-            {
-                let particles = (f64::from(*charge).ln_1p() / 2.299999952316284) as i32 + 1;
-                level_event(level, *pos, (particles << 6) + i32::from(mask))?;
-            }
-        }
-        self.cursors = processed
-            .into_iter()
-            .map(|index| self.cursors[index].clone())
-            .collect();
-        Ok(())
+        update_spreader(
+            &mut SpreaderAccess::Standalone(self),
+            level,
+            origin,
+            random,
+            spread_veins,
+        )
     }
 }
 
@@ -743,3 +642,234 @@ pub fn spread_patch(
 
 #[cfg(test)]
 mod tests;
+
+/// Short-borrow access to one canonical spreader. The live arm never takes a
+/// catalyst or its cursor list out of Level while world callbacks execute.
+enum SpreaderAccess<'a> {
+    Standalone(&'a mut SculkSpreader),
+    Live {
+        receiver: crate::block::entity::BlockEntityRef,
+        generation: u64,
+    },
+}
+impl SpreaderAccess<'_> {
+    fn read<'a>(
+        &'a self,
+        level: &'a LevelAccessRef<'_, '_>,
+    ) -> Result<&'a SculkSpreader, LevelError> {
+        match self {
+            Self::Standalone(value) => Ok(value),
+            Self::Live {
+                receiver,
+                generation,
+            } => {
+                let LevelAccessRef::Server(level) = level else {
+                    unreachable!("live catalyst")
+                };
+                let spreader = &level
+                    .block_entity::<crate::block::entity::sculk::SculkCatalystBlockEntity>(
+                        *receiver,
+                    )?
+                    .sculk_spreader;
+                if spreader.cursor_generation != *generation {
+                    return Err(LevelError::UnsupportedSculkCursorReentrancy(*receiver));
+                }
+                Ok(spreader)
+            }
+        }
+    }
+    fn write<'a>(
+        &'a mut self,
+        level: &'a mut LevelAccessRef<'_, '_>,
+    ) -> Result<&'a mut SculkSpreader, LevelError> {
+        match self {
+            Self::Standalone(value) => Ok(value),
+            Self::Live {
+                receiver,
+                generation,
+            } => {
+                let LevelAccessRef::Server(level) = level else {
+                    unreachable!("live catalyst")
+                };
+                let spreader = &mut level
+                    .block_entity_mut::<crate::block::entity::sculk::SculkCatalystBlockEntity>(
+                        *receiver,
+                    )?
+                    .sculk_spreader;
+                if spreader.cursor_generation != *generation {
+                    return Err(LevelError::UnsupportedSculkCursorReentrancy(*receiver));
+                }
+                Ok(spreader)
+            }
+        }
+    }
+    fn cursor(
+        &self,
+        index: usize,
+        level: &LevelAccessRef<'_, '_>,
+    ) -> Result<ChargeCursor, LevelError> {
+        Ok(self.read(level)?.cursors[index].clone())
+    }
+}
+/// Port of SculkCatalystBlockEntity#serverTick using the sole canonical random.
+pub(crate) fn tick_catalyst(
+    receiver: crate::block::entity::BlockEntityRef,
+    level: &mut crate::level::Level,
+) -> Result<(), LevelError> {
+    let generation = level
+        .block_entity::<crate::block::entity::sculk::SculkCatalystBlockEntity>(receiver)?
+        .sculk_spreader
+        .cursor_generation;
+    update_spreader(
+        &mut SpreaderAccess::Live {
+            receiver,
+            generation,
+        },
+        &mut LevelAccessRef::Server(level),
+        receiver.pos,
+        &mut FeatureRandomSelector::Canonical,
+        true,
+    )
+}
+fn update_cursor(
+    source: &mut SpreaderAccess<'_>,
+    index: usize,
+    level: &mut LevelAccessRef<'_, '_>,
+    origin: BlockPos,
+    random: &mut FeatureRandomSelector<'_>,
+    settings: SpreadSettings,
+    spread_veins: bool,
+) -> Result<(), LevelError> {
+    let cursor = source.cursor(index, level)?;
+    if cursor.charge <= 0
+        || !settings.world_generation
+            && !matches!(level, LevelAccessRef::Server(live) if live.should_tick_blocks_at(origin))
+    {
+        return Ok(());
+    }
+    if cursor.update_delay > 0 {
+        source.write(level)?.cursors[index].update_delay -= 1;
+        return Ok(());
+    }
+    let mut state = level.get_block_state(cursor.pos)?;
+    let mut behavior = SculkBehaviour::of(state);
+    if spread_veins
+        && behavior.attempt_spread_vein(
+            level,
+            cursor.pos,
+            state,
+            cursor.facings,
+            settings.world_generation,
+        )?
+    {
+        if behavior.can_change_block_state_on_spread() {
+            state = level.get_block_state(cursor.pos)?;
+            behavior = SculkBehaviour::of(state);
+        }
+        play_spread_sound(level, cursor.pos)?;
+    }
+    let charge = behavior.attempt_use_charge(
+        &source.cursor(index, level)?,
+        level,
+        origin,
+        random,
+        settings,
+        spread_veins,
+    )?;
+    source.write(level)?.cursors[index].charge = charge;
+    if charge <= 0 {
+        behavior.on_discharged(level, state, cursor.pos)?;
+    } else {
+        if let Some(next) = movement_pos(level, cursor.pos, origin, random, settings)? {
+            behavior.on_discharged(level, state, cursor.pos)?;
+            source.write(level)?.cursors[index].pos = next;
+            state = level.get_block_state(next)?;
+        } else if settings.world_generation {
+            behavior.on_discharged(level, state, cursor.pos)?;
+            source.write(level)?.cursors[index].charge = 0;
+            return Ok(());
+        }
+        let cursor = &mut source.write(level)?.cursors[index];
+        if is_sculk_behavior(state) {
+            cursor.facings = Some(if state.block() == Block::SCULK_VEIN {
+                face_mask(state)
+            } else {
+                0
+            });
+        }
+        cursor.decay_delay = behavior.update_decay_delay(cursor.decay_delay);
+        cursor.update_delay = behavior.sculk_spread_delay();
+    }
+    Ok(())
+}
+fn update_spreader(
+    source: &mut SpreaderAccess<'_>,
+    level: &mut LevelAccessRef<'_, '_>,
+    origin: BlockPos,
+    random: &mut FeatureRandomSelector<'_>,
+    spread_veins: bool,
+) -> Result<(), LevelError> {
+    let count = source.read(level)?.cursors.len();
+    if count == 0 {
+        return Ok(());
+    }
+    let settings = source.read(level)?.settings;
+    let mut processed = Vec::new();
+    let mut mergeable = JavaHashMap::<BlockPos, usize>::new();
+    let mut charges = Object2IntOpenHashMap::<BlockPos>::new();
+    for index in 0..count {
+        if chessboard_distance(source.cursor(index, level)?.pos, origin) > 1024 {
+            continue;
+        }
+        update_cursor(source, index, level, origin, random, settings, spread_veins)?;
+        let cursor = source.cursor(index, level)?;
+        if cursor.charge <= 0 {
+            level_event(level, cursor.pos, 0)?;
+        } else {
+            let (pos, charge) = (cursor.pos, cursor.charge);
+            let total = charges.get_or_insert_with(pos, || 0);
+            *total = total.wrapping_add(charge);
+            if let Some(&existing) = mergeable.get(&pos) {
+                if !settings.world_generation
+                    && charge.wrapping_add(source.cursor(existing, level)?.charge) <= 1000
+                {
+                    let spreader = source.write(level)?;
+                    spreader.cursors[existing].charge =
+                        spreader.cursors[existing].charge.wrapping_add(charge);
+                    spreader.cursors[existing].update_delay = spreader.cursors[existing]
+                        .update_delay
+                        .min(spreader.cursors[index].update_delay);
+                    spreader.cursors[index].charge = 0;
+                } else {
+                    processed.push(index);
+                    if charge < source.cursor(existing, level)?.charge {
+                        mergeable.insert(pos, index);
+                    }
+                }
+            } else {
+                mergeable.insert(pos, index);
+                processed.push(index);
+            }
+        }
+    }
+    for (pos, charge) in charges.iter() {
+        let mask = match mergeable.get(pos) {
+            Some(index) => source.read(level)?.cursors[*index].facings,
+            None => None,
+        };
+        if *charge > 0
+            && let Some(mask) = mask
+        {
+            let particles = (f64::from(*charge).ln_1p() / 2.299999952316284) as i32 + 1;
+            level_event(level, *pos, (particles << 6) + i32::from(mask))?;
+        }
+    }
+    let next = processed
+        .into_iter()
+        .map(|index| source.cursor(index, level))
+        .collect::<Result<Vec<_>, _>>()?;
+    let spreader = source.write(level)?;
+    spreader.cursor_generation = spreader.cursor_generation.wrapping_add(1);
+    spreader.cursors = next;
+    Ok(())
+}

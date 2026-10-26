@@ -66,6 +66,21 @@ pub struct BossEventState {
     pub overlay: play::BossBarOverlay,
     pub properties: play::BossProperties,
 }
+/// The two native TrackedWaypoint identifiers remain distinct even when a name
+/// happens to contain the textual form of an entity UUID.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum WaypointId {
+    Entity(Uuid),
+    Name(String),
+}
+impl From<&p::codec::Either<Uuid, String>> for WaypointId {
+    fn from(value: &p::codec::Either<Uuid, String>) -> Self {
+        match value {
+            p::codec::Either::Left(uuid) => Self::Entity(*uuid),
+            p::codec::Either::Right(name) => Self::Name(name.clone()),
+        }
+    }
+}
 #[derive(Clone, Debug, Default)]
 pub struct BotState {
     pub entity_id: Option<i32>,
@@ -89,6 +104,8 @@ pub struct BotState {
     pub advancement_progress: BTreeMap<p::Identifier, play::AdvancementProgress>,
     /// Includes initial Add operations consumed while connecting.
     pub boss_events: HashMap<Uuid, BossEventState>,
+    /// Current waypoints, including Track operations consumed during connect.
+    pub waypoints: HashMap<WaypointId, play::TrackedWaypointData>,
     pub scores: BTreeMap<(String, String), i32>,
     pub objectives: BTreeMap<String, play::ObjectiveOperation>,
     pub display_objectives: Vec<cb::SetDisplayObjective>,
@@ -1098,6 +1115,27 @@ fn apply(s: &mut BotState, p: &cb::Packet) -> Result<()> {
             s.scores
                 .insert((p.objective_name.clone(), p.owner.clone()), p.score.0);
         }
+        cb::Packet::Waypoint(packet) => {
+            let key = WaypointId::from(&packet.waypoint.identifier);
+            match packet.operation {
+                play::WaypointOperation::Track => {
+                    s.waypoints.insert(key, packet.waypoint.clone());
+                }
+                play::WaypointOperation::Untrack => {
+                    s.waypoints.remove(&key);
+                }
+                play::WaypointOperation::Update => {
+                    if let Some(previous) = s.waypoints.get_mut(&key)
+                        && std::mem::discriminant(&previous.contents)
+                            == std::mem::discriminant(&packet.waypoint.contents)
+                    {
+                        // TrackedWaypoint's concrete update changes its position;
+                        // replacing a type or icon requires a new Track operation.
+                        previous.contents = packet.waypoint.contents.clone();
+                    }
+                }
+            }
+        }
         cb::Packet::UpdateAdvancements(p) => {
             if p.should_reset {
                 s.advancement_progress.clear();
@@ -1172,6 +1210,81 @@ fn apply_delta(entity: &mut Entity, delta: &play::EntityDelta) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn waypoint_client_state_tracks_replaces_updates_and_untracks_join_packets() -> Result<()> {
+        let mut state = BotState::default();
+        let uuid = Uuid::new(1, 2);
+        let packet = |operation, color: Option<u32>, contents| {
+            cb::Packet::Waypoint(cb::TrackedWaypoint {
+                operation,
+                waypoint: play::TrackedWaypointData {
+                    identifier: p::codec::Either::Left(uuid),
+                    icon: play::WaypointIcon {
+                        style: "minecraft:default".parse().unwrap(),
+                        color: color.map(play::RgbColor),
+                    },
+                    contents,
+                },
+            })
+        };
+        let key = WaypointId::Entity(uuid);
+        apply(
+            &mut state,
+            &packet(
+                play::WaypointOperation::Track,
+                Some(0x123456),
+                play::WaypointContents::Chunk {
+                    x: VarInt(1),
+                    z: VarInt(2),
+                },
+            ),
+        )?;
+        apply(
+            &mut state,
+            &packet(
+                play::WaypointOperation::Update,
+                None,
+                play::WaypointContents::Chunk {
+                    x: VarInt(3),
+                    z: VarInt(4),
+                },
+            ),
+        )?;
+        assert_eq!(
+            state.waypoints[&key].icon.color,
+            Some(play::RgbColor(0x123456))
+        );
+        assert_eq!(
+            state.waypoints[&key].contents,
+            play::WaypointContents::Chunk {
+                x: VarInt(3),
+                z: VarInt(4)
+            }
+        );
+        apply(
+            &mut state,
+            &packet(
+                play::WaypointOperation::Track,
+                None,
+                play::WaypointContents::Azimuth { angle: 1.25 },
+            ),
+        )?;
+        assert_eq!(state.waypoints[&key].icon.color, None);
+        assert_eq!(
+            state.waypoints[&key].contents,
+            play::WaypointContents::Azimuth { angle: 1.25 }
+        );
+        apply(
+            &mut state,
+            &packet(
+                play::WaypointOperation::Untrack,
+                None,
+                play::WaypointContents::Empty {},
+            ),
+        )?;
+        assert!(state.waypoints.is_empty());
+        Ok(())
+    }
     #[test]
     fn advancement_updates_reset_remove_and_replace_whole_progress() -> Result<()> {
         let first = p::Identifier::parse("test:first")?;

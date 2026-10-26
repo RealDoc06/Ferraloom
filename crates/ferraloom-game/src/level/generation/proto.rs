@@ -9,13 +9,26 @@ use ferraloom_worldgen::{
 };
 
 /// Packed sections and heightmaps from an unchanged generation-owned chunk.
-/// Runtime invalidates this on biome, block or saved light changes; metadata
-/// such as shared structure piece flags is always captured from the live proto.
+/// Runtime invalidates this on biome/block changes and synchronizes saved light
+/// independently. Metadata such as shared structure flags always stays fresh.
 #[derive(Debug)]
 pub struct CapturedChunkTerrain {
     sections: Vec<storage::ChunkSection>,
     heightmaps: std::collections::BTreeMap<ferraloom_nbt::NbtString, storage::LongArray>,
     before_terrain: bool,
+}
+impl CapturedChunkTerrain {
+    /// Light propagation changes neither palettes nor heightmaps. Mirror only
+    /// the canonical disk section's light, including padding outside build height.
+    pub fn sync_light_section(&mut self, section: &storage::ChunkSection) {
+        if let Some(cached) = self.sections.iter_mut().find(|s| s.y == section.y) {
+            cached.block_light = section.block_light.clone();
+            cached.sky_light = section.sky_light.clone();
+        } else {
+            self.sections.push(section.clone());
+            self.sections.sort_by_key(|s| s.y);
+        }
+    }
 }
 
 /// Port of ProtoChunk's owned payload. Keep inherited disk fields until the
@@ -183,8 +196,8 @@ impl ProtoChunk {
         self.capture_with_cached_terrain(context, registry, &mut None)
     }
     /// Reuse serialized terrain, keeping all status/structure/entity/tick data
-    /// fresh. The owner must invalidate before any biome, block or light write,
-    /// including a failed step's partial effects and live FULL snapshot refresh.
+    /// fresh. The owner must invalidate before biome/block writes, including
+    /// partial effects and live FULL refresh, and synchronize light-only changes.
     pub fn capture_with_cached_terrain(
         &self,
         context: &WorldGenContext,

@@ -7,6 +7,8 @@ use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_protocol::{codec::VarInt, component::ItemStack};
 use ferraloom_util::random::RandomSource;
 
+mod attribute_updates;
+pub use attribute_updates::{on_attribute_updated_parent, refresh_dirty_attributes};
 pub mod climbable;
 pub mod damage_state;
 mod equipment;
@@ -34,6 +36,8 @@ pub struct LivingEntity {
     pub parent: EntityData,
     pub attributes: AttributeMap,
     pub equipment: EntityEquipment,
+    /// Port of LivingEntity#locatorBarIcon; the persistent icon, before team color overrides.
+    pub locator_bar_icon: ferraloom_protocol::play::WaypointIcon,
     pub(crate) active_effects: super::effect::ActiveEffects,
     pub effects_dirty: bool,
     pub use_item: ItemStack,
@@ -91,6 +95,7 @@ impl LivingEntity {
             parent,
             attributes,
             equipment: EntityEquipment::default(),
+            locator_bar_icon: crate::level::waypoints::default_icon(),
             active_effects: super::effect::ActiveEffects::default(),
             effects_dirty: true,
             use_item: ItemStack::default(),
@@ -314,6 +319,14 @@ impl LivingEntity {
             .and_then(|tag| EntityEquipment::from_tag(tag).ok())
             .unwrap_or_default();
         self.equipment.set_all(&equipment);
+        self.locator_bar_icon = crate::level::waypoints::load_icon(tag.get("locator_bar_icon"))
+            .unwrap_or_else(|error| {
+                eprintln!(
+                    "Failed to load locator_bar_icon for entity {}: {error}",
+                    self.parent.uuid
+                );
+                crate::level::waypoints::default_icon()
+            });
         self.current_impulse_context_reset_grace_time =
             tag.get_int_or("current_impulse_context_reset_grace_time", 0);
         self.current_impulse_impact_pos = tag
@@ -326,6 +339,13 @@ impl LivingEntity {
         level: &crate::level::Level,
         get_absorption: fn(&LivingEntity) -> f32,
     ) -> Result<(), crate::level::LevelError> {
+        tag.remove("locator_bar_icon");
+        if self.locator_bar_icon != crate::level::waypoints::default_icon() {
+            tag.insert(
+                "locator_bar_icon",
+                crate::level::waypoints::save_icon(&self.locator_bar_icon),
+            );
+        }
         tag.insert("Health", Tag::Float(self.health()));
         tag.insert("HurtTime", Tag::Short(self.hurt_time as i16));
         tag.insert("DeathTime", Tag::Short(self.death_time as i16));
@@ -370,6 +390,18 @@ impl LivingEntity {
         }
         Ok(())
     }
+}
+
+/// Port of LivingEntity#take. ServerPlayer's override broadcasts its menu after
+/// this tracking-player packet has entered the ordered outbound stream.
+pub(crate) fn take(
+    collector: super::EntityRef,
+    entity: super::EntityRef,
+    count: i32,
+    level: &mut crate::level::Level,
+) -> Result<(), crate::level::LevelError> {
+    level.entity::<LivingEntity>(collector)?;
+    level.take_item(entity, collector, count)
 }
 
 /// Port of server-side LivingEntity#stopUsingItem and ItemStack#causeUseVibration.

@@ -1,14 +1,70 @@
 //! ItemStack's live durability mutation, shared by wear and conversion paths.
 use crate::{
-    entity::{EntityRef, player::inventory},
+    entity::{
+        EntityRef,
+        player::{ServerPlayer, inventory},
+    },
     inventory::{StackOperation, StackRef},
     item::stack::receiver_error,
     level::LevelError,
 };
+
 use ferraloom_protocol::{
     codec::VarInt,
     component::{ComponentTypeId, DataComponent, ItemStack, ItemStackContents},
 };
+
+/// Port of ItemStack#hurtAndBreak(ServerLevel, ServerPlayer, Consumer). The
+/// actual receiver and player remain held through criteria and break callbacks.
+pub fn hurt_and_break(
+    receiver: StackRef,
+    amount: i32,
+    player: Option<EntityRef>,
+    operation: &mut StackOperation<'_>,
+    on_break: impl FnMut(ItemStack, &mut StackOperation<'_>) -> Result<(), LevelError>,
+) -> Result<(), LevelError> {
+    operation.pin_existing(receiver).map_err(receiver_error)?;
+    if let Some(player) = player {
+        operation.level.entity::<ServerPlayer>(player)?;
+        operation.level.retain_entity(player)?;
+    }
+    let result = (|| {
+        let change = process_durability_change(receiver, amount, player, operation)?;
+        if change != 0 {
+            let damage = damage_value(operation.level.stack(receiver).map_err(receiver_error)?)
+                .wrapping_add(change);
+            apply_damage(receiver, damage, player, operation, on_break)?;
+        }
+        Ok(())
+    })();
+    if let Some(player) = player {
+        operation.level.release_entity(player);
+    }
+    result
+}
+
+/// Port of ItemStack#processDurabilityChange. Infinite materials exits before
+/// enchantments and their RNG; negative changes bypass enchantments as native.
+fn process_durability_change(
+    receiver: StackRef,
+    amount: i32,
+    player: Option<EntityRef>,
+    operation: &mut StackOperation<'_>,
+) -> Result<i32, LevelError> {
+    if !is_damageable_item(operation.level.stack(receiver).map_err(receiver_error)?) {
+        return Ok(0);
+    }
+    if let Some(player) = player
+        && operation.level.entity::<ServerPlayer>(player)?.instabuild()
+    {
+        return Ok(0);
+    }
+    if amount > 0 {
+        super::enchantment::helper::process_durability_change(receiver, amount, operation)
+    } else {
+        Ok(amount)
+    }
+}
 
 /// Port of ItemStack#isDamageableItem. Component presence, rather than a
 /// positive damage value, controls eligibility.
@@ -93,5 +149,7 @@ pub fn set_damage_value(stack: &mut ItemStack, value: i32) {
     );
 }
 
+#[cfg(test)]
+mod hurt_tests;
 #[cfg(test)]
 mod tests;

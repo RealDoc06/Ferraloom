@@ -45,13 +45,8 @@ impl PlacementAccess for PlacementLevel<'_> {
     fn block_state(&mut self, pos: BlockPos) -> Result<ferraloom_data::BlockState, LevelError> {
         self.level.get_block_state(pos)
     }
-    fn block_entity_data(&mut self, pos: BlockPos) -> Result<Option<Tag>, LevelError> {
-        let state = self.level.get_block_state(pos)?;
-        if state.has_block_entity() {
-            Err(LevelError::UnsupportedBlockEntity(state.block()))
-        } else {
-            Ok(None)
-        }
+    fn block_entity_data(&mut self, pos: BlockPos) -> Result<Option<Tag>, PlacementError> {
+        placement::block_entity_data(self.level, pos)
     }
     fn set_block(
         &mut self,
@@ -79,13 +74,13 @@ impl PlacementAccess for PlacementLevel<'_> {
     ) -> Result<(), LevelError> {
         self.level.update_neighbors_on_block_set(pos, old)
     }
-    fn load_block_entity_data(&mut self, pos: BlockPos, _: &Tag) -> Result<bool, LevelError> {
-        let state = self.level.get_block_state(pos)?;
-        if state.has_block_entity() {
-            Err(LevelError::UnsupportedBlockEntity(state.block()))
-        } else {
-            Ok(false)
-        }
+    fn load_block_entity_data(&mut self, pos: BlockPos, tag: &Tag) -> Result<bool, PlacementError> {
+        placement::load_block_entity_data(
+            self.level,
+            pos,
+            tag.as_compound()
+                .expect("BlockInput parser supplies a compound"),
+        )
     }
 }
 struct ReloadHost<'a> {
@@ -122,6 +117,33 @@ impl MinecraftServer {
         command: &PreparedCommand,
     ) -> Result<bool> {
         match command.command.as_str() {
+            "gamerule" => {
+                let mut result =
+                    ferraloom_game::commands::builtins::gamerule(&mut self.game_rules, command)?;
+                if let Some(change) = result.rule_change.take() {
+                    let locator = match &change.effect {
+                        Some(ferraloom_game::gamerules::GameRuleEffect::LocatorBar { enabled }) => {
+                            Some(*enabled)
+                        }
+                        _ => None,
+                    };
+                    self.on_game_rule_changed(change);
+                    if let Some(enabled) = locator {
+                        // MinecraftServer#onGameRuleChanged runs before command feedback.
+                        self.level
+                            .level
+                            .update_locator_bar(enabled)
+                            .map_err(CommandLevelFailure)?;
+                    }
+                }
+                self.apply_level_effects()?;
+                self.apply_command_result(source, &command.source, result);
+            }
+            "team" => {
+                let result = self.execute_team_command_live(command);
+                self.apply_level_effects()?;
+                self.apply_command_result(source, &command.source, result?);
+            }
             "data" => {
                 let result = self.data_command(command)?;
                 self.apply_command_result(source, &command.source, result);
@@ -137,6 +159,7 @@ impl MinecraftServer {
                 .map_err(|error| match error {
                     PlacementError::Syntax(error) => anyhow::Error::new(error),
                     PlacementError::Level(error) => anyhow::Error::new(CommandLevelFailure(error)),
+                    PlacementError::Serialization(error) => anyhow::Error::new(error),
                 });
                 self.apply_level_effects()?;
                 self.apply_command_result(source, &command.source, result?);
@@ -160,12 +183,12 @@ impl MinecraftServer {
             "time" => {
                 let (result, changed) = self.clocks.command(command, self.level.game_time);
                 if let Some(clock) = changed {
-                    self.level
-                        .level
-                        .refresh_environment_attributes(
-                            super::command_runtime::environment_clock_snapshot(&self.clocks),
-                        )
-                        .map_err(CommandLevelFailure)?;
+                    let snapshot = super::command_runtime::environment_clock_snapshot(&self.clocks);
+                    for live in self.live_levels_mut() {
+                        live.level
+                            .refresh_environment_attributes(snapshot.clone())
+                            .map_err(CommandLevelFailure)?;
+                    }
                     self.broadcast(self.clock_packet(Some(&clock)));
                 }
                 self.apply_command_result(source, &command.source, result?);
@@ -176,7 +199,8 @@ impl MinecraftServer {
                 self.apply_command_result(source, &command.source, result?);
             }
             "weather" => {
-                let result = ferraloom_game::commands::weather::run(command, &mut self.level.level);
+                let result = ferraloom_game::commands::weather::run(command, &mut self.level.level)
+                    .map_err(CommandLevelFailure)?;
                 self.apply_command_result(source, &command.source, result);
             }
             "forceload" => {

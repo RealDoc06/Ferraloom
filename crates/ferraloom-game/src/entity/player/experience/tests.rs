@@ -11,13 +11,17 @@ use ferraloom_util::{Uuid, Vec3};
 const VECTORS: &str = include_str!("../../../../tests/java/entity/vectors.tsv");
 fn level() -> (Level, EntityRef) {
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-    let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+    let mut level = {
+        let mut fixture_level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     level.set_sound_seed(0);
     let player = level.next_entity_ref();
     let data = ServerPlayer::new(
         Uuid::new(0, 1),
         "xp".into(),
-        level.next_entity_id(),
+        level.next_entity_id().unwrap(),
         Vec3::ZERO,
         GameType::Survival,
     );

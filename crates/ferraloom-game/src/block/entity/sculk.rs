@@ -1,5 +1,5 @@
 //! Canonical sculk receiver storage. Plants owns listener and ticker mechanics;
-//! those effects remain explicit Unsupported while worldgen can retain data.
+//! data is shared by worldgen persistence and live listener/ticker mechanics.
 use super::{BlockEntity, BlockEntityData, BlockEntityRef, BlockEntityState};
 use crate::{
     block::plants::sculk::{ChargeCursor, SculkSpreader},
@@ -149,20 +149,30 @@ fn save_cursor(cursor: &ChargeCursor) -> Tag {
     Tag::Compound(tag)
 }
 
-pub(super) struct SculkBehavior;
-pub(super) static SCULK_ENTITY: SculkBehavior = SculkBehavior;
+pub(super) struct SculkBehavior {
+    catalyst: bool,
+}
+pub(super) static SCULK_ENTITY: SculkBehavior = SculkBehavior { catalyst: false };
+pub(super) static CATALYST_ENTITY: SculkBehavior = SculkBehavior { catalyst: true };
 impl BlockEntity for SculkBehavior {
+    fn game_event_listener(
+        &self,
+    ) -> Option<&'static dyn crate::level::game_event::GameEventListener> {
+        Some(if self.catalyst {
+            &crate::block::plants::sculk::catalyst::LISTENER
+        } else {
+            &crate::block::plants::sculk::vibration::LISTENER
+        })
+    }
     fn has_server_ticker(&self) -> bool {
         true
     }
     fn tick(&self, receiver: BlockEntityRef, level: &mut Level) -> Result<(), LevelError> {
-        Err(LevelError::UnsupportedBlockEntity(
-            level
-                .block_entity_state(receiver)?
-                .data()
-                .block_state
-                .block(),
-        ))
+        if self.catalyst {
+            crate::block::plants::sculk::tick_catalyst(receiver, level)
+        } else {
+            crate::block::plants::sculk::vibration::tick(receiver, level)
+        }
     }
     fn pre_remove_side_effects(
         &self,
@@ -176,6 +186,24 @@ impl BlockEntity for SculkBehavior {
             return Err(LevelError::UnsupportedBlockEntity(
                 entity.data().block_state.block(),
             ));
+        }
+        Ok(())
+    }
+    fn load_additional_live(
+        &self,
+        receiver: BlockEntityRef,
+        tag: &CompoundTag,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        let sources = cached_entity_refs(level.block_entity_state(receiver)?);
+        let context = level.context().clone();
+        self.load_additional(
+            level.block_entity_state_mut(receiver)?,
+            tag,
+            context.registry_context()?,
+        );
+        for source in sources.into_iter().flatten() {
+            level.release_entity(source);
         }
         Ok(())
     }
@@ -236,6 +264,26 @@ impl BlockEntity for SculkBehavior {
             _ => unreachable!(),
         })
     }
+}
+
+/// Strong cached VibrationInfo receivers; UUID-only decoded records own no entity.
+/// Retirement calls this before dropping a BE, without invoking world callbacks.
+pub(crate) fn cached_entity_refs(
+    state: &BlockEntityState,
+) -> [Option<crate::entity::EntityRef>; 2] {
+    let data = match state {
+        BlockEntityState::SculkSensor(value) => &value.vibration_data,
+        BlockEntityState::CalibratedSculkSensor(value) => &value.parent.vibration_data,
+        BlockEntityState::SculkShrieker(value) => &value.vibration_data,
+        _ => return [None, None],
+    };
+    [
+        data.current_vibration.as_ref().and_then(|info| info.entity),
+        data.selection_strategy
+            .current_vibration_data
+            .as_ref()
+            .and_then(|candidate| candidate.event.entity),
+    ]
 }
 
 #[cfg(test)]

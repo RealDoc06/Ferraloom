@@ -60,7 +60,11 @@ impl Cow {
     /// Native setAge's server state and metadata update. A live caller runs
     /// refreshDimensions immediately when this returns a boundary transition.
     pub(crate) fn read_age(&mut self, tag: &CompoundTag) -> bool {
-        let age = tag.get_int_or("Age", 0);
+        self.set_age(tag.get_int_or("Age", 0))
+    }
+    /// Port of AgeableMob#setAge. The caller refreshes dimensions on a boundary
+    /// transition; becoming a baby cannot trigger the adult boat dismount.
+    pub(crate) fn set_age(&mut self, age: i32) -> bool {
         let was_baby = self.parent.parent.parent.age < 0;
         self.parent.parent.parent.age = age;
         let changed = was_baby != (age < 0);

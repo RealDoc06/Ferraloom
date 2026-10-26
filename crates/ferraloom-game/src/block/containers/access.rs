@@ -85,6 +85,13 @@ pub fn get_item(
     slot: usize,
     level: &mut Level,
 ) -> Result<ItemStack, LevelError> {
+    if let BlockEntityState::ChiseledBookShelf(entity) = level.block_entity_state(handle)? {
+        return entity
+            .items
+            .get(slot)
+            .cloned()
+            .ok_or(LevelError::Inventory("bookshelf slot out of range"));
+    }
     if !matches!(
         level.block_entity_state(handle)?,
         BlockEntityState::Crafter(_)
@@ -115,6 +122,12 @@ pub fn set_item_value(
     value: StackValue,
     level: &mut Level,
 ) -> Result<(), LevelError> {
+    if matches!(
+        level.block_entity_state(handle)?,
+        BlockEntityState::ChiseledBookShelf(_)
+    ) {
+        return super::bookshelf::set_item_value(handle, slot, value, level);
+    }
     let mut operation = StackOperation::new(level);
     if let StackValue::Existing(reference) = &value {
         operation.pin_existing(*reference).map_err(stack_error)?;
@@ -178,6 +191,14 @@ pub fn remove_item(
     amount: i32,
     level: &mut Level,
 ) -> Result<ItemStack, LevelError> {
+    if matches!(
+        level.block_entity_state(handle)?,
+        BlockEntityState::ChiseledBookShelf(_)
+    ) {
+        return Err(LevelError::Inventory(
+            "bookshelf removal requires a caller-rooted stack operation",
+        ));
+    }
     level.with_block_entity_callback(handle, |level| {
         super::loot::unpack_loot_table(handle, None, level)?;
         let hopper = matches!(
@@ -202,6 +223,13 @@ pub fn remove_item_no_update(
     slot: usize,
     level: &mut Level,
 ) -> Result<ItemStack, LevelError> {
+    if let BlockEntityState::ChiseledBookShelf(entity) = level.block_entity_state_mut(handle)? {
+        return entity
+            .items
+            .get_mut(slot)
+            .map(|item| split(item, 1))
+            .ok_or(LevelError::Inventory("bookshelf slot out of range"));
+    }
     super::loot::unpack_loot_table(handle, None, level)?;
     let container = level.block_entity::<BaseContainerBlockEntity>(handle)?;
     if let Some((generations, item, index)) = container.stack_parts(slot)
@@ -257,6 +285,9 @@ pub fn block_container_at(
         return Ok(None);
     };
     let receiver = level.block_entity_state(handle)?;
+    if matches!(receiver, BlockEntityState::ChiseledBookShelf(_)) {
+        return Err(LevelError::UnsupportedBlockEntity(state.block()));
+    }
     if matches!(receiver, BlockEntityState::BrewingStand(_)) {
         return Err(LevelError::Inventory("BrewingStand worldly container"));
     }

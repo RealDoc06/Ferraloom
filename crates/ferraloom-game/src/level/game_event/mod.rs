@@ -107,10 +107,6 @@ pub(super) struct GameEventListenerRegistries {
 mod dispatcher;
 pub use dispatcher::GameEventDispatcher;
 mod registry;
-#[expect(
-    unused_imports,
-    reason = "BE lifecycle owner consumes the register/unregister boundaries after the micro-landing"
-)]
 pub(crate) use registry::{
     detach_chunk_listeners, register_block_entity_listener, unregister_block_entity_listener,
 };

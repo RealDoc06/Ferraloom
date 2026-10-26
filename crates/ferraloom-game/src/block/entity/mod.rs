@@ -9,7 +9,9 @@ pub mod banner;
 pub mod beehive;
 pub mod brewing_stand;
 pub mod brushable;
+pub mod chiseled_bookshelf;
 mod components;
+pub mod creaking_heart;
 pub mod daylight_detector;
 pub mod enchanting_table;
 pub mod ender_chest;
@@ -208,6 +210,8 @@ static THE_END_PORTAL: TheEndPortal = TheEndPortal;
 /// Canonical concrete states. Extend this enum when porting a subclass, never Any.
 #[derive(Clone, Debug)]
 pub enum BlockEntityState {
+    ChiseledBookShelf(Box<chiseled_bookshelf::ChiseledBookShelfBlockEntity>),
+    CreakingHeart(Box<creaking_heart::CreakingHeartBlockEntity>),
     Banner(Box<banner::BannerBlockEntity>),
     BrewingStand(Box<brewing_stand::BrewingStandBlockEntity>),
     EnchantingTable(Box<enchanting_table::EnchantingTableBlockEntity>),
@@ -239,6 +243,8 @@ pub enum BlockEntityState {
 impl BlockEntityState {
     pub fn data(&self) -> &BlockEntityData {
         match self {
+            Self::ChiseledBookShelf(entity) => &entity.parent,
+            Self::CreakingHeart(entity) => &entity.parent,
             Self::Banner(entity) => &entity.parent,
             Self::BrewingStand(entity) => &entity.parent.parent,
             Self::EnchantingTable(entity) => &entity.parent,
@@ -270,6 +276,8 @@ impl BlockEntityState {
     }
     pub fn data_mut(&mut self) -> &mut BlockEntityData {
         match self {
+            Self::ChiseledBookShelf(entity) => &mut entity.parent,
+            Self::CreakingHeart(entity) => &mut entity.parent,
             Self::Banner(entity) => &mut entity.parent,
             Self::BrewingStand(entity) => &mut entity.parent.parent,
             Self::EnchantingTable(entity) => &mut entity.parent,
@@ -301,14 +309,16 @@ impl BlockEntityState {
     }
     pub fn behavior(&self) -> &'static dyn BlockEntity {
         match self {
+            Self::ChiseledBookShelf(_) => &chiseled_bookshelf::CHISELED_BOOKSHELF_ENTITY,
+            Self::CreakingHeart(_) => &creaking_heart::CREAKING_HEART_ENTITY,
+            Self::SculkSensor(_) | Self::CalibratedSculkSensor(_) | Self::SculkShrieker(_) => {
+                &sculk::SCULK_ENTITY
+            }
+            Self::SculkCatalyst(_) => &sculk::CATALYST_ENTITY,
             Self::Banner(_) => &banner::BANNER_ENTITY,
             Self::BrewingStand(_) => &brewing_stand::BREWING_STAND_ENTITY,
             Self::EnchantingTable(_) => &enchanting_table::ENCHANTING_TABLE_ENTITY,
             Self::EnderChest(_) => &ender_chest::ENDER_CHEST_ENTITY,
-            Self::SculkSensor(_)
-            | Self::CalibratedSculkSensor(_)
-            | Self::SculkShrieker(_)
-            | Self::SculkCatalyst(_) => &sculk::SCULK_ENTITY,
             Self::DaylightDetector(_) => &daylight_detector::DAYLIGHT_DETECTOR_ENTITY,
             Self::PotentSulfur(_) => &potent_sulfur::POTENT_SULFUR_ENTITY,
             Self::Command(_) => &super::containers::command::COMMAND_ENTITY,
@@ -340,6 +350,7 @@ impl BlockEntityState {
     /// dimension's static fact. Types that do not use sky never require it.
     pub fn has_server_ticker(&self, has_skylight: Option<bool>) -> Result<bool, LevelError> {
         match self {
+            Self::CreakingHeart(entity) => Ok(entity.has_server_ticker()),
             Self::DaylightDetector(_) => has_skylight.ok_or(LevelError::UnsupportedLightQuery),
             Self::PotentSulfur(entity) => Ok(entity.has_server_ticker()),
             _ => Ok(self.behavior().has_server_ticker()),
@@ -515,6 +526,12 @@ pub fn create(pos: BlockPos, state: BlockState) -> Result<BlockEntityState, Leve
         .ok_or(LevelError::UnsupportedBlockEntity(state.block()))?;
     let data = BlockEntityData::new(kind, pos, state)?;
     match kind {
+        BlockEntityType::CHISELED_BOOKSHELF => Ok(BlockEntityState::ChiseledBookShelf(Box::new(
+            chiseled_bookshelf::ChiseledBookShelfBlockEntity::new(data),
+        ))),
+        BlockEntityType::CREAKING_HEART => Ok(BlockEntityState::CreakingHeart(Box::new(
+            creaking_heart::CreakingHeartBlockEntity::new(data),
+        ))),
         BlockEntityType::BANNER => Ok(BlockEntityState::Banner(Box::new(
             banner::BannerBlockEntity::new(data),
         ))),
@@ -639,7 +656,9 @@ pub fn supports(block: Block) -> bool {
     matches!(
         registry::for_block(block),
         Some(
-            BlockEntityType::BANNER
+            BlockEntityType::CHISELED_BOOKSHELF
+                | BlockEntityType::CREAKING_HEART
+                | BlockEntityType::BANNER
                 | BlockEntityType::BREWING_STAND
                 | BlockEntityType::ENCHANTING_TABLE
                 | BlockEntityType::ENDER_CHEST
@@ -798,6 +817,11 @@ projection!(
 mod placement_tests;
 
 projection!(potent_sulfur::PotentSulfurBlockEntity, PotentSulfur);
+projection!(creaking_heart::CreakingHeartBlockEntity, CreakingHeart);
+projection!(
+    chiseled_bookshelf::ChiseledBookShelfBlockEntity,
+    ChiseledBookShelf
+);
 
 projection!(banner::BannerBlockEntity, Banner);
 projection!(brewing_stand::BrewingStandBlockEntity, BrewingStand);

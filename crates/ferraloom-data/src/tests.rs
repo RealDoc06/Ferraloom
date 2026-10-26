@@ -3,6 +3,23 @@ use serde_json::Value;
 use std::fmt::Debug;
 
 #[test]
+fn native_entity_peaceful_flags_match_the_bootstrap_dump() {
+    let captured: serde_json::Value =
+        serde_json::from_str(include_str!("../../../data/generated/entity_types.json")).unwrap();
+    let captured = captured.as_array().unwrap();
+    assert_eq!(captured.len(), registries::entity_type::ALL.len());
+    for row in captured {
+        let kind = EntityType::from_name(row["name"].as_str().unwrap()).unwrap();
+        assert_eq!(kind.protocol_id(), row["id"].as_u64().unwrap() as u16);
+        assert_eq!(
+            kind.data().allowed_in_peaceful,
+            row["allowed_in_peaceful"].as_bool().unwrap(),
+            "{}",
+            kind.name()
+        );
+    }
+}
+#[test]
 fn render_shapes_remain_independent_of_air_collision_and_block_entities() {
     for block in [
         Block::AIR,

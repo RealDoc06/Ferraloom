@@ -18,7 +18,10 @@ pub mod monster;
 pub mod player;
 pub mod pushing;
 mod stuck;
-pub use persistence::{EntityPersistenceError, load_in_place};
+pub mod variant;
+pub use persistence::{EntityPersistenceError, load_entity_recursive, load_in_place};
+mod spawn;
+pub use spawn::{EntitySpawnReason, EntitySpawnRequest};
 pub use stuck::{make_stuck_in_block, reset_fall_distance};
 mod relationships;
 pub use relationships::PassengerList;
@@ -291,6 +294,7 @@ pub enum EntityMethod {
     LoadSleepingPosition,
     LoadBrain,
     CowVariantBehavior,
+    FinalizeSpawn,
 }
 impl EntityMethod {
     pub const fn name(self) -> &'static str {
@@ -314,6 +318,7 @@ impl EntityMethod {
             Self::LoadSleepingPosition => "LivingEntity#readAdditionalSaveData(sleeping_pos)",
             Self::LoadBrain => "LivingEntity#makeBrain",
             Self::CowVariantBehavior => "Cow#getSoundSet",
+            Self::FinalizeSpawn => "Mob#finalizeSpawn",
             Self::Die => "LivingEntity#die",
         }
     }
@@ -415,6 +420,16 @@ pub trait Entity: Sync {
         Ok(true)
     }
     /// Port of Entity#playerTouch; concrete pickup entities override this hook.
+    /// Port of LivingEntity#take, overridden by ServerPlayer for menu sync.
+    fn take(
+        &self,
+        collector: EntityRef,
+        entity: EntityRef,
+        count: i32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        living::take(collector, entity, count, level)
+    }
     fn player_touch(
         &self,
         _entity: EntityRef,
@@ -502,6 +517,10 @@ pub trait Entity: Sync {
         movement::get_on_pos(entity, 1.0e-5_f32, level)
     }
     fn is_spectator(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
+        Ok(false)
+    }
+    /// Port of Entity#dampensVibrations; ItemEntity overrides its effective stack query.
+    fn dampens_vibrations(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
         Ok(false)
     }
     /// Port of Entity#isSteppingCarefully; Cat and Ocelot override this read.
@@ -971,6 +990,15 @@ pub trait Entity: Sync {
         movement::base_cause_fall_damage(entity, level, fall_distance, damage_modifier, source)
     }
 
+    /// Port of LivingEntity#onAttributeUpdated with the derived dispatcher.
+    fn on_attribute_updated(
+        &self,
+        entity: EntityRef,
+        attribute: ferraloom_data::registries::attribute::Id,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        living::on_attribute_updated_parent(self, entity, attribute, level)
+    }
     /// Port of LivingEntity#onEquippedItemBroken, overridden by ServerPlayer.
     fn on_equipped_item_broken(
         &self,

@@ -419,6 +419,8 @@ pub(super) fn initial_orientation(
 }
 
 #[cfg(test)]
+mod phase_trace;
+#[cfg(test)]
 mod tests;
 
 #[cfg(test)]
