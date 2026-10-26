@@ -14,9 +14,8 @@ pub trait CommandCallbackHost {
 
 /// Port of CommandResultCallback. Callbacks run inline, in composition order.
 #[derive(Clone, Default)]
-pub struct CommandResultCallback(
-    Option<Arc<dyn Fn(&mut dyn CommandCallbackHost, bool, i32) + Send + Sync>>,
-);
+pub struct CommandResultCallback(Option<Arc<ResultCallbackAction>>);
+type ResultCallbackAction = dyn Fn(&mut dyn CommandCallbackHost, bool, i32) + Send + Sync;
 impl fmt::Debug for CommandResultCallback {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(if self.0.is_some() {
