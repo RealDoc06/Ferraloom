@@ -20,6 +20,11 @@ pub struct WorldServices {
     pub(super) saving: Arc<JobPool>,
 }
 impl WorldServices {
+    /// Immutable worldgen definitions shared by generation and live placement.
+    pub(crate) fn worldgen(&self) -> &Arc<ferraloom_game::level::generation::WorldGenRegistries> {
+        &self.worldgen
+    }
+
     /// Port of WorldDimensions#specialWorldProperty: debug/flat are global
     /// WorldData flags, including when the player's current level is not OW.
     pub fn is_debug_world(&self) -> bool {
