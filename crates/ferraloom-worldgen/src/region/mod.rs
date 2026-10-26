@@ -542,6 +542,7 @@ struct RegionEnvironment {
     biome_indices: Vec<usize>,
 }
 pub struct WorldGenRegion<'a> {
+    structure_templates: Option<&'a crate::structure::template::StructureTemplateManager>,
     registry_context: Option<&'a dyn RegistryContext>,
     light_engine: Option<&'a mut dyn ProtoChunkLightEngine>,
     environment: Option<RegionEnvironment>,
@@ -638,6 +639,7 @@ impl<'a> WorldGenRegion<'a> {
         }
         Ok(Self {
             registry_context: None,
+            structure_templates: None,
             light_engine: None,
             environment: None,
             random: None,
@@ -665,6 +667,19 @@ impl<'a> WorldGenRegion<'a> {
     pub fn registry_context(&self) -> Result<&'a dyn RegistryContext, Error> {
         self.registry_context
             .ok_or_else(|| Error("Unsupported: worldgen registry context unavailable".into()))
+    }
+    pub fn set_structure_templates(
+        &mut self,
+        templates: &'a crate::structure::template::StructureTemplateManager,
+    ) {
+        self.structure_templates = Some(templates);
+    }
+    pub fn structure_templates(
+        &self,
+    ) -> Result<&'a crate::structure::template::StructureTemplateManager, Error> {
+        self.structure_templates.ok_or_else(|| {
+            Error("Unsupported: worldgen structure template manager unavailable".into())
+        })
     }
     /// Lend the executor's canonical proto light engine for this region call.
     /// The executor drains its checks before any changed proto save/transport.

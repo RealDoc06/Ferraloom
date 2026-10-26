@@ -110,7 +110,7 @@ impl TemplateStructurePiece {
             return Ok(());
         }
         for marker in filter_blocks(
-            template,
+            &template,
             self.position,
             &mut self.settings,
             Block::STRUCTURE_BLOCK,
@@ -135,7 +135,7 @@ impl TemplateStructurePiece {
             }
         }
         for block in filter_blocks(
-            template,
+            &template,
             self.position,
             &mut self.settings,
             Block::JIGSAW,

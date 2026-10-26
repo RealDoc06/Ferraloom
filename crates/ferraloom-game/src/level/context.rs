@@ -19,6 +19,8 @@ pub struct LevelContext {
     enchantments: Option<Arc<crate::item::enchantment::EnchantmentRegistry>>,
     mob_variants: Option<Arc<crate::entity::variant::MobVariants>>,
     registry_context: Option<Arc<dyn ferraloom_protocol::codec::RegistryContext>>,
+    structure_templates:
+        Option<Arc<ferraloom_worldgen::structure::template::StructureTemplateManager>>,
     game_event_tags:
         Option<Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::game_event::Id>>>,
 }
@@ -45,6 +47,7 @@ impl LevelContext {
             enchantments: None,
             mob_variants: None,
             registry_context: None,
+            structure_templates: None,
             game_event_tags: None,
         }
     }
@@ -131,6 +134,26 @@ impl LevelContext {
         self.registry_context
             .as_deref()
             .ok_or(super::LevelError::MissingRegistryContext)
+    }
+
+    /// MinecraftServer#getStructureManager supplies the same canonical asset
+    /// cache to live placement and worldgen in every dimension.
+    pub fn with_structure_templates(
+        mut self,
+        templates: Arc<ferraloom_worldgen::structure::template::StructureTemplateManager>,
+    ) -> Self {
+        self.structure_templates = Some(templates);
+        self
+    }
+    pub fn structure_templates(
+        &self,
+    ) -> Result<
+        &Arc<ferraloom_worldgen::structure::template::StructureTemplateManager>,
+        super::LevelError,
+    > {
+        self.structure_templates
+            .as_ref()
+            .ok_or(super::LevelError::MissingStructureTemplates)
     }
 
     pub fn damage_types(&self) -> &Arc<DamageTypeRegistry> {
@@ -264,5 +287,27 @@ impl ferraloom_protocol::codec::RegistryContext for FixtureRegistryContext {
             .registry(&format!("tags/{}", registry.path()))
             .keys()
             .any(|name| name.to_string() == tag.as_str())
+    }
+}
+
+#[cfg(test)]
+mod template_tests {
+    use super::*;
+
+    #[test]
+    fn structure_templates_require_installation_and_retain_the_canonical_arc() {
+        let mut context = Arc::unwrap_or_clone(LevelContext::fixture(0, 63));
+        context.structure_templates = None;
+        assert!(matches!(
+            context.structure_templates(),
+            Err(super::super::LevelError::MissingStructureTemplates)
+        ));
+        let templates =
+            Arc::new(ferraloom_worldgen::structure::template::StructureTemplateManager::default());
+        let context = context.with_structure_templates(templates.clone());
+        assert!(Arc::ptr_eq(
+            context.structure_templates().unwrap(),
+            &templates
+        ));
     }
 }
