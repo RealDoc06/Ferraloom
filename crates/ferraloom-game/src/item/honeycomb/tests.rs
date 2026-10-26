@@ -118,25 +118,24 @@ fn native_honeycomb_use_keeps_context_receiver_chest_effect_order_and_rng() {
         let f = line.split('\t').collect::<Vec<_>>();
         let old = BlockState::from_id(f[1].parse().unwrap()).unwrap();
         let separate = f[2] == "true";
-        // The native waxing result is captured above, but this receiver cannot
-        // be attached until the canonical CopperGolemStatue BE factory lands.
-        // Keep its required error explicit; these eight cases are not matches.
-        if old
+        let statue = old
             .block()
-            .is_instance_of(BlockClass::CopperGolemStatueBlock)
-        {
-            assert!(
-                matches!(entity::create(pos, old), Err(LevelError::UnsupportedBlockEntity(block)) if block == old.block()),
-                "{line}"
-            );
-            pending_statues += 1;
-            continue;
-        }
+            .is_instance_of(BlockClass::CopperGolemStatueBlock);
         let (mut level, player) = level();
         level
             .set_block_state(pos.below(1), Block::STONE.default_state())
             .unwrap();
         state(&mut level, pos, old);
+        let original_statue = if statue {
+            Some(
+                level
+                    .block_entity_ref(pos)
+                    .unwrap()
+                    .expect("real statue factory"),
+            )
+        } else {
+            None
+        };
         let neighbor = super::tests::pos(f[7]);
         if old.block().is_instance_of(BlockClass::ChestBlock)
             && old.get(p::TYPE_).is_some_and(|v| v.as_str() != "single")
@@ -185,9 +184,58 @@ fn native_honeycomb_use_keeps_context_receiver_chest_effect_order_and_rng() {
             },
         );
         *operation.level.random() = Random::Legacy(LegacyRandomSource::new(1234));
-        let result = crate::item::stack::use_on(receiver, &context, &mut operation)
-            .unwrap()
-            .unwrap();
+        let result = crate::item::stack::use_on(receiver, &context, &mut operation);
+        if statue {
+            // The canonical factory is real now. Every captured statue case
+            // changes its block with UPDATE_NEIGHBORS, so full waxing still
+            // requires CopperGolemStatueBlock#affectNeighborsAfterRemoval.
+            // Verify the native mutation prefix without counting it as a match.
+            assert!(
+                operation
+                    .level
+                    .required_block_behavior(
+                        old.block(),
+                        crate::block::BlockMethod::AffectNeighborsAfterRemoval
+                    )
+                    .is_err(),
+                "remove this pending branch when the callback lands"
+            );
+            let error = result.expect_err("statue removal callback remains required");
+            assert_eq!(
+                error.root(),
+                &LevelError::UnsupportedBlock(old.block()),
+                "{line}"
+            );
+            assert_eq!(
+                operation.level.block_entity_ref(pos).unwrap(),
+                original_statue,
+                "{line}"
+            );
+            assert_eq!(
+                inventory::count(operation.level.stack(receiver).unwrap()),
+                f[4].parse::<i32>().unwrap(),
+                "{line}"
+            );
+            assert_eq!(
+                inventory::count(operation.level.stack(held).unwrap()),
+                f[5].parse::<i32>().unwrap(),
+                "{line}"
+            );
+            assert_eq!(
+                operation.level.get_block_state(pos).unwrap().id(),
+                f[6].parse::<u16>().unwrap(),
+                "{line}"
+            );
+            let remaining = inventory::count(operation.level.stack(held).unwrap());
+            assert_eq!(
+                actions(operation.level, remaining),
+                "",
+                "effects after the required callback must not run: {line}"
+            );
+            pending_statues += 1;
+            continue;
+        }
+        let result = result.unwrap().unwrap();
         assert_eq!(
             if result.consumes_action() {
                 "success"
