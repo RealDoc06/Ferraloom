@@ -40,6 +40,7 @@ public final class EvaluatorVectors {
             public net.minecraft.world.level.lighting.LevelLightEngine getLightEngine(){return light;}
             public void onSectionEmptinessChanged(int x,int y,int z,boolean empty){}
         }
+        public int getSeaLevel(){return 63;}
         public ChunkSource getChunkSource(){return source;}
         public BlockState getBlockState(BlockPos pos){var chunk=chunks.get(ChunkPos.containing(pos));return chunk==null?Blocks.AIR.defaultBlockState():chunk.getBlockState(pos);}
         public FluidState getFluidState(BlockPos pos){return getBlockState(pos).getFluidState();}

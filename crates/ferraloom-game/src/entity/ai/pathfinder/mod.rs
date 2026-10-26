@@ -35,3 +35,6 @@ pub use amphibious_node_evaluator::AmphibiousNodeEvaluator;
 pub use fly_node_evaluator::FlyNodeEvaluator;
 pub use swim_node_evaluator::SwimNodeEvaluator;
 pub use walk_node_evaluator::WalkNodeEvaluator;
+
+#[cfg(test)]
+mod evaluator_tests;
