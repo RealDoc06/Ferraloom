@@ -14,7 +14,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Crafting and recipes](features/crafting-recipes.md) | 2137 | 2 | 29 | 2106 | 0 |
 | [Datapacks and resource reload](features/datapacks-reload.md) | 57 | 57 | 0 | 0 | 0 |
 | [Enchantments](features/enchantments.md) | 139 | 107 | 32 | 0 | 0 |
-| [Entities and AI](features/entities.md) | 799 | 672 | 111 | 16 | 0 |
+| [Entities and AI](features/entities.md) | 802 | 672 | 114 | 16 | 0 |
 | [Fluids](features/fluids.md) | 32 | 25 | 6 | 1 | 0 |
 | [Binary data, geometry and randomness](features/foundations.md) | 64 | 18 | 18 | 28 | 0 |
 | [Functions and macros](features/functions-macros.md) | 10 | 10 | 0 | 0 | 0 |
@@ -50,4 +50,4 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 308 | 305 | 3 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3116 | 2640 | 176 | 300 | 0 |
-| **Total** | **19641** | **8222** | **2846** | **8573** | **0** |
+| **Total** | **19644** | **8222** | **2849** | **8573** | **0** |
