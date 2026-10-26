@@ -111,6 +111,7 @@ impl BlockEntityRuntime {
         &self,
         chunk: &mut super::chunk::LevelChunk,
         game_time: i64,
+        min_y: i32,
     ) {
         // LevelChunk's proto constructor calls setBlockEntity, which sets the
         // level and clears removed before postLoad, without binding tickers.
@@ -127,7 +128,7 @@ impl BlockEntityRuntime {
                 data.generation = generation;
             }
             data.removed = false;
-            state.set_level(game_time);
+            state.set_level(game_time, min_y);
         }
     }
     pub(super) fn register_published_chunk(
@@ -229,19 +230,19 @@ impl Level {
         state.data_mut().block_state = block;
         let has_ticker = state.has_server_ticker(self.region().has_skylight)?;
         let region = self.region_mut();
-        if let Some(mut old) = region
+        let old = if let Some(old) = region
             .chunks
             .get_mut(&key)
             .ok_or(LevelError::MissingChunk(key))?
             .block_entities
             .remove(pos)
         {
-            old.data_mut().set_removed();
-            region
-                .block_entity_state
-                .detached
-                .insert(old.data().reference(), old);
-        }
+            let reference = old.data().reference();
+            region.block_entity_state.detached.insert(reference, old);
+            Some(reference)
+        } else {
+            None
+        };
         let runtime = &mut region.block_entity_state;
         let generation = runtime
             .next_generation
@@ -255,13 +256,18 @@ impl Level {
         data.removed = false;
         let reference = data.reference();
         let kind = data.kind;
-        state.set_level(region.game_time);
+        state.set_level(region.game_time, region.min_y);
         region
             .chunks
             .get_mut(&key)
             .ok_or(LevelError::MissingChunk(key))?
             .block_entities
             .insert(state);
+        // Native puts the new receiver first; the previous receiver's class
+        // callback then observes the replacement through positional queries.
+        if let Some(old) = old {
+            old.set_removed_live(self)?;
+        }
         super::game_event::register_block_entity_listener(reference, self)?;
         let tickers = self.region_mut().block_entity_state.tickers.get_mut();
         if has_ticker {
@@ -293,10 +299,10 @@ impl Level {
                 .insert(handle, state);
             if unregister {
                 super::game_event::unregister_block_entity_listener(handle, self)?;
+                handle.set_removed_live(self)?;
             }
-            self.block_entity_state_mut(handle)?
-                .data_mut()
-                .set_removed();
+            // clearAllBlockEntities already called every class hook while the
+            // chunk's full receiver map was still present.
         }
         self.region_mut()
             .block_entity_state
@@ -470,26 +476,50 @@ impl Level {
     /// held by menus/callback frames and its serialized data for later reattachment.
     pub fn detach_block_entities_for_unload(&mut self, key: ChunkPos) -> Result<(), LevelError> {
         let tags = self.block_entity_tags_for_saving(key)?;
-        let positions: Vec<_> = self
+        let handles: Vec<_> = self
             .chunk(key)
             .unwrap()
             .block_entities
             .iter()
-            .map(|entity| entity.data().pos)
+            .map(|entity| entity.data().reference())
             .collect();
-        // ServerLevel#unload clears receivers/tickers and detaches the chunk
-        // registry owner as a whole, without unregistering individual listeners.
-        for pos in positions {
-            self.detach_block_entity(pos, false)?;
+        for (index, &handle) in handles.iter().enumerate() {
+            if let Err(error) = self.retain_block_entity(handle) {
+                for &retained in &handles[..index] {
+                    self.release_block_entity(retained);
+                }
+                return Err(error);
+            }
         }
-        super::game_event::detach_chunk_listeners(key, self)?;
-        self.region_mut()
-            .chunks
-            .get_mut(&key)
-            .unwrap()
-            .pending_generation
-            .block_entities = tags;
-        Ok(())
+        let result = (|| {
+            // LevelChunk#clearAllBlockEntities invokes all setRemoved callbacks
+            // before clearing the map, then detaches the chunk registry owner.
+            for &handle in &handles {
+                handle.set_removed_live(self)?;
+            }
+            let positions: Vec<_> = self
+                .chunk(key)
+                .unwrap()
+                .block_entities
+                .iter()
+                .map(|entity| entity.data().pos)
+                .collect();
+            for pos in positions {
+                self.detach_block_entity(pos, false)?;
+            }
+            super::game_event::detach_chunk_listeners(key, self)?;
+            self.region_mut()
+                .chunks
+                .get_mut(&key)
+                .unwrap()
+                .pending_generation
+                .block_entities = tags;
+            Ok(())
+        })();
+        for &handle in handles.iter().rev() {
+            self.release_block_entity(handle);
+        }
+        result
     }
     /// Port of LevelChunk#getBlockEntity(CHECK)'s removed-entry cleanup. A
     /// retained receiver stays addressable; its pending replacement is not

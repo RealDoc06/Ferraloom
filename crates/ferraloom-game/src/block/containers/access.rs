@@ -287,7 +287,10 @@ pub fn block_container_at(
     let receiver = level.block_entity_state(handle)?;
     if matches!(
         receiver,
-        BlockEntityState::ChiseledBookShelf(_) | BlockEntityState::DecoratedPot(_)
+        BlockEntityState::ChiseledBookShelf(_)
+            | BlockEntityState::DecoratedPot(_)
+            | BlockEntityState::Shelf(_)
+            | BlockEntityState::Jukebox(_)
     ) {
         return Err(LevelError::UnsupportedBlockEntity(state.block()));
     }

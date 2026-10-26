@@ -605,9 +605,11 @@ impl Level {
             .set(chunk.publication_generation);
         chunk.staged_publication = None;
         chunk.loaded.set(true);
-        region
-            .block_entity_state
-            .prepare_published_chunk(&mut chunk, region.game_time);
+        region.block_entity_state.prepare_published_chunk(
+            &mut chunk,
+            region.game_time,
+            region.min_y,
+        );
         let block_ticks = std::mem::take(&mut chunk.block_ticks);
         let fluid_ticks = std::mem::take(&mut chunk.fluid_ticks);
         // Listener roots must resolve the canonical receiver before native
