@@ -6,7 +6,7 @@ use ferraloom_chunk::BiomeId;
 use ferraloom_data::{Block, BlockState, FluidState};
 use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_protocol::codec::RegistryContext;
-use std::{cell::OnceCell, collections::BTreeMap};
+use std::{collections::BTreeMap, sync::OnceLock};
 
 mod block_entity;
 mod lighting;
@@ -106,7 +106,7 @@ pub struct RegionChunk {
     pub fluid_ticks: ProtoChunkTicks<ferraloom_data::registries::fluid::Id>,
     pub poi_changes: Vec<([i32; 3], BlockState, BlockState)>,
     sky_light_sources: ferraloom_light::ChunkSkyLightSources,
-    heightmaps: [OnceCell<[i32; 256]>; 6],
+    heightmaps: [OnceLock<[i32; 256]>; 6],
 }
 impl RegionChunk {
     /// ChunkAccess#getBlockEntityNbtForSaving prefers the actual receiver to a
@@ -151,8 +151,8 @@ impl RegionChunk {
         self.chunk.ocean_floor = chunk.ocean_floor;
     }
 
-    fn heightmap_caches(chunk: &GeneratedChunk) -> [OnceCell<[i32; 256]>; 6] {
-        let heightmaps: [OnceCell<[i32; 256]>; 6] = std::array::from_fn(|_| OnceCell::new());
+    fn heightmap_caches(chunk: &GeneratedChunk) -> [OnceLock<[i32; 256]>; 6] {
+        let heightmaps: [OnceLock<[i32; 256]>; 6] = std::array::from_fn(|_| OnceLock::new());
         heightmaps[Heightmap::WorldSurfaceWg as usize]
             .set(chunk.world_surface)
             .unwrap();
