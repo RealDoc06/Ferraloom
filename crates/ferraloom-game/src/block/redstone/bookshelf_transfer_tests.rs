@@ -17,6 +17,7 @@ use ferraloom_data::{
     datapack::{Pack, ResourceManager, TagSet},
 };
 use ferraloom_nbt::{Tag, parse_compound};
+use ferraloom_protocol::component::Persistent;
 use std::sync::{Arc, LazyLock};
 
 const POS: BlockPos = BlockPos::new(8, 64, 8);
