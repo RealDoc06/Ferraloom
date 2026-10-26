@@ -280,6 +280,7 @@ impl Bot {
         ))
         .await?;
         let mut registries = RegistrySet {
+            resources: Arc::new(ferraloom_data::datapack::ResourceManager::default()),
             entries: BTreeMap::new(),
             tags: common::clientbound::UpdateTags { tags: Vec::new() },
         };

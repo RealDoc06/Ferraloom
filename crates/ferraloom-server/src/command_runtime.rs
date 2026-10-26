@@ -2209,6 +2209,7 @@ mod command_context_tests {
     fn command_context_shares_static_dynamic_and_empty_resolved_tags() {
         let id = |name: &str| Identifier::parse(name).unwrap();
         let registries = RegistrySet {
+            resources: std::sync::Arc::new(ferraloom_data::datapack::ResourceManager::default()),
             entries: BTreeMap::from([(
                 "minecraft:worldgen/biome".into(),
                 vec!["minecraft:plains".into(), "minecraft:desert".into()],

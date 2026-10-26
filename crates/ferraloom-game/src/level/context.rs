@@ -219,6 +219,23 @@ impl LevelContext {
 struct FixtureRegistryContext(ferraloom_data::datapack::ResourceManager);
 #[cfg(any(test, feature = "test-fixtures"))]
 impl ferraloom_protocol::codec::RegistryContext for FixtureRegistryContext {
+    fn entry_value(
+        &self,
+        registry: &ferraloom_protocol::Identifier,
+        key: &ferraloom_protocol::Identifier,
+    ) -> Option<serde_json::Value> {
+        self.entry_id(registry, key)?;
+        self.0
+            .get(
+                &ferraloom_data::datapack::Identifier::new(
+                    key.namespace(),
+                    &format!("{}/{}.json", registry.path(), key.path()),
+                )
+                .ok()?,
+            )?
+            .json()
+            .ok()
+    }
     fn entry_id(
         &self,
         registry: &ferraloom_protocol::Identifier,

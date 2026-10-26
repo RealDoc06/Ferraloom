@@ -163,7 +163,7 @@ impl WorldRoot {
                 dimension_types,
                 registry: Arc::new(RegistryAdapter::new(registries)?),
                 registry_context: registries.clone(),
-                resources: Arc::new(resources.clone()),
+                resources: registries.resources.clone(),
                 generate_structures,
                 bonus_chest,
                 unported_behavior,
@@ -308,10 +308,10 @@ mod tests {
     #[tokio::test]
     async fn native_world_flags_follow_overworld_data_in_every_dimension() {
         let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
-        let resources = ResourceManager::new(vec![
+        let resources = std::sync::Arc::new(ResourceManager::new(vec![
             ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
-        ]);
-        let registries = Arc::new(RegistrySet::load(&resources).unwrap());
+        ]));
+        let registries = Arc::new(RegistrySet::load(resources.clone()).unwrap());
         let cases: Vec<_> = include_str!("../../tests/java/world_data/flags.tsv")
             .lines()
             .map(|row| row.split('\t').collect::<Vec<_>>())
@@ -358,10 +358,10 @@ mod tests {
     #[tokio::test]
     async fn dimensions_share_one_root_and_keep_their_actual_generators_and_io() {
         let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
-        let resources = ResourceManager::new(vec![
+        let resources = std::sync::Arc::new(ResourceManager::new(vec![
             ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
-        ]);
-        let registries = Arc::new(RegistrySet::load(&resources).unwrap());
+        ]));
+        let registries = Arc::new(RegistrySet::load(resources.clone()).unwrap());
         let directory = tempfile::tempdir().unwrap();
         let mut properties = ServerProperties::from_values(Default::default());
         properties.set("level-type", "minecraft:flat");
@@ -500,10 +500,10 @@ mod tests {
     #[test]
     fn unknown_dimension_does_not_fall_back_to_overworld_or_mutate_metadata() {
         let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
-        let resources = ResourceManager::new(vec![
+        let resources = std::sync::Arc::new(ResourceManager::new(vec![
             ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
-        ]);
-        let registries = Arc::new(RegistrySet::load(&resources).unwrap());
+        ]));
+        let registries = Arc::new(RegistrySet::load(resources.clone()).unwrap());
         let directory = tempfile::tempdir().unwrap();
         let properties = ServerProperties::from_values(Default::default());
         let mut root = WorldRoot::open(

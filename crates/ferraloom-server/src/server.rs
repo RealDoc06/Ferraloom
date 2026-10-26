@@ -261,8 +261,8 @@ impl MinecraftServer {
             "Management, RCON and query listeners are not yet implemented"
         );
         let jar = assets::vanilla_jar(&options.cache).await?;
-        let resources = ResourceManager::new(vec![Pack::vanilla_jar(&jar)?]);
-        let registries = Arc::new(RegistrySet::load(&resources)?);
+        let resources = std::sync::Arc::new(ResourceManager::new(vec![Pack::vanilla_jar(&jar)?]));
+        let registries = Arc::new(RegistrySet::load(resources.clone())?);
         let recipe_manager = Arc::new(RecipeManager::load(&resources, &TagSet::load(&resources)?)?);
         let recipe_synchronization =
             Arc::new(RecipeSynchronization::new(&recipe_manager, |_| true));
