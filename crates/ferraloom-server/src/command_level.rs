@@ -148,6 +148,10 @@ impl MinecraftServer {
                 let result = self.data_command(command)?;
                 self.apply_command_result(source, &command.source, result);
             }
+            "summon" => {
+                let result = self.summon_command(command)?;
+                self.apply_command_result(source, &command.source, result);
+            }
             "setblock" | "fill" => {
                 let result = placement::run(
                     command,
