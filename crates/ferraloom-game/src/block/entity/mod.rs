@@ -70,6 +70,14 @@ impl BlockEntityRef {
     }
     /// Port of BlockEntity#setChanged, including comparator-neighbor updates.
     pub fn set_changed(self, level: &mut Level) -> Result<(), LevelError> {
+        level.with_block_entity_callback(self, |level| {
+            let behavior = level.block_entity_state(self)?.behavior();
+            behavior.set_changed_live(self, level)
+        })
+    }
+    /// BlockEntity's superclass implementation. Overrides call this directly,
+    /// so superclass calls never re-enter the receiver's virtual method.
+    pub(crate) fn set_changed_base(self, level: &mut Level) -> Result<(), LevelError> {
         let data = level.block_entity::<BlockEntityData>(self)?;
         let (has_level, state) = (data.has_level, data.block_state);
         if has_level {
@@ -135,6 +143,14 @@ impl BlockEntityData {
 
 /// Port of BlockEntity's virtual methods. Implementations are immutable dispatchers.
 pub trait BlockEntity: Sync {
+    /// Port of the native setChanged virtual on a rooted receiver generation.
+    fn set_changed_live(
+        &self,
+        handle: BlockEntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        handle.set_changed_base(level)
+    }
     /// Port of EntityBlock#getListener for a GameEventListener.Provider receiver.
     fn game_event_listener(
         &self,
