@@ -209,4 +209,7 @@ pub fn template<A: TemplateAccess>(
 }
 
 #[cfg(test)]
+#[path = "place/block_entities.rs"]
+mod block_entity_tests;
+#[cfg(test)]
 mod tests;

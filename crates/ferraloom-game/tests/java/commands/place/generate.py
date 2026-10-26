@@ -16,4 +16,4 @@ subprocess.run([str(jdk / 'javac'), '-cp', cp, '-d', str(classes),
     str(source / 'PlaceVectors.java'), str(source.parents[1] / 'loot/LootVectors.java')], check=True)
 subprocess.run([str(jdk / 'java'), '-Xmx1g', '-Dnet.bytebuddy.experimental=true',
     '-XX:+EnableDynamicAgentLoading', '-cp', f'{classes}:{cp}', 'PlaceVectors',
-    str(source / 'vectors.json')], cwd=vanilla, check=True)
+    str(source / 'vectors.json'), str(source / 'block-entity-callbacks.json')], cwd=vanilla, check=True)

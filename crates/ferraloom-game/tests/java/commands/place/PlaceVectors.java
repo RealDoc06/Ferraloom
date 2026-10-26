@@ -105,5 +105,27 @@ public final class PlaceVectors {
         SharedConstants.tryDetectVersion();Bootstrap.bootStrap();var lookup=LootVectors.load();
         var rows=capture(CommandBuildContext.simple(lookup,FeatureFlags.DEFAULT_FLAGS));
         Files.writeString(Path.of(args[0]),JSON.toJson(rows)+"\n");System.out.println("Captured "+rows.size()+" native PlaceCommand template vectors");
+        captureBlockEntityCallbacks(lookup,Path.of(args[1]));
+    }
+    static void captureBlockEntityCallbacks(HolderLookup.Provider lookup,Path output) throws Exception {
+        var input=net.minecraft.nbt.TagParser.parseCompoundFully("{size:[2,1,1],palette:[{id:'minecraft:chest'}],blocks:[{pos:[0,0,0],state:0,nbt:{id:'minecraft:chest',LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:99L}},{pos:[1,0,0],state:0,nbt:{id:'minecraft:chest',LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:99L}}]}");
+        var template=new StructureTemplate();template.load(lookup.lookupOrThrow(net.minecraft.core.registries.Registries.BLOCK),input);
+        var trace=new JsonArray();var level=mock(ServerLevel.class);var origin=new BlockPos(8,5,8);
+        var access=new RegistryAccess.ImmutableRegistryAccess(lookup.listRegistries().map(r->(Registry<?>)r).toList());
+        doReturn(access).when(level).registryAccess();
+        doReturn(net.minecraft.world.level.material.Fluids.EMPTY.defaultFluidState()).when(level).getFluidState(any());
+        doAnswer(i->{var c=call("set");c.add("pos",pos(i.getArgument(0)));c.addProperty("state",Block.getId(i.getArgument(1)));c.addProperty("flags",(int)i.getArgument(2));trace.add(c);return true;}).when(level).setBlock(any(),any(),anyInt());
+        var receivers=new HashMap<BlockPos,net.minecraft.world.level.block.entity.ChestBlockEntity>();
+        for(int x=8;x<=9;x++) {
+            var p=new BlockPos(x,5,8);var receiver=mock(net.minecraft.world.level.block.entity.ChestBlockEntity.class);receivers.put(p,receiver);
+            doAnswer(i->{var c=call("load");c.add("pos",pos(p));net.minecraft.world.level.storage.ValueInput data=i.getArgument(0);c.addProperty("seed",data.getLongOr("LootTableSeed",0));trace.add(c);return null;}).when(receiver).loadWithComponents(any());
+            doAnswer(i->{var c=call("changed");c.add("pos",pos(p));trace.add(c);return null;}).when(receiver).setChanged();
+        }
+        doAnswer(i->receivers.get(i.getArgument(0))).when(level).getBlockEntity(any());
+        var random=RandomSource.create(42);var traced=mock(RandomSource.class);
+        doAnswer(i->{long seed=random.nextLong();var c=call("random");c.addProperty("value",seed);trace.add(c);return seed;}).when(traced).nextLong();
+        var placed=template.placeInWorld(level,origin,origin,new StructurePlaceSettings().setKnownShape(true),traced,818);
+        var result=new JsonObject();result.addProperty("input",input.toString());result.addProperty("placed",placed);result.add("trace",trace);result.addProperty("next_long",random.nextLong());
+        Files.writeString(output,JSON.toJson(result)+"\n");
     }
 }
