@@ -2705,7 +2705,7 @@ mod generation_order_tests {
         let flat = ferraloom_game::level::generation::WorldGenContext::from_registries(
             shared.clone(),
             generator,
-            contexts[0].dimension,
+            contexts[0].dimension.clone(),
             root.seed,
             false,
             contexts[0].environment.clone(),
