@@ -28,15 +28,7 @@ impl std::error::Error for EntityLoadError {}
 
 /// The supported constructor set is shared by persistent and proto-chunk loads.
 pub(crate) fn has_entity_factory(kind: ferraloom_data::EntityType) -> bool {
-    use ferraloom_data::EntityType;
-    matches!(
-        kind,
-        EntityType::COW
-            | EntityType::ITEM
-            | EntityType::TNT
-            | EntityType::FALLING_BLOCK
-            | EntityType::EXPERIENCE_ORB
-    )
+    super::registration::for_type(kind).is_some_and(|entry| entry.factory.is_some())
 }
 
 /// One EntityType factory dispatcher serves cold storage and recursive live
@@ -45,29 +37,11 @@ pub(crate) fn create_entity_state(
     level: &crate::level::Level,
     kind: ferraloom_data::EntityType,
 ) -> Result<super::EntityState, EntityPersistenceError> {
-    use super::{
-        EntityState,
-        animal::Cow,
-        experience_orb::ExperienceOrb,
-        item::{FallingBlockEntity, ItemEntity, PrimedTnt},
-    };
-    use ferraloom_data::EntityType;
-    if !has_entity_factory(kind) {
-        return Err(EntityPersistenceError::UnsupportedType(kind.name().into()));
-    }
+    let factory = super::registration::for_type(kind)
+        .and_then(|entry| entry.factory)
+        .ok_or_else(|| EntityPersistenceError::UnsupportedType(kind.name().into()))?;
     let parent = level.create_entity_data(kind)?;
-    Ok(match kind {
-        EntityType::COW => EntityState::Cow(Box::new(Cow::with_level(parent, level)?)),
-        EntityType::ITEM => EntityState::Item(Box::new(ItemEntity::with_parent(parent))),
-        EntityType::TNT => EntityState::PrimedTnt(Box::new(PrimedTnt::with_parent(parent))),
-        EntityType::FALLING_BLOCK => {
-            EntityState::FallingBlock(Box::new(FallingBlockEntity::with_parent(parent)))
-        }
-        EntityType::EXPERIENCE_ORB => {
-            EntityState::ExperienceOrb(Box::new(ExperienceOrb::with_parent(parent)))
-        }
-        _ => unreachable!("checked entity factory"),
-    })
+    Ok(factory(parent, level)?)
 }
 
 /// Reuse the canonical loader for one constructor, allowing the stream consumer

@@ -52,32 +52,25 @@ impl Cow {
             "minecraft:cow_sound_variant",
             "minecraft:classic",
         )?;
-        let mut cow = Self {
+        let mob = Mob::with_parent_and_metadata(parent, context, |parent, _| {
+            parent.entity_data.define(super::synched_data::BABY, false);
+            parent
+                .entity_data
+                .define(super::synched_data::AGE_LOCKED, false);
+            parent
+                .entity_data
+                .define(super::synched_data::COW_VARIANT, CowVariant(variant));
+            parent.entity_data.define(
+                super::synched_data::COW_SOUND_VARIANT,
+                CowSoundVariant(sound),
+            );
+            Ok(())
+        })?;
+        Ok(Self {
             parent: AbstractCow {
                 parent: Animal {
                     parent: AgeableMob {
-                        parent: PathfinderMob {
-                            parent: Mob {
-                                parent: {
-                                    let mut living = LivingEntity::with_parent(parent);
-                                    living.entity_data.define(super::synched_data::MOB_FLAGS, 0);
-                                    living.entity_data.define(super::synched_data::BABY, false);
-                                    living
-                                        .entity_data
-                                        .define(super::synched_data::AGE_LOCKED, false);
-                                    living
-                                },
-                                target: None,
-                                can_pick_up_loot: false,
-                                persistence_required: false,
-                                drop_chances: Default::default(),
-                                leash_data: None,
-                                home_radius: -1,
-                                home_position: ferraloom_util::BlockPos::ZERO,
-                                loot_table: None,
-                                loot_table_seed: 0,
-                            },
-                        },
+                        parent: PathfinderMob::with_parent(mob),
                         age: 0,
                         forced_age: 0,
                     },
@@ -85,15 +78,7 @@ impl Cow {
                     love_cause: None,
                 },
             },
-        };
-        cow.as_living_mut()
-            .entity_data
-            .define(super::synched_data::COW_VARIANT, CowVariant(variant));
-        cow.as_living_mut().entity_data.define(
-            super::synched_data::COW_SOUND_VARIANT,
-            CowSoundVariant(sound),
-        );
-        Ok(cow)
+        })
     }
 }
 

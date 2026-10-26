@@ -131,6 +131,7 @@ pub use lifecycle::{
 };
 pub mod persistence;
 pub mod reference;
+mod registration;
 pub use reference::EntityReference;
 pub mod synched_data;
 pub mod tracking;
@@ -141,6 +142,9 @@ pub use base::{EntityData, EntityDimensions, Movement, RemovalReason};
 pub struct Mob {
     pub parent: LivingEntity,
     pub target: Option<EntityRef>,
+    pub ai: ai::MobAi,
+    pub xp_reward: i32,
+    pub(crate) pathfinding_malus: [Option<f32>; ai::pathfinder::PathType::ALL.len()],
     pub can_pick_up_loot: bool,
     pub persistence_required: bool,
     pub drop_chances: mob::DropChances,
@@ -263,6 +267,28 @@ impl EntityDataView for EntityData {
     }
     fn view_mut(state: &mut EntityState) -> Option<&mut Self> {
         Some(state.as_entity_mut())
+    }
+}
+impl EntityDataView for Mob {
+    fn view(state: &EntityState) -> Option<&Self> {
+        state.as_mob()
+    }
+    fn view_mut(state: &mut EntityState) -> Option<&mut Self> {
+        state.as_mob_mut()
+    }
+}
+impl EntityDataView for PathfinderMob {
+    fn view(state: &EntityState) -> Option<&Self> {
+        match state {
+            EntityState::Cow(cow) => Some(&cow.parent.parent.parent.parent),
+            _ => None,
+        }
+    }
+    fn view_mut(state: &mut EntityState) -> Option<&mut Self> {
+        match state {
+            EntityState::Cow(cow) => Some(&mut cow.parent.parent.parent.parent),
+            _ => None,
+        }
     }
 }
 impl EntityDataView for LivingEntity {
@@ -653,12 +679,122 @@ pub trait Entity: Sync {
     ) -> Result<(), LevelError> {
         level.entity_behavior(other)?.push(other, entity, level)
     }
+    /// Port of Mob#getControllingPassenger; Entity's parent returns null.
     fn controlling_passenger(
+        &self,
+        entity: EntityRef,
+        level: &Level,
+    ) -> Result<Option<EntityRef>, LevelError> {
+        let state = level.entity_state(entity)?;
+        let Some(mob) = state.as_mob() else {
+            return Ok(None);
+        };
+        if mob.is_no_ai() {
+            return Ok(None);
+        }
+        let Some(&first) = state.as_entity().passengers.first() else {
+            return Ok(None);
+        };
+        if level.entity_state(first)?.as_mob().is_some()
+            && level
+                .entity_behavior(first)?
+                .can_control_vehicle(first, level)?
+        {
+            Ok(Some(first))
+        } else {
+            Ok(None)
+        }
+    }
+    fn can_control_vehicle(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        Ok(!level.entity_type_tags()?.contains_key(
+            ferraloom_data::tags::EntityTypeTags::NON_CONTROLLING_RIDER,
+            level.entity::<EntityData>(entity)?.entity_type,
+        ))
+    }
+    fn should_passengers_inherit_malus(
         &self,
         _entity: EntityRef,
         _level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(false)
+    }
+    fn get_pathfinding_malus(
+        &self,
+        entity: EntityRef,
+        path_type: ai::pathfinder::PathType,
+        level: &Level,
+    ) -> Result<f32, LevelError> {
+        mob::get_pathfinding_malus(entity, path_type, level)
+    }
+    fn set_pathfinding_malus(
+        &self,
+        entity: EntityRef,
+        path_type: ai::pathfinder::PathType,
+        cost: f32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        mob::set_pathfinding_malus(entity, path_type, cost, level)
+    }
+    /// Native Mob parent bodies are empty; subclasses may override these hooks.
+    fn on_pathfinding_start(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        level.entity::<Mob>(entity)?;
+        Ok(())
+    }
+    fn on_pathfinding_done(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        level.entity::<Mob>(entity)?;
+        Ok(())
+    }
+    fn get_target(
+        &self,
+        entity: EntityRef,
+        level: &Level,
     ) -> Result<Option<EntityRef>, LevelError> {
-        Ok(None)
+        mob::get_target(entity, level)
+    }
+    fn can_be_seen_by_anyone(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        Ok(!self.is_spectator(entity, level)? && self.is_alive(entity, level)?)
+    }
+    fn can_be_seen_as_enemy(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        mob::can_be_seen_as_enemy_parent(self, entity, level)
+    }
+    fn can_attack(
+        &self,
+        entity: EntityRef,
+        target: EntityRef,
+        level: &Level,
+    ) -> Result<bool, LevelError> {
+        mob::can_attack(entity, target, level)
+    }
+    fn get_max_fall_distance(&self, entity: EntityRef, level: &Level) -> Result<i32, LevelError> {
+        if level.entity_state(entity)?.as_mob().is_some() {
+            mob::max_fall_distance(entity, level)
+        } else {
+            Ok(3)
+        }
+    }
+    fn is_in_floatable_fluid(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        Ok(level
+            .entity::<EntityData>(entity)?
+            .fluid_interaction
+            .height(ferraloom_data::tags::FluidTags::ENTITY_FLOATABLE, level)?
+            > 0.0)
+    }
+    /// Mob dispatches its native component order; LivingEntity's parent body is empty.
+    fn server_ai_step(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        if level.entity_state(entity)?.as_mob().is_some() {
+            mob::server_ai_step(entity, level)
+        } else {
+            Ok(())
+        }
+    }
+    /// Port of Mob#customServerAiStep, overridden by concrete Brain consumers.
+    fn custom_server_ai_step(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        level.entity::<Mob>(entity)?;
+        Ok(())
     }
     fn sound_source(&self) -> ferraloom_protocol::play::SoundSource {
         ferraloom_protocol::play::SoundSource::Neutral
@@ -879,6 +1015,26 @@ pub trait Entity: Sync {
     }
     fn default_gravity(&self, _entity: EntityRef, _level: &Level) -> Result<f64, LevelError> {
         Ok(0.0)
+    }
+    /// Root integration hook for subclass work that native readAdditionalSaveData
+    /// performs before invoking super (for example AbstractCubeMob#setSize).
+    fn read_additional_before_parent(
+        &self,
+        _entity: EntityRef,
+        _tag: &ferraloom_nbt::CompoundTag,
+        _level: &mut Level,
+    ) -> Result<(), EntityPersistenceError> {
+        Ok(())
+    }
+    /// Matching post-parent subclass phase. These hooks are not a second loader;
+    /// Entity#load still owns UUID/position and the root owns every parent phase.
+    fn read_additional_after_parent(
+        &self,
+        _entity: EntityRef,
+        _tag: &ferraloom_nbt::CompoundTag,
+        _level: &mut Level,
+    ) -> Result<(), EntityPersistenceError> {
+        Ok(())
     }
     /// Full native readAdditionalSaveData chain on the same canonical receiver.
     fn read_additional_save_data(
@@ -1444,15 +1600,7 @@ pub(crate) fn hurt_unarmored(
 
 /// Built-in stateless dispatchers. Explicit behavior tables still override these.
 pub fn vanilla_behavior(kind: EntityType) -> Option<&'static dyn Entity> {
-    match kind {
-        EntityType::COW => Some(&animal::CowBehavior),
-        EntityType::PLAYER => Some(&player::PlayerBehavior),
-        EntityType::TNT => Some(&item::PrimedTntBehavior),
-        EntityType::ITEM => Some(&item::ItemEntityBehavior),
-        EntityType::FALLING_BLOCK => Some(&item::FallingBlockBehavior),
-        EntityType::EXPERIENCE_ORB => Some(&experience_orb::ExperienceOrbBehavior),
-        _ => None,
-    }
+    registration::for_type(kind).map(|entry| entry.behavior)
 }
 
 #[cfg(test)]
