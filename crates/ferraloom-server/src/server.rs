@@ -3145,9 +3145,9 @@ impl MinecraftServer {
         );
         let frame = queue.top_frame(CommandResultCallback::default());
         execution::queue_command(&mut queue, frame, prepared, false);
-        let mut pending = None;
+        let mut host = command_runtime::callbacks::ServerCommandHost::new(self, source);
         loop {
-            match queue.run_next(&mut pending) {
+            match queue.run_next(&mut host) {
                 Ok(false) => break,
                 Err(QueueResult::CommandLimit) => {
                     println!(
@@ -3163,72 +3163,73 @@ impl MinecraftServer {
                 Err(QueueResult::Complete) => unreachable!(),
                 Ok(true) => {}
             }
-            let Some(prepared) = pending.take() else {
+            let Some(pending) = host.pending.take() else {
                 continue;
             };
+            let prepared = pending.command;
             let stack = prepared.source.clone();
             let action = Commands::action(prepared);
             match action {
                 CommandAction::Run(command) => {
-                    match self.run_level_command(source, &command).await {
+                    match host.server.run_level_command(source, &command).await {
                         Ok(true) => continue,
                         Ok(false) => {}
                         Err(error) => {
                             if let Some(syntax) =
                                 error.downcast_ref::<ferraloom_brigadier::CommandSyntaxException>()
                             {
-                                self.command_failure(
+                                host.server.command_failure(
                                     source,
                                     &stack,
                                     ferraloom_game::commands::exceptions::error_component(syntax),
                                 );
-                                stack.callback.on_failure();
+                                stack.callback.on_failure(&mut host);
                                 continue;
                             }
                             return Err(error);
                         }
                     }
-                    if let Err(error) = self.run_builtin(source, *command) {
-                        self.command_failure(
+                    if let Err(error) = host.server.run_builtin(source, *command) {
+                        host.server.command_failure(
                             source,
                             &stack,
                             ferraloom_game::commands::exceptions::error_component(&error),
                         );
-                        stack.callback.on_failure();
+                        stack.callback.on_failure(&mut host);
                     }
                 }
                 CommandAction::Stop => {
-                    self.command_success(
+                    host.server.command_success(
                         source,
                         &stack,
                         Component::translatable("commands.stop.stopping", vec![]),
                         true,
                     );
-                    self.stop = true;
-                    stack.callback.on_success(1);
+                    host.server.stop = true;
+                    stack.callback.on_success(&mut host, 1);
                 }
                 CommandAction::Save { flush } => {
-                    self.command_success(
+                    host.server.command_success(
                         source,
                         &stack,
                         Component::translatable("commands.save.saving", vec![]),
                         false,
                     );
-                    if self.save_all(flush, true).await.is_ok() {
-                        self.command_success(
+                    if host.server.save_all(flush, true).await.is_ok() {
+                        host.server.command_success(
                             source,
                             &stack,
                             Component::translatable("commands.save.success", vec![]),
                             true,
                         );
-                        stack.callback.on_success(1);
+                        stack.callback.on_success(&mut host, 1);
                     } else {
-                        self.command_failure(
+                        host.server.command_failure(
                             source,
                             &stack,
                             Component::translatable("commands.save.failed", vec![]),
                         );
-                        stack.callback.on_failure();
+                        stack.callback.on_failure(&mut host);
                     }
                 }
             }

@@ -2,6 +2,8 @@
 use super::*;
 #[path = "bossbar_commands.rs"]
 mod bossbar_commands;
+#[path = "command_callbacks.rs"]
+pub(super) mod callbacks;
 #[path = "data_commands.rs"]
 mod data_commands;
 #[path = "place_commands.rs"]
@@ -280,7 +282,10 @@ impl MinecraftServer {
         for feedback in result.feedback {
             self.command_success(source, stack, feedback.message, feedback.broadcast);
         }
-        stack.callback.on_success(result.value);
+        stack.callback.on_success(
+            &mut callbacks::ServerCommandHost::new(self, source),
+            result.value,
+        );
     }
     /// Additional built-ins execute synchronously, using the same live server state as packet commands.
     pub(super) fn run_builtin(

@@ -5,9 +5,17 @@ use ferraloom_protocol::{Uuid, chat::Component, play::MessageSignature};
 use ferraloom_util::{Vec3, mth};
 use std::{fmt, sync::Arc};
 
+/// Live capabilities available at the native callback fire point. Future result
+/// stores extend this host rather than capturing or deferring mutable world data.
+pub trait CommandCallbackHost {
+    fn send_success(&mut self, source: &CommandSourceStack, message: Component, broadcast: bool);
+}
+
 /// Port of CommandResultCallback. Callbacks run inline, in composition order.
 #[derive(Clone, Default)]
-pub struct CommandResultCallback(Option<Arc<dyn Fn(bool, i32) + Send + Sync>>);
+pub struct CommandResultCallback(
+    Option<Arc<dyn Fn(&mut dyn CommandCallbackHost, bool, i32) + Send + Sync>>,
+);
 impl fmt::Debug for CommandResultCallback {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(if self.0.is_some() {
@@ -18,19 +26,24 @@ impl fmt::Debug for CommandResultCallback {
     }
 }
 impl CommandResultCallback {
-    pub fn new(callback: impl Fn(bool, i32) + Send + Sync + 'static) -> Self {
+    pub fn new(
+        callback: impl Fn(&mut dyn CommandCallbackHost, bool, i32) + Send + Sync + 'static,
+    ) -> Self {
         Self(Some(Arc::new(callback)))
     }
-    pub fn on_result(&self, success: bool, value: i32) {
+    pub fn on_result(&self, host: &mut dyn CommandCallbackHost, success: bool, value: i32) {
         if let Some(callback) = &self.0 {
-            callback(success, value);
+            callback(host, success, value);
         }
     }
-    pub fn on_success(&self, value: i32) {
-        self.on_result(true, value);
+    pub fn on_success(&self, host: &mut dyn CommandCallbackHost, value: i32) {
+        self.on_result(host, true, value);
     }
-    pub fn on_failure(&self) {
-        self.on_result(false, 0);
+    pub fn on_failure(&self, host: &mut dyn CommandCallbackHost) {
+        self.on_result(host, false, 0);
+    }
+    pub fn is_empty(&self) -> bool {
+        self.0.is_none()
     }
     pub fn chain(self, other: Self) -> Self {
         if self.0.is_none() {
@@ -39,9 +52,9 @@ impl CommandResultCallback {
         if other.0.is_none() {
             return self;
         }
-        Self::new(move |success, value| {
-            self.on_result(success, value);
-            other.on_result(success, value);
+        Self::new(move |host, success, value| {
+            self.on_result(host, success, value);
+            other.on_result(host, success, value);
         })
     }
 }
@@ -277,6 +290,12 @@ mod tests {
 mod java_tests {
     use super::*;
     use std::sync::Mutex;
+    struct Host;
+    impl CommandCallbackHost for Host {
+        fn send_success(&mut self, _: &CommandSourceStack, _: Component, _: bool) {
+            panic!("source transformation does not send feedback");
+        }
+    }
 
     #[test]
     fn owned_source_transformations_match_java() {
@@ -286,7 +305,7 @@ mod java_tests {
             let events = Arc::new(Mutex::new(Vec::new()));
             let callback = |name: &'static str| {
                 let events = events.clone();
-                CommandResultCallback::new(move |success, value| {
+                CommandResultCallback::new(move |_host, success, value| {
                     events
                         .lock()
                         .unwrap()
@@ -368,7 +387,7 @@ mod java_tests {
                     )
                 }
             };
-            source.callback.on_success(17);
+            source.callback.on_success(&mut Host, 17);
             let name = source.display_name(|entity| {
                 Component::literal(
                     if entity == EntityRef::fixture(crate::level::RegionId::FIXTURE, 1) {

@@ -1,5 +1,5 @@
 //! Port of the 26.3 execution queue. All actions run inline on the exclusive caller.
-use super::source::CommandResultCallback;
+use super::source::{CommandCallbackHost, CommandResultCallback};
 use ferraloom_brigadier::CommandSyntaxException;
 use std::collections::VecDeque;
 
@@ -8,14 +8,19 @@ use std::collections::VecDeque;
 pub struct Frame {
     pub depth: usize,
     pub return_value_consumer: CommandResultCallback,
-    discard_all: bool,
+    control: FrameControl,
+}
+#[derive(Clone, Copy, Debug)]
+enum FrameControl {
+    All,
+    Depth(usize),
 }
 impl Frame {
-    pub fn return_success(&self, value: i32) {
-        self.return_value_consumer.on_success(value);
+    pub fn return_success(&self, host: &mut dyn CommandCallbackHost, value: i32) {
+        self.return_value_consumer.on_success(host, value);
     }
-    pub fn return_failure(&self) {
-        self.return_value_consumer.on_failure();
+    pub fn return_failure(&self, host: &mut dyn CommandCallbackHost) {
+        self.return_value_consumer.on_failure(host);
     }
 }
 type EntryAction<H> = Box<dyn FnOnce(&mut ExecutionContext<H>, &Frame, &mut H) + Send>;
@@ -78,13 +83,13 @@ impl<H> ExecutionContext<H> {
             Frame {
                 depth: 0,
                 return_value_consumer: callback,
-                discard_all: true,
+                control: FrameControl::All,
             }
         } else {
             Frame {
                 depth: self.current_frame_depth + 1,
                 return_value_consumer: callback,
-                discard_all: false,
+                control: FrameControl::Depth(self.current_frame_depth + 1),
             }
         }
     }
@@ -108,10 +113,9 @@ impl<H> ExecutionContext<H> {
         }
     }
     pub fn discard(&mut self, frame: &Frame) {
-        if frame.discard_all {
-            self.queue.clear();
-        } else {
-            self.discard_at_depth_or_higher(frame.depth);
+        match frame.control {
+            FrameControl::All => self.queue.clear(),
+            FrameControl::Depth(depth) => self.discard_at_depth_or_higher(depth),
         }
     }
     fn push_new_commands(&mut self) {
@@ -169,29 +173,41 @@ impl<H> ExecutionContext<H> {
         &mut self,
         frame: &Frame,
         source_callback: &CommandResultCallback,
+        host: &mut dyn CommandCallbackHost,
         value: Option<i32>,
     ) {
         if let Some(value) = value {
-            source_callback.on_success(value);
-            frame.return_success(value);
+            source_callback.on_success(host, value);
+            frame.return_success(host, value);
         } else {
-            source_callback.on_failure();
-            frame.return_failure();
+            source_callback.on_failure(host);
+            frame.return_failure(host);
         }
         self.discard(frame);
     }
 }
 /// Port of BuildContexts' top-level/continuation and ReturnCommand's custom executors.
 /// World mutations remain in the host, after this entry emits its owned command.
-pub fn queue_command(
-    context: &mut ExecutionContext<Option<super::PreparedCommand>>,
+#[derive(Clone, Debug)]
+pub struct PendingCommand {
+    pub command: super::PreparedCommand,
+    pub frame: Frame,
+    pub returning: bool,
+}
+
+pub trait CommandExecutionHost: CommandCallbackHost {
+    fn emit_command(&mut self, command: PendingCommand);
+}
+
+pub fn queue_command<H: CommandExecutionHost>(
+    context: &mut ExecutionContext<H>,
     frame: Frame,
     mut command: super::PreparedCommand,
     returning: bool,
 ) {
     context.queue_next(CommandQueueEntry::new(
         frame,
-        move |context, frame, _pending| {
+        move |context, frame, host| {
             if command.command == "return" {
                 if let Some(continuation) = command.continuation.take() {
                     context.discard(frame);
@@ -199,19 +215,32 @@ pub fn queue_command(
                     continuation.source = command.source;
                     queue_command(context, frame.clone(), continuation, true);
                 } else {
-                    context.return_value(frame, &command.source.callback, command.integer("value"));
+                    context.return_value(
+                        frame,
+                        &command.source.callback,
+                        host,
+                        command.integer("value"),
+                    );
                 }
             } else {
-                if returning {
+                if returning && command.command != "function" {
                     command.source = command
                         .source
                         .with_combined_callback(frame.return_value_consumer.clone());
                 }
                 context.queue_next(CommandQueueEntry::new(
                     frame.clone(),
-                    move |context, _, pending| {
-                        context.increment_cost();
-                        *pending = Some(command);
+                    move |context, frame, host| {
+                        // FunctionCommand is a custom executor. CallFunction,
+                        // rather than ExecuteCommand, consumes its native quota.
+                        if command.command != "function" {
+                            context.increment_cost();
+                        }
+                        host.emit_command(PendingCommand {
+                            command,
+                            frame: frame.clone(),
+                            returning,
+                        });
                     },
                 ));
             }
@@ -222,6 +251,69 @@ pub fn queue_command(
 mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
+    impl CommandCallbackHost for Vec<i32> {
+        fn send_success(
+            &mut self,
+            _: &super::super::CommandSourceStack,
+            _: ferraloom_protocol::chat::Component,
+            _: bool,
+        ) {
+            panic!("queue control vectors do not send feedback");
+        }
+    }
+    impl CommandCallbackHost for Option<PendingCommand> {
+        fn send_success(
+            &mut self,
+            _: &super::super::CommandSourceStack,
+            _: ferraloom_protocol::chat::Component,
+            _: bool,
+        ) {
+            panic!("return vectors do not send feedback");
+        }
+    }
+    impl CommandExecutionHost for Option<PendingCommand> {
+        fn emit_command(&mut self, command: PendingCommand) {
+            *self = Some(command);
+        }
+    }
+    #[test]
+    fn callbacks_mutate_the_live_host_before_the_action_continues() {
+        struct Host(Vec<String>);
+        impl CommandCallbackHost for Host {
+            fn send_success(
+                &mut self,
+                _: &super::super::CommandSourceStack,
+                message: ferraloom_protocol::chat::Component,
+                _: bool,
+            ) {
+                self.0.push(crate::language::plain_text(&message));
+            }
+        }
+        let callback = |name: &'static str| {
+            CommandResultCallback::new(move |host, _, value| {
+                host.send_success(
+                    &super::super::CommandSourceStack::server(4, ferraloom_util::Vec3::ZERO),
+                    ferraloom_protocol::chat::Component::literal(format!("{name}:{value}")),
+                    false,
+                );
+            })
+        };
+        let mut context = ExecutionContext::<Host>::new(4, 4);
+        let frame = context.top_frame(callback("frame"));
+        let source = callback("source").chain(callback("combined"));
+        context.queue_next(CommandQueueEntry::new(
+            frame,
+            move |context, frame, host: &mut Host| {
+                context.return_value(frame, &source, host, Some(7));
+                assert_eq!(host.0, ["source:7", "combined:7", "frame:7"]);
+                host.0.push("after".into());
+            },
+        ));
+        let mut host = Host(Vec::new());
+        assert_eq!(context.run_command_queue(&mut host), QueueResult::Complete);
+        assert_eq!(host.0, ["source:7", "combined:7", "frame:7", "after"]);
+    }
+
     #[test]
     fn next_commands_run_before_siblings_in_insertion_order() {
         let mut context = ExecutionContext::<Vec<i32>>::new(10, 10);
@@ -264,7 +356,7 @@ mod tests {
     fn return_callbacks_run_inline_and_discard_pending_siblings() {
         let results = Arc::new(Mutex::new(Vec::new()));
         let callback_results = results.clone();
-        let callback = CommandResultCallback::new(move |success, value| {
+        let callback = CommandResultCallback::new(move |_host, success, value| {
             callback_results.lock().unwrap().push((success, value))
         });
         let mut context = ExecutionContext::<Vec<i32>>::new(1, 2);
@@ -273,7 +365,7 @@ mod tests {
             frame.clone(),
             move |context, frame, host: &mut Vec<i32>| {
                 context.increment_cost();
-                context.return_value(frame, &callback, Some(7));
+                context.return_value(frame, &callback, host, Some(7));
                 host.push(7);
             },
         ));
@@ -350,7 +442,7 @@ mod tests {
                     let child = Frame {
                         depth: 1,
                         return_value_consumer: CommandResultCallback::default(),
-                        discard_all: false,
+                        control: FrameControl::Depth(1),
                     };
                     let grandchild = Frame {
                         depth: 2,
@@ -373,7 +465,7 @@ mod tests {
                     let child = Frame {
                         depth: 2,
                         return_value_consumer: CommandResultCallback::default(),
-                        discard_all: false,
+                        control: FrameControl::Depth(2),
                     };
                     context.queue_next(CommandQueueEntry::new(
                         child,
@@ -407,6 +499,31 @@ mod command_tests {
     use crate::commands::{CommandSourceStack, Commands};
     use ferraloom_util::Vec3;
     use std::sync::{Arc, Mutex};
+    impl CommandCallbackHost for Vec<i32> {
+        fn send_success(
+            &mut self,
+            _: &super::super::CommandSourceStack,
+            _: ferraloom_protocol::chat::Component,
+            _: bool,
+        ) {
+            panic!("queue control vectors do not send feedback");
+        }
+    }
+    impl CommandCallbackHost for Option<PendingCommand> {
+        fn send_success(
+            &mut self,
+            _: &super::super::CommandSourceStack,
+            _: ferraloom_protocol::chat::Component,
+            _: bool,
+        ) {
+            panic!("return vectors do not send feedback");
+        }
+    }
+    impl CommandExecutionHost for Option<PendingCommand> {
+        fn emit_command(&mut self, command: PendingCommand) {
+            *self = Some(command);
+        }
+    }
     #[test]
     fn return_commands_share_the_live_queue_and_compose_callbacks() {
         let commands = Commands::default();
@@ -420,7 +537,7 @@ mod command_tests {
             let source_results = results.clone();
             let frame_results = results.clone();
             let source = CommandSourceStack::server(4, Vec3::ZERO).with_callback(
-                CommandResultCallback::new(move |success, value| {
+                CommandResultCallback::new(move |_host, success, value| {
                     source_results
                         .lock()
                         .unwrap()
@@ -429,20 +546,21 @@ mod command_tests {
             );
             let command = commands.prepare(input, source).unwrap();
             let mut context = ExecutionContext::new(10, 10);
-            let frame = context.top_frame(CommandResultCallback::new(move |success, value| {
-                frame_results
-                    .lock()
-                    .unwrap()
-                    .push(("frame", success, value))
-            }));
+            let frame =
+                context.top_frame(CommandResultCallback::new(move |_host, success, value| {
+                    frame_results
+                        .lock()
+                        .unwrap()
+                        .push(("frame", success, value))
+                }));
             queue_command(&mut context, frame, command, false);
             let mut pending = None;
             let mut did_emit = false;
             while context.run_next(&mut pending) == Ok(true) {
                 if let Some(command) = pending.take() {
                     did_emit = true;
-                    assert_eq!(command.command, "seed");
-                    command.source.callback.on_success(41);
+                    assert_eq!(command.command.command, "seed");
+                    command.command.source.callback.on_success(&mut pending, 41);
                 }
             }
             assert_eq!(did_emit, emitted, "{input}");
