@@ -463,6 +463,7 @@ mod tests {
             let mut level = Level::new(Region::new(&EMPTY), context);
             world.configure_live_rules(&mut level);
             assert_eq!(level.has_skylight().unwrap(), stem.dimension.has_skylight);
+            assert_eq!(level.rules().can_have_weather, key == "minecraft:overworld");
             let mut marker = CompoundTag::new();
             marker.insert("DataVersion", Tag::Int(storage::DATA_VERSION));
             marker.insert("dimension", Tag::String(key.into()));

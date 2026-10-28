@@ -973,7 +973,11 @@ impl World {
         let rules = level.rules_mut();
         rules.debug = self.is_debug_world();
         rules.fast_lava = self.dimension.fast_lava;
-        rules.can_have_weather = self.dimension.has_skylight && !self.dimension.has_ceiling;
+        // Level#canHaveWeather explicitly excludes END even though its type
+        // has skylight and no ceiling. Otherwise it advances shared timers twice.
+        rules.can_have_weather = self.dimension.has_skylight
+            && !self.dimension.has_ceiling
+            && self.dimension_key.as_str() != "minecraft:the_end";
     }
     /// Capture the dimension's actual generator, configured feature registry and
     /// WorldOptions seed before constructing the concrete live level.
