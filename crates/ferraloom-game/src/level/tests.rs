@@ -2744,3 +2744,64 @@ fn native_lightning_living_target_filter_fallback_and_random_consumption() {
     }
     assert_eq!(count, 30);
 }
+
+#[test]
+fn poi_command_task_queues_remove_add_while_tick_time_mutation_is_immediate() {
+    use super::poi::{PoiTypeId, PoiUpdate};
+    let mut level = empty_level(&EMPTY);
+    let pos = BlockPos::new(1, 0, 1);
+    let old = Block::STONE.default_state();
+    let bell = Block::BELL.default_state();
+    assert!(!level.set_poi_executor_running(true));
+    level
+        .update_poi_on_block_state_change(pos, old, bell)
+        .unwrap();
+    assert_eq!(level.poi_manager().get_type(pos).unwrap(), None);
+    assert_eq!(
+        level.take_effects(),
+        vec![LevelEffect::PoiUpdate(PoiUpdate::Add {
+            pos,
+            poi_type: PoiTypeId::MEETING
+        })]
+    );
+    assert!(level.set_poi_executor_running(false));
+    level
+        .apply_poi_update(PoiUpdate::Add {
+            pos,
+            poi_type: PoiTypeId::MEETING,
+        })
+        .unwrap();
+    assert_eq!(
+        level.poi_manager().get_type(pos).unwrap(),
+        Some(PoiTypeId::MEETING)
+    );
+    level
+        .update_poi_on_block_state_change(pos, bell, old)
+        .unwrap();
+    assert_eq!(level.poi_manager().get_type(pos).unwrap(), None);
+    assert!(level.take_effects().is_empty());
+    level
+        .apply_poi_update(PoiUpdate::Add {
+            pos,
+            poi_type: PoiTypeId::MEETING,
+        })
+        .unwrap();
+    level.set_poi_executor_running(true);
+    level
+        .update_poi_on_block_state_change(pos, bell, Block::LODESTONE.default_state())
+        .unwrap();
+    assert_eq!(
+        level.take_effects(),
+        vec![
+            LevelEffect::PoiUpdate(PoiUpdate::Remove { pos }),
+            LevelEffect::PoiUpdate(PoiUpdate::Add {
+                pos,
+                poi_type: PoiTypeId::LODESTONE
+            }),
+        ]
+    );
+    assert_eq!(
+        level.poi_manager().get_type(pos).unwrap(),
+        Some(PoiTypeId::MEETING)
+    );
+}

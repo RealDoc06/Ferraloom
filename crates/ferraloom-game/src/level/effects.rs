@@ -5,6 +5,7 @@ use ferraloom_util::{BlockPos, ChunkPos};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum LevelEffect {
+    PoiUpdate(super::poi::PoiUpdate),
     /// Accepted transition captured at setEntityPos, including A -> B -> A.
     PlayerSectionChange {
         player: crate::entity::EntityRef,

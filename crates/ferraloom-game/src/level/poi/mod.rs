@@ -16,3 +16,6 @@ mod access;
 
 #[cfg(test)]
 mod tests;
+
+mod update;
+pub use update::PoiUpdate;

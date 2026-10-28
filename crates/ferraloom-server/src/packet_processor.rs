@@ -16,10 +16,19 @@ pub(super) enum PacketEvent {
 }
 
 /// Port of TickTask: the birth tick controls MinecraftServer#shouldRun's
-/// starvation guard. Only tryHandleChat's server.execute calls enter this queue.
+/// starvation guard. Chat/commands and captured server.execute POI work share
+/// the native queue, preserving removal/addition order across task callbacks.
 pub(super) struct TickTask {
     tick: u64,
-    packet: ListenerAndPacket,
+    action: MainThreadAction,
+}
+
+pub(super) enum MainThreadAction {
+    Packet(ListenerAndPacket),
+    Poi {
+        dimension: protocol::Identifier,
+        update: ferraloom_game::level::poi::PoiUpdate,
+    },
 }
 
 /// MinecraftServer#haveTime's two deadlines during waitUntilNextTick. A
@@ -162,7 +171,7 @@ impl MinecraftServer {
                 if main_executor {
                     self.pending_tasks.push_back(TickTask {
                         tick: self.tick,
-                        packet,
+                        action: MainThreadAction::Packet(packet),
                     });
                 } else {
                     self.packet_processor.push_back(PacketEvent::Packet(packet));
@@ -174,6 +183,17 @@ impl MinecraftServer {
                 .push_back(PacketEvent::Console(command)),
         }
         Ok(())
+    }
+
+    pub(super) fn queue_poi_update(
+        &mut self,
+        dimension: protocol::Identifier,
+        update: ferraloom_game::level::poi::PoiUpdate,
+    ) {
+        self.pending_tasks.push_back(TickTask {
+            tick: self.tick,
+            action: MainThreadAction::Poi { dimension, update },
+        });
     }
 
     fn receive_available_ingress(&mut self) -> Result<()> {
@@ -272,7 +292,20 @@ impl MinecraftServer {
             task.tick.wrapping_add(3) < self.tick
                 || deadline.is_none_or(|deadline| tokio::time::Instant::now() < deadline)
         }) {
-            self.handle_queued_packet(task.packet).await?;
+            let previous = self
+                .live_levels_mut()
+                .map(|live| live.level.set_poi_executor_running(true))
+                .collect::<Vec<_>>();
+            let result = match task.action {
+                MainThreadAction::Packet(packet) => self.handle_queued_packet(packet).await,
+                MainThreadAction::Poi { dimension, update } => self
+                    .live_level_in_mut(&dimension)
+                    .and_then(|live| live.level.apply_poi_update(update).map_err(game_error)),
+            };
+            for (live, previous) in self.live_levels_mut().zip(previous) {
+                live.level.set_poi_executor_running(previous);
+            }
+            result?;
             self.flush_outbound();
             return Ok(true);
         }

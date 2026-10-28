@@ -4,7 +4,7 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 
 | ID | Feature | Vanilla source | Test | Vanilla | Ferraloom |
 |---|---|---|---|---|---|
-| villages-trading-poi.poi.discovery | Discover and invalidate POIs from block states and loaded chunk sections | `PoiManager#checkConsistencyWithBlocks; PoiSection` | [poi::tests::invalid_section_refresh_preserves_old_ticket_objects_by_position](../crates/ferraloom-game/src/level/poi/tests.rs) (core source complete; load/block-hook wiring and live test pending) | - | partial |
+| villages-trading-poi.poi.discovery | Discover and invalidate POIs from block states and loaded chunk sections | `PoiManager#checkConsistencyWithBlocks; PoiSection` | [poi::tests::invalid_section_refresh_preserves_old_ticket_objects_by_position](../crates/ferraloom-game/src/level/poi/tests.rs) and [task/tick update ordering](../crates/ferraloom-game/src/level/tests.rs) (core source complete; production load/block-hook wiring and live test pending) | - | partial |
 | villages-trading-poi.poi.capacity | Claim, release and query POI tickets using occupation and distance predicates | `PoiManager; PoiRecord` | [poi::tests::ticket_capacity_occupancy_and_revision_acknowledgement_remain_canonical](../crates/ferraloom-game/src/level/poi/tests.rs) (core source complete; AI/live integration pending) | - | partial |
 | villages-trading-poi.poi.village-distance | Track distance from occupied village POIs for village membership queries | `PoiManager#sectionsToVillage` | | - | todo |
 | villages-trading-poi.villager.profession | Claim a workstation, set profession and release job-site memories when work becomes invalid | `AcquirePoi; AssignProfessionFromJobSite; ResetProfession` | | - | todo |
