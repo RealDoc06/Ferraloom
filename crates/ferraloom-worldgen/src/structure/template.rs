@@ -344,3 +344,7 @@ pub fn transform_entity(
 #[cfg(test)]
 #[path = "template_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "template_native_tests.rs"]
+mod native_tests;
