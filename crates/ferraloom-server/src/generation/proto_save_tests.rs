@@ -1,6 +1,5 @@
 //! Complete native proto save captures, including materialization boundaries.
 use super::*;
-use ferraloom_data::datapack::ResourceManager;
 use ferraloom_nbt::{CompoundTag, Compression, NbtAccounter, NbtIo};
 use ferraloom_worldgen::{
     generator::{ChunkGenerator, GenerationData},
@@ -11,7 +10,7 @@ use std::{io::Read, sync::OnceLock};
 pub(super) fn noise_fixture() -> (Arc<WorldGenContext>, Arc<RegistryAdapter>) {
     static FIXTURE: OnceLock<(Arc<WorldGenContext>, Arc<RegistryAdapter>)> = OnceLock::new();
     let (context, registry) = FIXTURE.get_or_init(|| {
-        let resources: ResourceManager = crate::generation_tests::resources();
+        let resources = crate::generation_tests::resources();
         let preset = resources
             .require(
                 &"minecraft:worldgen/world_preset/normal.json"
@@ -36,7 +35,7 @@ pub(super) fn noise_fixture() -> (Arc<WorldGenContext>, Arc<RegistryAdapter>) {
         context.generate_structures = false;
         context.possible_sets.clear();
         let registry =
-            RegistryAdapter::new(&crate::registries::RegistrySet::load(&resources).unwrap())
+            RegistryAdapter::new(&crate::registries::RegistrySet::load(resources.clone()).unwrap())
                 .unwrap();
         (Arc::new(context), Arc::new(registry))
     });
