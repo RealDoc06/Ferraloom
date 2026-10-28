@@ -89,6 +89,17 @@ pub fn ai_step<E: Entity + ?Sized>(
     level: &mut Level,
     tick_rate: &TickRateManager,
 ) -> Result<(), LevelError> {
+    level.retain_entity(entity)?;
+    let result = ai_step_body(behavior, entity, level, tick_rate);
+    level.release_entity(entity);
+    result
+}
+fn ai_step_body<E: Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    level: &mut Level,
+    tick_rate: &TickRateManager,
+) -> Result<(), LevelError> {
     // noJumpDelay precedes the equipment tick, but velocity/input follows it.
     {
         let living = level.entity_mut::<LivingEntity>(entity)?;

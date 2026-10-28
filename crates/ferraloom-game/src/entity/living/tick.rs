@@ -12,9 +12,20 @@ fn required(entity: EntityRef, method: EntityMethod, level: &Level) -> Result<()
     ))
 }
 
-/// Port of LivingEntity#tick and its inherited baseTick slots. The caller owns
-/// the entity's retained tick root; every callback ends its state borrow first.
+/// Port of LivingEntity#tick and its inherited baseTick slots. Keep
+/// no state borrow across callbacks. A counted receiver root survives removal.
 pub fn tick<E: Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    level: &mut Level,
+    tick_rate: &TickRateManager,
+) -> Result<(), LevelError> {
+    level.retain_entity(entity)?;
+    let result = tick_body(behavior, entity, level, tick_rate);
+    level.release_entity(entity);
+    result
+}
+fn tick_body<E: Entity + ?Sized>(
     behavior: &E,
     entity: EntityRef,
     level: &mut Level,
@@ -147,3 +158,6 @@ pub fn tick_head_turn_parent(entity: EntityRef, level: &mut Level) -> Result<(),
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;

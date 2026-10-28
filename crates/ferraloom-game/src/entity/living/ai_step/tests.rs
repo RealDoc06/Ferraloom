@@ -42,6 +42,9 @@ fn event(entity: EntityRef, text: String, level: &mut Level) -> Result<(), Level
 }
 struct Probe;
 impl Entity for Probe {
+    fn trace_entity_refs(&self, state: &EntityState, references: &mut Vec<EntityRef>) {
+        crate::entity::animal::CowBehavior.trace_entity_refs(state, references);
+    }
     fn is_local_instance_authoritative(
         &self,
         entity: EntityRef,
