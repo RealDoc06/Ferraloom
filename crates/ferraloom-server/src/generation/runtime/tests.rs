@@ -159,7 +159,7 @@ async fn resumed_full_promotion_keeps_the_successful_entity_post_load_checkpoint
     properties.set("level-type", "minecraft:debug_all_block_states");
     let directory = tempfile::tempdir().unwrap();
     let mut world_root = WorldRoot::open(
-        directory.path(),
+        crate::world::WorldStartup::read(directory.path(), &properties).unwrap(),
         &properties,
         &resources,
         &registries,
@@ -509,7 +509,7 @@ async fn structure_status_reads_on_current_thread() {
     properties.set("level-type", "minecraft:debug_all_block_states");
     let directory = tempfile::tempdir().unwrap();
     let mut root = WorldRoot::open(
-        directory.path(),
+        crate::world::WorldStartup::read(directory.path(), &properties).unwrap(),
         &properties,
         &resources,
         &registries,

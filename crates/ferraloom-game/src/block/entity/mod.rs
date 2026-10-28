@@ -29,6 +29,8 @@ pub mod potent_sulfur;
 pub mod sculk;
 pub mod shelf;
 pub mod spawner;
+pub mod test_block;
+pub mod test_instance;
 mod worldgen;
 use super::containers::{
     chest::{BarrelBlockEntity, ChestBlockEntity, ShulkerBoxBlockEntity},
@@ -83,6 +85,14 @@ impl BlockEntityRef {
     }
     /// Port of BlockEntity#setChanged, including comparator-neighbor updates.
     pub fn set_changed(self, level: &mut Level) -> Result<(), LevelError> {
+        level.with_block_entity_callback(self, |level| {
+            let behavior = level.block_entity_state(self)?.behavior();
+            behavior.set_changed_live(self, level)
+        })
+    }
+    /// BlockEntity's superclass implementation. Overrides call this directly,
+    /// so superclass calls never re-enter the receiver's virtual method.
+    pub(crate) fn set_changed_base(self, level: &mut Level) -> Result<(), LevelError> {
         let data = level.block_entity::<BlockEntityData>(self)?;
         let (has_level, state) = (data.has_level, data.block_state);
         if has_level {
@@ -148,6 +158,14 @@ impl BlockEntityData {
 
 /// Port of BlockEntity's virtual methods. Implementations are immutable dispatchers.
 pub trait BlockEntity: Sync {
+    /// Port of the native setChanged virtual on a rooted receiver generation.
+    fn set_changed_live(
+        &self,
+        handle: BlockEntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        handle.set_changed_base(level)
+    }
     /// Port of EntityBlock#getListener for a GameEventListener.Provider receiver.
     fn game_event_listener(
         &self,
@@ -240,6 +258,8 @@ static THE_END_PORTAL: TheEndPortal = TheEndPortal;
 /// Canonical concrete states. Extend this enum when porting a subclass, never Any.
 #[derive(Clone, Debug)]
 pub enum BlockEntityState {
+    TestInstance(Box<test_instance::TestInstanceBlockEntity>),
+    TestBlock(Box<test_block::TestBlockEntity>),
     Jukebox(Box<jukebox::JukeboxBlockEntity>),
     CopperGolemStatue(Box<copper_golem_statue::CopperGolemStatueBlockEntity>),
     Shelf(Box<shelf::ShelfBlockEntity>),
@@ -284,6 +304,8 @@ pub enum BlockEntityState {
 impl BlockEntityState {
     pub fn data(&self) -> &BlockEntityData {
         match self {
+            Self::TestInstance(entity) => &entity.parent,
+            Self::TestBlock(entity) => &entity.parent,
             Self::Jukebox(entity) => &entity.parent,
             Self::CopperGolemStatue(entity) => &entity.parent,
             Self::Shelf(entity) => &entity.parent,
@@ -328,6 +350,8 @@ impl BlockEntityState {
     }
     pub fn data_mut(&mut self) -> &mut BlockEntityData {
         match self {
+            Self::TestInstance(entity) => &mut entity.parent,
+            Self::TestBlock(entity) => &mut entity.parent,
             Self::Jukebox(entity) => &mut entity.parent,
             Self::CopperGolemStatue(entity) => &mut entity.parent,
             Self::Shelf(entity) => &mut entity.parent,
@@ -372,6 +396,8 @@ impl BlockEntityState {
     }
     pub fn behavior(&self) -> &'static dyn BlockEntity {
         match self {
+            Self::TestInstance(_) => &test_instance::TEST_INSTANCE_ENTITY,
+            Self::TestBlock(_) => &test_block::TEST_BLOCK_ENTITY,
             Self::Jukebox(_) => &jukebox::JUKEBOX_ENTITY,
             Self::CopperGolemStatue(_) => &copper_golem_statue::COPPER_GOLEM_STATUE_ENTITY,
             Self::Shelf(_) => &shelf::SHELF_ENTITY,
@@ -602,6 +628,12 @@ pub fn create(pos: BlockPos, state: BlockState) -> Result<BlockEntityState, Leve
         .ok_or(LevelError::UnsupportedBlockEntity(state.block()))?;
     let data = BlockEntityData::new(kind, pos, state)?;
     match kind {
+        BlockEntityType::TEST_INSTANCE_BLOCK => Ok(BlockEntityState::TestInstance(Box::new(
+            test_instance::TestInstanceBlockEntity::new(data),
+        ))),
+        BlockEntityType::TEST_BLOCK => Ok(BlockEntityState::TestBlock(Box::new(
+            test_block::TestBlockEntity::new(data),
+        ))),
         BlockEntityType::JUKEBOX => Ok(BlockEntityState::Jukebox(Box::new(
             jukebox::JukeboxBlockEntity::new(data),
         ))),
@@ -765,7 +797,9 @@ pub fn supports(block: Block) -> bool {
     matches!(
         registry::for_block(block),
         Some(
-            BlockEntityType::BEACON
+            BlockEntityType::TEST_INSTANCE_BLOCK
+                | BlockEntityType::TEST_BLOCK
+                | BlockEntityType::BEACON
                 | BlockEntityType::CONDUIT
                 | BlockEntityType::SHELF
                 | BlockEntityType::COPPER_GOLEM_STATUE
@@ -837,6 +871,8 @@ macro_rules! projection {
         }
     };
 }
+projection!(test_instance::TestInstanceBlockEntity, TestInstance);
+projection!(test_block::TestBlockEntity, TestBlock);
 projection!(super::containers::command::CommandBlockEntity, Command);
 projection!(end_gateway::TheEndGatewayBlockEntity, EndGateway);
 projection!(jigsaw::JigsawBlockEntity, Jigsaw);

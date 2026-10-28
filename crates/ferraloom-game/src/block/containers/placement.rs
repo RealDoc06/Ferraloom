@@ -147,8 +147,8 @@ fn least_oxidized_connected(
     let mut own_block = state.block();
     let mut other_block = connected.block();
     if own.is_waxed != other.is_waxed {
-        own_block = own.unwaxed.unwrap_or(own_block);
-        other_block = other.unwaxed.unwrap_or(other_block);
+        own_block = own_block.unwaxed().unwrap_or(own_block);
+        other_block = other_block.unwaxed().unwrap_or(other_block);
     }
     let chosen = if own.weathering_stage <= other.weathering_stage {
         own_block

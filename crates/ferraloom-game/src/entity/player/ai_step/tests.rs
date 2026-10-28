@@ -1,9 +1,12 @@
 use super::*;
+use crate::entity::{EntityData, EntityMethod, synched_data};
 use crate::entity::{
     EntityState,
     player::{GameType, PlayerBehavior},
 };
+use ferraloom_data::EntityType;
 use ferraloom_nbt::Tag;
+use ferraloom_util::Vec3;
 use ferraloom_util::{BlockPos, Uuid};
 fn vec_bits(v: Vec3) -> String {
     format!(
@@ -41,6 +44,12 @@ fn event(entity: EntityRef, text: String, level: &mut Level) -> Result<(), Level
 }
 struct Probe;
 impl Entity for Probe {
+    fn is_effective_ai(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        PlayerBehavior.is_effective_ai(entity, level)
+    }
+    fn is_immobile(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        PlayerBehavior.is_immobile(entity, level)
+    }
     fn can_freeze(&self, _: EntityRef, _: &Level) -> Result<bool, LevelError> {
         Ok(false)
     }
