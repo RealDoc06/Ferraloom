@@ -6,7 +6,6 @@ use crate::Block;
 pub struct CopperChestProperties {
     pub weathering_stage: u8,
     pub is_waxed: bool,
-    pub unwaxed: Option<Block>,
 }
 include!(concat!(env!("OUT_DIR"), "/copper_chest_properties.rs"));
 
