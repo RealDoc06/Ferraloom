@@ -310,10 +310,7 @@ fn native_drowned_and_piglin_constructor_fields_have_one_canonical_owner() {
                     ai.navigation.require(),
                     Err(AiOperation::Navigation(NavigationKind::Amphibious))
                 );
-                assert_eq!(
-                    ai.move_control.require(),
-                    Err(AiOperation::MoveControl(MoveControlKind::Drowned))
-                );
+                assert_eq!(ai.move_control.kind(), MoveControlKind::Drowned);
                 assert_eq!(
                     drowned.parent.as_mob().pathfinding_malus[PathType::Water.id() as usize]
                         .unwrap()

@@ -3,7 +3,10 @@ use super::Zombie;
 use crate::{
     entity::{
         EntityData,
-        ai::{AiOperation, MoveControlKind, NavigationKind, Unported, pathfinder::PathType},
+        ai::{
+            AiOperation, MoveControlKind, NavigationKind, Unported, control::MoveControl,
+            pathfinder::PathType,
+        },
     },
     level::{Level, LevelError},
 };
@@ -22,7 +25,7 @@ impl Drowned {
         let mut parent = Zombie::with_level(parent, level)?;
         let mob = parent.as_mob_mut();
         mob.ai.navigation = Unported::new(AiOperation::Navigation(NavigationKind::Amphibious));
-        mob.ai.move_control = Unported::new(AiOperation::MoveControl(MoveControlKind::Drowned));
+        mob.ai.move_control = MoveControl::new(MoveControlKind::Drowned);
         mob.pathfinding_malus[PathType::Water.id() as usize] = Some(0.0);
         Ok(Self {
             parent,

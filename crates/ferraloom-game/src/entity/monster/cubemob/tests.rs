@@ -129,8 +129,8 @@ fn native_cube_constructors_use_ageable_parent_and_do_not_apply_size_attributes(
             Err(AiOperation::Navigation(NavigationKind::Ground))
         );
         assert_eq!(
-            parent.as_mob().ai.move_control.require(),
-            Err(AiOperation::MoveControl(MoveControlKind::AbstractCube))
+            parent.as_mob().ai.move_control.kind(),
+            MoveControlKind::AbstractCube
         );
         assert_eq!(parent.parent.age, 0);
         assert_eq!(parent.parent.forced_age, 0);

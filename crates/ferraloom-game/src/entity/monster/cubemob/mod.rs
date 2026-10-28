@@ -54,7 +54,7 @@ impl AbstractCubeMob {
     ) -> Result<Self, crate::level::LevelError> {
         use crate::entity::{
             AgeableMob, Mob, PathfinderMob,
-            ai::{AiOperation, MoveControlKind, Unported},
+            ai::{MoveControlKind, control::MoveControl},
         };
         let mut mob = Mob::with_parent_and_metadata(parent, level.context(), |base, _| {
             base.entity_data
@@ -77,8 +77,7 @@ impl AbstractCubeMob {
         mob.parent.eye_height = dimensions.eye_height;
         // The controller's owned family fields and tick remain a required seam
         // until the canonical MoveControl family state is released by AI.
-        mob.ai.move_control =
-            Unported::new(AiOperation::MoveControl(MoveControlKind::AbstractCube));
+        mob.ai.move_control = MoveControl::new(MoveControlKind::AbstractCube);
         Ok(Self {
             parent: AgeableMob {
                 parent: PathfinderMob::with_parent(mob),
