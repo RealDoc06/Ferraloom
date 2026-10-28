@@ -134,6 +134,6 @@ pub fn tick_jump(entity: EntityRef, level: &mut Level) -> Result<(), LevelError>
     retained(entity, level, runtime::tick_jump)
 }
 /// Port of BodyRotationControl#clientTick's live base-controller entry.
-pub fn tick_body(entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+pub fn tick_body_rotation(entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
     retained(entity, level, runtime::tick_body)
 }
