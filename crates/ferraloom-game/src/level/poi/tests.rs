@@ -187,3 +187,28 @@ fn storage_errors_keep_the_original_owned_cause() {
         )))
     );
 }
+
+#[test]
+fn village_distance_tracks_occupied_sources_and_caps_at_seven_without_loading() {
+    use ferraloom_util::SectionPos;
+    let mut manager = loaded();
+    let pos = BlockPos::new(1, 0, 1);
+    manager.add(pos, PoiTypeId::HOME).unwrap();
+    let village = |kind| kind == PoiTypeId::HOME;
+    assert_eq!(
+        manager.sections_to_village(SectionPos::new(0, 0, 0), village),
+        7
+    );
+    manager.take(village, |_, _| true, pos, 1).unwrap();
+    for distance in 0..=8 {
+        assert_eq!(
+            manager.sections_to_village(SectionPos::new(distance, distance, -distance), village),
+            distance.min(7)
+        );
+    }
+    manager.release(pos).unwrap();
+    assert_eq!(
+        manager.sections_to_village(SectionPos::new(0, 0, 0), village),
+        7
+    );
+}

@@ -273,6 +273,94 @@ impl PoiManager {
         }
         Ok(closest)
     }
+    pub fn find_all(
+        &self,
+        predicate: impl FnMut(PoiTypeId) -> bool,
+        mut filter: impl FnMut(BlockPos) -> bool,
+        center: BlockPos,
+        radius: i32,
+        occupancy: Occupancy,
+    ) -> Result<Vec<BlockPos>, PoiError> {
+        Ok(self
+            .get_in_range(predicate, center, radius, occupancy)?
+            .into_iter()
+            .filter(|record| filter(record.pos))
+            .map(|record| record.pos)
+            .collect())
+    }
+    pub fn find_all_with_type(
+        &self,
+        predicate: impl FnMut(PoiTypeId) -> bool,
+        mut filter: impl FnMut(BlockPos) -> bool,
+        center: BlockPos,
+        radius: i32,
+        occupancy: Occupancy,
+    ) -> Result<Vec<(PoiTypeId, BlockPos)>, PoiError> {
+        Ok(self
+            .get_in_range(predicate, center, radius, occupancy)?
+            .into_iter()
+            .filter(|record| filter(record.pos))
+            .map(|record| (record.poi_type, record.pos))
+            .collect())
+    }
+    pub fn find_all_closest_first_with_type(
+        &self,
+        predicate: impl FnMut(PoiTypeId) -> bool,
+        filter: impl FnMut(BlockPos) -> bool,
+        center: BlockPos,
+        radius: i32,
+        occupancy: Occupancy,
+    ) -> Result<Vec<(PoiTypeId, BlockPos)>, PoiError> {
+        let mut records = self.find_all_with_type(predicate, filter, center, radius, occupancy)?;
+        records.sort_by(|a, b| {
+            Self::distance_squared(a.1, center).total_cmp(&Self::distance_squared(b.1, center))
+        });
+        Ok(records)
+    }
+    pub fn find_closest_with_type(
+        &self,
+        predicate: impl FnMut(PoiTypeId) -> bool,
+        center: BlockPos,
+        radius: i32,
+        occupancy: Occupancy,
+    ) -> Result<Option<(PoiTypeId, BlockPos)>, PoiError> {
+        let mut closest = None;
+        let mut best = f64::INFINITY;
+        for record in self.get_in_range(predicate, center, radius, occupancy)? {
+            let distance = Self::distance_squared(record.pos, center);
+            if distance < best {
+                best = distance;
+                closest = Some((record.poi_type, record.pos));
+            }
+        }
+        Ok(closest)
+    }
+    /// Port of PoiManager#sectionsToVillage. On the obstacle-free 26-neighbor
+    /// SectionTracker graph, the settled level is Chebyshev distance to an
+    /// occupied village source, capped at 7. Query only loaded sections, like get.
+    /// The predicate must resolve the canonical PoiTypeTags.VILLAGE tag.
+    pub fn sections_to_village(
+        &self,
+        section: ferraloom_util::SectionPos,
+        mut village_type: impl FnMut(PoiTypeId) -> bool,
+    ) -> i32 {
+        let mut result = 7;
+        for (chunk, data) in &self.chunks {
+            for (y, records) in &data.sections {
+                if !records
+                    .records(&mut village_type, Occupancy::IsOccupied)
+                    .is_empty()
+                {
+                    let distance = (i64::from(chunk.x) - i64::from(section.x))
+                        .abs()
+                        .max((i64::from(*y) - i64::from(section.y)).abs())
+                        .max((i64::from(chunk.z) - i64::from(section.z)).abs());
+                    result = result.min(distance.min(7) as i32);
+                }
+            }
+        }
+        result
+    }
     pub fn take(
         &mut self,
         predicate: impl FnMut(PoiTypeId) -> bool,
