@@ -19,6 +19,7 @@ enum Event {
 }
 
 struct Driver {
+    spawn_counter: Option<RefCell<crate::level::simulation::FixedPlayerDistanceChunkTracker>>,
     owner: Cell<bool>,
     level: Cell<Option<i32>>,
     promote: Cell<bool>,
@@ -41,6 +42,7 @@ struct Driver {
 impl Driver {
     fn new(level: Option<i32>) -> Self {
         Self {
+            spawn_counter: None,
             owner: Cell::new(true),
             level: Cell::new(level),
             promote: Cell::new(true),
@@ -71,6 +73,15 @@ impl Driver {
 }
 
 impl AcquireDriver for Driver {
+    fn natural_spawn_chunk_distance(&self, pos: ChunkPos) -> Result<i32, LevelError> {
+        let mut counter = self
+            .spawn_counter
+            .as_ref()
+            .ok_or(LevelError::MissingNaturalSpawnCounter)?
+            .borrow_mut();
+        counter.run_all_updates();
+        Ok(counter.level(pos))
+    }
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -175,6 +186,59 @@ impl AcquireDriver for Driver {
         self.events.borrow_mut().push(Event::Forward);
         Ok(self.present.get())
     }
+}
+
+impl Level {
+    /// Explicit native natural-spawn source chunks, with the real graph settled
+    /// before installing this test-only driver. No proximity result is cached.
+    pub(crate) fn install_spawn_proximity_fixture(
+        &mut self,
+        player_chunks: &[ChunkPos],
+    ) -> Result<(), LevelError> {
+        let mut counter = crate::level::simulation::FixedPlayerDistanceChunkTracker::default();
+        for &pos in player_chunks {
+            counter.update_player_chunk(pos, true);
+        }
+        counter.run_all_updates();
+        let mut driver = Driver::new(None);
+        driver.spawn_counter = Some(RefCell::new(counter));
+        let height = self.region().min_y..self.region().max_y;
+        self.install_acquire_driver(Box::new(driver), height)
+    }
+}
+
+#[test]
+fn spawn_proximity_requires_the_canonical_counter_and_settles_fixture_sources() {
+    let make = || {
+        Level::new(
+            crate::level::Region::new(&crate::Behaviors::EMPTY),
+            crate::level::LevelContext::fixture(0, 63),
+        )
+    };
+    let mut level = make();
+    assert_eq!(
+        level.any_player_close_enough_for_spawning(POS),
+        Err(LevelError::MissingNaturalSpawnCounter)
+    );
+    level.install_spawn_proximity_fixture(&[POS]).unwrap();
+    assert!(
+        level
+            .any_player_close_enough_for_spawning(ChunkPos::new(5, 5))
+            .unwrap()
+    );
+    assert!(
+        !level
+            .any_player_close_enough_for_spawning(ChunkPos::new(9, 0))
+            .unwrap()
+    );
+    assert!(
+        !level
+            .any_player_close_enough_for_spawning(ChunkPos::new(6, 0))
+            .unwrap()
+    );
+    let mut absent = make();
+    absent.install_spawn_proximity_fixture(&[]).unwrap();
+    assert!(!absent.any_player_close_enough_for_spawning(POS).unwrap());
 }
 
 struct MainTask(AcquireTaskKind);
@@ -661,4 +725,70 @@ fn unknown_tickets_use_native_status_levels_and_signed_refresh_expiry() {
             .unwrap(),
         trace
     );
+}
+
+#[test]
+fn spawn_proximity_matches_native_settled_counter_and_player_distance_vectors() {
+    use crate::entity::{
+        EntityState,
+        player::{GameType, ServerPlayer},
+    };
+    use ferraloom_util::{Uuid, Vec3};
+    for row in include_str!("../../../tests/java/level/spawn-proximity.tsv").lines() {
+        let fields: Vec<_> = row.split('\t').collect();
+        let pos = ChunkPos::new(fields[1].parse().unwrap(), fields[2].parse().unwrap());
+        let mut level = Level::new(
+            crate::level::Region::new(&crate::Behaviors::EMPTY),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        if fields[0] == "player" {
+            let at = Vec3::new(
+                fields[3].parse().unwrap(),
+                fields[4].parse().unwrap(),
+                fields[5].parse().unwrap(),
+            );
+            let mode = if fields[6] == "true" {
+                GameType::Spectator
+            } else {
+                GameType::Survival
+            };
+            let player = level.next_entity_ref();
+            level
+                .add_entity(
+                    player,
+                    EntityState::Player(Box::new(ServerPlayer::new(
+                        Uuid::new(1, 2),
+                        "spawn".into(),
+                        1,
+                        at,
+                        mode,
+                    ))),
+                )
+                .unwrap();
+            level.install_spawn_proximity_fixture(&[POS]).unwrap();
+            assert_eq!(
+                level.any_player_close_enough_for_spawning(pos).unwrap(),
+                fields[7] == "true",
+                "{row}"
+            );
+        } else {
+            let sources = if fields[0] == "removed" {
+                &[][..]
+            } else {
+                &[POS][..]
+            };
+            level.install_spawn_proximity_fixture(sources).unwrap();
+            let distance = level
+                .acquire_driver()
+                .unwrap()
+                .natural_spawn_chunk_distance(pos)
+                .unwrap();
+            let result = match distance {
+                ..=5 => "TRUE",
+                6..=8 => "DEFAULT",
+                _ => "FALSE",
+            };
+            assert_eq!(result, fields[3], "{row}");
+        }
+    }
 }

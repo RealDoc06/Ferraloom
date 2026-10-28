@@ -91,6 +91,11 @@ pub enum AcquireFailure {
 /// keep reentrant completions reachable, never evict, and never advance a tick.
 /// Worker failure/cancellation returns an error instead of an endless Pending.
 pub trait AcquireDriver: Send + Any {
+    /// DistanceManager#hasPlayersNearby settles the sole natural-spawn graph
+    /// before reading its Chebyshev distance. This does not acquire a chunk.
+    fn natural_spawn_chunk_distance(&self, _pos: ChunkPos) -> Result<i32, LevelError> {
+        Err(LevelError::MissingNaturalSpawnCounter)
+    }
     /// Port of ChunkMap#updatePlayerStatus's synchronous DistanceManager boundary.
     /// This mutates the existing ticket owner, with no queued publication.
     fn update_player_tracking_status(

@@ -158,6 +158,7 @@ pub enum LevelError {
     MissingBlockTransformers,
     MissingEnchantments,
     MissingSpawnProtectionContext,
+    MissingNaturalSpawnCounter,
     MissingServerShared,
     EntityIdAllocationExhausted,
     MissingBlockTags,

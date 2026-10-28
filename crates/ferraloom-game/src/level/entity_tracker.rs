@@ -36,6 +36,35 @@ impl Default for EntityTracker {
     }
 }
 impl Level {
+    /// Port of ServerLevel#anyPlayerCloseEnoughForSpawning and ChunkMap's
+    /// counter shortcut, then its strict horizontal player-distance check.
+    pub fn any_player_close_enough_for_spawning(
+        &self,
+        pos: ferraloom_util::ChunkPos,
+    ) -> Result<bool, LevelError> {
+        let distance = self
+            .acquire_driver()
+            .ok_or(LevelError::MissingNaturalSpawnCounter)?
+            .natural_spawn_chunk_distance(pos)?;
+        if distance <= 5 {
+            return Ok(true);
+        }
+        if distance > 8 {
+            return Ok(false);
+        }
+        for &player in self.region().entity_tracker.player_map.keys() {
+            if self.entity_behavior(player)?.is_spectator(player, self)? {
+                continue;
+            }
+            let at = self.entity::<EntityData>(player)?.position;
+            let dx = f64::from(pos.x.wrapping_mul(16).wrapping_add(8)) - at.x;
+            let dz = f64::from(pos.z.wrapping_mul(16).wrapping_add(8)) - at.z;
+            if dx * dx + dz * dz < 16384.0 {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
     /// Port of ServerLevel#canSpreadFireAround and ChunkMap#anyPlayerCloseEnoughTo.
     /// Distance is from the integer block corner, with a strict radius boundary;
     /// ignored chunk-generation players still participate unless spectators.
