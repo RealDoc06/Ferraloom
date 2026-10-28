@@ -70,7 +70,11 @@ impl Fixture {
                 base.old_position.z = d(2);
             }
             "look" => self.cow.as_mob_mut().ai.look_control.set_look_at(
-                position + Vec3::new(d(1), f64::from(1.3_f32) + d(2), d(3)),
+                Vec3::new(
+                    position.x + d(1),
+                    position.y + f64::from(1.3_f32) + d(2),
+                    position.z + d(3),
+                ),
                 f(4),
                 f(5),
             ),
