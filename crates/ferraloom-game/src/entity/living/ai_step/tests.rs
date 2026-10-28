@@ -85,7 +85,7 @@ impl Entity for Probe {
         event(entity, "push".into(), level)
     }
 }
-const BEHAVIORS: Behaviors = Behaviors::EMPTY.with_entity(EntityType::COW, &Probe);
+static BEHAVIORS: Behaviors = Behaviors::EMPTY.with_entity(EntityType::COW, &Probe);
 
 #[test]
 fn native_nonplayer_thresholds_no_ai_and_immobility_preserve_phase_order() {
