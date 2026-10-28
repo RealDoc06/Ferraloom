@@ -8,7 +8,7 @@ use ferraloom_util::{
     BlockPos,
     random::{LegacyRandomSource, Random, RandomSource},
 };
-use std::{collections::BTreeSet, io::Read, sync::LazyLock};
+use std::{io::Read, sync::LazyLock};
 
 static VECTORS: LazyLock<String> = LazyLock::new(|| {
     let mut text = String::new();
@@ -48,7 +48,7 @@ fn statue(state: BlockState) -> bool {
 }
 fn replay(modes: &[&str], expected: usize, statues_only: Option<bool>) {
     let mut level = level();
-    let mut previous = BTreeSet::new();
+    let mut previous = Vec::new();
     let mut checked = 0;
     for line in VECTORS
         .lines()
@@ -69,7 +69,7 @@ fn replay(modes: &[&str], expected: usize, statues_only: Option<bool>) {
             } else {
                 set(&mut level, pos, state);
             }
-            previous.insert(pos);
+            previous.push(pos);
         }
         if f[4] == "3" {
             level.remove_block_entity(POS).unwrap();
@@ -108,7 +108,7 @@ fn replay(modes: &[&str], expected: usize, statues_only: Option<bool>) {
             .into_iter()
             .filter_map(|effect| {
                 if let LevelEffect::BlockUpdated { pos, old, new } = effect {
-                    previous.insert(pos);
+                    previous.push(pos);
                     Some(format!(
                         "{},{},{}:{}>{}",
                         pos.x,
@@ -130,7 +130,7 @@ fn replay(modes: &[&str], expected: usize, statues_only: Option<bool>) {
                 expected,
                 "{line}, {pos:?}"
             );
-            previous.insert(pos);
+            previous.push(pos);
         }
         let after = level.block_entity_ref(POS).unwrap();
         if !statue(original) {
