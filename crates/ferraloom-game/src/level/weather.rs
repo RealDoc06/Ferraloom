@@ -165,12 +165,14 @@ impl Weather {
         if self.old_rain != self.rain {
             events.push(LevelEffect::WeatherEvent {
                 event: 7,
+                global: false,
                 param: self.rain,
             });
         }
         if self.old_thunder != self.thunder {
             events.push(LevelEffect::WeatherEvent {
                 event: 8,
+                global: false,
                 param: self.thunder,
             });
         }
@@ -178,13 +180,16 @@ impl Weather {
             events.push(LevelEffect::WeatherEvent {
                 event: if was_raining { 2 } else { 1 },
                 param: 0.0,
+                global: true,
             });
             events.push(LevelEffect::WeatherEvent {
                 event: 7,
+                global: true,
                 param: self.rain,
             });
             events.push(LevelEffect::WeatherEvent {
                 event: 8,
+                global: true,
                 param: self.thunder,
             });
         }
@@ -481,8 +486,8 @@ impl Level {
         }
         self.can_survive(Block::SNOW.default_state(), pos)
     }
-    /// Port of ServerLevel#tickPrecipitation. Selection remains observable in
-    /// the pending-family hook while survival, entity pushing and cauldrons land.
+    /// Port of ServerLevel#tickPrecipitation. Chunk random ticks select the
+    /// column before this heightmap/biome query and synchronous mutation path.
     pub fn tick_precipitation(&mut self, pos: BlockPos) -> std::result::Result<(), LevelError> {
         use crate::block::{BlockMethod, UnportedOperation};
         use ferraloom_data::Block;
@@ -545,7 +550,7 @@ impl Level {
             let layers = state.get(properties::LAYERS).unwrap();
             if i32::from(layers) < self.rules().max_snow_accumulation_height.min(8) {
                 let next = state.with(properties::LAYERS, layers + 1).unwrap();
-                self.unported_operation(crate::block::UnportedOperation::PushEntitiesUp)?;
+                self.push_entities_up(state, next, top)?;
                 self.set_block_and_update(top, next)?;
             }
         } else {
@@ -743,11 +748,11 @@ mod tests {
             events
                 .iter()
                 .map(|e| match e {
-                    LevelEffect::WeatherEvent { event, .. } => *event,
+                    LevelEffect::WeatherEvent { event, global, .. } => (*event, *global),
                     _ => unreachable!(),
                 })
                 .collect::<Vec<_>>(),
-            vec![7, 8, 1, 7, 8]
+            vec![(7, false), (8, false), (1, true), (7, true), (8, true)]
         );
     }
 }
