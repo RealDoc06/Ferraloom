@@ -33,7 +33,7 @@ impl BlockBehavior for ComparatorObserver {
                 pos.x,
                 pos.y,
                 pos.z,
-                source.id()
+                source.protocol_id()
             ));
         });
         Ok(())
@@ -94,7 +94,7 @@ fn native_statue_removal_notifies_only_comparators_in_order() {
         let mut expected = fields[3].split(';');
         assert_eq!(
             expected.next().unwrap(),
-            format!("u:{}", state.block().id())
+            format!("u:{}", state.block().protocol_id())
         );
         NEIGHBORS.with_borrow(|trace| assert_eq!(trace, &expected.collect::<Vec<_>>(), "{line}"));
         assert!(level.take_effects().is_empty(), "{line}");
