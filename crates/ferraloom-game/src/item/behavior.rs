@@ -161,6 +161,20 @@ impl ItemBehavior for BoneMeal {
 }
 static BONE_MEAL: BoneMeal = BoneMeal;
 
+struct Honeycomb;
+impl ItemBehavior for Honeycomb {
+    fn use_on(
+        &self,
+        _item: Item,
+        _receiver: StackRef,
+        context: &UseOnContext<'_>,
+        operation: &mut StackOperation<'_>,
+    ) -> Result<Option<InteractionResult>, LevelError> {
+        super::honeycomb::use_on(context, operation)
+    }
+}
+static HONEYCOMB: Honeycomb = Honeycomb;
+
 struct BlockItem;
 impl ItemBehavior for BlockItem {
     fn use_on(
@@ -184,6 +198,7 @@ pub fn ported_behavior(item: Item, method: ItemMethod) -> Option<&'static dyn It
     match (method, owner) {
         (ItemMethod::UseOn, ItemClass::Item) => Some(&ITEM),
         (ItemMethod::UseOn, ItemClass::BoneMealItem) => Some(&BONE_MEAL),
+        (ItemMethod::UseOn, ItemClass::HoneycombItem) => Some(&HONEYCOMB),
         (
             ItemMethod::UseOn
             | ItemMethod::Place

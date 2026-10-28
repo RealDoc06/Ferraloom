@@ -6,6 +6,7 @@ pub mod bone_meal;
 pub mod damage;
 pub mod durability;
 pub mod enchantment;
+pub(crate) mod honeycomb;
 pub mod name;
 mod placement;
 mod pov;
