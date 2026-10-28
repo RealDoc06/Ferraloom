@@ -144,6 +144,20 @@ fn canonical_constructors_match_native_parent_xp_health_and_navigation() {
         let kind = EntityType::from_name(f[1]).unwrap();
         let base = EntityData::new(kind, 1, 0);
         let (monster, navigation) = match kind {
+            EntityType::DROWNED => (
+                zombie::drowned::Drowned::with_level(base, &level)
+                    .unwrap()
+                    .parent
+                    .parent,
+                NavigationKind::Amphibious,
+            ),
+            EntityType::ZOMBIFIED_PIGLIN => (
+                zombie::zombified_piglin::ZombifiedPiglin::with_level(base, &level)
+                    .unwrap()
+                    .parent
+                    .parent,
+                NavigationKind::Ground,
+            ),
             EntityType::ZOMBIE => (
                 zombie::Zombie::with_level(base, &level).unwrap().parent,
                 NavigationKind::Ground,
@@ -198,7 +212,7 @@ fn canonical_constructors_match_native_parent_xp_health_and_navigation() {
         );
         checked += 1;
     }
-    assert_eq!(checked, 4);
+    assert_eq!(checked, 6);
 }
 
 #[test]
@@ -212,7 +226,13 @@ fn zombie_subclass_save_load_round_trips_match_vanilla() {
     {
         let f: Vec<_> = row.split('\t').collect();
         let kind = EntityType::from_name(f[1]).unwrap();
-        let mut mob = zombie::Zombie::with_level(EntityData::new(kind, 1, 0), &level).unwrap();
+        let mut mob = if kind == EntityType::DROWNED {
+            zombie::drowned::Drowned::with_level(EntityData::new(kind, 1, 0), &level)
+                .unwrap()
+                .parent
+        } else {
+            zombie::Zombie::with_level(EntityData::new(kind, 1, 0), &level).unwrap()
+        };
         let mut tag = CompoundTag::new();
         tag.insert("IsBaby", Tag::Byte(i8::from(f[2] == "true")));
         tag.insert("InWaterTime", Tag::Int(37));
@@ -253,5 +273,125 @@ fn zombie_subclass_save_load_round_trips_match_vanilla() {
         assert_eq!(saved, repeated);
         checked += 1;
     }
-    assert_eq!(checked, 20);
+    assert_eq!(checked, 30);
+}
+
+#[test]
+fn native_drowned_and_piglin_constructor_fields_have_one_canonical_owner() {
+    use crate::entity::ai::{AiOperation, MoveControlKind, NavigationKind, pathfinder::PathType};
+    let level = crate::entity::tests::level(false);
+    let drowned =
+        zombie::drowned::Drowned::with_level(EntityData::new(EntityType::DROWNED, 1, 0), &level)
+            .unwrap();
+    let piglin = zombie::zombified_piglin::ZombifiedPiglin::with_level(
+        EntityData::new(EntityType::ZOMBIFIED_PIGLIN, 2, 0),
+        &level,
+    )
+    .unwrap();
+    let mut checked = 0;
+    for row in VECTORS
+        .lines()
+        .filter(|row| row.starts_with("monster-subclass\t"))
+    {
+        let f: Vec<_> = row.split('\t').collect();
+        match f[1] {
+            "drowned" => {
+                assert_eq!(f[2], "AmphibiousPathNavigation");
+                assert_eq!(f[3], "DrownedMoveControl");
+                let ai = &drowned.parent.as_mob().ai;
+                assert_eq!(
+                    ai.navigation.require(),
+                    Err(AiOperation::Navigation(NavigationKind::Amphibious))
+                );
+                assert_eq!(
+                    ai.move_control.require(),
+                    Err(AiOperation::MoveControl(MoveControlKind::Drowned))
+                );
+                assert_eq!(
+                    drowned.parent.as_mob().pathfinding_malus[PathType::Water.id() as usize]
+                        .unwrap()
+                        .to_bits(),
+                    u32::from_str_radix(f[4], 16).unwrap()
+                );
+                assert_eq!(drowned.searching_for_land, f[5] == "true");
+                assert_eq!(
+                    drowned.ranged_attack_uncertainty.to_bits(),
+                    u32::from_str_radix(f[6], 16).unwrap()
+                );
+            }
+            "zombified_piglin" => {
+                assert_eq!(
+                    piglin.parent.as_mob().pathfinding_malus[PathType::Lava.id() as usize]
+                        .unwrap()
+                        .to_bits(),
+                    u32::from_str_radix(f[2], 16).unwrap()
+                );
+                assert_eq!(
+                    piglin.play_first_anger_sound_in,
+                    f[3].parse::<i32>().unwrap()
+                );
+                assert_eq!(
+                    piglin.persistent_anger_end_time,
+                    f[4].parse::<i64>().unwrap()
+                );
+                assert_eq!(piglin.ticks_until_next_alert, f[5].parse::<i32>().unwrap());
+                assert!(piglin.persistent_anger_target.is_none());
+            }
+            name => panic!("unrecognized subclass {name}"),
+        }
+        checked += 1;
+    }
+    assert_eq!(checked, 2);
+}
+
+#[test]
+fn native_piglin_anger_nbt_prioritizes_absolute_time_and_round_trips_references() {
+    use zombie::zombified_piglin::ZombifiedPiglin;
+    let level = crate::entity::tests::level(false);
+    let mut checked = 0;
+    for row in VECTORS
+        .lines()
+        .filter(|row| row.starts_with("piglin-anger\t"))
+    {
+        let f: Vec<_> = row.split('\t').collect();
+        let input = ferraloom_nbt::parse_compound(f[2]).unwrap();
+        let mut piglin = ZombifiedPiglin::with_level(
+            EntityData::new(EntityType::ZOMBIFIED_PIGLIN, 1, 0),
+            &level,
+        )
+        .unwrap();
+        piglin.read_anger_end_time(&input, f[1].parse().unwrap());
+        piglin.read_anger_target(&input);
+        let mut saved = ferraloom_nbt::CompoundTag::new();
+        piglin.add_anger_save_data(&mut saved, &level).unwrap();
+        assert_eq!(
+            saved.get_long_or("anger_end_time", 0),
+            f[3].parse::<i64>().unwrap()
+        );
+        let expected_target = if f[4] == "-" {
+            None
+        } else {
+            Some(ferraloom_nbt::parse(f[4]).unwrap())
+        };
+        assert_eq!(saved.get("angry_at"), expected_target.as_ref());
+        // The native mocked ServerLevel has no entity with that UUID. Resolution
+        // is a live read and does not erase the retained unresolved reference.
+        let target = piglin
+            .persistent_anger_target
+            .as_mut()
+            .and_then(|r| r.resolve(&level).unwrap());
+        assert_eq!(target.is_none(), f[5] == "true");
+        let mut again = ZombifiedPiglin::with_level(
+            EntityData::new(EntityType::ZOMBIFIED_PIGLIN, 2, 1),
+            &level,
+        )
+        .unwrap();
+        again.read_anger_end_time(&saved, f[1].parse().unwrap());
+        again.read_anger_target(&saved);
+        let mut repeated = ferraloom_nbt::CompoundTag::new();
+        again.add_anger_save_data(&mut repeated, &level).unwrap();
+        assert_eq!(saved, repeated);
+        checked += 1;
+    }
+    assert_eq!(checked, 24);
 }

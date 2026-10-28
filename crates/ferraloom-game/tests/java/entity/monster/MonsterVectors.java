@@ -120,7 +120,8 @@ public final class MonsterVectors {
     BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(context).forEach(net.minecraft.core.component.DataComponentInitializers.PendingComponents::apply);
     var level=new Fixture(registries);
     for(var type:types())constructor(level,type);
-    zombieNbt(level,EntityTypes.ZOMBIE);zombieNbt(level,EntityTypes.HUSK);
+    ZombieSubclassVectors.capture(level);
+    zombieNbt(level,EntityTypes.DROWNED);zombieNbt(level,EntityTypes.ZOMBIE);zombieNbt(level,EntityTypes.HUSK);
     cube(level,EntityTypes.SLIME);cube(level,EntityTypes.MAGMA_CUBE);villagerRandom();
   }
 }

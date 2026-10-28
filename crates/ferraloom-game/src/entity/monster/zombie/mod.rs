@@ -2,7 +2,9 @@
 use crate::entity::synched_data::{EntityDataAccessor, SynchedEntityData};
 use ferraloom_protocol::codec::VarInt;
 
+pub mod drowned;
 pub mod villager;
+pub mod zombified_piglin;
 
 /// Port of Zombie#DATA_BABY_ID.
 pub const DATA_BABY_ID: EntityDataAccessor<bool> = EntityDataAccessor::new(16);
