@@ -1218,6 +1218,7 @@ impl Game<'_> {
         self.lan_critical_hits.clear();
         self.lan_cushion_breaks.clear();
         self.streaming.extra.clear();
+        self.streaming.ahead.clear();
         if announce {
             self.system_message(Text::translate(
                 "menu.multiplayerOptions.publish.stopped",
@@ -2040,6 +2041,28 @@ impl Game<'_> {
             .iter()
             .filter(|g| host.hub.here(g))
             .map(|g| (g.chunk(), radius))
+            .collect();
+        // Ferraloom: the chunks a moving player reaches in 2, 4 and 6 seconds
+        // at their last move's speed, so generation runs ahead of them.
+        self.streaming.ahead = host
+            .hub
+            .guests
+            .iter()
+            .filter(|g| host.hub.here(g))
+            .flat_map(|g| {
+                let (dx, dz) = (
+                    g.position[0] - g.previous_position[0],
+                    g.position[2] - g.previous_position[2],
+                );
+                // Still, or a teleport rather than a move (over 4 blocks a tick).
+                let moving = (1e-4..16.0).contains(&(dx * dx + dz * dz));
+                [40.0, 80.0, 120.0].into_iter().filter(move |_| moving).map(move |ticks| {
+                    (
+                        ((g.position[0] + dx * ticks).floor() as i32) >> 4,
+                        ((g.position[2] + dz * ticks).floor() as i32) >> 4,
+                    )
+                })
+            })
             .collect();
     }
 

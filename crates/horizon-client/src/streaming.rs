@@ -288,6 +288,11 @@ pub struct Streaming {
     /// chunks finish out to `radius + 1` (Chebyshev) and generation reaches
     /// past that as around the player. They are generated and kept but not meshed.
     pub extra: Vec<((i32, i32), i32)>,
+    /// Ferraloom: where moving players will be in a few seconds (chunk
+    /// positions). Generation ranks a column by its distance to these too, so
+    /// terrain on a player's path comes before terrain behind them. Only the
+    /// order of proto generation changes, never what is loaded.
+    pub ahead: Vec<(i32, i32)>,
     /// `extra`'s squares as a grid, made again when `extra` changes.
     cover: Option<ExtraCover>,
     /// Mesh the sections for drawing (false on a server thread).
@@ -341,6 +346,7 @@ struct GenerationInputs<'a> {
     decorates: bool,
     remote: bool,
     loading: bool,
+    ahead: &'a [(i32, i32)],
 }
 impl GenerationScan {
     /// None means the scan was skipped; Some preserves the original candidate
@@ -391,7 +397,8 @@ impl GenerationScan {
                     {
                         continue;
                     }
-                    wanted.push((input.ranges.priority(x, z, input.loading), x, z));
+                    let own = input.ranges.priority(x, z, input.loading);
+                    wanted.push((ahead_priority(own, input.ahead, input.loading, x, z), x, z));
                 }
             }
             // Forced chunks and their generation neighbourhood.
@@ -595,6 +602,7 @@ impl Streaming {
             meshed_total: 0,
             remote: false,
             extra: Vec::new(),
+            ahead: Vec::new(),
             cover: None,
             mesh: true,
             band: None,
@@ -1317,6 +1325,7 @@ impl Streaming {
             decorates: self.decorates,
             remote: self.remote,
             loading: self.loading,
+            ahead: &self.ahead,
         };
         if let Some(wanted) = self.generation_scan.candidates(input, workers * 3) {
             for (_, x, z) in wanted {
@@ -1609,6 +1618,17 @@ impl Band {
             + (i64::from(z - self.z0 + 8).max(0) << 20)
             + i64::from(x - self.x0 + 8).max(0)
     }
+}
+/// A generation priority lowered to the squared distance from the nearest
+/// point ahead of a moving player, outside the loading screen's ring order.
+fn ahead_priority(own: i64, ahead: &[(i32, i32)], loading: bool, x: i32, z: i32) -> i64 {
+    if loading {
+        return own;
+    }
+    ahead
+        .iter()
+        .map(|&(ax, az)| i64::from(x - ax).pow(2) + i64::from(z - az).pow(2))
+        .fold(own, i64::min)
 }
 /// For every column near the extra areas, how far it lies outside the
 /// nearest one's square (Chebyshev distance less its radius; 0 inside). A server has an area per player, and streaming asks of every
@@ -1959,6 +1979,7 @@ mod tests {
                 center: (0, 0),
                 radius,
                 extra: Vec::new(),
+            ahead: Vec::new(),
                 forced: HashSet::new(),
                 generating: Default::default(),
                 protos: Default::default(),
@@ -1984,6 +2005,7 @@ mod tests {
                 decorates: self.decorates,
                 remote: self.remote,
                 loading: false,
+                ahead: &[],
             }
         }
         fn fill(&mut self) {
