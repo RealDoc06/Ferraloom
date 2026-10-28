@@ -892,9 +892,12 @@ impl Streaming {
         if self.paused {
             return (uploads, Vec::new());
         }
+        let span = crate::spans::scope("st_cover");
         ExtraCover::refresh(&mut self.cover, &self.extra);
+        drop(span);
         self.requeue();
         self.relight_edits(world);
+        let span = crate::spans::scope("st_results");
         let deferred = std::mem::take(&mut self.deferred);
         let received = std::iter::from_fn(|| self.results.try_recv().ok());
         for done in deferred.into_iter().chain(received.collect::<Vec<_>>()) {
@@ -967,6 +970,8 @@ impl Streaming {
                 }
             }
         }
+        drop(span);
+        let span = crate::spans::scope("st_unload");
         // Unload far columns.
         let far: Vec<_> = world
             .chunks
@@ -1031,6 +1036,8 @@ impl Streaming {
         self.decorated.retain(|k| {
             protos.contains_key(k) || finishing.contains(k) || world.chunks.contains_key(k)
         });
+        drop(span);
+        let span = crate::spans::scope("st_finalize");
         // Finalize chunks whose neighbourhood is decorated.
         let candidates: Vec<(i32, i32)> = self.protos.keys().copied().collect();
         for (x, z) in candidates {
@@ -1057,6 +1064,8 @@ impl Streaming {
                 self.submit(Some((x, z)), 0, Job::Finish(proto));
             }
         }
+        drop(span);
+        let span = crate::spans::scope("st_decorate");
         // Decorate chunks whose 3x3 proto neighbourhood is available, in
         // vanilla's order: decoration is order dependent where write regions
         // overlap (see `DecorationOrder`).
@@ -1164,7 +1173,9 @@ impl Streaming {
                 self.submit(Some((x, z)), 1, Job::Decorate(x, z, region));
             }
         }
-        self.schedule_generation(world, workers);
+        drop(span);
+        crate::spans::time("st_generate", || self.schedule_generation(world, workers));
+        let span = crate::spans::scope("st_light");
         // Lighting once all neighbours exist.
         let light: Vec<_> = world.dirty_light.iter().copied().collect();
         for (x, z) in light {
@@ -1186,6 +1197,7 @@ impl Streaming {
                 Job::Light(x, z, region, self.sequence, self.sky_light),
             );
         }
+        drop(span);
         // A server draws nothing: its sections are never meshed.
         if !self.mesh {
             world.dirty_sections.clear();

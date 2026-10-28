@@ -42,6 +42,30 @@ pub fn time<T>(name: &'static str, f: impl FnOnce() -> T) -> T {
     SPANS.with(|s| s.borrow_mut().push(Span { name, ms, cpu_ms }));
     out
 }
+/// A span from here to the end of the enclosing scope, for blocks that
+/// borrow too much to fit in `time`'s closure: `let _span = spans::scope("x");`
+#[inline]
+pub fn scope(name: &'static str) -> Scope {
+    Scope(
+        ENABLED
+            .load(Ordering::Relaxed)
+            .then(|| (name, Instant::now(), thread_cpu())),
+    )
+}
+/// The running span `scope` returns; it records itself when dropped.
+pub struct Scope(Option<(&'static str, Instant, Option<Duration>)>);
+impl Drop for Scope {
+    fn drop(&mut self) {
+        let Some((name, started, cpu)) = self.0.take() else {
+            return;
+        };
+        let ms = started.elapsed().as_secs_f32() * 1000.0;
+        let cpu_ms = thread_cpu()
+            .zip(cpu)
+            .map_or(ms, |(end, start)| (end - start).as_secs_f32() * 1000.0);
+        SPANS.with(|s| s.borrow_mut().push(Span { name, ms, cpu_ms }));
+    }
+}
 /// The CPU time this thread has used, where the platform tells it: a tick
 /// with more wall time than CPU time waited (for a lock, or for a core on a
 /// busy machine).
