@@ -19,3 +19,5 @@ mod tests;
 
 mod update;
 pub use update::PoiUpdate;
+#[cfg(test)]
+mod oracle_tests;
