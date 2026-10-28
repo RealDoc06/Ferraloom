@@ -9,6 +9,66 @@ use ferraloom_data::registries::{
 };
 use ferraloom_protocol::component::{DataComponent, EquipmentSlot, ItemStack};
 
+/// Port of LivingEntity#onEquipItem. Captured old/new objects survive both the
+/// seeded sound and the synchronous game event without rereading an owner slot.
+pub(crate) fn on_equip_item_parent<E: crate::entity::Entity + ?Sized>(
+    behavior: &E,
+    owner: EntityRef,
+    slot: EquipmentSlot,
+    old: crate::inventory::StackRef,
+    new: crate::inventory::StackRef,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    use crate::{
+        entity::{EntityData, player::inventory, synched_data::SILENT},
+        item::stack::receiver_error,
+    };
+    use ferraloom_data::registries::game_event;
+    use ferraloom_util::random::RandomSource;
+    if behavior.is_spectator(owner, level)? {
+        return Ok(());
+    }
+    if inventory::is_same_item_same_components(
+        level.stack(old).map_err(receiver_error)?,
+        level.stack(new).map_err(receiver_error)?,
+    ) || level.entity::<EntityData>(owner)?.first_tick
+    {
+        return Ok(());
+    }
+    let stack = level.stack(new).map_err(receiver_error)?;
+    let equippable =
+        match stack
+            .component(ComponentType::EQUIPPABLE)
+            .map_err(|e| LevelError::ItemData {
+                item: stack.item(),
+                source: e.to_string(),
+            })? {
+            Some(DataComponent::Equippable(value)) => Some((value.slot, value.equip_sound.clone())),
+            _ => None,
+        };
+    if !*level.entity::<EntityData>(owner)?.entity_data.get(SILENT)
+        && let Some((equip_slot, sound)) = &equippable
+        && slot == *equip_slot
+    {
+        let position = level.entity::<EntityData>(owner)?.position;
+        let source = behavior.sound_source();
+        let seed = level.entity_mut::<EntityData>(owner)?.random.next_long();
+        level.play_seeded_sound_holder(None, position, sound.clone(), source, 1.0, 1.0, seed)?;
+    }
+    if behavior.does_emit_equip_event(slot) {
+        behavior.game_event(
+            owner,
+            if equippable.is_some() {
+                game_event::Id::EQUIP
+            } else {
+                game_event::Id::UNEQUIP
+            },
+            level,
+        )?;
+    }
+    Ok(())
+}
+
 /// Port of LivingEntity#onEquippedItemBroken's virtual entry, retaining the native copy.
 pub fn on_equipped_item_broken(
     owner: EntityRef,

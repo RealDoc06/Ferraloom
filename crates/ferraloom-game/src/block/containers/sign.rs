@@ -138,6 +138,24 @@ pub fn update_sign_text(
         Ok(true)
     })
 }
+/// Port of SignBlockEntity#setWaxed / markUpdated on the original generation.
+pub fn set_waxed(
+    handle: crate::block::entity::BlockEntityRef,
+    waxed: bool,
+    level: &mut crate::level::Level,
+) -> Result<bool, crate::level::LevelError> {
+    level.with_block_entity_callback(handle, |level| {
+        let sign = level.block_entity_mut::<SignBlockEntity>(handle)?;
+        if sign.is_waxed == waxed {
+            return Ok(false);
+        }
+        sign.is_waxed = waxed;
+        handle.set_changed(level)?;
+        level.block_entity_updated(handle)?;
+        Ok(true)
+    })
+}
+
 pub struct SignBehavior;
 pub static SIGN_ENTITY: SignBehavior = SignBehavior;
 impl BlockEntity for SignBehavior {

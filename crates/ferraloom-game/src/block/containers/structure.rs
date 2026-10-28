@@ -34,6 +34,17 @@ pub struct StructureBlockEntity {
     pub seed: i64,
 }
 impl StructureBlockEntity {
+    /// Port of StructureBlockEntity#createRandom.
+    pub fn create_random(seed: i64) -> ferraloom_util::random::Random {
+        ferraloom_util::random::Random::Legacy(ferraloom_util::random::LegacyRandomSource::new(
+            if seed == 0 {
+                crate::level::get_millis()
+            } else {
+                seed
+            },
+        ))
+    }
+
     pub fn new(parent: BlockEntityData) -> Self {
         let mode = parent.block_state.get(p::MODE).expect("structure mode");
         Self {

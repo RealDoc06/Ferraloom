@@ -45,6 +45,7 @@ pub mod path_navigation_region;
 mod post_processing;
 pub mod publication;
 mod random;
+pub(crate) use random::get_millis;
 pub mod redstone;
 mod saved_ticks;
 pub mod server_level;
@@ -91,6 +92,11 @@ pub enum LevelError {
     },
     UnsupportedPortalUse(Block),
     UnsupportedEntityMethod(EntityType, crate::entity::EntityMethod),
+    UnsupportedMobAi {
+        entity: crate::entity::EntityRef,
+        entity_type: EntityType,
+        operation: crate::entity::ai::AiOperation,
+    },
     UnsupportedAdvancementCriterion(crate::advancements::criteria::Trigger),
     UnsupportedAdvancementPredicate {
         trigger: crate::advancements::criteria::Trigger,
@@ -123,6 +129,7 @@ pub enum LevelError {
     },
     MissingTrackedEntity(i32),
     MissingRegistryContext,
+    MissingStructureTemplates,
     MissingMobVariants,
     UnsupportedSpawnCondition(ferraloom_protocol::Identifier),
     MissingNetworkRegistryEntry {
@@ -147,6 +154,7 @@ pub enum LevelError {
     UnsupportedLightQuery,
     UnsupportedEnvironmentAttribute(ferraloom_data::registries::environment_attribute::Id),
     MissingEnvironmentContext,
+    MissingDimensionType,
     MissingBlockTransformers,
     MissingEnchantments,
     MissingSpawnProtectionContext,
@@ -210,6 +218,16 @@ impl std::fmt::Display for LevelError {
             Self::UnsupportedAdvancementPredicate { trigger, source } => {
                 write!(formatter, "{}: {source}", trigger.name())
             }
+            Self::UnsupportedMobAi {
+                entity,
+                entity_type,
+                operation,
+            } => write!(
+                formatter,
+                "unsupported mob AI {} for {} ({entity:?})",
+                operation.name(),
+                entity_type.name()
+            ),
             Self::EnchantmentEffect {
                 enchantment,
                 source,
@@ -251,6 +269,7 @@ pub struct LevelRules {
     pub pvp: bool,
     pub mob_drops: bool,
     pub keep_inventory: bool,
+    pub limited_crafting: bool,
     pub send_command_feedback: bool,
     pub natural_health_regeneration: bool,
     pub debug: bool,
@@ -297,6 +316,7 @@ impl Default for LevelRules {
             pvp: damage_default(GameRule::Pvp),
             mob_drops: damage_default(GameRule::MobDrops),
             keep_inventory: damage_default(GameRule::KeepInventory),
+            limited_crafting: damage_default(GameRule::LimitedCrafting),
             send_command_feedback: damage_default(GameRule::SendCommandFeedback),
             natural_health_regeneration: damage_default(GameRule::NaturalHealthRegeneration),
             debug: false,

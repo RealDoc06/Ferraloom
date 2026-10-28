@@ -1,0 +1,3030 @@
+[
+  {
+    "mode": "NORMAL",
+    "strict": false,
+    "filter": "all",
+    "destination": 8,
+    "limit": 100,
+    "loaded": true,
+    "debug": false,
+    "changed": true,
+    "entity": false,
+    "feedback": "Successfully cloned 3 block(s)",
+    "broadcast": true,
+    "value": 3,
+    "trace": [
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "end": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "end": [
+          10,
+          80,
+          0
+        ]
+      },
+      "debug",
+      {
+        "call": "state",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          8,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          9,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          10,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "set",
+        "pos": [
+          10,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          9,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "state": "stone",
+        "flags": 2
+      },
+      {
+        "call": "set",
+        "pos": [
+          9,
+          80,
+          0
+        ],
+        "state": "torch",
+        "flags": 2
+      },
+      {
+        "call": "set",
+        "pos": [
+          10,
+          80,
+          0
+        ],
+        "state": "air",
+        "flags": 2
+      },
+      {
+        "call": "neighbors",
+        "pos": [
+          10,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "neighbors",
+        "pos": [
+          9,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "neighbors",
+        "pos": [
+          8,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "ticks",
+        "pos": [
+          8,
+          0,
+          0
+        ]
+      },
+      "success"
+    ]
+  },
+  {
+    "mode": "NORMAL",
+    "strict": true,
+    "filter": "all",
+    "destination": 8,
+    "limit": 100,
+    "loaded": true,
+    "debug": false,
+    "changed": true,
+    "entity": false,
+    "feedback": "Successfully cloned 3 block(s)",
+    "broadcast": true,
+    "value": 3,
+    "trace": [
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "end": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "end": [
+          10,
+          80,
+          0
+        ]
+      },
+      "debug",
+      {
+        "call": "state",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          8,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          9,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          10,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "set",
+        "pos": [
+          10,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          9,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "state": "stone",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          9,
+          80,
+          0
+        ],
+        "state": "torch",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          10,
+          80,
+          0
+        ],
+        "state": "air",
+        "flags": 818
+      },
+      {
+        "call": "ticks",
+        "pos": [
+          8,
+          0,
+          0
+        ]
+      },
+      "success"
+    ]
+  },
+  {
+    "mode": "FORCE",
+    "strict": false,
+    "filter": "all",
+    "destination": 8,
+    "limit": 100,
+    "loaded": true,
+    "debug": false,
+    "changed": true,
+    "entity": false,
+    "feedback": "Successfully cloned 3 block(s)",
+    "broadcast": true,
+    "value": 3,
+    "trace": [
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "end": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "end": [
+          10,
+          80,
+          0
+        ]
+      },
+      "debug",
+      {
+        "call": "state",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          8,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          9,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          10,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "set",
+        "pos": [
+          10,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          9,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "state": "stone",
+        "flags": 2
+      },
+      {
+        "call": "set",
+        "pos": [
+          9,
+          80,
+          0
+        ],
+        "state": "torch",
+        "flags": 2
+      },
+      {
+        "call": "set",
+        "pos": [
+          10,
+          80,
+          0
+        ],
+        "state": "air",
+        "flags": 2
+      },
+      {
+        "call": "neighbors",
+        "pos": [
+          10,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "neighbors",
+        "pos": [
+          9,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "neighbors",
+        "pos": [
+          8,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "ticks",
+        "pos": [
+          8,
+          0,
+          0
+        ]
+      },
+      "success"
+    ]
+  },
+  {
+    "mode": "FORCE",
+    "strict": true,
+    "filter": "all",
+    "destination": 8,
+    "limit": 100,
+    "loaded": true,
+    "debug": false,
+    "changed": true,
+    "entity": false,
+    "feedback": "Successfully cloned 3 block(s)",
+    "broadcast": true,
+    "value": 3,
+    "trace": [
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "end": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "end": [
+          10,
+          80,
+          0
+        ]
+      },
+      "debug",
+      {
+        "call": "state",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          8,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          9,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          10,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "set",
+        "pos": [
+          10,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          9,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "state": "stone",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          9,
+          80,
+          0
+        ],
+        "state": "torch",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          10,
+          80,
+          0
+        ],
+        "state": "air",
+        "flags": 818
+      },
+      {
+        "call": "ticks",
+        "pos": [
+          8,
+          0,
+          0
+        ]
+      },
+      "success"
+    ]
+  },
+  {
+    "mode": "MOVE",
+    "strict": false,
+    "filter": "all",
+    "destination": 8,
+    "limit": 100,
+    "loaded": true,
+    "debug": false,
+    "changed": true,
+    "entity": false,
+    "feedback": "Successfully cloned 3 block(s)",
+    "broadcast": true,
+    "value": 3,
+    "trace": [
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "end": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "end": [
+          10,
+          80,
+          0
+        ]
+      },
+      "debug",
+      {
+        "call": "state",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          8,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          9,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          10,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "set",
+        "pos": [
+          2,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          1,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          2,
+          80,
+          0
+        ],
+        "state": "air",
+        "flags": 3
+      },
+      {
+        "call": "set",
+        "pos": [
+          1,
+          80,
+          0
+        ],
+        "state": "air",
+        "flags": 3
+      },
+      {
+        "call": "set",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "state": "air",
+        "flags": 3
+      },
+      {
+        "call": "set",
+        "pos": [
+          10,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          9,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "state": "stone",
+        "flags": 2
+      },
+      {
+        "call": "set",
+        "pos": [
+          9,
+          80,
+          0
+        ],
+        "state": "torch",
+        "flags": 2
+      },
+      {
+        "call": "set",
+        "pos": [
+          10,
+          80,
+          0
+        ],
+        "state": "air",
+        "flags": 2
+      },
+      {
+        "call": "neighbors",
+        "pos": [
+          10,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "neighbors",
+        "pos": [
+          9,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "neighbors",
+        "pos": [
+          8,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "ticks",
+        "pos": [
+          8,
+          0,
+          0
+        ]
+      },
+      "success"
+    ]
+  },
+  {
+    "mode": "MOVE",
+    "strict": true,
+    "filter": "all",
+    "destination": 8,
+    "limit": 100,
+    "loaded": true,
+    "debug": false,
+    "changed": true,
+    "entity": false,
+    "feedback": "Successfully cloned 3 block(s)",
+    "broadcast": true,
+    "value": 3,
+    "trace": [
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "end": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "end": [
+          10,
+          80,
+          0
+        ]
+      },
+      "debug",
+      {
+        "call": "state",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          8,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          9,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          10,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "set",
+        "pos": [
+          2,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          1,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          2,
+          80,
+          0
+        ],
+        "state": "air",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          1,
+          80,
+          0
+        ],
+        "state": "air",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "state": "air",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          10,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          9,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "state": "stone",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          9,
+          80,
+          0
+        ],
+        "state": "torch",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          10,
+          80,
+          0
+        ],
+        "state": "air",
+        "flags": 818
+      },
+      {
+        "call": "ticks",
+        "pos": [
+          8,
+          0,
+          0
+        ]
+      },
+      "success"
+    ]
+  },
+  {
+    "mode": "NORMAL",
+    "strict": false,
+    "filter": "masked",
+    "destination": 8,
+    "limit": 100,
+    "loaded": true,
+    "debug": false,
+    "changed": true,
+    "entity": false,
+    "feedback": "Successfully cloned 2 block(s)",
+    "broadcast": true,
+    "value": 2,
+    "trace": [
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "end": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "end": [
+          10,
+          80,
+          0
+        ]
+      },
+      "debug",
+      {
+        "call": "state",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          8,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          9,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "set",
+        "pos": [
+          9,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "state": "stone",
+        "flags": 2
+      },
+      {
+        "call": "set",
+        "pos": [
+          9,
+          80,
+          0
+        ],
+        "state": "torch",
+        "flags": 2
+      },
+      {
+        "call": "neighbors",
+        "pos": [
+          9,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "neighbors",
+        "pos": [
+          8,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "ticks",
+        "pos": [
+          8,
+          0,
+          0
+        ]
+      },
+      "success"
+    ]
+  },
+  {
+    "mode": "NORMAL",
+    "strict": false,
+    "filter": "stone",
+    "destination": 8,
+    "limit": 100,
+    "loaded": true,
+    "debug": false,
+    "changed": true,
+    "entity": false,
+    "feedback": "Successfully cloned 1 block(s)",
+    "broadcast": true,
+    "value": 1,
+    "trace": [
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "end": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "end": [
+          10,
+          80,
+          0
+        ]
+      },
+      "debug",
+      {
+        "call": "state",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          8,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "set",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "state": "stone",
+        "flags": 2
+      },
+      {
+        "call": "neighbors",
+        "pos": [
+          8,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "ticks",
+        "pos": [
+          8,
+          0,
+          0
+        ]
+      },
+      "success"
+    ]
+  },
+  {
+    "mode": "NORMAL",
+    "strict": false,
+    "filter": "none",
+    "destination": 8,
+    "limit": 100,
+    "loaded": true,
+    "debug": false,
+    "changed": true,
+    "entity": false,
+    "error": "No blocks were cloned",
+    "trace": [
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "end": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "end": [
+          10,
+          80,
+          0
+        ]
+      },
+      "debug",
+      {
+        "call": "state",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "ticks",
+        "pos": [
+          8,
+          0,
+          0
+        ]
+      }
+    ]
+  },
+  {
+    "mode": "NORMAL",
+    "strict": false,
+    "filter": "all",
+    "destination": 1,
+    "limit": 0,
+    "loaded": false,
+    "debug": true,
+    "changed": true,
+    "entity": false,
+    "error": "The source and destination areas cannot overlap",
+    "trace": []
+  },
+  {
+    "mode": "FORCE",
+    "strict": false,
+    "filter": "all",
+    "destination": 8,
+    "limit": 2,
+    "loaded": false,
+    "debug": true,
+    "changed": true,
+    "entity": false,
+    "error": "Too many blocks in the specified area (maximum 2, but specified 3)",
+    "trace": []
+  },
+  {
+    "mode": "FORCE",
+    "strict": false,
+    "filter": "all",
+    "destination": 8,
+    "limit": 100,
+    "loaded": false,
+    "debug": true,
+    "changed": true,
+    "entity": false,
+    "error": "That position is not loaded",
+    "trace": [
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "end": [
+          2,
+          80,
+          0
+        ]
+      }
+    ]
+  },
+  {
+    "mode": "NORMAL",
+    "strict": false,
+    "filter": "all",
+    "destination": 8,
+    "limit": 100,
+    "loaded": true,
+    "debug": true,
+    "changed": true,
+    "entity": false,
+    "error": "No blocks were cloned",
+    "trace": [
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "end": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "end": [
+          10,
+          80,
+          0
+        ]
+      },
+      "debug"
+    ]
+  },
+  {
+    "mode": "NORMAL",
+    "strict": false,
+    "filter": "all",
+    "destination": 8,
+    "limit": 100,
+    "loaded": true,
+    "debug": false,
+    "changed": false,
+    "entity": false,
+    "error": "No blocks were cloned",
+    "trace": [
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "end": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "end": [
+          10,
+          80,
+          0
+        ]
+      },
+      "debug",
+      {
+        "call": "state",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          8,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          9,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          10,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "set",
+        "pos": [
+          10,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          9,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "state": "stone",
+        "flags": 2
+      },
+      {
+        "call": "set",
+        "pos": [
+          9,
+          80,
+          0
+        ],
+        "state": "torch",
+        "flags": 2
+      },
+      {
+        "call": "set",
+        "pos": [
+          10,
+          80,
+          0
+        ],
+        "state": "air",
+        "flags": 2
+      },
+      {
+        "call": "neighbors",
+        "pos": [
+          10,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "neighbors",
+        "pos": [
+          9,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "neighbors",
+        "pos": [
+          8,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "ticks",
+        "pos": [
+          8,
+          0,
+          0
+        ]
+      }
+    ]
+  },
+  {
+    "mode": "MOVE",
+    "strict": false,
+    "filter": "all",
+    "destination": 1,
+    "limit": 100,
+    "loaded": true,
+    "debug": false,
+    "changed": true,
+    "entity": false,
+    "feedback": "Successfully cloned 3 block(s)",
+    "broadcast": true,
+    "value": 3,
+    "trace": [
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "end": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          1,
+          80,
+          0
+        ],
+        "end": [
+          3,
+          80,
+          0
+        ]
+      },
+      "debug",
+      {
+        "call": "state",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          3,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "set",
+        "pos": [
+          2,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          1,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          2,
+          80,
+          0
+        ],
+        "state": "air",
+        "flags": 3
+      },
+      {
+        "call": "set",
+        "pos": [
+          1,
+          80,
+          0
+        ],
+        "state": "air",
+        "flags": 3
+      },
+      {
+        "call": "set",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "state": "air",
+        "flags": 3
+      },
+      {
+        "call": "set",
+        "pos": [
+          3,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          2,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          1,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          1,
+          80,
+          0
+        ],
+        "state": "stone",
+        "flags": 2
+      },
+      {
+        "call": "set",
+        "pos": [
+          2,
+          80,
+          0
+        ],
+        "state": "torch",
+        "flags": 2
+      },
+      {
+        "call": "set",
+        "pos": [
+          3,
+          80,
+          0
+        ],
+        "state": "air",
+        "flags": 2
+      },
+      {
+        "call": "neighbors",
+        "pos": [
+          3,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "neighbors",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "neighbors",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "ticks",
+        "pos": [
+          1,
+          0,
+          0
+        ]
+      },
+      "success"
+    ]
+  },
+  {
+    "mode": "NORMAL",
+    "strict": false,
+    "filter": "all",
+    "destination": 8,
+    "limit": 100,
+    "loaded": true,
+    "debug": false,
+    "changed": true,
+    "entity": true,
+    "feedback": "Successfully cloned 3 block(s)",
+    "broadcast": true,
+    "value": 3,
+    "trace": [
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "end": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "end": [
+          10,
+          80,
+          0
+        ]
+      },
+      "debug",
+      {
+        "call": "state",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          8,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      "save_custom",
+      {
+        "call": "state",
+        "pos": [
+          9,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          10,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "set",
+        "pos": [
+          10,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          9,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "state": "stone",
+        "flags": 2
+      },
+      {
+        "call": "set",
+        "pos": [
+          9,
+          80,
+          0
+        ],
+        "state": "torch",
+        "flags": 2
+      },
+      {
+        "call": "set",
+        "pos": [
+          10,
+          80,
+          0
+        ],
+        "state": "air",
+        "flags": 2
+      },
+      {
+        "call": "entity",
+        "pos": [
+          9,
+          80,
+          0
+        ]
+      },
+      "load_custom",
+      "components",
+      "changed",
+      {
+        "call": "set",
+        "pos": [
+          9,
+          80,
+          0
+        ],
+        "state": "torch",
+        "flags": 2
+      },
+      {
+        "call": "neighbors",
+        "pos": [
+          10,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "neighbors",
+        "pos": [
+          9,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "neighbors",
+        "pos": [
+          8,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "ticks",
+        "pos": [
+          8,
+          0,
+          0
+        ]
+      },
+      "success"
+    ]
+  },
+  {
+    "mode": "MOVE",
+    "strict": true,
+    "filter": "all",
+    "destination": 8,
+    "limit": 100,
+    "loaded": true,
+    "debug": false,
+    "changed": true,
+    "entity": true,
+    "feedback": "Successfully cloned 3 block(s)",
+    "broadcast": true,
+    "value": 3,
+    "trace": [
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "end": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "end": [
+          10,
+          80,
+          0
+        ]
+      },
+      "debug",
+      {
+        "call": "state",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          8,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          1,
+          80,
+          0
+        ]
+      },
+      "save_custom",
+      {
+        "call": "state",
+        "pos": [
+          9,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "filter",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "entity",
+        "pos": [
+          2,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "state",
+        "pos": [
+          10,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "set",
+        "pos": [
+          2,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          1,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          2,
+          80,
+          0
+        ],
+        "state": "air",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "state": "air",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          1,
+          80,
+          0
+        ],
+        "state": "air",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          10,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          9,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "state": "barrier",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          8,
+          80,
+          0
+        ],
+        "state": "stone",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          9,
+          80,
+          0
+        ],
+        "state": "torch",
+        "flags": 818
+      },
+      {
+        "call": "set",
+        "pos": [
+          10,
+          80,
+          0
+        ],
+        "state": "air",
+        "flags": 818
+      },
+      {
+        "call": "entity",
+        "pos": [
+          9,
+          80,
+          0
+        ]
+      },
+      "load_custom",
+      "components",
+      "changed",
+      {
+        "call": "set",
+        "pos": [
+          9,
+          80,
+          0
+        ],
+        "state": "torch",
+        "flags": 818
+      },
+      {
+        "call": "ticks",
+        "pos": [
+          8,
+          0,
+          0
+        ]
+      },
+      "success"
+    ]
+  }
+]

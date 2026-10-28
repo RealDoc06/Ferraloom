@@ -382,6 +382,7 @@ impl GameRules {
         rules.pvp = self.boolean(GameRule::Pvp);
         rules.mob_drops = self.boolean(GameRule::MobDrops);
         rules.keep_inventory = self.boolean(GameRule::KeepInventory);
+        rules.limited_crafting = self.boolean(GameRule::LimitedCrafting);
         rules.random_tick_speed = self.integer(GameRule::RandomTickSpeed).max(0) as u32;
         rules.water_source_conversion = self.boolean(GameRule::WaterSourceConversion);
         rules.lava_source_conversion = self.boolean(GameRule::LavaSourceConversion);

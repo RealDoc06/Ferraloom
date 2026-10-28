@@ -33,9 +33,11 @@ use crate::{
     world::{ChunkLight, World, WorldRoot, heightmap},
 };
 use anyhow::{Context, Result, bail, ensure};
+#[cfg(test)]
+use ferraloom_data::datapack::Pack;
 use ferraloom_data::{
     Block, EntityType,
-    datapack::{Pack, ResourceManager, TagSet},
+    datapack::{ResourceManager, TagSet},
 };
 use ferraloom_game::{
     Behaviors,
@@ -210,6 +212,8 @@ pub struct MinecraftServer {
     level: crate::generation::runtime::LiveLevel,
     additional_levels: Vec<crate::generation::runtime::LiveLevel>,
     commands: Commands,
+    pack_repository: ferraloom_data::datapack::repository::PackRepository<Component>,
+    functions: ferraloom_game::commands::functions::ServerFunctionManager,
     game_rules: ferraloom_game::gamerules::GameRules,
     shared: Option<Box<ferraloom_game::ServerShared>>,
     clocks: ferraloom_game::commands::clocks::ServerClockManager,
@@ -254,6 +258,12 @@ struct PendingLevelHooks {
     game_events: u64,
 }
 impl MinecraftServer {
+    /// Port of MinecraftServer#getPackRepository.
+    pub fn pack_repository(
+        &self,
+    ) -> &ferraloom_data::datapack::repository::PackRepository<Component> {
+        &self.pack_repository
+    }
     pub async fn start(options: ServerOptions) -> Result<RunningServer> {
         let mut startup = crate::generation::profile::Span::new("server_startup", None);
         std::fs::create_dir_all(&options.root)?;
@@ -272,7 +282,9 @@ impl MinecraftServer {
             "Management, RCON and query listeners are not yet implemented"
         );
         let jar = assets::vanilla_jar(&options.cache).await?;
-        let resources = ResourceManager::new(vec![Pack::vanilla_jar(&jar)?]);
+        let mut world_startup = crate::datapacks::WorldStartup::read(&options.root, &properties)?;
+        let (pack_repository, resources) =
+            crate::datapacks::load_resources(&options.root, &jar, &mut world_startup)?;
         let registries = Arc::new(RegistrySet::load(&resources)?);
         let recipe_manager = Arc::new(RecipeManager::load(&resources, &TagSet::load(&resources)?)?);
         let recipe_synchronization =
@@ -288,7 +300,7 @@ impl MinecraftServer {
         startup.checkpoint("resources");
 
         let mut world_root = WorldRoot::open(
-            &options.root,
+            world_startup,
             &properties,
             &resources,
             &registries,
@@ -334,6 +346,12 @@ impl MinecraftServer {
             &registries,
             &resources,
             command_runtime::rule_features(&world_root),
+        );
+        let commands = Commands::new(command_context);
+        let functions = command_runtime::load_functions(
+            &resources,
+            &commands,
+            properties.int("function-permission-level"),
         );
         let command_entity_tags =
             ferraloom_data::datapack::load_tags(&resources, "entity_type", |id, _| {
@@ -604,7 +622,9 @@ impl MinecraftServer {
             saving_enabled: true,
             idle_timeout: properties.int("player-idle-timeout"),
             default_game_mode: game_type(properties.get("gamemode")),
-            commands: Commands::new(command_context),
+            commands,
+            pack_repository,
+            functions,
             connections: BTreeMap::new(),
             players: Vec::new(),
             ingress,
@@ -1013,7 +1033,7 @@ impl MinecraftServer {
         let dimension = saved.resolve_dimension(&respawn.dimension.parse()?, |key| {
             self.get_level(key).is_some()
         });
-        let dimension_type = self.world_root.stem(&dimension)?.dimension;
+        let dimension_type = self.world_root.stem(&dimension)?.dimension.clone();
         let game_type = self.default_game_mode;
         let radius = self
             .game_rules
@@ -2807,7 +2827,7 @@ impl MinecraftServer {
                         .context("spawn not prepared")?
                         .dimension()
                         .clone();
-                    let dimension_type = self.world_root.stem(&dimension)?.dimension;
+                    let dimension_type = self.world_root.stem(&dimension)?.dimension.clone();
                     let lent = self.lend_server_shared_to(&dimension)?;
                     let result = {
                         let task = self
@@ -3345,9 +3365,9 @@ impl MinecraftServer {
         );
         let frame = queue.top_frame(CommandResultCallback::default());
         execution::queue_command(&mut queue, frame, prepared, false);
-        let mut pending = None;
+        let mut host = command_runtime::callbacks::ServerCommandHost::execution(self, source);
         loop {
-            match queue.run_next(&mut pending) {
+            match queue.run_next(&mut host) {
                 Ok(false) => break,
                 Err(QueueResult::CommandLimit) => {
                     println!(
@@ -3363,72 +3383,102 @@ impl MinecraftServer {
                 Err(QueueResult::Complete) => unreachable!(),
                 Ok(true) => {}
             }
-            let Some(prepared) = pending.take() else {
+            let Some(pending) = host.pending.take() else {
                 continue;
             };
+            let prepared = pending.command;
             let stack = prepared.source.clone();
+            if prepared.command == "function" {
+                match host.server.prepare_function_call(source, &prepared) {
+                    Ok(functions) => {
+                        ferraloom_game::commands::functions::queue_functions(
+                            &mut queue,
+                            pending.frame,
+                            &functions,
+                            stack,
+                            pending.returning,
+                            &mut host,
+                        )?;
+                    }
+                    Err(error) => {
+                        if let Some(syntax) =
+                            error.downcast_ref::<ferraloom_brigadier::CommandSyntaxException>()
+                        {
+                            host.server.command_failure(
+                                source,
+                                &stack,
+                                ferraloom_game::commands::exceptions::error_component(syntax),
+                            );
+                            stack.callback.on_failure(&mut host);
+                        } else {
+                            return Err(error);
+                        }
+                    }
+                }
+                continue;
+            }
             let action = Commands::action(prepared);
             match action {
                 CommandAction::Run(command) => {
-                    match self.run_level_command(source, &command).await {
+                    match host.server.run_level_command(source, &command).await {
                         Ok(true) => continue,
                         Ok(false) => {}
                         Err(error) => {
                             if let Some(syntax) =
                                 error.downcast_ref::<ferraloom_brigadier::CommandSyntaxException>()
                             {
-                                self.command_failure(
+                                host.server.command_failure(
                                     source,
                                     &stack,
                                     ferraloom_game::commands::exceptions::error_component(syntax),
                                 );
-                                stack.callback.on_failure();
+                                stack.callback.on_failure(&mut host);
                                 continue;
                             }
                             return Err(error);
                         }
                     }
-                    if let Err(error) = self.run_builtin(source, *command) {
-                        self.command_failure(
+                    if let Err(error) = host.server.run_builtin(source, *command) {
+                        host.server.command_failure(
                             source,
                             &stack,
                             ferraloom_game::commands::exceptions::error_component(&error),
                         );
-                        stack.callback.on_failure();
+                        stack.callback.on_failure(&mut host);
                     }
                 }
                 CommandAction::Stop => {
-                    self.command_success(
+                    host.server.command_success(
                         source,
                         &stack,
                         Component::translatable("commands.stop.stopping", vec![]),
                         true,
                     );
-                    self.stop = true;
-                    stack.callback.on_success(1);
+                    host.server.stop = true;
+                    stack.callback.on_success(&mut host, 1);
                 }
                 CommandAction::Save { flush } => {
-                    self.command_success(
+                    host.server.command_success(
                         source,
                         &stack,
                         Component::translatable("commands.save.saving", vec![]),
                         false,
                     );
-                    if self.save_all(flush, true).await.is_ok() {
-                        self.command_success(
+                    if host.server.save_all(flush, true).await.is_ok() {
+                        host.server.command_success(
                             source,
                             &stack,
                             Component::translatable("commands.save.success", vec![]),
                             true,
                         );
-                        stack.callback.on_success(1);
+                        stack.callback.on_success(&mut host, 1);
                     } else {
-                        self.command_failure(
+                        host.server.command_failure(
                             source,
                             &stack,
                             Component::translatable("commands.save.failed", vec![]),
                         );
-                        stack.callback.on_failure();
+                        stack.callback.on_failure(&mut host);
                     }
                 }
             }

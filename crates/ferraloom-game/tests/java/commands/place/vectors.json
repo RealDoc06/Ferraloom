@@ -1,0 +1,3833 @@
+[
+  {
+    "command": "place template fixture:sample",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          80,
+          0,
+          -32
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          96,
+          0,
+          -32
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          80,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          96,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          80,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          96,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "random",
+        "seed": 0
+      },
+      {
+        "call": "place",
+        "pos": [
+          80,
+          64,
+          -17
+        ],
+        "reference": [
+          80,
+          64,
+          -17
+        ],
+        "rotation": "NONE",
+        "mirror": "NONE",
+        "known_shape": false,
+        "ignore_entities": false,
+        "finalize_entities": false,
+        "waterlogging": true,
+        "flags": 2,
+        "processors": [],
+        "settings_first_long": 1651446066140532451,
+        "placement_first_long": -5025562857975149833
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.template.success",
+          "with": [
+            "fixture:sample",
+            80,
+            64,
+            -17
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "place template fixture:sample 0 80 0",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "random",
+        "seed": 0
+      },
+      {
+        "call": "place",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "reference": [
+          0,
+          80,
+          0
+        ],
+        "rotation": "NONE",
+        "mirror": "NONE",
+        "known_shape": false,
+        "ignore_entities": false,
+        "finalize_entities": false,
+        "waterlogging": true,
+        "flags": 2,
+        "processors": [],
+        "settings_first_long": 192741607108112494,
+        "placement_first_long": -5025562857975149833
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.template.success",
+          "with": [
+            "fixture:sample",
+            0,
+            80,
+            0
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "place template fixture:sample ~ ~1 ~-2",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          80,
+          65,
+          -19
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          80,
+          65,
+          -19
+        ]
+      },
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          80,
+          0,
+          -32
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          96,
+          0,
+          -32
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          80,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          96,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "random",
+        "seed": 0
+      },
+      {
+        "call": "place",
+        "pos": [
+          80,
+          65,
+          -19
+        ],
+        "reference": [
+          80,
+          65,
+          -19
+        ],
+        "rotation": "NONE",
+        "mirror": "NONE",
+        "known_shape": false,
+        "ignore_entities": false,
+        "finalize_entities": false,
+        "waterlogging": true,
+        "flags": 2,
+        "processors": [],
+        "settings_first_long": 5353541257856665844,
+        "placement_first_long": -5025562857975149833
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.template.success",
+          "with": [
+            "fixture:sample",
+            80,
+            65,
+            -19
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "place template fixture:sample ^1 ^2 ^3",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      "eye_height",
+      {
+        "call": "has_chunk",
+        "pos": [
+          79,
+          68,
+          -15
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          79,
+          68,
+          -15
+        ]
+      },
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          64,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          80,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          96,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          64,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          80,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          96,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "random",
+        "seed": 0
+      },
+      {
+        "call": "place",
+        "pos": [
+          79,
+          68,
+          -15
+        ],
+        "reference": [
+          79,
+          68,
+          -15
+        ],
+        "rotation": "NONE",
+        "mirror": "NONE",
+        "known_shape": false,
+        "ignore_entities": false,
+        "finalize_entities": false,
+        "waterlogging": true,
+        "flags": 2,
+        "processors": [],
+        "settings_first_long": 7849520751255716142,
+        "placement_first_long": -5025562857975149833
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.template.success",
+          "with": [
+            "fixture:sample",
+            79,
+            68,
+            -15
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "place template fixture:sample 0 80 0 clockwise_90",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "random",
+        "seed": 0
+      },
+      {
+        "call": "place",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "reference": [
+          0,
+          80,
+          0
+        ],
+        "rotation": "CLOCKWISE_90",
+        "mirror": "NONE",
+        "known_shape": false,
+        "ignore_entities": false,
+        "finalize_entities": false,
+        "waterlogging": true,
+        "flags": 2,
+        "processors": [],
+        "settings_first_long": 192741607108112494,
+        "placement_first_long": -5025562857975149833
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.template.success",
+          "with": [
+            "fixture:sample",
+            0,
+            80,
+            0
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "place template fixture:sample 0 80 0 180 left_right",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "random",
+        "seed": 0
+      },
+      {
+        "call": "place",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "reference": [
+          0,
+          80,
+          0
+        ],
+        "rotation": "CLOCKWISE_180",
+        "mirror": "LEFT_RIGHT",
+        "known_shape": false,
+        "ignore_entities": false,
+        "finalize_entities": false,
+        "waterlogging": true,
+        "flags": 2,
+        "processors": [],
+        "settings_first_long": 192741607108112494,
+        "placement_first_long": -5025562857975149833
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.template.success",
+          "with": [
+            "fixture:sample",
+            0,
+            80,
+            0
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "place template fixture:sample 0 80 0 none none 0.5",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "random",
+        "seed": 0
+      },
+      {
+        "call": "random",
+        "seed": 0
+      },
+      {
+        "call": "place",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "reference": [
+          0,
+          80,
+          0
+        ],
+        "rotation": "NONE",
+        "mirror": "NONE",
+        "known_shape": false,
+        "ignore_entities": false,
+        "finalize_entities": false,
+        "waterlogging": true,
+        "flags": 2,
+        "processors": [
+          {
+            "integrity": 0.5
+          }
+        ],
+        "settings_first_long": -5025562857975149833,
+        "placement_first_long": -5025562857975149833
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.template.success",
+          "with": [
+            "fixture:sample",
+            0,
+            80,
+            0
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "place template fixture:sample 0 80 0 none none 0.25 -42",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "random",
+        "seed": -42
+      },
+      {
+        "call": "random",
+        "seed": -42
+      },
+      {
+        "call": "place",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "reference": [
+          0,
+          80,
+          0
+        ],
+        "rotation": "NONE",
+        "mirror": "NONE",
+        "known_shape": false,
+        "ignore_entities": false,
+        "finalize_entities": false,
+        "waterlogging": true,
+        "flags": 2,
+        "processors": [
+          {
+            "integrity": 0.25
+          }
+        ],
+        "settings_first_long": 5028867820122015268,
+        "placement_first_long": 5028867820122015268
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.template.success",
+          "with": [
+            "fixture:sample",
+            0,
+            80,
+            0
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "place template fixture:sample 0 80 0 counterclockwise_90 front_back 0.75 42 strict",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "random",
+        "seed": 42
+      },
+      {
+        "call": "random",
+        "seed": 42
+      },
+      {
+        "call": "place",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "reference": [
+          0,
+          80,
+          0
+        ],
+        "rotation": "COUNTERCLOCKWISE_90",
+        "mirror": "FRONT_BACK",
+        "known_shape": true,
+        "ignore_entities": false,
+        "finalize_entities": false,
+        "waterlogging": true,
+        "flags": 818,
+        "processors": [
+          {
+            "integrity": 0.75
+          }
+        ],
+        "settings_first_long": -5025562857975149833,
+        "placement_first_long": -5025562857975149833
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.template.success",
+          "with": [
+            "fixture:sample",
+            0,
+            80,
+            0
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "place template fixture:sample 0 80 0 none none 1 2147483647 strict",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "random",
+        "seed": 2147483647
+      },
+      {
+        "call": "place",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "reference": [
+          0,
+          80,
+          0
+        ],
+        "rotation": "NONE",
+        "mirror": "NONE",
+        "known_shape": true,
+        "ignore_entities": false,
+        "finalize_entities": false,
+        "waterlogging": true,
+        "flags": 818,
+        "processors": [],
+        "settings_first_long": 192741607108112494,
+        "placement_first_long": -7007903716997160253
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.template.success",
+          "with": [
+            "fixture:sample",
+            0,
+            80,
+            0
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "place template fixture:sample 0 80 0 none none 0 -2147483648",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "random",
+        "seed": -2147483648
+      },
+      {
+        "call": "random",
+        "seed": -2147483648
+      },
+      {
+        "call": "place",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "reference": [
+          0,
+          80,
+          0
+        ],
+        "rotation": "NONE",
+        "mirror": "NONE",
+        "known_shape": false,
+        "ignore_entities": false,
+        "finalize_entities": false,
+        "waterlogging": true,
+        "flags": 2,
+        "processors": [
+          {
+            "integrity": 0.0
+          }
+        ],
+        "settings_first_long": 7006251233788940600,
+        "placement_first_long": 7006251233788940600
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.template.success",
+          "with": [
+            "fixture:sample",
+            0,
+            80,
+            0
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "place template fixture:sample -1 80 -1 none none 1 42",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          -1,
+          80,
+          -1
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          -1,
+          80,
+          -1
+        ]
+      },
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "random",
+        "seed": 42
+      },
+      {
+        "call": "place",
+        "pos": [
+          -1,
+          80,
+          -1
+        ],
+        "reference": [
+          -1,
+          80,
+          -1
+        ],
+        "rotation": "NONE",
+        "mirror": "NONE",
+        "known_shape": false,
+        "ignore_entities": false,
+        "finalize_entities": false,
+        "waterlogging": true,
+        "flags": 2,
+        "processors": [],
+        "settings_first_long": -7249461343409198171,
+        "placement_first_long": -5025562857975149833
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.template.success",
+          "with": [
+            "fixture:sample",
+            -1,
+            80,
+            -1
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "place template fixture:sample -1 80 -1 none front_back 1 42",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          -1,
+          80,
+          -1
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          -1,
+          80,
+          -1
+        ]
+      },
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "random",
+        "seed": 42
+      },
+      {
+        "call": "place",
+        "pos": [
+          -1,
+          80,
+          -1
+        ],
+        "reference": [
+          -1,
+          80,
+          -1
+        ],
+        "rotation": "NONE",
+        "mirror": "FRONT_BACK",
+        "known_shape": false,
+        "ignore_entities": false,
+        "finalize_entities": false,
+        "waterlogging": true,
+        "flags": 2,
+        "processors": [],
+        "settings_first_long": -7249461343409198171,
+        "placement_first_long": -5025562857975149833
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.template.success",
+          "with": [
+            "fixture:sample",
+            -1,
+            80,
+            -1
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "place template fixture:sample -1 80 -1 none left_right 1 42",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          -1,
+          80,
+          -1
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          -1,
+          80,
+          -1
+        ]
+      },
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "random",
+        "seed": 42
+      },
+      {
+        "call": "place",
+        "pos": [
+          -1,
+          80,
+          -1
+        ],
+        "reference": [
+          -1,
+          80,
+          -1
+        ],
+        "rotation": "NONE",
+        "mirror": "LEFT_RIGHT",
+        "known_shape": false,
+        "ignore_entities": false,
+        "finalize_entities": false,
+        "waterlogging": true,
+        "flags": 2,
+        "processors": [],
+        "settings_first_long": -7249461343409198171,
+        "placement_first_long": -5025562857975149833
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.template.success",
+          "with": [
+            "fixture:sample",
+            -1,
+            80,
+            -1
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "place template fixture:sample -1 80 -1 clockwise_90 none 1 42",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          -1,
+          80,
+          -1
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          -1,
+          80,
+          -1
+        ]
+      },
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "random",
+        "seed": 42
+      },
+      {
+        "call": "place",
+        "pos": [
+          -1,
+          80,
+          -1
+        ],
+        "reference": [
+          -1,
+          80,
+          -1
+        ],
+        "rotation": "CLOCKWISE_90",
+        "mirror": "NONE",
+        "known_shape": false,
+        "ignore_entities": false,
+        "finalize_entities": false,
+        "waterlogging": true,
+        "flags": 2,
+        "processors": [],
+        "settings_first_long": -7249461343409198171,
+        "placement_first_long": -5025562857975149833
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.template.success",
+          "with": [
+            "fixture:sample",
+            -1,
+            80,
+            -1
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "place template fixture:sample -1 80 -1 clockwise_90 front_back 1 42",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          -1,
+          80,
+          -1
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          -1,
+          80,
+          -1
+        ]
+      },
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "random",
+        "seed": 42
+      },
+      {
+        "call": "place",
+        "pos": [
+          -1,
+          80,
+          -1
+        ],
+        "reference": [
+          -1,
+          80,
+          -1
+        ],
+        "rotation": "CLOCKWISE_90",
+        "mirror": "FRONT_BACK",
+        "known_shape": false,
+        "ignore_entities": false,
+        "finalize_entities": false,
+        "waterlogging": true,
+        "flags": 2,
+        "processors": [],
+        "settings_first_long": -7249461343409198171,
+        "placement_first_long": -5025562857975149833
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.template.success",
+          "with": [
+            "fixture:sample",
+            -1,
+            80,
+            -1
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "place template fixture:sample -1 80 -1 clockwise_90 left_right 1 42",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          -1,
+          80,
+          -1
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          -1,
+          80,
+          -1
+        ]
+      },
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "random",
+        "seed": 42
+      },
+      {
+        "call": "place",
+        "pos": [
+          -1,
+          80,
+          -1
+        ],
+        "reference": [
+          -1,
+          80,
+          -1
+        ],
+        "rotation": "CLOCKWISE_90",
+        "mirror": "LEFT_RIGHT",
+        "known_shape": false,
+        "ignore_entities": false,
+        "finalize_entities": false,
+        "waterlogging": true,
+        "flags": 2,
+        "processors": [],
+        "settings_first_long": -7249461343409198171,
+        "placement_first_long": -5025562857975149833
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.template.success",
+          "with": [
+            "fixture:sample",
+            -1,
+            80,
+            -1
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "place template fixture:sample -1 80 -1 180 none 1 42",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          -1,
+          80,
+          -1
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          -1,
+          80,
+          -1
+        ]
+      },
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "random",
+        "seed": 42
+      },
+      {
+        "call": "place",
+        "pos": [
+          -1,
+          80,
+          -1
+        ],
+        "reference": [
+          -1,
+          80,
+          -1
+        ],
+        "rotation": "CLOCKWISE_180",
+        "mirror": "NONE",
+        "known_shape": false,
+        "ignore_entities": false,
+        "finalize_entities": false,
+        "waterlogging": true,
+        "flags": 2,
+        "processors": [],
+        "settings_first_long": -7249461343409198171,
+        "placement_first_long": -5025562857975149833
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.template.success",
+          "with": [
+            "fixture:sample",
+            -1,
+            80,
+            -1
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "place template fixture:sample -1 80 -1 180 front_back 1 42",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          -1,
+          80,
+          -1
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          -1,
+          80,
+          -1
+        ]
+      },
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "random",
+        "seed": 42
+      },
+      {
+        "call": "place",
+        "pos": [
+          -1,
+          80,
+          -1
+        ],
+        "reference": [
+          -1,
+          80,
+          -1
+        ],
+        "rotation": "CLOCKWISE_180",
+        "mirror": "FRONT_BACK",
+        "known_shape": false,
+        "ignore_entities": false,
+        "finalize_entities": false,
+        "waterlogging": true,
+        "flags": 2,
+        "processors": [],
+        "settings_first_long": -7249461343409198171,
+        "placement_first_long": -5025562857975149833
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.template.success",
+          "with": [
+            "fixture:sample",
+            -1,
+            80,
+            -1
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "place template fixture:sample -1 80 -1 180 left_right 1 42",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          -1,
+          80,
+          -1
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          -1,
+          80,
+          -1
+        ]
+      },
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "random",
+        "seed": 42
+      },
+      {
+        "call": "place",
+        "pos": [
+          -1,
+          80,
+          -1
+        ],
+        "reference": [
+          -1,
+          80,
+          -1
+        ],
+        "rotation": "CLOCKWISE_180",
+        "mirror": "LEFT_RIGHT",
+        "known_shape": false,
+        "ignore_entities": false,
+        "finalize_entities": false,
+        "waterlogging": true,
+        "flags": 2,
+        "processors": [],
+        "settings_first_long": -7249461343409198171,
+        "placement_first_long": -5025562857975149833
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.template.success",
+          "with": [
+            "fixture:sample",
+            -1,
+            80,
+            -1
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "place template fixture:sample -1 80 -1 counterclockwise_90 none 1 42",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          -1,
+          80,
+          -1
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          -1,
+          80,
+          -1
+        ]
+      },
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "random",
+        "seed": 42
+      },
+      {
+        "call": "place",
+        "pos": [
+          -1,
+          80,
+          -1
+        ],
+        "reference": [
+          -1,
+          80,
+          -1
+        ],
+        "rotation": "COUNTERCLOCKWISE_90",
+        "mirror": "NONE",
+        "known_shape": false,
+        "ignore_entities": false,
+        "finalize_entities": false,
+        "waterlogging": true,
+        "flags": 2,
+        "processors": [],
+        "settings_first_long": -7249461343409198171,
+        "placement_first_long": -5025562857975149833
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.template.success",
+          "with": [
+            "fixture:sample",
+            -1,
+            80,
+            -1
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "place template fixture:sample -1 80 -1 counterclockwise_90 front_back 1 42",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          -1,
+          80,
+          -1
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          -1,
+          80,
+          -1
+        ]
+      },
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "random",
+        "seed": 42
+      },
+      {
+        "call": "place",
+        "pos": [
+          -1,
+          80,
+          -1
+        ],
+        "reference": [
+          -1,
+          80,
+          -1
+        ],
+        "rotation": "COUNTERCLOCKWISE_90",
+        "mirror": "FRONT_BACK",
+        "known_shape": false,
+        "ignore_entities": false,
+        "finalize_entities": false,
+        "waterlogging": true,
+        "flags": 2,
+        "processors": [],
+        "settings_first_long": -7249461343409198171,
+        "placement_first_long": -5025562857975149833
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.template.success",
+          "with": [
+            "fixture:sample",
+            -1,
+            80,
+            -1
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "place template fixture:sample -1 80 -1 counterclockwise_90 left_right 1 42",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          -1,
+          80,
+          -1
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          -1,
+          80,
+          -1
+        ]
+      },
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "random",
+        "seed": 42
+      },
+      {
+        "call": "place",
+        "pos": [
+          -1,
+          80,
+          -1
+        ],
+        "reference": [
+          -1,
+          80,
+          -1
+        ],
+        "rotation": "COUNTERCLOCKWISE_90",
+        "mirror": "LEFT_RIGHT",
+        "known_shape": false,
+        "ignore_entities": false,
+        "finalize_entities": false,
+        "waterlogging": true,
+        "flags": 2,
+        "processors": [],
+        "settings_first_long": -7249461343409198171,
+        "placement_first_long": -5025562857975149833
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.template.success",
+          "with": [
+            "fixture:sample",
+            -1,
+            80,
+            -1
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "place template fixture:sample 0 80 0 none none -0.1",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "error": "Float must not be less than 0.0: found -0.1",
+    "cursor": 47,
+    "error_component": {
+      "translate": "argument.float.low",
+      "with": [
+        0.0,
+        -0.1
+      ]
+    },
+    "trace": [],
+    "feedback": []
+  },
+  {
+    "command": "place template fixture:sample 0 80 0 none none 1.1",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "error": "Float must not be more than 1.0: found 1.1",
+    "cursor": 47,
+    "error_component": {
+      "translate": "argument.float.big",
+      "with": [
+        1.0,
+        1.1
+      ]
+    },
+    "trace": [],
+    "feedback": []
+  },
+  {
+    "command": "place template fixture:sample 0 80 0 bad_rotation",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "error": "Invalid value 'bad_rotation'",
+    "cursor": 49,
+    "error_component": {
+      "translate": "argument.enum.invalid",
+      "with": [
+        "bad_rotation"
+      ]
+    },
+    "trace": [],
+    "feedback": []
+  },
+  {
+    "command": "place template fixture:sample 0 80 0 none bad_mirror",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "error": "Invalid value 'bad_mirror'",
+    "cursor": 52,
+    "error_component": {
+      "translate": "argument.enum.invalid",
+      "with": [
+        "bad_mirror"
+      ]
+    },
+    "trace": [],
+    "feedback": []
+  },
+  {
+    "command": "place template fixture:sample 0 80",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "error": "Incomplete (expected 3 coordinates)",
+    "cursor": 30,
+    "error_component": {
+      "translate": "argument.pos3d.incomplete"
+    },
+    "trace": [],
+    "feedback": []
+  },
+  {
+    "command": "place template Fixture:bad",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "error": "Expected whitespace to end one argument, but found trailing data",
+    "cursor": 15,
+    "error_component": {
+      "translate": "command.expected.separator"
+    },
+    "trace": [],
+    "feedback": []
+  },
+  {
+    "command": "place template fixture:missing",
+    "found": false,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "error": "There is no template with ID \"fixture:missing\"",
+    "cursor": -1,
+    "error_component": {
+      "translate": "commands.place.template.invalid",
+      "with": [
+        "fixture:missing"
+      ]
+    },
+    "trace": [
+      {
+        "call": "template",
+        "id": "fixture:missing"
+      }
+    ],
+    "feedback": []
+  },
+  {
+    "command": "place template fixture:sample",
+    "found": true,
+    "placed": false,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "error": "Failed to place template",
+    "cursor": -1,
+    "error_component": {
+      "translate": "commands.place.template.failed"
+    },
+    "trace": [
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          80,
+          0,
+          -32
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          96,
+          0,
+          -32
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          80,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          96,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          80,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          96,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "random",
+        "seed": 0
+      },
+      {
+        "call": "place",
+        "pos": [
+          80,
+          64,
+          -17
+        ],
+        "reference": [
+          80,
+          64,
+          -17
+        ],
+        "rotation": "NONE",
+        "mirror": "NONE",
+        "known_shape": false,
+        "ignore_entities": false,
+        "finalize_entities": false,
+        "waterlogging": true,
+        "flags": 2,
+        "processors": [],
+        "settings_first_long": 1651446066140532451,
+        "placement_first_long": -5025562857975149833
+      }
+    ],
+    "feedback": []
+  },
+  {
+    "command": "place template fixture:sample 0 80 0",
+    "found": true,
+    "placed": true,
+    "hasChunk": false,
+    "inWorld": false,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "error": "That position is not loaded",
+    "cursor": -1,
+    "error_component": {
+      "translate": "argument.pos.unloaded"
+    },
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      }
+    ],
+    "feedback": []
+  },
+  {
+    "command": "place template fixture:sample 0 80 0",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": false,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "error": "That position is out of this world!",
+    "cursor": -1,
+    "error_component": {
+      "translate": "argument.pos.outofworld"
+    },
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      }
+    ],
+    "feedback": []
+  },
+  {
+    "command": "place template fixture:sample 0 80 0",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [
+      16,
+      0,
+      0
+    ],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "error": "That position is not loaded",
+    "cursor": -1,
+    "error_component": {
+      "translate": "argument.pos.unloaded"
+    },
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          0
+        ]
+      }
+    ],
+    "feedback": []
+  },
+  {
+    "command": "place template fixture:sample 0 80 0 clockwise_90",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [
+      16,
+      0,
+      16
+    ],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 4,
+    "error": "That position is not loaded",
+    "cursor": -1,
+    "error_component": {
+      "translate": "argument.pos.unloaded"
+    },
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          16
+        ]
+      }
+    ],
+    "feedback": []
+  },
+  {
+    "command": "place template fixture:sample",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": false,
+    "missing": [],
+    "size": [
+      0,
+      0,
+      0
+    ],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          80,
+          0,
+          -32
+        ]
+      },
+      {
+        "call": "random",
+        "seed": 0
+      },
+      {
+        "call": "place",
+        "pos": [
+          80,
+          64,
+          -17
+        ],
+        "reference": [
+          80,
+          64,
+          -17
+        ],
+        "rotation": "NONE",
+        "mirror": "NONE",
+        "known_shape": false,
+        "ignore_entities": false,
+        "finalize_entities": false,
+        "waterlogging": true,
+        "flags": 2,
+        "processors": [],
+        "settings_first_long": 1651446066140532451,
+        "placement_first_long": -5025562857975149833
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.template.success",
+          "with": [
+            "fixture:sample",
+            80,
+            64,
+            -17
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "place template fixture:sample 0 80 0",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      -17,
+      2,
+      -18
+    ],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "template",
+        "id": "fixture:sample"
+      },
+      "size",
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -32,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -32,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          -32
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          -32
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -32,
+          0,
+          -32
+        ]
+      },
+      {
+        "call": "random",
+        "seed": 0
+      },
+      {
+        "call": "place",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "reference": [
+          0,
+          80,
+          0
+        ],
+        "rotation": "NONE",
+        "mirror": "NONE",
+        "known_shape": false,
+        "ignore_entities": false,
+        "finalize_entities": false,
+        "waterlogging": true,
+        "flags": 2,
+        "processors": [],
+        "settings_first_long": 192741607108112494,
+        "placement_first_long": -5025562857975149833
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.template.success",
+          "with": [
+            "fixture:sample",
+            0,
+            80,
+            0
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "place template fixture:sample",
+    "found": true,
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "size": [
+      17,
+      2,
+      18
+    ],
+    "permission": 1,
+    "error": "Unknown or incomplete command. See below for error",
+    "cursor": 0,
+    "error_component": {
+      "translate": "command.unknown.command"
+    },
+    "trace": [],
+    "feedback": []
+  }
+]

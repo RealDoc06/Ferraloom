@@ -17,6 +17,8 @@ use std::sync::Arc;
 
 #[derive(Clone, Debug, Default)]
 pub struct SuggestionData {
+    pub functions: Vec<String>,
+    pub function_tags: Vec<String>,
     pub players: Vec<String>,
     pub operators: Vec<String>,
     pub whitelist: Vec<String>,
@@ -68,6 +70,15 @@ pub fn argument(
             }
             "minecraft:post_effects" => {} // CommandSourceStack#getAvailablePostEffects is empty.
             "minecraft:ask_server" => {
+                if matches!(argument.wire, CommandArgument::Function {}) {
+                    resources(
+                        &mut builder,
+                        data.function_tags.iter().map(String::as_str),
+                        "#",
+                    );
+                    resources(&mut builder, data.functions.iter().map(String::as_str), "");
+                    return Ok(builder.build());
+                }
                 let input = StringReader::new(&context.input)
                     .slice(context.range.start, context.input.encode_utf16().count());
                 let mut path = input.split_whitespace();

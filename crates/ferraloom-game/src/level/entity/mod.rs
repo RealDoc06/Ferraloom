@@ -706,8 +706,16 @@ impl Level {
                 self.region().entities.registration.queue_retirement(id);
                 continue;
             }
-            let region = self.region_mut();
-            region.entities.retire(id);
+            let active_chest = match self.entity_state(id).expect("retiring entity") {
+                EntityState::Player(player) => player.get_ender_chest_inventory().active_chest(),
+                _ => None,
+            };
+            self.region_mut().entities.retire(id);
+            // PlayerEnderChestContainer keeps its active BE alive for the full
+            // canonical player lifetime, including held removed receivers.
+            if let Some(chest) = active_chest {
+                self.release_block_entity(chest);
+            }
         }
     }
 }

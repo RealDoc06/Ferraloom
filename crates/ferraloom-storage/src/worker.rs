@@ -10,8 +10,14 @@ use std::{
     thread::{self, JoinHandle},
 };
 
+type Callback<T> = Box<dyn FnOnce(Result<T>) + Send>;
+struct CompletionState<T> {
+    result: Option<Result<T>>,
+    waker: Option<Waker>,
+    callback: Option<Callback<T>>,
+}
 struct Completion<T> {
-    value: Mutex<(Option<Result<T>>, Option<Waker>)>,
+    value: Mutex<CompletionState<T>>,
     ready: Condvar,
 }
 /// A nonblocking storage operation. Await it from any executor; `wait` is for shutdown/tools only.
@@ -21,7 +27,11 @@ pub struct IoTask<T> {
 impl<T> IoTask<T> {
     fn pair() -> (Self, Arc<Completion<T>>) {
         let state = Arc::new(Completion {
-            value: Mutex::new((None, None)),
+            value: Mutex::new(CompletionState {
+                result: None,
+                waker: None,
+                callback: None,
+            }),
             ready: Condvar::new(),
         });
         (
@@ -31,10 +41,26 @@ impl<T> IoTask<T> {
             state,
         )
     }
+    /// Deliver once without an executor. The callback only hands owned work to
+    /// its destination; neither completion nor registration holds the IO guard.
+    pub fn on_complete(self, callback: impl FnOnce(Result<T>) + Send + 'static) {
+        let callback: Callback<T> = Box::new(callback);
+        let result = {
+            let mut state = self.state.value.lock().unwrap_or_else(|e| e.into_inner());
+            match state.result.take() {
+                Some(result) => result,
+                None => {
+                    state.callback = Some(callback);
+                    return;
+                }
+            }
+        };
+        callback(result);
+    }
     pub fn wait(self) -> Result<T> {
         let mut state = self.state.value.lock().unwrap_or_else(|e| e.into_inner());
         loop {
-            if let Some(value) = state.0.take() {
+            if let Some(value) = state.result.take() {
                 return value;
             }
             state = self
@@ -49,24 +75,31 @@ impl<T> Future for IoTask<T> {
     type Output = Result<T>;
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let mut state = self.state.value.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(value) = state.0.take() {
+        if let Some(value) = state.result.take() {
             Poll::Ready(value)
         } else {
-            state.1 = Some(cx.waker().clone());
+            state.waker = Some(cx.waker().clone());
             Poll::Pending
         }
     }
 }
 impl<T> Completion<T> {
     fn finish(&self, value: Result<T>) {
-        let waker = {
+        let (callback, waker, value) = {
             let mut state = self.value.lock().unwrap_or_else(|e| e.into_inner());
-            state.0 = Some(value);
-            state.1.take()
+            if let Some(callback) = state.callback.take() {
+                (Some(callback), state.waker.take(), Some(value))
+            } else {
+                state.result = Some(value);
+                (None, state.waker.take(), None)
+            }
         };
         self.ready.notify_all();
         if let Some(waker) = waker {
             waker.wake();
+        }
+        if let Some(callback) = callback {
+            callback(value.expect("callback owns the completion"));
         }
     }
 }
@@ -240,5 +273,80 @@ fn report_failures(failures: &mut Vec<String>) -> Result<()> {
         Ok(())
     } else {
         Err(Error::Invalid(std::mem::take(failures).join("; ")))
+    }
+}
+
+#[cfg(test)]
+mod callback_tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn completed_task_calls_back_on_registering_thread_outside_guard() {
+        let (task, completion) = IoTask::<u32>::pair();
+        completion.finish(Ok(42));
+        let registering = thread::current().id();
+        let (send, receive) = mpsc::channel();
+        task.on_complete(move |result| {
+            assert!(completion.value.try_lock().is_ok());
+            send.send((thread::current().id(), result.unwrap()))
+                .unwrap();
+        });
+        assert_eq!(receive.try_recv().unwrap(), (registering, 42));
+        assert!(matches!(
+            receive.try_recv(),
+            Err(mpsc::TryRecvError::Disconnected)
+        ));
+    }
+
+    #[test]
+    fn pending_task_calls_back_once_on_completion_outside_guard() {
+        let (task, completion) = IoTask::<u32>::pair();
+        let held = completion.clone();
+        let (send, receive) = mpsc::channel();
+        task.on_complete(move |result| {
+            assert!(held.value.try_lock().is_ok());
+            send.send((thread::current().id(), result.unwrap()))
+                .unwrap();
+        });
+        assert!(matches!(receive.try_recv(), Err(mpsc::TryRecvError::Empty)));
+        let worker = thread::spawn(move || {
+            completion.finish(Ok(17));
+            thread::current().id()
+        });
+        let (thread, value) = receive.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert_eq!(thread, worker.join().unwrap());
+        assert_eq!(value, 17);
+        assert!(matches!(
+            receive.try_recv(),
+            Err(mpsc::TryRecvError::Disconnected)
+        ));
+    }
+
+    #[test]
+    fn callback_preserves_errors_before_and_after_registration() {
+        for ready in [false, true] {
+            let (task, completion) = IoTask::<u32>::pair();
+            if ready {
+                completion.finish(Err(Error::Closed));
+            }
+            let held = completion.clone();
+            let (send, receive) = mpsc::channel();
+            task.on_complete(move |result| {
+                assert!(held.value.try_lock().is_ok());
+                send.send(result).unwrap();
+            });
+            if !ready {
+                completion.finish(Err(Error::Closed));
+            }
+            assert!(matches!(
+                receive.recv_timeout(Duration::from_secs(5)).unwrap(),
+                Err(Error::Closed)
+            ));
+            assert!(matches!(
+                receive.try_recv(),
+                Err(mpsc::TryRecvError::Disconnected)
+            ));
+        }
     }
 }

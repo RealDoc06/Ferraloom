@@ -19,6 +19,9 @@ pub(super) fn load(
                         if key.as_str() == "minecraft:banner_patterns" {
                             super::banner::read_patterns(value, registries)
                                 .map(DataComponent::BannerPatterns)
+                        } else if key.as_str() == "minecraft:pot_decorations" {
+                            super::decorated_pot::read_decorations(value)
+                                .map(DataComponent::PotDecorations)
                         } else {
                             DataComponent::from_nbt(&key, value).ok()
                         }

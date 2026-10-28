@@ -1,0 +1,89 @@
+{
+  "input": "{blocks:[{nbt:{LootTable:\"minecraft:chests/simple_dungeon\",LootTableSeed:99L,id:\"minecraft:chest\"},pos:[0,0,0],state:0},{nbt:{LootTable:\"minecraft:chests/simple_dungeon\",LootTableSeed:99L,id:\"minecraft:chest\"},pos:[1,0,0],state:0}],palette:[{id:\"minecraft:chest\"}],size:[2,1,1]}",
+  "placed": true,
+  "trace": [
+    {
+      "call": "set",
+      "pos": [
+        8,
+        5,
+        8
+      ],
+      "state": 14381,
+      "flags": 820
+    },
+    {
+      "call": "set",
+      "pos": [
+        8,
+        5,
+        8
+      ],
+      "state": 5544,
+      "flags": 818
+    },
+    {
+      "call": "random",
+      "value": -5025562857975149833
+    },
+    {
+      "call": "load",
+      "pos": [
+        8,
+        5,
+        8
+      ],
+      "seed": -5025562857975149833
+    },
+    {
+      "call": "set",
+      "pos": [
+        9,
+        5,
+        8
+      ],
+      "state": 14381,
+      "flags": 820
+    },
+    {
+      "call": "set",
+      "pos": [
+        9,
+        5,
+        8
+      ],
+      "state": 5544,
+      "flags": 818
+    },
+    {
+      "call": "random",
+      "value": -5843495416241995736
+    },
+    {
+      "call": "load",
+      "pos": [
+        9,
+        5,
+        8
+      ],
+      "seed": -5843495416241995736
+    },
+    {
+      "call": "changed",
+      "pos": [
+        8,
+        5,
+        8
+      ]
+    },
+    {
+      "call": "changed",
+      "pos": [
+        9,
+        5,
+        8
+      ]
+    }
+  ],
+  "next_long": 5694868678511409995
+}

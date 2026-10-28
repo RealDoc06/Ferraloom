@@ -5,13 +5,14 @@ use crate::{
     structure::{
         BoundingBox,
         processor::StructureProcessor,
-        template::{PlacementRandom, StructurePlaceSettings, StructureTemplateManager},
+        template::{PlacementRandom, StructurePlaceSettings},
     },
 };
 use ferraloom_util::{Mirror, Rotation};
 
-/// Port of FossilFeature. Templates/processors are decoded once; placement
-/// shares the feature RNG with both template passes, as StructurePlaceSettings
+/// Port of FossilFeature. Processors are decoded once; placement obtains
+/// templates from the world's canonical manager, including generated overrides.
+/// Both passes share the feature RNG, as StructurePlaceSettings
 /// does when setRandom is supplied by vanilla.
 #[derive(Debug)]
 struct FossilFeature {
@@ -19,7 +20,6 @@ struct FossilFeature {
     overlay: Vec<Identifier>,
     base_processors: Vec<StructureProcessor>,
     overlay_processors: Vec<StructureProcessor>,
-    templates: StructureTemplateManager,
     tags: BlockTags,
     max_empty: i32,
 }
@@ -56,14 +56,11 @@ pub(super) fn register(loader: &mut FeatureLoader<'_>) -> Result<(), Error> {
         };
         let base_processors = processors("fossil_processors")?;
         let overlay_processors = processors("overlay_processors")?;
-        let templates =
-            StructureTemplateManager::load(l.data.resources, base.iter().chain(&overlay).cloned())?;
         Ok(Arc::new(FossilFeature {
             base,
             overlay,
             base_processors,
             overlay_processors,
-            templates,
             tags: BlockTags(l.data.block_tags.clone()),
             max_empty: int_range(field(v, "max_empty_corners_allowed")?, 0, 7)?,
         }))
@@ -78,8 +75,9 @@ impl Feature for FossilFeature {
             Rotation::CounterClockwise90,
         ][ctx.random()?.next_int_bound(4) as usize];
         let index = ctx.random()?.next_int_bound(self.base.len() as i32) as usize;
-        let base = self.templates.get_or_create(&self.base[index]);
-        let overlay = self.templates.get_or_create(&self.overlay[index]);
+        let templates = ctx.level.structure_templates()?;
+        let base = templates.get_or_create(&self.base[index]);
+        let overlay = templates.get_or_create(&self.overlay[index]);
         let min = [
             (ctx.origin[0] >> 4) * 16 - 16,
             ctx.level.min_y(),

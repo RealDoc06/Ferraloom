@@ -1,0 +1,2040 @@
+[
+  {
+    "bodies": [
+      [
+        "seed"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "seed"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "seed:1",
+      "tail"
+    ],
+    "remaining": 17
+  },
+  {
+    "bodies": [
+      [
+        "seed"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "seed"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "seed:1",
+      "frame:false:0"
+    ],
+    "remaining": 18
+  },
+  {
+    "bodies": [
+      [
+        "seed"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "seed"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "seed:1",
+      "tail"
+    ],
+    "remaining": 17
+  },
+  {
+    "bodies": [
+      [
+        "seed"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "seed"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "seed:1",
+      "frame:false:0"
+    ],
+    "remaining": 18
+  },
+  {
+    "bodies": [
+      [
+        "seed"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "seed"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "seed:1",
+      "tail"
+    ],
+    "remaining": 17
+  },
+  {
+    "bodies": [
+      [
+        "seed"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "seed"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "seed:1",
+      "frame:false:0"
+    ],
+    "remaining": 18
+  },
+  {
+    "bodies": [
+      [
+        "seed"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "seed"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "seed:1",
+      "tail"
+    ],
+    "remaining": 17
+  },
+  {
+    "bodies": [
+      [
+        "seed"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "seed"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "seed:1",
+      "frame:false:0"
+    ],
+    "remaining": 18
+  },
+  {
+    "bodies": [
+      [
+        "return 7"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return 7"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "Function test:f0 returned 7",
+      "tail"
+    ],
+    "remaining": 18
+  },
+  {
+    "bodies": [
+      [
+        "return 7"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return 7"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "Function test:f0 returned 7",
+      "frame:true:7"
+    ],
+    "remaining": 19
+  },
+  {
+    "bodies": [
+      [
+        "return 7"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return 7"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "Function test:f0 returned 7",
+      "original:true:7",
+      "tail"
+    ],
+    "remaining": 18
+  },
+  {
+    "bodies": [
+      [
+        "return 7"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return 7"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "Function test:f0 returned 7",
+      "original:true:7",
+      "frame:true:7"
+    ],
+    "remaining": 19
+  },
+  {
+    "bodies": [
+      [
+        "return 7"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return 7"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "tail"
+    ],
+    "remaining": 18
+  },
+  {
+    "bodies": [
+      [
+        "return 7"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return 7"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "frame:true:7"
+    ],
+    "remaining": 19
+  },
+  {
+    "bodies": [
+      [
+        "return 7"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return 7"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "original:true:7",
+      "tail"
+    ],
+    "remaining": 18
+  },
+  {
+    "bodies": [
+      [
+        "return 7"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return 7"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "original:true:7",
+      "frame:true:7"
+    ],
+    "remaining": 19
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "Function test:f0 returned 0",
+      "tail"
+    ],
+    "remaining": 18
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "Function test:f0 returned 0",
+      "frame:false:0"
+    ],
+    "remaining": 19
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "Function test:f0 returned 0",
+      "original:false:0",
+      "tail"
+    ],
+    "remaining": 18
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "Function test:f0 returned 0",
+      "original:false:0",
+      "frame:false:0"
+    ],
+    "remaining": 19
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "tail"
+    ],
+    "remaining": 18
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "frame:false:0"
+    ],
+    "remaining": 19
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "original:false:0",
+      "tail"
+    ],
+    "remaining": 18
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "original:false:0",
+      "frame:false:0"
+    ],
+    "remaining": 19
+  },
+  {
+    "bodies": [
+      [],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "Function test:f1 returned 7",
+      "tail"
+    ],
+    "remaining": 17
+  },
+  {
+    "bodies": [
+      [],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "Function test:f1 returned 7",
+      "frame:true:7"
+    ],
+    "remaining": 18
+  },
+  {
+    "bodies": [
+      [],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "Function test:f1 returned 7",
+      "original:true:7",
+      "tail"
+    ],
+    "remaining": 17
+  },
+  {
+    "bodies": [
+      [],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "Function test:f1 returned 7",
+      "original:true:7",
+      "frame:true:7"
+    ],
+    "remaining": 18
+  },
+  {
+    "bodies": [
+      [],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "tail"
+    ],
+    "remaining": 17
+  },
+  {
+    "bodies": [
+      [],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "frame:true:7"
+    ],
+    "remaining": 18
+  },
+  {
+    "bodies": [
+      [],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "original:true:7",
+      "tail"
+    ],
+    "remaining": 17
+  },
+  {
+    "bodies": [
+      [],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "original:true:7",
+      "frame:true:7"
+    ],
+    "remaining": 18
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "Function test:f0 returned 0",
+      "Function test:f1 returned 7",
+      "tail"
+    ],
+    "remaining": 17
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "Function test:f0 returned 0",
+      "frame:false:0"
+    ],
+    "remaining": 19
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "Function test:f0 returned 0",
+      "Function test:f1 returned 7",
+      "original:true:7",
+      "tail"
+    ],
+    "remaining": 17
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "Function test:f0 returned 0",
+      "original:false:0",
+      "frame:false:0"
+    ],
+    "remaining": 19
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "tail"
+    ],
+    "remaining": 17
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "frame:false:0"
+    ],
+    "remaining": 19
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "original:true:7",
+      "tail"
+    ],
+    "remaining": 17
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return fail"
+      ],
+      [
+        "return 7"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "original:false:0",
+      "frame:false:0"
+    ],
+    "remaining": 19
+  },
+  {
+    "bodies": [
+      [
+        "return 2147483647"
+      ],
+      [
+        "return 1"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return 2147483647"
+      ],
+      [
+        "return 1"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "Function test:f0 returned 2147483647",
+      "Function test:f1 returned 1",
+      "tail"
+    ],
+    "remaining": 17
+  },
+  {
+    "bodies": [
+      [
+        "return 2147483647"
+      ],
+      [
+        "return 1"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return 2147483647"
+      ],
+      [
+        "return 1"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "Function test:f0 returned 2147483647",
+      "frame:true:2147483647"
+    ],
+    "remaining": 19
+  },
+  {
+    "bodies": [
+      [
+        "return 2147483647"
+      ],
+      [
+        "return 1"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return 2147483647"
+      ],
+      [
+        "return 1"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "Function test:f0 returned 2147483647",
+      "Function test:f1 returned 1",
+      "original:true:-2147483648",
+      "tail"
+    ],
+    "remaining": 17
+  },
+  {
+    "bodies": [
+      [
+        "return 2147483647"
+      ],
+      [
+        "return 1"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return 2147483647"
+      ],
+      [
+        "return 1"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "Function test:f0 returned 2147483647",
+      "original:true:2147483647",
+      "frame:true:2147483647"
+    ],
+    "remaining": 19
+  },
+  {
+    "bodies": [
+      [
+        "return 2147483647"
+      ],
+      [
+        "return 1"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return 2147483647"
+      ],
+      [
+        "return 1"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "tail"
+    ],
+    "remaining": 17
+  },
+  {
+    "bodies": [
+      [
+        "return 2147483647"
+      ],
+      [
+        "return 1"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return 2147483647"
+      ],
+      [
+        "return 1"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "frame:true:2147483647"
+    ],
+    "remaining": 19
+  },
+  {
+    "bodies": [
+      [
+        "return 2147483647"
+      ],
+      [
+        "return 1"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return 2147483647"
+      ],
+      [
+        "return 1"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "original:true:-2147483648",
+      "tail"
+    ],
+    "remaining": 17
+  },
+  {
+    "bodies": [
+      [
+        "return 2147483647"
+      ],
+      [
+        "return 1"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "return 2147483647"
+      ],
+      [
+        "return 1"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "original:true:2147483647",
+      "frame:true:2147483647"
+    ],
+    "remaining": 19
+  },
+  {
+    "bodies": [
+      [],
+      []
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [],
+      []
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "tail"
+    ],
+    "remaining": 17
+  },
+  {
+    "bodies": [
+      [],
+      []
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [],
+      []
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "frame:false:0"
+    ],
+    "remaining": 18
+  },
+  {
+    "bodies": [
+      [],
+      []
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [],
+      []
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "tail"
+    ],
+    "remaining": 17
+  },
+  {
+    "bodies": [
+      [],
+      []
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [],
+      []
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "frame:false:0"
+    ],
+    "remaining": 18
+  },
+  {
+    "bodies": [
+      [],
+      []
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [],
+      []
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "tail"
+    ],
+    "remaining": 17
+  },
+  {
+    "bodies": [
+      [],
+      []
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [],
+      []
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "frame:false:0"
+    ],
+    "remaining": 18
+  },
+  {
+    "bodies": [
+      [],
+      []
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [],
+      []
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "tail"
+    ],
+    "remaining": 17
+  },
+  {
+    "bodies": [
+      [],
+      []
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [],
+      []
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "frame:false:0"
+    ],
+    "remaining": 18
+  },
+  {
+    "bodies": [
+      [
+        "seed",
+        "return -4",
+        "seed"
+      ],
+      [
+        "return 9"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "seed",
+        "return -4",
+        "seed"
+      ],
+      [
+        "return 9"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "seed:1",
+      "Function test:f0 returned -4",
+      "Function test:f1 returned 9",
+      "tail"
+    ],
+    "remaining": 16
+  },
+  {
+    "bodies": [
+      [
+        "seed",
+        "return -4",
+        "seed"
+      ],
+      [
+        "return 9"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "seed",
+        "return -4",
+        "seed"
+      ],
+      [
+        "return 9"
+      ]
+    ],
+    "silent": false,
+    "callback": false,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "seed:1",
+      "Function test:f0 returned -4",
+      "frame:true:-4"
+    ],
+    "remaining": 18
+  },
+  {
+    "bodies": [
+      [
+        "seed",
+        "return -4",
+        "seed"
+      ],
+      [
+        "return 9"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "seed",
+        "return -4",
+        "seed"
+      ],
+      [
+        "return 9"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "seed:1",
+      "Function test:f0 returned -4",
+      "Function test:f1 returned 9",
+      "original:true:5",
+      "tail"
+    ],
+    "remaining": 16
+  },
+  {
+    "bodies": [
+      [
+        "seed",
+        "return -4",
+        "seed"
+      ],
+      [
+        "return 9"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "seed",
+        "return -4",
+        "seed"
+      ],
+      [
+        "return 9"
+      ]
+    ],
+    "silent": false,
+    "callback": true,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "seed:1",
+      "Function test:f0 returned -4",
+      "original:true:-4",
+      "frame:true:-4"
+    ],
+    "remaining": 18
+  },
+  {
+    "bodies": [
+      [
+        "seed",
+        "return -4",
+        "seed"
+      ],
+      [
+        "return 9"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "seed",
+        "return -4",
+        "seed"
+      ],
+      [
+        "return 9"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "seed:1",
+      "tail"
+    ],
+    "remaining": 16
+  },
+  {
+    "bodies": [
+      [
+        "seed",
+        "return -4",
+        "seed"
+      ],
+      [
+        "return 9"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "seed",
+        "return -4",
+        "seed"
+      ],
+      [
+        "return 9"
+      ]
+    ],
+    "silent": true,
+    "callback": false,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "seed:1",
+      "frame:true:-4"
+    ],
+    "remaining": 18
+  },
+  {
+    "bodies": [
+      [
+        "seed",
+        "return -4",
+        "seed"
+      ],
+      [
+        "return 9"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": false,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "seed",
+        "return -4",
+        "seed"
+      ],
+      [
+        "return 9"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": false,
+    "quota": 20,
+    "events": [
+      "seed:1",
+      "original:true:5",
+      "tail"
+    ],
+    "remaining": 16
+  },
+  {
+    "bodies": [
+      [
+        "seed",
+        "return -4",
+        "seed"
+      ],
+      [
+        "return 9"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": true,
+    "quota": 1,
+    "events": [],
+    "remaining": 0
+  },
+  {
+    "bodies": [
+      [
+        "seed",
+        "return -4",
+        "seed"
+      ],
+      [
+        "return 9"
+      ]
+    ],
+    "silent": true,
+    "callback": true,
+    "returning": true,
+    "quota": 20,
+    "events": [
+      "seed:1",
+      "original:true:-4",
+      "frame:true:-4"
+    ],
+    "remaining": 18
+  }
+]

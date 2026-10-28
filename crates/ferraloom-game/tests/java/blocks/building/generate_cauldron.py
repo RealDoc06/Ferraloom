@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+"""Capture independent vanilla cauldron precipitation mutation, event and RNG vectors."""
+import argparse
+import gzip
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+
+HERE = Path(__file__).resolve().parent
+CACHE = Path('/home/doc/code/Ferraloom/.cache')
+JAVA = CACHE / 'toolchains/jdk-25.0.4.1+1/bin'
+VANILLA = CACHE / 'vanilla/26.3'
+CP = os.pathsep.join(map(str, [VANILLA / 'versions/26.3/server-26.3.jar', *sorted((VANILLA / 'libraries').rglob('*.jar'))]))
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--check', action='store_true')
+args = parser.parse_args()
+with tempfile.TemporaryDirectory(dir=CACHE / 'tools', prefix='cauldron-') as temporary:
+    log_path = CACHE / 'logs/building-cauldron-native.log'
+    with log_path.open('w') as log:
+        result = subprocess.run([str(JAVA / 'javac'), '-cp', CP, '-d', temporary,
+            str(HERE.parent / 'redstone/RedstoneIdentityVectors.java'), str(HERE / 'AnvilVectors.java'),
+            str(HERE / 'CauldronVectors.java')], stdout=log, stderr=subprocess.STDOUT)
+        if result.returncode:
+            raise RuntimeError(log_path.read_text()[-8000:])
+        result = subprocess.run([str(JAVA / 'java'), '-Xmx768M', '-cp', temporary + os.pathsep + CP,
+            'CauldronCapture'], cwd=temporary, stdout=subprocess.PIPE, stderr=log, text=True, timeout=300)
+        log.write(result.stdout)
+        if result.returncode:
+            log.flush()
+            raise RuntimeError(log_path.read_text()[-8000:])
+    lines = [line.removeprefix('BUILDING\t') for line in result.stdout.splitlines() if line.startswith('BUILDING\t')]
+    modes = [line.split('\t', 1)[0] for line in lines]
+    assert modes.count('chance') == 780
+    assert modes.count('handle') == 6240
+    output = ('\n'.join(lines) + '\n').encode()
+    target = HERE / 'cauldron-precipitation.tsv.gz'
+    if args.check:
+        assert gzip.decompress(target.read_bytes()) == output, 'native cauldron vectors differ'
+    else:
+        target.write_bytes(gzip.compress(output, mtime=0))
+    print(f'{len(lines)} native cauldron precipitation observations')

@@ -5,6 +5,7 @@ pub mod abilities;
 mod ai_step;
 mod contact;
 pub mod cooldowns;
+pub mod ender_chest;
 pub mod equipment;
 mod experience;
 pub mod food;
@@ -63,6 +64,7 @@ pub struct ServerPlayer {
     // GameProfile identity is immutable; entity NBT cannot replace it.
     profile_id: Uuid,
     pub inventory: inventory::Inventory,
+    ender_chest_inventory: ender_chest::PlayerEnderChestContainer,
     pub menus: crate::inventory::MenuSession,
     pub recipe_book: crate::crafting::ServerRecipeBook,
     pub advancements: crate::advancements::PlayerAdvancements,
@@ -249,6 +251,7 @@ impl ServerPlayer {
             profile_id: uuid,
             name,
             inventory: Default::default(),
+            ender_chest_inventory: Default::default(),
             menus: Default::default(),
             recipe_book: Default::default(),
             advancements: Default::default(),
@@ -414,6 +417,8 @@ impl ServerPlayer {
         let selected = tag.get_int_or("SelectedItemSlot", 0);
         self.inventory.load(&inventory);
         self.inventory.set_selected_slot(selected as usize);
+        self.ender_chest_inventory
+            .load_slots(&tag.get_list("EnderItems").cloned().unwrap_or_default());
         self.first_good = self.position;
         self.last_good = self.position;
         Ok(())
@@ -475,6 +480,14 @@ impl ServerPlayer {
         tag.insert(
             "SelectedItemSlot",
             Tag::Int(self.inventory.selected_slot() as i32),
+        );
+        tag.insert(
+            "EnderItems",
+            Tag::List(
+                self.ender_chest_inventory
+                    .store_as_slots()
+                    .map_err(|_| LevelError::Inventory("invalid saved ender chest"))?,
+            ),
         );
         self.food_data.save(&mut tag);
         tag.remove("ShoulderEntityLeft");
@@ -762,6 +775,49 @@ fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Resu
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {
+    fn can_be_seen_as_enemy(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        Ok(
+            !level.entity::<ServerPlayer>(entity)?.abilities.invulnerable
+                && super::mob::can_be_seen_as_enemy_parent(self, entity, level)?,
+        )
+    }
+
+    fn base_experience_reward(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+    ) -> Result<i32, LevelError> {
+        super::living::death::player_base_experience_reward(entity, level)
+    }
+    /// ServerPlayer has a distinct death body, not LivingEntity's parent prefix.
+    fn die(
+        &self,
+        entity: EntityRef,
+        _source: &crate::entity::DamageSource,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Err(LevelError::UnsupportedEntityMethod(
+            level.entity_state(entity)?.entity_type(),
+            crate::entity::EntityMethod::Die,
+        ))
+    }
+
+    fn get_slot(
+        &self,
+        entity: EntityRef,
+        slot: i32,
+        level: &Level,
+    ) -> Result<Option<crate::item::slot::SlotAccess>, LevelError> {
+        crate::item::slot::player_access(entity, slot, level)
+    }
+    /// Port of Player#doesEmitEquipEvent: hands and animal armor do not emit.
+    fn does_emit_equip_event(&self, slot: ferraloom_protocol::component::EquipmentSlot) -> bool {
+        use ferraloom_protocol::component::EquipmentSlot;
+        matches!(
+            slot,
+            EquipmentSlot::Feet | EquipmentSlot::Legs | EquipmentSlot::Chest | EquipmentSlot::Head
+        )
+    }
     /// ServerPlayer#onAttributeUpdated handles RECEIVE before its LivingEntity parent.
     fn on_attribute_updated(
         &self,

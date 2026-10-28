@@ -65,6 +65,7 @@ macro_rules! level_operations {
     };
 }
 level_operations! {
+    read fn structure_templates(self: &Self) -> Result<&crate::structure::template::StructureTemplateManager, Error> [{ Err(Error("Unsupported: live structure template manager".into())) }] => { WorldGenRegion::structure_templates(self) };
     read fn min_y(self: &Self) -> i32 [required] => { WorldGenRegion::min_y(self) };
     read fn height(self: &Self) -> i32 [required] => { WorldGenRegion::height(self) };
     read fn block(self: &Self, p: [i32; 3]) -> Result<BlockState, Error> [{ let _ = p; Err(Error("Unsupported: live feature block".into())) }] => { WorldGenRegion::block(self, p) };
@@ -85,6 +86,12 @@ level_operations! {
     write fn update_neighbors_at(self: &mut Self, _p: [i32; 3], _block: Block) -> Result<(), Error> [{ let _ = (_p, _block); Err(Error("Unsupported: live feature update_neighbors_at".into())) }] => { WorldGenRegion::update_neighbors_at(self, _p, _block) };
     write fn load_block_entity(self: &mut Self, p: [i32; 3], tag: CompoundTag, random: &mut FeatureRandomSelector<'_>) -> Result<(), Error> [{ let _ = (p, tag, random); Err(Error("Unsupported: live feature load_block_entity".into())) }] => { WorldGenRegion::load_block_entity(self, p, tag, random.region_mut()?) };
     write fn finalize_template_entity(self: &mut Self, tag: &mut CompoundTag, mirror: Mirror, rotation: Rotation, finalize: bool) -> Result<bool, Error> [{ let _ = (tag, mirror, rotation, finalize); Err(Error("Unsupported: live feature finalize_template_entity".into())) }] => { WorldGenRegion::finalize_template_entity(self, tag, mirror, rotation, finalize) };
+    /// Live placement constructs and transforms one retained receiver. Generation
+    /// keeps its existing deferred tag finalization and insertion path.
+    write fn place_template_entity(self: &mut Self, chunk: [i32; 2], tag: CompoundTag, mirror: Mirror, rotation: Rotation, finalize: bool) -> Result<(), Error> [{ place_template_entity_deferred(self, chunk, tag, mirror, rotation, finalize) }] => { place_template_entity_deferred(self, chunk, tag, mirror, rotation, finalize) };
+    /// After waterlogging, StructureTemplate's final per-block pass calls
+    /// setChanged after updating that block's neighbor shapes.
+    write fn mark_template_block_entity_changed(self: &mut Self, p: [i32; 3]) -> Result<(), Error> [{ let _ = p; Err(Error("Unsupported: live template block entity setChanged".into())) }] => { let _ = p; Ok(()) };
     read fn is_outline_full_block(self: &Self, state: BlockState, p: [i32; 3]) -> Result<bool, Error> [{ let _ = (state, p); Err(Error("Unsupported: live feature is_outline_full_block".into())) }] => { WorldGenRegion::is_outline_full_block(self, state, p) };
     read fn is_collision_full_block(self: &Self, state: BlockState, p: [i32; 3]) -> Result<bool, Error> [{ let _ = (state, p); Err(Error("Unsupported: live feature is_collision_full_block".into())) }] => { WorldGenRegion::is_collision_full_block(self, state, p) };
     read fn is_solid(self: &Self, p: [i32; 3]) -> Result<bool, Error> [{ Ok(self.block(p)?.is_solid()) }] => { WorldGenRegion::is_solid(self, p) };
@@ -115,4 +122,18 @@ level_operations! {
     read fn has_block_entity_at(self: &Self, p: [i32; 3]) -> Result<bool, Error> [{
         let _ = p; Err(Error("Unsupported: live feature block entities".into()))
     }] => { Ok(WorldGenRegion::block_entity(self, p)?.is_some()) };
+}
+
+fn place_template_entity_deferred(
+    level: &mut (impl LiveWorldGenLevel + ?Sized),
+    chunk: [i32; 2],
+    mut tag: CompoundTag,
+    mirror: Mirror,
+    rotation: Rotation,
+    finalize: bool,
+) -> Result<(), Error> {
+    if level.finalize_template_entity(&mut tag, mirror, rotation, finalize)? {
+        level.add_entity(chunk, tag)?;
+    }
+    Ok(())
 }

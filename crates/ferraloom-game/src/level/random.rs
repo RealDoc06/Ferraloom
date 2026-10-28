@@ -26,6 +26,10 @@ fn nano_time() -> i64 {
     });
     offset.wrapping_add(instant.elapsed().as_nanos() as i64)
 }
+/// Port of Util#getMillis.
+pub(crate) fn get_millis() -> i64 {
+    nano_time() / 1_000_000
+}
 /// Port of RandomSource#create and RandomSupport#generateUniqueSeed. This is
 /// Level#random, independent of the world seed; tests can install a fixed stream.
 pub(super) fn new_level_random() -> Random {

@@ -136,6 +136,9 @@ fn chunks(
                     has_skylight: true,
                     fast_lava: false,
                     coordinate_scale: 1.0,
+                    infiniburn: crate::structure::processor::BlockSet::Tag(
+                        "minecraft:infiniburn_overworld".parse().unwrap(),
+                    ),
                 },
             );
             for y in -64..64 {
@@ -204,6 +207,7 @@ fn check(
     feature: &dyn Feature,
     registry: &FeatureRegistry,
     base: &[RegionChunk],
+    templates: &crate::structure::template::StructureTemplateManager,
 ) -> Result<(), Error> {
     assert!(
         case.get("vanilla_pending").is_none(),
@@ -226,6 +230,7 @@ fn check(
         63,
     )
     .unwrap();
+    region.set_structure_templates(templates);
     let mut context = FeatureContext {
         level: crate::feature::WorldGenLevel::Region(&mut region),
         random: crate::feature::FeatureRandomSelector::External(
@@ -354,6 +359,8 @@ fn run(select: impl Fn(&Value) -> bool) {
         }
     }
     let registry = loader.finish();
+    let structure_templates =
+        crate::structure::template::StructureTemplateManager::load_all(&resources).unwrap();
     let mut templates = BTreeMap::new();
     let mut unavailable = Vec::new();
     for case in selected {
@@ -363,7 +370,14 @@ fn run(select: impl Fn(&Value) -> bool) {
             .entry((terrain.to_owned(), origin))
             .or_insert_with(|| chunks(&generator, terrain, origin));
         let feature = &features[case["feature"].as_str().unwrap()];
-        if let Err(error) = check(&case, &generator, feature.as_ref(), &registry, base) {
+        if let Err(error) = check(
+            &case,
+            &generator,
+            feature.as_ref(),
+            &registry,
+            base,
+            &structure_templates,
+        ) {
             unavailable.push(format!(
                 "{} {} seed={}: {}",
                 case["feature"], case["terrain"], case["seed"], error

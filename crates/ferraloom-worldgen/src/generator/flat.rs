@@ -371,7 +371,7 @@ impl FlatLevelSource {
         )
     }
     pub fn build_terrain(&self, position: [i32; 2], dimension: DimensionType) -> GeneratedChunk {
-        let mut chunk = self.new_chunk_in_dimension(position, dimension);
+        let mut chunk = self.new_chunk_in_dimension(position, dimension.clone());
         for (i, state) in self
             .layers
             .iter()

@@ -1,0 +1,336 @@
+monster-constructor	minecraft:zombie	Monster	GroundPathNavigation	MoveControl	5	3f19999a	3ff9999a	3fdeb852	41a00000
+monster-attribute	minecraft:zombie	minecraft:air_drag_modifier	3ff0000000000000
+monster-attribute	minecraft:zombie	minecraft:armor	4000000000000000
+monster-attribute	minecraft:zombie	minecraft:armor_toughness	0
+monster-attribute	minecraft:zombie	minecraft:attack_damage	4008000000000000
+monster-attribute	minecraft:zombie	minecraft:attack_knockback	0
+monster-attribute	minecraft:zombie	minecraft:below_name_distance	4024000000000000
+monster-attribute	minecraft:zombie	minecraft:bounciness	0
+monster-attribute	minecraft:zombie	minecraft:burning_time	3ff0000000000000
+monster-attribute	minecraft:zombie	minecraft:camera_distance	4010000000000000
+monster-attribute	minecraft:zombie	minecraft:entity_interaction_range	4008000000000000
+monster-attribute	minecraft:zombie	minecraft:explosion_knockback_resistance	0
+monster-attribute	minecraft:zombie	minecraft:fall_damage_multiplier	3ff0000000000000
+monster-attribute	minecraft:zombie	minecraft:follow_range	4041800000000000
+monster-attribute	minecraft:zombie	minecraft:friction_modifier	3ff0000000000000
+monster-attribute	minecraft:zombie	minecraft:gravity	3fb47ae147ae147b
+monster-attribute	minecraft:zombie	minecraft:jump_strength	3fdae147a0000000
+monster-attribute	minecraft:zombie	minecraft:knockback_resistance	0
+monster-attribute	minecraft:zombie	minecraft:max_absorption	0
+monster-attribute	minecraft:zombie	minecraft:max_health	4034000000000000
+monster-attribute	minecraft:zombie	minecraft:movement_efficiency	0
+monster-attribute	minecraft:zombie	minecraft:movement_speed	3fcd70a3e0000000
+monster-attribute	minecraft:zombie	minecraft:name_tag_distance	4050000000000000
+monster-attribute	minecraft:zombie	minecraft:oxygen_bonus	0
+monster-attribute	minecraft:zombie	minecraft:safe_fall_distance	4008000000000000
+monster-attribute	minecraft:zombie	minecraft:scale	3ff0000000000000
+monster-attribute	minecraft:zombie	minecraft:spawn_reinforcements	0
+monster-attribute	minecraft:zombie	minecraft:step_height	3fe3333333333333
+monster-attribute	minecraft:zombie	minecraft:water_movement_efficiency	0
+monster-attribute	minecraft:zombie	minecraft:waypoint_transmit_range	0
+monster-data	minecraft:zombie	16	Zombie	DATA_BABY_ID	8	false
+monster-data	minecraft:zombie	17	Zombie	DATA_SPECIAL_TYPE_ID	1	0
+monster-data	minecraft:zombie	18	Zombie	DATA_DROWNED_CONVERSION_ID	8	false
+monster-constructor	minecraft:husk	Zombie	GroundPathNavigation	MoveControl	5	3f19999a	3ff9999a	3fdeb852	41a00000
+monster-attribute	minecraft:husk	minecraft:air_drag_modifier	3ff0000000000000
+monster-attribute	minecraft:husk	minecraft:armor	4000000000000000
+monster-attribute	minecraft:husk	minecraft:armor_toughness	0
+monster-attribute	minecraft:husk	minecraft:attack_damage	4008000000000000
+monster-attribute	minecraft:husk	minecraft:attack_knockback	0
+monster-attribute	minecraft:husk	minecraft:below_name_distance	4024000000000000
+monster-attribute	minecraft:husk	minecraft:bounciness	0
+monster-attribute	minecraft:husk	minecraft:burning_time	3ff0000000000000
+monster-attribute	minecraft:husk	minecraft:camera_distance	4010000000000000
+monster-attribute	minecraft:husk	minecraft:entity_interaction_range	4008000000000000
+monster-attribute	minecraft:husk	minecraft:explosion_knockback_resistance	0
+monster-attribute	minecraft:husk	minecraft:fall_damage_multiplier	3ff0000000000000
+monster-attribute	minecraft:husk	minecraft:follow_range	4041800000000000
+monster-attribute	minecraft:husk	minecraft:friction_modifier	3ff0000000000000
+monster-attribute	minecraft:husk	minecraft:gravity	3fb47ae147ae147b
+monster-attribute	minecraft:husk	minecraft:jump_strength	3fdae147a0000000
+monster-attribute	minecraft:husk	minecraft:knockback_resistance	0
+monster-attribute	minecraft:husk	minecraft:max_absorption	0
+monster-attribute	minecraft:husk	minecraft:max_health	4034000000000000
+monster-attribute	minecraft:husk	minecraft:movement_efficiency	0
+monster-attribute	minecraft:husk	minecraft:movement_speed	3fcd70a3e0000000
+monster-attribute	minecraft:husk	minecraft:name_tag_distance	4050000000000000
+monster-attribute	minecraft:husk	minecraft:oxygen_bonus	0
+monster-attribute	minecraft:husk	minecraft:safe_fall_distance	4008000000000000
+monster-attribute	minecraft:husk	minecraft:scale	3ff0000000000000
+monster-attribute	minecraft:husk	minecraft:spawn_reinforcements	0
+monster-attribute	minecraft:husk	minecraft:step_height	3fe3333333333333
+monster-attribute	minecraft:husk	minecraft:water_movement_efficiency	0
+monster-attribute	minecraft:husk	minecraft:waypoint_transmit_range	0
+monster-data	minecraft:husk	16	Zombie	DATA_BABY_ID	8	false
+monster-data	minecraft:husk	17	Zombie	DATA_SPECIAL_TYPE_ID	1	0
+monster-data	minecraft:husk	18	Zombie	DATA_DROWNED_CONVERSION_ID	8	false
+monster-constructor	minecraft:drowned	Zombie	AmphibiousPathNavigation	DrownedMoveControl	5	3f19999a	3ff9999a	3fdeb852	41a00000
+monster-attribute	minecraft:drowned	minecraft:air_drag_modifier	3ff0000000000000
+monster-attribute	minecraft:drowned	minecraft:armor	4000000000000000
+monster-attribute	minecraft:drowned	minecraft:armor_toughness	0
+monster-attribute	minecraft:drowned	minecraft:attack_damage	4008000000000000
+monster-attribute	minecraft:drowned	minecraft:attack_knockback	0
+monster-attribute	minecraft:drowned	minecraft:below_name_distance	4024000000000000
+monster-attribute	minecraft:drowned	minecraft:bounciness	0
+monster-attribute	minecraft:drowned	minecraft:burning_time	3ff0000000000000
+monster-attribute	minecraft:drowned	minecraft:camera_distance	4010000000000000
+monster-attribute	minecraft:drowned	minecraft:entity_interaction_range	4008000000000000
+monster-attribute	minecraft:drowned	minecraft:explosion_knockback_resistance	0
+monster-attribute	minecraft:drowned	minecraft:fall_damage_multiplier	3ff0000000000000
+monster-attribute	minecraft:drowned	minecraft:follow_range	4041800000000000
+monster-attribute	minecraft:drowned	minecraft:friction_modifier	3ff0000000000000
+monster-attribute	minecraft:drowned	minecraft:gravity	3fb47ae147ae147b
+monster-attribute	minecraft:drowned	minecraft:jump_strength	3fdae147a0000000
+monster-attribute	minecraft:drowned	minecraft:knockback_resistance	0
+monster-attribute	minecraft:drowned	minecraft:max_absorption	0
+monster-attribute	minecraft:drowned	minecraft:max_health	4034000000000000
+monster-attribute	minecraft:drowned	minecraft:movement_efficiency	0
+monster-attribute	minecraft:drowned	minecraft:movement_speed	3fcd70a3e0000000
+monster-attribute	minecraft:drowned	minecraft:name_tag_distance	4050000000000000
+monster-attribute	minecraft:drowned	minecraft:oxygen_bonus	0
+monster-attribute	minecraft:drowned	minecraft:safe_fall_distance	4008000000000000
+monster-attribute	minecraft:drowned	minecraft:scale	3ff0000000000000
+monster-attribute	minecraft:drowned	minecraft:spawn_reinforcements	0
+monster-attribute	minecraft:drowned	minecraft:step_height	3ff0000000000000
+monster-attribute	minecraft:drowned	minecraft:water_movement_efficiency	0
+monster-attribute	minecraft:drowned	minecraft:waypoint_transmit_range	0
+monster-data	minecraft:drowned	16	Zombie	DATA_BABY_ID	8	false
+monster-data	minecraft:drowned	17	Zombie	DATA_SPECIAL_TYPE_ID	1	0
+monster-data	minecraft:drowned	18	Zombie	DATA_DROWNED_CONVERSION_ID	8	false
+monster-constructor	minecraft:zombie_villager	Zombie	GroundPathNavigation	MoveControl	5	3f19999a	3ff9999a	3fdeb852	41a00000
+monster-attribute	minecraft:zombie_villager	minecraft:air_drag_modifier	3ff0000000000000
+monster-attribute	minecraft:zombie_villager	minecraft:armor	4000000000000000
+monster-attribute	minecraft:zombie_villager	minecraft:armor_toughness	0
+monster-attribute	minecraft:zombie_villager	minecraft:attack_damage	4008000000000000
+monster-attribute	minecraft:zombie_villager	minecraft:attack_knockback	0
+monster-attribute	minecraft:zombie_villager	minecraft:below_name_distance	4024000000000000
+monster-attribute	minecraft:zombie_villager	minecraft:bounciness	0
+monster-attribute	minecraft:zombie_villager	minecraft:burning_time	3ff0000000000000
+monster-attribute	minecraft:zombie_villager	minecraft:camera_distance	4010000000000000
+monster-attribute	minecraft:zombie_villager	minecraft:entity_interaction_range	4008000000000000
+monster-attribute	minecraft:zombie_villager	minecraft:explosion_knockback_resistance	0
+monster-attribute	minecraft:zombie_villager	minecraft:fall_damage_multiplier	3ff0000000000000
+monster-attribute	minecraft:zombie_villager	minecraft:follow_range	4041800000000000
+monster-attribute	minecraft:zombie_villager	minecraft:friction_modifier	3ff0000000000000
+monster-attribute	minecraft:zombie_villager	minecraft:gravity	3fb47ae147ae147b
+monster-attribute	minecraft:zombie_villager	minecraft:jump_strength	3fdae147a0000000
+monster-attribute	minecraft:zombie_villager	minecraft:knockback_resistance	0
+monster-attribute	minecraft:zombie_villager	minecraft:max_absorption	0
+monster-attribute	minecraft:zombie_villager	minecraft:max_health	4034000000000000
+monster-attribute	minecraft:zombie_villager	minecraft:movement_efficiency	0
+monster-attribute	minecraft:zombie_villager	minecraft:movement_speed	3fcd70a3e0000000
+monster-attribute	minecraft:zombie_villager	minecraft:name_tag_distance	4050000000000000
+monster-attribute	minecraft:zombie_villager	minecraft:oxygen_bonus	0
+monster-attribute	minecraft:zombie_villager	minecraft:safe_fall_distance	4008000000000000
+monster-attribute	minecraft:zombie_villager	minecraft:scale	3ff0000000000000
+monster-attribute	minecraft:zombie_villager	minecraft:spawn_reinforcements	0
+monster-attribute	minecraft:zombie_villager	minecraft:step_height	3fe3333333333333
+monster-attribute	minecraft:zombie_villager	minecraft:water_movement_efficiency	0
+monster-attribute	minecraft:zombie_villager	minecraft:waypoint_transmit_range	0
+monster-data	minecraft:zombie_villager	16	Zombie	DATA_BABY_ID	8	false
+monster-data	minecraft:zombie_villager	17	Zombie	DATA_SPECIAL_TYPE_ID	1	0
+monster-data	minecraft:zombie_villager	18	Zombie	DATA_DROWNED_CONVERSION_ID	8	false
+monster-data	minecraft:zombie_villager	19	ZombieVillager	DATA_CONVERTING_ID	8	false
+monster-data	minecraft:zombie_villager	20	ZombieVillager	DATA_VILLAGER_DATA	18	runtime
+monster-data	minecraft:zombie_villager	21	ZombieVillager	DATA_VILLAGER_DATA_FINALIZED	8	false
+monster-constructor	minecraft:zombified_piglin	Zombie	GroundPathNavigation	MoveControl	5	3f19999a	3ff9999a	3fe51eb8	41a00000
+monster-attribute	minecraft:zombified_piglin	minecraft:air_drag_modifier	3ff0000000000000
+monster-attribute	minecraft:zombified_piglin	minecraft:armor	4000000000000000
+monster-attribute	minecraft:zombified_piglin	minecraft:armor_toughness	0
+monster-attribute	minecraft:zombified_piglin	minecraft:attack_damage	4014000000000000
+monster-attribute	minecraft:zombified_piglin	minecraft:attack_knockback	0
+monster-attribute	minecraft:zombified_piglin	minecraft:below_name_distance	4024000000000000
+monster-attribute	minecraft:zombified_piglin	minecraft:bounciness	0
+monster-attribute	minecraft:zombified_piglin	minecraft:burning_time	3ff0000000000000
+monster-attribute	minecraft:zombified_piglin	minecraft:camera_distance	4010000000000000
+monster-attribute	minecraft:zombified_piglin	minecraft:entity_interaction_range	4008000000000000
+monster-attribute	minecraft:zombified_piglin	minecraft:explosion_knockback_resistance	0
+monster-attribute	minecraft:zombified_piglin	minecraft:fall_damage_multiplier	3ff0000000000000
+monster-attribute	minecraft:zombified_piglin	minecraft:follow_range	4041800000000000
+monster-attribute	minecraft:zombified_piglin	minecraft:friction_modifier	3ff0000000000000
+monster-attribute	minecraft:zombified_piglin	minecraft:gravity	3fb47ae147ae147b
+monster-attribute	minecraft:zombified_piglin	minecraft:jump_strength	3fdae147a0000000
+monster-attribute	minecraft:zombified_piglin	minecraft:knockback_resistance	0
+monster-attribute	minecraft:zombified_piglin	minecraft:max_absorption	0
+monster-attribute	minecraft:zombified_piglin	minecraft:max_health	4034000000000000
+monster-attribute	minecraft:zombified_piglin	minecraft:movement_efficiency	0
+monster-attribute	minecraft:zombified_piglin	minecraft:movement_speed	3fcd70a3e0000000
+monster-attribute	minecraft:zombified_piglin	minecraft:name_tag_distance	4050000000000000
+monster-attribute	minecraft:zombified_piglin	minecraft:oxygen_bonus	0
+monster-attribute	minecraft:zombified_piglin	minecraft:safe_fall_distance	4008000000000000
+monster-attribute	minecraft:zombified_piglin	minecraft:scale	3ff0000000000000
+monster-attribute	minecraft:zombified_piglin	minecraft:spawn_reinforcements	0
+monster-attribute	minecraft:zombified_piglin	minecraft:step_height	3fe3333333333333
+monster-attribute	minecraft:zombified_piglin	minecraft:water_movement_efficiency	0
+monster-attribute	minecraft:zombified_piglin	minecraft:waypoint_transmit_range	0
+monster-data	minecraft:zombified_piglin	16	Zombie	DATA_BABY_ID	8	false
+monster-data	minecraft:zombified_piglin	17	Zombie	DATA_SPECIAL_TYPE_ID	1	0
+monster-data	minecraft:zombified_piglin	18	Zombie	DATA_DROWNED_CONVERSION_ID	8	false
+monster-constructor	minecraft:spider	Monster	WallClimberNavigation	MoveControl	5	3fb33333	3f666666	3f266666	41800000
+monster-attribute	minecraft:spider	minecraft:air_drag_modifier	3ff0000000000000
+monster-attribute	minecraft:spider	minecraft:armor	0
+monster-attribute	minecraft:spider	minecraft:armor_toughness	0
+monster-attribute	minecraft:spider	minecraft:attack_damage	4000000000000000
+monster-attribute	minecraft:spider	minecraft:attack_knockback	0
+monster-attribute	minecraft:spider	minecraft:below_name_distance	4024000000000000
+monster-attribute	minecraft:spider	minecraft:bounciness	0
+monster-attribute	minecraft:spider	minecraft:burning_time	3ff0000000000000
+monster-attribute	minecraft:spider	minecraft:camera_distance	4010000000000000
+monster-attribute	minecraft:spider	minecraft:entity_interaction_range	4008000000000000
+monster-attribute	minecraft:spider	minecraft:explosion_knockback_resistance	0
+monster-attribute	minecraft:spider	minecraft:fall_damage_multiplier	3ff0000000000000
+monster-attribute	minecraft:spider	minecraft:follow_range	4030000000000000
+monster-attribute	minecraft:spider	minecraft:friction_modifier	3ff0000000000000
+monster-attribute	minecraft:spider	minecraft:gravity	3fb47ae147ae147b
+monster-attribute	minecraft:spider	minecraft:jump_strength	3fdae147a0000000
+monster-attribute	minecraft:spider	minecraft:knockback_resistance	0
+monster-attribute	minecraft:spider	minecraft:max_absorption	0
+monster-attribute	minecraft:spider	minecraft:max_health	4030000000000000
+monster-attribute	minecraft:spider	minecraft:movement_efficiency	0
+monster-attribute	minecraft:spider	minecraft:movement_speed	3fd3333340000000
+monster-attribute	minecraft:spider	minecraft:name_tag_distance	4050000000000000
+monster-attribute	minecraft:spider	minecraft:oxygen_bonus	0
+monster-attribute	minecraft:spider	minecraft:safe_fall_distance	4008000000000000
+monster-attribute	minecraft:spider	minecraft:scale	3ff0000000000000
+monster-attribute	minecraft:spider	minecraft:step_height	3fe3333333333333
+monster-attribute	minecraft:spider	minecraft:water_movement_efficiency	0
+monster-attribute	minecraft:spider	minecraft:waypoint_transmit_range	0
+monster-data	minecraft:spider	16	Spider	DATA_FLAGS_ID	0	0
+monster-constructor	minecraft:cave_spider	Spider	WallClimberNavigation	MoveControl	5	3f333333	3f000000	3ee66666	41400000
+monster-attribute	minecraft:cave_spider	minecraft:air_drag_modifier	3ff0000000000000
+monster-attribute	minecraft:cave_spider	minecraft:armor	0
+monster-attribute	minecraft:cave_spider	minecraft:armor_toughness	0
+monster-attribute	minecraft:cave_spider	minecraft:attack_damage	4000000000000000
+monster-attribute	minecraft:cave_spider	minecraft:attack_knockback	0
+monster-attribute	minecraft:cave_spider	minecraft:below_name_distance	4024000000000000
+monster-attribute	minecraft:cave_spider	minecraft:bounciness	0
+monster-attribute	minecraft:cave_spider	minecraft:burning_time	3ff0000000000000
+monster-attribute	minecraft:cave_spider	minecraft:camera_distance	4010000000000000
+monster-attribute	minecraft:cave_spider	minecraft:entity_interaction_range	4008000000000000
+monster-attribute	minecraft:cave_spider	minecraft:explosion_knockback_resistance	0
+monster-attribute	minecraft:cave_spider	minecraft:fall_damage_multiplier	3ff0000000000000
+monster-attribute	minecraft:cave_spider	minecraft:follow_range	4030000000000000
+monster-attribute	minecraft:cave_spider	minecraft:friction_modifier	3ff0000000000000
+monster-attribute	minecraft:cave_spider	minecraft:gravity	3fb47ae147ae147b
+monster-attribute	minecraft:cave_spider	minecraft:jump_strength	3fdae147a0000000
+monster-attribute	minecraft:cave_spider	minecraft:knockback_resistance	0
+monster-attribute	minecraft:cave_spider	minecraft:max_absorption	0
+monster-attribute	minecraft:cave_spider	minecraft:max_health	4028000000000000
+monster-attribute	minecraft:cave_spider	minecraft:movement_efficiency	0
+monster-attribute	minecraft:cave_spider	minecraft:movement_speed	3fd3333340000000
+monster-attribute	minecraft:cave_spider	minecraft:name_tag_distance	4050000000000000
+monster-attribute	minecraft:cave_spider	minecraft:oxygen_bonus	0
+monster-attribute	minecraft:cave_spider	minecraft:safe_fall_distance	4008000000000000
+monster-attribute	minecraft:cave_spider	minecraft:scale	3ff0000000000000
+monster-attribute	minecraft:cave_spider	minecraft:step_height	3fe3333333333333
+monster-attribute	minecraft:cave_spider	minecraft:water_movement_efficiency	0
+monster-attribute	minecraft:cave_spider	minecraft:waypoint_transmit_range	0
+monster-data	minecraft:cave_spider	16	Spider	DATA_FLAGS_ID	0	0
+monster-constructor	minecraft:slime	AbstractCubeMob	GroundPathNavigation	CubeMobMoveControl	0	3f051eb8	3f051eb8	3ea66666	41a00000
+monster-attribute	minecraft:slime	minecraft:air_drag_modifier	3ff0000000000000
+monster-attribute	minecraft:slime	minecraft:armor	0
+monster-attribute	minecraft:slime	minecraft:armor_toughness	0
+monster-attribute	minecraft:slime	minecraft:attack_damage	4000000000000000
+monster-attribute	minecraft:slime	minecraft:attack_knockback	0
+monster-attribute	minecraft:slime	minecraft:below_name_distance	4024000000000000
+monster-attribute	minecraft:slime	minecraft:bounciness	0
+monster-attribute	minecraft:slime	minecraft:burning_time	3ff0000000000000
+monster-attribute	minecraft:slime	minecraft:camera_distance	4010000000000000
+monster-attribute	minecraft:slime	minecraft:entity_interaction_range	4008000000000000
+monster-attribute	minecraft:slime	minecraft:explosion_knockback_resistance	0
+monster-attribute	minecraft:slime	minecraft:fall_damage_multiplier	3ff0000000000000
+monster-attribute	minecraft:slime	minecraft:follow_range	4030000000000000
+monster-attribute	minecraft:slime	minecraft:friction_modifier	3ff0000000000000
+monster-attribute	minecraft:slime	minecraft:gravity	3fb47ae147ae147b
+monster-attribute	minecraft:slime	minecraft:jump_strength	3fdae147a0000000
+monster-attribute	minecraft:slime	minecraft:knockback_resistance	0
+monster-attribute	minecraft:slime	minecraft:max_absorption	0
+monster-attribute	minecraft:slime	minecraft:max_health	4034000000000000
+monster-attribute	minecraft:slime	minecraft:movement_efficiency	0
+monster-attribute	minecraft:slime	minecraft:movement_speed	3fe6666666666666
+monster-attribute	minecraft:slime	minecraft:name_tag_distance	4050000000000000
+monster-attribute	minecraft:slime	minecraft:oxygen_bonus	0
+monster-attribute	minecraft:slime	minecraft:safe_fall_distance	4008000000000000
+monster-attribute	minecraft:slime	minecraft:scale	3ff0000000000000
+monster-attribute	minecraft:slime	minecraft:step_height	3fe3333333333333
+monster-attribute	minecraft:slime	minecraft:water_movement_efficiency	0
+monster-attribute	minecraft:slime	minecraft:waypoint_transmit_range	0
+monster-data	minecraft:slime	16	AgeableMob	DATA_BABY_ID	8	false
+monster-data	minecraft:slime	17	AgeableMob	AGE_LOCKED	8	false
+monster-data	minecraft:slime	18	AbstractCubeMob	ID_SIZE	1	1
+monster-constructor	minecraft:magma_cube	AbstractCubeMob	GroundPathNavigation	CubeMobMoveControl	0	3f051eb8	3f051eb8	3ea66666	41a00000
+monster-attribute	minecraft:magma_cube	minecraft:air_drag_modifier	3ff0000000000000
+monster-attribute	minecraft:magma_cube	minecraft:armor	0
+monster-attribute	minecraft:magma_cube	minecraft:armor_toughness	0
+monster-attribute	minecraft:magma_cube	minecraft:attack_damage	4000000000000000
+monster-attribute	minecraft:magma_cube	minecraft:attack_knockback	0
+monster-attribute	minecraft:magma_cube	minecraft:below_name_distance	4024000000000000
+monster-attribute	minecraft:magma_cube	minecraft:bounciness	0
+monster-attribute	minecraft:magma_cube	minecraft:burning_time	3ff0000000000000
+monster-attribute	minecraft:magma_cube	minecraft:camera_distance	4010000000000000
+monster-attribute	minecraft:magma_cube	minecraft:entity_interaction_range	4008000000000000
+monster-attribute	minecraft:magma_cube	minecraft:explosion_knockback_resistance	0
+monster-attribute	minecraft:magma_cube	minecraft:fall_damage_multiplier	3ff0000000000000
+monster-attribute	minecraft:magma_cube	minecraft:follow_range	4030000000000000
+monster-attribute	minecraft:magma_cube	minecraft:friction_modifier	3ff0000000000000
+monster-attribute	minecraft:magma_cube	minecraft:gravity	3fb47ae147ae147b
+monster-attribute	minecraft:magma_cube	minecraft:jump_strength	3fdae147a0000000
+monster-attribute	minecraft:magma_cube	minecraft:knockback_resistance	0
+monster-attribute	minecraft:magma_cube	minecraft:max_absorption	0
+monster-attribute	minecraft:magma_cube	minecraft:max_health	4034000000000000
+monster-attribute	minecraft:magma_cube	minecraft:movement_efficiency	0
+monster-attribute	minecraft:magma_cube	minecraft:movement_speed	3fc99999a0000000
+monster-attribute	minecraft:magma_cube	minecraft:name_tag_distance	4050000000000000
+monster-attribute	minecraft:magma_cube	minecraft:oxygen_bonus	0
+monster-attribute	minecraft:magma_cube	minecraft:safe_fall_distance	4008000000000000
+monster-attribute	minecraft:magma_cube	minecraft:scale	3ff0000000000000
+monster-attribute	minecraft:magma_cube	minecraft:step_height	3fe3333333333333
+monster-attribute	minecraft:magma_cube	minecraft:water_movement_efficiency	0
+monster-attribute	minecraft:magma_cube	minecraft:waypoint_transmit_range	0
+monster-data	minecraft:magma_cube	16	AgeableMob	DATA_BABY_ID	8	false
+monster-data	minecraft:magma_cube	17	AgeableMob	AGE_LOCKED	8	false
+monster-data	minecraft:magma_cube	18	AbstractCubeMob	ID_SIZE	1	1
+cube-load	minecraft:slime	-10	false	1	3ff0000000000000	3fd3333340000000	3ff0000000000000	0	3f800000	1	true
+cube-load	minecraft:slime	-10	true	1	4054400000000000	3fe8dd2f1a9fbe77	404b800000000000	0	42a20000	1	true
+cube-load	minecraft:slime	-1	false	1	3ff0000000000000	3fd3333340000000	3ff0000000000000	0	3f800000	1	true
+cube-load	minecraft:slime	-1	true	1	4054400000000000	3fe8dd2f1a9fbe77	404b800000000000	0	42a20000	1	true
+cube-load	minecraft:slime	0	false	1	3ff0000000000000	3fd3333340000000	3ff0000000000000	0	3f800000	1	true
+cube-load	minecraft:slime	0	true	1	4054400000000000	3fe8dd2f1a9fbe77	404b800000000000	0	42a20000	1	true
+cube-load	minecraft:slime	1	false	2	4010000000000000	3fd99999a0000000	4000000000000000	0	40800000	2	true
+cube-load	minecraft:slime	1	true	2	4054400000000000	3fe8dd2f1a9fbe77	404b800000000000	0	42a20000	2	true
+cube-load	minecraft:slime	2	false	3	4022000000000000	3fe0000000000000	4008000000000000	0	41100000	3	true
+cube-load	minecraft:slime	2	true	3	4054400000000000	3fe8dd2f1a9fbe77	404b800000000000	0	42a20000	3	true
+cube-load	minecraft:slime	126	false	127	40cf808000000000	4029ccccc0000000	405fc00000000000	0	44800000	127	true
+cube-load	minecraft:slime	126	true	127	4054400000000000	3fe8dd2f1a9fbe77	404b800000000000	0	42a20000	127	true
+cube-load	minecraft:slime	127	false	127	40cf808000000000	4029ccccc0000000	405fc00000000000	0	44800000	127	true
+cube-load	minecraft:slime	127	true	127	4054400000000000	3fe8dd2f1a9fbe77	404b800000000000	0	42a20000	127	true
+cube-load	minecraft:slime	128	false	127	40cf808000000000	4029ccccc0000000	405fc00000000000	0	44800000	127	true
+cube-load	minecraft:slime	128	true	127	4054400000000000	3fe8dd2f1a9fbe77	404b800000000000	0	42a20000	127	true
+cube-load	minecraft:slime	2147483647	false	1	3ff0000000000000	3fd3333340000000	3ff0000000000000	0	3f800000	1	true
+cube-load	minecraft:slime	2147483647	true	1	4054400000000000	3fe8dd2f1a9fbe77	404b800000000000	0	42a20000	1	true
+cube-load	minecraft:magma_cube	-10	false	1	3ff0000000000000	3fd3333340000000	3ff0000000000000	c03b000000000000	3f800000	1	true
+cube-load	minecraft:magma_cube	-10	true	1	4054400000000000	3fe8dd2f1a9fbe77	404b800000000000	c03b000000000000	42a20000	1	true
+cube-load	minecraft:magma_cube	-1	false	1	3ff0000000000000	3fd3333340000000	3ff0000000000000	0	3f800000	1	true
+cube-load	minecraft:magma_cube	-1	true	1	4054400000000000	3fe8dd2f1a9fbe77	404b800000000000	0	42a20000	1	true
+cube-load	minecraft:magma_cube	0	false	1	3ff0000000000000	3fd3333340000000	3ff0000000000000	4008000000000000	3f800000	1	true
+cube-load	minecraft:magma_cube	0	true	1	4054400000000000	3fe8dd2f1a9fbe77	404b800000000000	4008000000000000	42a20000	1	true
+cube-load	minecraft:magma_cube	1	false	2	4010000000000000	3fd99999a0000000	4000000000000000	4018000000000000	40800000	2	true
+cube-load	minecraft:magma_cube	1	true	2	4054400000000000	3fe8dd2f1a9fbe77	404b800000000000	4018000000000000	42a20000	2	true
+cube-load	minecraft:magma_cube	2	false	3	4022000000000000	3fe0000000000000	4008000000000000	4022000000000000	41100000	3	true
+cube-load	minecraft:magma_cube	2	true	3	4054400000000000	3fe8dd2f1a9fbe77	404b800000000000	4022000000000000	42a20000	3	true
+cube-load	minecraft:magma_cube	126	false	127	40cf808000000000	4029ccccc0000000	405fc00000000000	4077d00000000000	44800000	127	true
+cube-load	minecraft:magma_cube	126	true	127	4054400000000000	3fe8dd2f1a9fbe77	404b800000000000	4077d00000000000	42a20000	127	true
+cube-load	minecraft:magma_cube	127	false	127	40cf808000000000	4029ccccc0000000	405fc00000000000	4078000000000000	44800000	127	true
+cube-load	minecraft:magma_cube	127	true	127	4054400000000000	3fe8dd2f1a9fbe77	404b800000000000	4078000000000000	42a20000	127	true
+cube-load	minecraft:magma_cube	128	false	127	40cf808000000000	4029ccccc0000000	405fc00000000000	4078300000000000	44800000	127	true
+cube-load	minecraft:magma_cube	128	true	127	4054400000000000	3fe8dd2f1a9fbe77	404b800000000000	4078300000000000	42a20000	127	true
+cube-load	minecraft:magma_cube	2147483647	false	1	3ff0000000000000	3fd3333340000000	3ff0000000000000	c1e0000000000000	3f800000	1	true
+cube-load	minecraft:magma_cube	2147483647	true	1	4054400000000000	3fe8dd2f1a9fbe77	404b800000000000	c1e0000000000000	42a20000	1	true
+zombie-villager-random	0	minecraft:plains	minecraft:none	1	-3109364765729502342
+zombie-villager-random	1	minecraft:plains	minecraft:none	1	1853403699951111791
+zombie-villager-random	2	minecraft:plains	minecraft:toolsmith	1	5411842376618821008
+zombie-villager-random	3	minecraft:plains	minecraft:weaponsmith	1	-8072133231410116475
+zombie-villager-random	12345	minecraft:plains	minecraft:armorer	1	-8979699159253079774
+zombie-villager-random	-1	minecraft:plains	minecraft:leatherworker	1	8108487875070533655
+zombie-villager-random	-9223372036854775808	minecraft:plains	minecraft:none	1	-3109364765729502342
+zombie-villager-random	9223372036854775807	minecraft:plains	minecraft:leatherworker	1	8108487875070533655

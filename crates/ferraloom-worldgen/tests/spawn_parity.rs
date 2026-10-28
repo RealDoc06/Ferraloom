@@ -65,6 +65,9 @@ impl SpawnWorld for CollisionWorld {
             has_skylight: true,
             fast_lava: false,
             coordinate_scale: 1.0,
+            infiniburn: ferraloom_worldgen::structure::processor::BlockSet::Tag(
+                "minecraft:infiniburn_overworld".parse().unwrap(),
+            ),
         }
     }
     fn ensure_chunk(&mut self, _: [i32; 2]) -> Result<(), Error> {
@@ -153,7 +156,7 @@ struct SpiralWorld {
 }
 impl SpawnWorld for SpiralWorld {
     fn dimension(&self) -> DimensionType {
-        self.dimension
+        self.dimension.clone()
     }
     fn ensure_chunk(&mut self, p: [i32; 2]) -> Result<(), Error> {
         self.visited.push(p);
@@ -207,7 +210,7 @@ fn initial_spawn_spiral_and_selection_match_real_vanilla_control_flow() {
         }
         let stem = loaded.as_ref().unwrap().dimensions.overworld();
         let mut world = SpiralWorld {
-            dimension: stem.dimension,
+            dimension: stem.dimension.clone(),
             hit: case["hit"].as_i64().unwrap() as i32,
             visited: Vec::new(),
         };

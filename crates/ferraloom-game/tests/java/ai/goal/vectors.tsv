@@ -1,0 +1,83 @@
+selector	priority	add,a,5,MOVE+LOOK	-	a:5:false/
+selector	priority	add,b,5,MOVE	-	a:5:false,b:5:false/
+selector	priority	add,c,1,LOOK	-	a:5:false,b:5:false,c:1:false/
+selector	priority	add,d,6,MOVE	-	a:5:false,b:5:false,c:1:false,d:6:false/
+selector	priority	tick	a.use|a.start|a.interrupt|a.interrupt|c.use|a.stop|c.start|a.interrupt|c.tick	a:5:false,b:5:false,c:1:true,d:6:false/MOVE:a,LOOK:c
+selector	priority	tick	c.continue|c.interrupt|b.use|b.start|b.interrupt|b.tick|c.tick	a:5:false,b:5:true,c:1:true,d:6:false/MOVE:b,LOOK:c
+selector	priority	continue,c,false	-	a:5:false,b:5:true,c:1:true,d:6:false/MOVE:b,LOOK:c
+selector	priority	tick	b.continue|c.continue|c.stop|b.interrupt|c.use|c.start|b.interrupt|b.tick|c.tick	a:5:false,b:5:true,c:1:true,d:6:false/MOVE:b,LOOK:c
+selector	priority	disable,LOOK	-	a:5:false,b:5:true,c:1:true,d:6:false/MOVE:b,LOOK:c
+selector	priority	tick	b.continue|c.stop|b.interrupt|b.tick	a:5:false,b:5:true,c:1:false,d:6:false/MOVE:b
+selector	priority	enable,LOOK	-	a:5:false,b:5:true,c:1:false,d:6:false/MOVE:b
+selector	priority	tick	b.continue|b.interrupt|c.use|c.start|b.interrupt|b.tick|c.tick	a:5:false,b:5:true,c:1:true,d:6:false/MOVE:b,LOOK:c
+selector	interrupt	add,a,5,MOVE	-	a:5:false/
+selector	interrupt	interrupt,a,false	-	a:5:false/
+selector	interrupt	tick	a.use|a.start|a.tick	a:5:true/MOVE:a
+selector	interrupt	add,b,1,MOVE	-	a:5:true,b:1:false/MOVE:a
+selector	interrupt	tick	a.continue|a.interrupt|a.tick	a:5:true,b:1:false/MOVE:a
+selector	interrupt	interrupt,a,true	-	a:5:true,b:1:false/MOVE:a
+selector	interrupt	tick	a.continue|a.interrupt|b.use|a.stop|b.start|b.tick	a:5:false,b:1:true/MOVE:b
+selector	interrupt	continue,b,false	-	a:5:false,b:1:true/MOVE:b
+selector	interrupt	use,b,false	-	a:5:false,b:1:true/MOVE:b
+selector	interrupt	tick	b.continue|b.stop|a.use|a.start|a.interrupt|b.use|a.tick	a:5:true,b:1:false/MOVE:a
+selector	cadence	add,a,1,MOVE	-	a:1:false/
+selector	cadence	add,b,1,LOOK	-	a:1:false,b:1:false/
+selector	cadence	every,b,true	-	a:1:false,b:1:false/
+selector	cadence	tick	a.use|a.start|b.use|b.start|a.tick|b.tick	a:1:true,b:1:true/MOVE:a,LOOK:b
+selector	cadence	disable,MOVE	-	a:1:true,b:1:true/MOVE:a,LOOK:b
+selector	cadence	continue,b,false	-	a:1:true,b:1:true/MOVE:a,LOOK:b
+selector	cadence	fast	a.every|b.every|b.tick	a:1:true,b:1:true/MOVE:a,LOOK:b
+selector	cadence	force	a.tick|b.tick	a:1:true,b:1:true/MOVE:a,LOOK:b
+selector	cadence	tick	a.stop|b.continue|b.stop|b.use|b.start|b.tick	a:1:false,b:1:true/LOOK:b
+selector	cadence	enable,MOVE	-	a:1:false,b:1:true/LOOK:b
+selector	cadence	tick	b.continue|b.stop|a.use|a.start|b.use|b.start|a.tick|b.tick	a:1:true,b:1:true/MOVE:a,LOOK:b
+selector	identity	add,a,5,MOVE	-	a:5:false/
+selector	identity	add,a,1,MOVE	-	a:5:false/
+selector	identity	add,b,2,LOOK	-	a:5:false,b:2:false/
+selector	identity	tick	a.use|a.start|b.use|b.start|a.tick|b.tick	a:5:true,b:2:true/MOVE:a,LOOK:b
+selector	identity	remove,a	a.stop	b:2:true/MOVE:a,LOOK:b
+selector	identity	force	b.tick	b:2:true/MOVE:a,LOOK:b
+selector	identity	tick	b.continue|b.tick	b:2:true/LOOK:b
+selector	identity	add,a,3,MOVE	-	b:2:true,a:3:false/LOOK:b
+selector	identity	tick	b.continue|a.use|a.start|b.tick|a.tick	b:2:true,a:3:true/MOVE:a,LOOK:b
+selector	identity	removeAll,ab	b.predicate|b.stop|a.predicate|a.stop|b.predicate|a.predicate	/MOVE:a,LOOK:b
+selector	identity	tick	-	/
+selector	flags	add,a,2,MOVE+JUMP	-	a:2:false/
+selector	flags	add,b,1,LOOK+TARGET	-	a:2:false,b:1:false/
+selector	flags	tick	a.use|a.start|b.use|b.start|a.tick|b.tick	a:2:true,b:1:true/MOVE:a,LOOK:b,JUMP:a,TARGET:b
+selector	flags	flags,a,LOOK	-	a:2:true,b:1:true/MOVE:a,LOOK:b,JUMP:a,TARGET:b
+selector	flags	tick	a.continue|b.continue|a.tick|b.tick	a:2:true,b:1:true/MOVE:a,LOOK:b,JUMP:a,TARGET:b
+selector	flags	flags,b,-	-	a:2:true,b:1:true/MOVE:a,LOOK:b,JUMP:a,TARGET:b
+selector	flags	disable,LOOK	-	a:2:true,b:1:true/MOVE:a,LOOK:b,JUMP:a,TARGET:b
+selector	flags	tick	a.stop|b.continue|b.tick	a:2:false,b:1:true/LOOK:b,TARGET:b
+selector	flags	enable,LOOK	-	a:2:false,b:1:true/LOOK:b,TARGET:b
+selector	flags	tick	b.continue|b.interrupt|b.tick	a:2:false,b:1:true/LOOK:b,TARGET:b
+selector	no-goal	add,a,2147483647,MOVE	-	a:2147483647:false/
+selector	no-goal	add,b,2147483647,-	-	a:2147483647:false,b:2147483647:false/
+selector	no-goal	tick	b.use|b.start|b.tick	a:2147483647:false,b:2147483647:true/
+selector	no-goal	remove,b	b.stop	a:2147483647:false/
+selector	no-goal	add,a,-2147483648,MOVE	-	a:2147483647:false/
+selector	no-goal	tick	-	a:2147483647:false/
+selector	no-goal	remove,a	-	/
+selector	no-goal	add,a,-2147483648,MOVE	-	a:-2147483648:false/
+selector	no-goal	tick	a.use|a.start|a.tick	a:-2147483648:true/MOVE:a
+delay	false	-2147483648	1073741824
+delay	false	-3	-1
+delay	false	-2	-1
+delay	false	-1	0
+delay	false	0	0
+delay	false	1	1
+delay	false	2	1
+delay	false	3	2
+delay	false	7	4
+delay	false	2147483647	1073741824
+delay	true	-2147483648	-2147483648
+delay	true	-3	-3
+delay	true	-2	-2
+delay	true	-1	-1
+delay	true	0	0
+delay	true	1	1
+delay	true	2	2
+delay	true	3	3
+delay	true	7	7
+delay	true	2147483647	2147483647

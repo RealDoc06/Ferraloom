@@ -31,6 +31,12 @@ impl Level {
     }
     fn stack_parts(&self, slot: ContainerSlot) -> Result<(&StackGenerations, &ItemStack, usize)> {
         match slot.container {
+            ContainerHandle::PlayerEnderChest(entity) => self
+                .entity::<ServerPlayer>(entity)?
+                .get_ender_chest_inventory()
+                .contents()
+                .stack_parts(slot.slot)
+                .ok_or(MenuError::InvalidSlot(slot.slot as i32)),
             ContainerHandle::PlayerInventory(entity) => {
                 let player = self.entity::<ServerPlayer>(entity)?;
                 player
@@ -95,6 +101,9 @@ impl Level {
         slot: ContainerSlot,
     ) -> Result<(&mut StackGenerations, &mut ItemStack, usize)> {
         match slot.container {
+            ContainerHandle::PlayerEnderChest(entity) => self.entity_mut::<ServerPlayer>(entity)?
+                .get_ender_chest_inventory_mut().contents_mut().stack_parts_mut(slot.slot)
+                .ok_or(MenuError::InvalidSlot(slot.slot as i32)),
             ContainerHandle::PlayerInventory(entity) => {
                 let player = self.entity_mut::<ServerPlayer>(entity)?;
                 player
@@ -179,18 +188,18 @@ impl Level {
             ContainerHandle::PlayerInventory(_)
             | ContainerHandle::MenuListenerCopies { .. }
             | ContainerHandle::MenuOperationStacks { .. } => {}
-            ContainerHandle::Entity(entity) | ContainerHandle::LivingEquipment(entity) => {
-                self.retain_entity(entity)?
-            }
+            ContainerHandle::Entity(entity)
+            | ContainerHandle::LivingEquipment(entity)
+            | ContainerHandle::PlayerEnderChest(entity) => self.retain_entity(entity)?,
         }
         Ok(())
     }
     fn release_stack_owner(&mut self, owner: ContainerHandle) {
         match owner {
             ContainerHandle::BlockEntity(handle) => self.release_block_entity(handle),
-            ContainerHandle::Entity(entity) | ContainerHandle::LivingEquipment(entity) => {
-                self.release_entity(entity)
-            }
+            ContainerHandle::Entity(entity)
+            | ContainerHandle::LivingEquipment(entity)
+            | ContainerHandle::PlayerEnderChest(entity) => self.release_entity(entity),
             ContainerHandle::MenuLocal { player, menu, .. }
             | ContainerHandle::MenuCarried { player, menu } => {
                 if let Ok(player) = self.entity_mut::<ServerPlayer>(player)

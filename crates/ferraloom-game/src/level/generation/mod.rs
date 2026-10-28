@@ -5,6 +5,7 @@ mod live_holder;
 mod proto;
 mod pyramid;
 mod range;
+mod registries;
 mod task;
 pub use context::WorldGenContext;
 pub use ferraloom_worldgen::region::ChunkStatus;
@@ -18,4 +19,5 @@ pub use pyramid::{
     status_name,
 };
 pub use range::ChunkRangeFuture;
+pub use registries::WorldGenRegistries;
 pub use task::{ChunkGenerationTask, GenerationChunkHolder, GenerationError, GenerationLayer};

@@ -148,3 +148,6 @@ pub fn check_neighbour_blocks<E>(
     }
     Ok(fallback)
 }
+
+pub(super) mod prepared;
+pub use prepared::WalkNodeEvaluator;

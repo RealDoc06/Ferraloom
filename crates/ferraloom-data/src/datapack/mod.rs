@@ -2,7 +2,11 @@
 
 use serde_json::Value;
 mod block_state;
+mod config;
+pub mod metadata;
+pub mod repository;
 pub use block_state::decode_block_state;
+pub use config::{DataPackConfig, FeatureFlags, WorldDataConfiguration};
 pub mod tags;
 pub use tags::{StaticTagElement, TagElement, TagId, TagKey, TagSet};
 
@@ -86,6 +90,7 @@ pub enum Error {
     InvalidTag(String),
     InvalidData(String),
     MissingResource(Identifier),
+    UnsupportedPack { pack: String, operation: String },
 }
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -97,6 +102,9 @@ impl fmt::Display for Error {
             Self::InvalidData(s) => write!(f, "invalid resource data: {s}"),
             Self::InvalidTag(s) => write!(f, "invalid tag: {s}"),
             Self::MissingResource(id) => write!(f, "missing resource: {id}"),
+            Self::UnsupportedPack { pack, operation } => {
+                write!(f, "Unsupported datapack {pack}: {operation}")
+            }
         }
     }
 }
@@ -182,27 +190,57 @@ impl Pack {
     }
     /// Accepts both the extracted server jar and Mojang's executable bundle.
     pub fn vanilla_jar(path: &Path) -> Result<Self, Error> {
-        let mut archive = zip::ZipArchive::new(fs::File::open(path)?)?;
-        if archive
-            .file_names()
-            .any(|name| name.starts_with("data/minecraft/"))
-        {
-            return Self::from_zip("vanilla", archive.into_inner());
-        }
-        let mut versions = String::new();
-        archive
-            .by_name("META-INF/versions.list")?
-            .read_to_string(&mut versions)?;
-        let jar = versions
-            .lines()
-            .find_map(|line| line.split('\t').nth(2))
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "empty server bundle"))?;
-        let mut bytes = Vec::new();
-        archive
-            .by_name(&format!("META-INF/versions/{jar}"))?
-            .read_to_end(&mut bytes)?;
-        Self::from_zip("vanilla", Cursor::new(bytes))
+        Self::from_zip("vanilla", Cursor::new(vanilla_archive(path)?))
     }
+    pub(super) fn from_zip_root(
+        name: impl Into<String>,
+        reader: impl Read + Seek,
+        prefix: &str,
+    ) -> Result<Self, Error> {
+        let mut archive = zip::ZipArchive::new(reader)?;
+        let mut pack = Self::new(name);
+        for i in 0..archive.len() {
+            let mut file = archive.by_index(i)?;
+            if file.is_file()
+                && let Some(id) = file.name().strip_prefix(prefix).and_then(resource_id)
+            {
+                let mut bytes = Vec::new();
+                file.read_to_end(&mut bytes)?;
+                pack.insert(id, bytes);
+            }
+        }
+        Ok(pack)
+    }
+    pub(super) fn overlay(&mut self, overlay: Self) {
+        self.resources.extend(overlay.resources);
+    }
+}
+/// Shared executable-bundle ingress for the base pack and built-in feature packs.
+fn vanilla_archive(path: &Path) -> Result<Arc<[u8]>, Error> {
+    let mut archive = zip::ZipArchive::new(fs::File::open(path)?)?;
+    if archive
+        .file_names()
+        .any(|name| name.starts_with("data/minecraft/"))
+    {
+        let mut file = archive.into_inner();
+        file.rewind()?;
+        let mut bytes = Vec::new();
+        file.read_to_end(&mut bytes)?;
+        return Ok(bytes.into());
+    }
+    let mut versions = String::new();
+    archive
+        .by_name("META-INF/versions.list")?
+        .read_to_string(&mut versions)?;
+    let jar = versions
+        .lines()
+        .find_map(|line| line.split('\t').nth(2))
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "empty server bundle"))?;
+    let mut bytes = Vec::new();
+    archive
+        .by_name(&format!("META-INF/versions/{jar}"))?
+        .read_to_end(&mut bytes)?;
+    Ok(bytes.into())
 }
 fn resource_id(path: &str) -> Option<Identifier> {
     let (namespace, path) = path.strip_prefix("data/")?.split_once('/')?;
@@ -224,9 +262,42 @@ impl Resource<'_> {
         strict_json(self.bytes)
     }
 }
+// Resource#openAsReader uses the JDK UTF-8 decoder's replacement policy.
+// An encoded surrogate (ED A0..BF xx) consumes its complete continuation prefix
+// as one malformed input; Rust's from_utf8_lossy instead replaces its bytes.
+pub fn read_utf8(bytes: &[u8]) -> String {
+    let mut output = String::new();
+    let mut start = 0;
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == 0xed
+            && bytes
+                .get(index + 1)
+                .is_some_and(|byte| (0xa0..=0xbf).contains(byte))
+        {
+            output.push_str(&String::from_utf8_lossy(&bytes[start..index]));
+            output.push('\u{fffd}');
+            index += 2;
+            if bytes
+                .get(index)
+                .is_some_and(|byte| (0x80..=0xbf).contains(byte))
+            {
+                index += 1;
+            }
+            start = index;
+        } else {
+            index += 1;
+        }
+    }
+    output.push_str(&String::from_utf8_lossy(&bytes[start..]));
+    output
+}
+
 /// Port of StrictJsonParser. Gson retains the final duplicate object key and
 /// skips the end-of-document check for a null root; streaming preserves both.
 fn strict_json(bytes: &[u8]) -> Result<Value, Error> {
+    let text = read_utf8(bytes);
+    let bytes = text.as_bytes();
     let mut decoder = serde_json::Deserializer::from_slice(bytes);
     decoder.disable_recursion_limit();
     let mut stream = decoder.into_iter::<Value>();

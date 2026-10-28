@@ -3,6 +3,8 @@
 mod cases;
 #[path = "command_paths/harness.rs"]
 mod harness;
+#[path = "command_paths/place_template.rs"]
+mod place_template;
 #[path = "command_paths/placement_nbt.rs"]
 mod placement_nbt;
 
@@ -21,6 +23,7 @@ family!(parity_paths_chat, "chat");
 family!(parity_paths_players, "players");
 family!(parity_paths_admin, "admin");
 family!(parity_paths_placement, "placement");
+family!(parity_paths_place_template, "place_template");
 family!(parity_paths_placement_nbt, "placement_nbt");
 
 family!(parity_paths_give, "give");

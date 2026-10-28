@@ -1,0 +1,688 @@
+mob-constructor	0	5	40a72bcf	41200000	3d93cb799b3970be
+mob-constructor	1	4	3f219c52	41200000	68fb0e6f684df992
+mob-constructor	2	5	3febf288	41200000	e6c5459001105f17
+mob-constructor	7	3	408062b8	41200000	bfc9945a02770b39
+mob-constructor	98	1	3f41c644	41200000	2d7e6185e8c3ae73
+mob-constructor	1234	10	3fd0ef78	41200000	f38c2dda3cc8eb78
+mob-constructor	-1	5	4030c224	41200000	32420168c4bff9e
+mob-constructor	-9223372036854775808	5	40a72bcf	41200000	3d93cb799b3970be
+mob-malus	0	false	false	false	false	bf800000	3fc00000	40f80000
+mob-malus	0	false	false	false	true	bf800000	3fc00000	40f80000
+mob-malus	0	false	false	true	false	bf800000	3fc00000	40f80000
+mob-malus	0	false	false	true	true	bf800000	3fc00000	40f80000
+mob-malus	0	false	true	false	false	bf800000	3fc00000	40f80000
+mob-malus	0	false	true	false	true	bf800000	3fc00000	40f80000
+mob-malus	0	false	true	true	false	bf800000	3fc00000	40f80000
+mob-malus	0	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	0	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	0	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	0	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	0	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	0	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	0	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	0	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	0	true	true	true	true	40f80000	40f80000	40f80000
+mob-malus	1	false	false	false	false	0	3fc00000	40f80000
+mob-malus	1	false	false	false	true	0	3fc00000	40f80000
+mob-malus	1	false	false	true	false	0	3fc00000	40f80000
+mob-malus	1	false	false	true	true	0	3fc00000	40f80000
+mob-malus	1	false	true	false	false	0	3fc00000	40f80000
+mob-malus	1	false	true	false	true	0	3fc00000	40f80000
+mob-malus	1	false	true	true	false	0	3fc00000	40f80000
+mob-malus	1	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	1	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	1	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	1	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	1	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	1	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	1	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	1	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	1	true	true	true	true	40f80000	40f80000	40f80000
+mob-malus	2	false	false	false	false	0	3fc00000	40f80000
+mob-malus	2	false	false	false	true	0	3fc00000	40f80000
+mob-malus	2	false	false	true	false	0	3fc00000	40f80000
+mob-malus	2	false	false	true	true	0	3fc00000	40f80000
+mob-malus	2	false	true	false	false	0	3fc00000	40f80000
+mob-malus	2	false	true	false	true	0	3fc00000	40f80000
+mob-malus	2	false	true	true	false	0	3fc00000	40f80000
+mob-malus	2	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	2	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	2	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	2	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	2	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	2	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	2	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	2	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	2	true	true	true	true	40f80000	40f80000	40f80000
+mob-malus	3	false	false	false	false	0	3fc00000	40f80000
+mob-malus	3	false	false	false	true	0	3fc00000	40f80000
+mob-malus	3	false	false	true	false	0	3fc00000	40f80000
+mob-malus	3	false	false	true	true	0	3fc00000	40f80000
+mob-malus	3	false	true	false	false	0	3fc00000	40f80000
+mob-malus	3	false	true	false	true	0	3fc00000	40f80000
+mob-malus	3	false	true	true	false	0	3fc00000	40f80000
+mob-malus	3	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	3	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	3	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	3	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	3	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	3	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	3	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	3	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	3	true	true	true	true	40f80000	40f80000	40f80000
+mob-malus	4	false	false	false	false	0	3fc00000	40f80000
+mob-malus	4	false	false	false	true	0	3fc00000	40f80000
+mob-malus	4	false	false	true	false	0	3fc00000	40f80000
+mob-malus	4	false	false	true	true	0	3fc00000	40f80000
+mob-malus	4	false	true	false	false	0	3fc00000	40f80000
+mob-malus	4	false	true	false	true	0	3fc00000	40f80000
+mob-malus	4	false	true	true	false	0	3fc00000	40f80000
+mob-malus	4	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	4	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	4	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	4	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	4	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	4	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	4	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	4	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	4	true	true	true	true	40f80000	40f80000	40f80000
+mob-malus	5	false	false	false	false	bf800000	3fc00000	40f80000
+mob-malus	5	false	false	false	true	bf800000	3fc00000	40f80000
+mob-malus	5	false	false	true	false	bf800000	3fc00000	40f80000
+mob-malus	5	false	false	true	true	bf800000	3fc00000	40f80000
+mob-malus	5	false	true	false	false	bf800000	3fc00000	40f80000
+mob-malus	5	false	true	false	true	bf800000	3fc00000	40f80000
+mob-malus	5	false	true	true	false	bf800000	3fc00000	40f80000
+mob-malus	5	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	5	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	5	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	5	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	5	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	5	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	5	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	5	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	5	true	true	true	true	40f80000	40f80000	40f80000
+mob-malus	6	false	false	false	false	0	3fc00000	40f80000
+mob-malus	6	false	false	false	true	0	3fc00000	40f80000
+mob-malus	6	false	false	true	false	0	3fc00000	40f80000
+mob-malus	6	false	false	true	true	0	3fc00000	40f80000
+mob-malus	6	false	true	false	false	0	3fc00000	40f80000
+mob-malus	6	false	true	false	true	0	3fc00000	40f80000
+mob-malus	6	false	true	true	false	0	3fc00000	40f80000
+mob-malus	6	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	6	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	6	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	6	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	6	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	6	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	6	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	6	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	6	true	true	true	true	40f80000	40f80000	40f80000
+mob-malus	7	false	false	false	false	bf800000	3fc00000	40f80000
+mob-malus	7	false	false	false	true	bf800000	3fc00000	40f80000
+mob-malus	7	false	false	true	false	bf800000	3fc00000	40f80000
+mob-malus	7	false	false	true	true	bf800000	3fc00000	40f80000
+mob-malus	7	false	true	false	false	bf800000	3fc00000	40f80000
+mob-malus	7	false	true	false	true	bf800000	3fc00000	40f80000
+mob-malus	7	false	true	true	false	bf800000	3fc00000	40f80000
+mob-malus	7	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	7	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	7	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	7	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	7	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	7	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	7	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	7	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	7	true	true	true	true	40f80000	40f80000	40f80000
+mob-malus	8	false	false	false	false	bf800000	3fc00000	40f80000
+mob-malus	8	false	false	false	true	bf800000	3fc00000	40f80000
+mob-malus	8	false	false	true	false	bf800000	3fc00000	40f80000
+mob-malus	8	false	false	true	true	bf800000	3fc00000	40f80000
+mob-malus	8	false	true	false	false	bf800000	3fc00000	40f80000
+mob-malus	8	false	true	false	true	bf800000	3fc00000	40f80000
+mob-malus	8	false	true	true	false	bf800000	3fc00000	40f80000
+mob-malus	8	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	8	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	8	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	8	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	8	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	8	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	8	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	8	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	8	true	true	true	true	40f80000	40f80000	40f80000
+mob-malus	9	false	false	false	false	41000000	3fc00000	40f80000
+mob-malus	9	false	false	false	true	41000000	3fc00000	40f80000
+mob-malus	9	false	false	true	false	41000000	3fc00000	40f80000
+mob-malus	9	false	false	true	true	41000000	3fc00000	40f80000
+mob-malus	9	false	true	false	false	41000000	3fc00000	40f80000
+mob-malus	9	false	true	false	true	41000000	3fc00000	40f80000
+mob-malus	9	false	true	true	false	41000000	3fc00000	40f80000
+mob-malus	9	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	9	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	9	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	9	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	9	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	9	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	9	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	9	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	9	true	true	true	true	40f80000	40f80000	40f80000
+mob-malus	10	false	false	false	false	41000000	3fc00000	40f80000
+mob-malus	10	false	false	false	true	41000000	3fc00000	40f80000
+mob-malus	10	false	false	true	false	41000000	3fc00000	40f80000
+mob-malus	10	false	false	true	true	41000000	3fc00000	40f80000
+mob-malus	10	false	true	false	false	41000000	3fc00000	40f80000
+mob-malus	10	false	true	false	true	41000000	3fc00000	40f80000
+mob-malus	10	false	true	true	false	41000000	3fc00000	40f80000
+mob-malus	10	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	10	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	10	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	10	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	10	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	10	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	10	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	10	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	10	true	true	true	true	40f80000	40f80000	40f80000
+mob-malus	11	false	false	false	false	0	3fc00000	40f80000
+mob-malus	11	false	false	false	true	0	3fc00000	40f80000
+mob-malus	11	false	false	true	false	0	3fc00000	40f80000
+mob-malus	11	false	false	true	true	0	3fc00000	40f80000
+mob-malus	11	false	true	false	false	0	3fc00000	40f80000
+mob-malus	11	false	true	false	true	0	3fc00000	40f80000
+mob-malus	11	false	true	true	false	0	3fc00000	40f80000
+mob-malus	11	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	11	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	11	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	11	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	11	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	11	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	11	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	11	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	11	true	true	true	true	40f80000	40f80000	40f80000
+mob-malus	12	false	false	false	false	bf800000	3fc00000	40f80000
+mob-malus	12	false	false	false	true	bf800000	3fc00000	40f80000
+mob-malus	12	false	false	true	false	bf800000	3fc00000	40f80000
+mob-malus	12	false	false	true	true	bf800000	3fc00000	40f80000
+mob-malus	12	false	true	false	false	bf800000	3fc00000	40f80000
+mob-malus	12	false	true	false	true	bf800000	3fc00000	40f80000
+mob-malus	12	false	true	true	false	bf800000	3fc00000	40f80000
+mob-malus	12	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	12	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	12	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	12	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	12	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	12	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	12	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	12	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	12	true	true	true	true	40f80000	40f80000	40f80000
+mob-malus	13	false	false	false	false	41800000	3fc00000	40f80000
+mob-malus	13	false	false	false	true	41800000	3fc00000	40f80000
+mob-malus	13	false	false	true	false	41800000	3fc00000	40f80000
+mob-malus	13	false	false	true	true	41800000	3fc00000	40f80000
+mob-malus	13	false	true	false	false	41800000	3fc00000	40f80000
+mob-malus	13	false	true	false	true	41800000	3fc00000	40f80000
+mob-malus	13	false	true	true	false	41800000	3fc00000	40f80000
+mob-malus	13	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	13	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	13	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	13	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	13	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	13	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	13	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	13	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	13	true	true	true	true	40f80000	40f80000	40f80000
+mob-malus	14	false	false	false	false	bf800000	3fc00000	40f80000
+mob-malus	14	false	false	false	true	bf800000	3fc00000	40f80000
+mob-malus	14	false	false	true	false	bf800000	3fc00000	40f80000
+mob-malus	14	false	false	true	true	bf800000	3fc00000	40f80000
+mob-malus	14	false	true	false	false	bf800000	3fc00000	40f80000
+mob-malus	14	false	true	false	true	bf800000	3fc00000	40f80000
+mob-malus	14	false	true	true	false	bf800000	3fc00000	40f80000
+mob-malus	14	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	14	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	14	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	14	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	14	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	14	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	14	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	14	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	14	true	true	true	true	40f80000	40f80000	40f80000
+mob-malus	15	false	false	false	false	41000000	3fc00000	40f80000
+mob-malus	15	false	false	false	true	41000000	3fc00000	40f80000
+mob-malus	15	false	false	true	false	41000000	3fc00000	40f80000
+mob-malus	15	false	false	true	true	41000000	3fc00000	40f80000
+mob-malus	15	false	true	false	false	41000000	3fc00000	40f80000
+mob-malus	15	false	true	false	true	41000000	3fc00000	40f80000
+mob-malus	15	false	true	true	false	41000000	3fc00000	40f80000
+mob-malus	15	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	15	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	15	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	15	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	15	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	15	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	15	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	15	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	15	true	true	true	true	40f80000	40f80000	40f80000
+mob-malus	16	false	false	false	false	bf800000	3fc00000	40f80000
+mob-malus	16	false	false	false	true	bf800000	3fc00000	40f80000
+mob-malus	16	false	false	true	false	bf800000	3fc00000	40f80000
+mob-malus	16	false	false	true	true	bf800000	3fc00000	40f80000
+mob-malus	16	false	true	false	false	bf800000	3fc00000	40f80000
+mob-malus	16	false	true	false	true	bf800000	3fc00000	40f80000
+mob-malus	16	false	true	true	false	bf800000	3fc00000	40f80000
+mob-malus	16	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	16	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	16	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	16	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	16	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	16	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	16	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	16	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	16	true	true	true	true	40f80000	40f80000	40f80000
+mob-malus	17	false	false	false	false	0	3fc00000	40f80000
+mob-malus	17	false	false	false	true	0	3fc00000	40f80000
+mob-malus	17	false	false	true	false	0	3fc00000	40f80000
+mob-malus	17	false	false	true	true	0	3fc00000	40f80000
+mob-malus	17	false	true	false	false	0	3fc00000	40f80000
+mob-malus	17	false	true	false	true	0	3fc00000	40f80000
+mob-malus	17	false	true	true	false	0	3fc00000	40f80000
+mob-malus	17	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	17	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	17	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	17	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	17	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	17	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	17	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	17	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	17	true	true	true	true	40f80000	40f80000	40f80000
+mob-malus	18	false	false	false	false	bf800000	3fc00000	40f80000
+mob-malus	18	false	false	false	true	bf800000	3fc00000	40f80000
+mob-malus	18	false	false	true	false	bf800000	3fc00000	40f80000
+mob-malus	18	false	false	true	true	bf800000	3fc00000	40f80000
+mob-malus	18	false	true	false	false	bf800000	3fc00000	40f80000
+mob-malus	18	false	true	false	true	bf800000	3fc00000	40f80000
+mob-malus	18	false	true	true	false	bf800000	3fc00000	40f80000
+mob-malus	18	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	18	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	18	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	18	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	18	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	18	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	18	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	18	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	18	true	true	true	true	40f80000	40f80000	40f80000
+mob-malus	19	false	false	false	false	bf800000	3fc00000	40f80000
+mob-malus	19	false	false	false	true	bf800000	3fc00000	40f80000
+mob-malus	19	false	false	true	false	bf800000	3fc00000	40f80000
+mob-malus	19	false	false	true	true	bf800000	3fc00000	40f80000
+mob-malus	19	false	true	false	false	bf800000	3fc00000	40f80000
+mob-malus	19	false	true	false	true	bf800000	3fc00000	40f80000
+mob-malus	19	false	true	true	false	bf800000	3fc00000	40f80000
+mob-malus	19	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	19	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	19	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	19	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	19	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	19	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	19	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	19	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	19	true	true	true	true	40f80000	40f80000	40f80000
+mob-malus	20	false	false	false	false	40800000	3fc00000	40f80000
+mob-malus	20	false	false	false	true	40800000	3fc00000	40f80000
+mob-malus	20	false	false	true	false	40800000	3fc00000	40f80000
+mob-malus	20	false	false	true	true	40800000	3fc00000	40f80000
+mob-malus	20	false	true	false	false	40800000	3fc00000	40f80000
+mob-malus	20	false	true	false	true	40800000	3fc00000	40f80000
+mob-malus	20	false	true	true	false	40800000	3fc00000	40f80000
+mob-malus	20	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	20	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	20	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	20	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	20	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	20	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	20	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	20	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	20	true	true	true	true	40f80000	40f80000	40f80000
+mob-malus	21	false	false	false	false	bf800000	3fc00000	40f80000
+mob-malus	21	false	false	false	true	bf800000	3fc00000	40f80000
+mob-malus	21	false	false	true	false	bf800000	3fc00000	40f80000
+mob-malus	21	false	false	true	true	bf800000	3fc00000	40f80000
+mob-malus	21	false	true	false	false	bf800000	3fc00000	40f80000
+mob-malus	21	false	true	false	true	bf800000	3fc00000	40f80000
+mob-malus	21	false	true	true	false	bf800000	3fc00000	40f80000
+mob-malus	21	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	21	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	21	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	21	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	21	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	21	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	21	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	21	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	21	true	true	true	true	40f80000	40f80000	40f80000
+mob-malus	22	false	false	false	false	41000000	3fc00000	40f80000
+mob-malus	22	false	false	false	true	41000000	3fc00000	40f80000
+mob-malus	22	false	false	true	false	41000000	3fc00000	40f80000
+mob-malus	22	false	false	true	true	41000000	3fc00000	40f80000
+mob-malus	22	false	true	false	false	41000000	3fc00000	40f80000
+mob-malus	22	false	true	false	true	41000000	3fc00000	40f80000
+mob-malus	22	false	true	true	false	41000000	3fc00000	40f80000
+mob-malus	22	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	22	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	22	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	22	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	22	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	22	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	22	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	22	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	22	true	true	true	true	40f80000	40f80000	40f80000
+mob-malus	23	false	false	false	false	0	3fc00000	40f80000
+mob-malus	23	false	false	false	true	0	3fc00000	40f80000
+mob-malus	23	false	false	true	false	0	3fc00000	40f80000
+mob-malus	23	false	false	true	true	0	3fc00000	40f80000
+mob-malus	23	false	true	false	false	0	3fc00000	40f80000
+mob-malus	23	false	true	false	true	0	3fc00000	40f80000
+mob-malus	23	false	true	true	false	0	3fc00000	40f80000
+mob-malus	23	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	23	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	23	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	23	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	23	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	23	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	23	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	23	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	23	true	true	true	true	40f80000	40f80000	40f80000
+mob-malus	24	false	false	false	false	0	3fc00000	40f80000
+mob-malus	24	false	false	false	true	0	3fc00000	40f80000
+mob-malus	24	false	false	true	false	0	3fc00000	40f80000
+mob-malus	24	false	false	true	true	0	3fc00000	40f80000
+mob-malus	24	false	true	false	false	0	3fc00000	40f80000
+mob-malus	24	false	true	false	true	0	3fc00000	40f80000
+mob-malus	24	false	true	true	false	0	3fc00000	40f80000
+mob-malus	24	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	24	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	24	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	24	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	24	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	24	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	24	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	24	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	24	true	true	true	true	40f80000	40f80000	40f80000
+mob-malus	25	false	false	false	false	0	3fc00000	40f80000
+mob-malus	25	false	false	false	true	0	3fc00000	40f80000
+mob-malus	25	false	false	true	false	0	3fc00000	40f80000
+mob-malus	25	false	false	true	true	0	3fc00000	40f80000
+mob-malus	25	false	true	false	false	0	3fc00000	40f80000
+mob-malus	25	false	true	false	true	0	3fc00000	40f80000
+mob-malus	25	false	true	true	false	0	3fc00000	40f80000
+mob-malus	25	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	25	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	25	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	25	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	25	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	25	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	25	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	25	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	25	true	true	true	true	40f80000	40f80000	40f80000
+mob-malus	26	false	false	false	false	40800000	3fc00000	40f80000
+mob-malus	26	false	false	false	true	40800000	3fc00000	40f80000
+mob-malus	26	false	false	true	false	40800000	3fc00000	40f80000
+mob-malus	26	false	false	true	true	40800000	3fc00000	40f80000
+mob-malus	26	false	true	false	false	40800000	3fc00000	40f80000
+mob-malus	26	false	true	false	true	40800000	3fc00000	40f80000
+mob-malus	26	false	true	true	false	40800000	3fc00000	40f80000
+mob-malus	26	false	true	true	true	40f80000	40f80000	40f80000
+mob-malus	26	true	false	false	false	c0100000	3fc00000	40f80000
+mob-malus	26	true	false	false	true	c0100000	3fc00000	40f80000
+mob-malus	26	true	false	true	false	c0100000	3fc00000	40f80000
+mob-malus	26	true	false	true	true	c0100000	3fc00000	40f80000
+mob-malus	26	true	true	false	false	c0100000	3fc00000	40f80000
+mob-malus	26	true	true	false	true	c0100000	3fc00000	40f80000
+mob-malus	26	true	true	true	false	c0100000	3fc00000	40f80000
+mob-malus	26	true	true	true	true	40f80000	40f80000	40f80000
+mob-fall	0	false	0	3
+mob-fall	0	false	3f800000	3
+mob-fall	0	false	40a00000	3
+mob-fall	0	false	40d33333	3
+mob-fall	0	false	41200000	3
+mob-fall	0	false	419ffdf4	3
+mob-fall	0	false	41a00000	3
+mob-fall	0	false	7fc00000	3
+mob-fall	0	false	7f800000	3
+mob-fall	0	true	0	3
+mob-fall	0	true	3f800000	3
+mob-fall	0	true	40a00000	3
+mob-fall	0	true	40d33333	3
+mob-fall	0	true	41200000	3
+mob-fall	0	true	419ffdf4	3
+mob-fall	0	true	41a00000	3
+mob-fall	0	true	7fc00000	3
+mob-fall	0	true	7f800000	3
+mob-fall	1	false	0	3
+mob-fall	1	false	3f800000	3
+mob-fall	1	false	40a00000	3
+mob-fall	1	false	40d33333	3
+mob-fall	1	false	41200000	3
+mob-fall	1	false	419ffdf4	3
+mob-fall	1	false	41a00000	3
+mob-fall	1	false	7fc00000	3
+mob-fall	1	false	7f800000	3
+mob-fall	1	true	0	3
+mob-fall	1	true	3f800000	3
+mob-fall	1	true	40a00000	3
+mob-fall	1	true	40d33333	3
+mob-fall	1	true	41200000	3
+mob-fall	1	true	419ffdf4	3
+mob-fall	1	true	41a00000	3
+mob-fall	1	true	7fc00000	3
+mob-fall	1	true	7f800000	3
+mob-fall	2	false	0	3
+mob-fall	2	false	3f800000	3
+mob-fall	2	false	40a00000	3
+mob-fall	2	false	40d33333	3
+mob-fall	2	false	41200000	3
+mob-fall	2	false	419ffdf4	3
+mob-fall	2	false	41a00000	3
+mob-fall	2	false	7fc00000	3
+mob-fall	2	false	7f800000	3
+mob-fall	2	true	0	3
+mob-fall	2	true	3f800000	3
+mob-fall	2	true	40a00000	3
+mob-fall	2	true	40d33333	3
+mob-fall	2	true	41200000	5
+mob-fall	2	true	419ffdf4	5
+mob-fall	2	true	41a00000	5
+mob-fall	2	true	7fc00000	3
+mob-fall	2	true	7f800000	5
+mob-fall	3	false	0	3
+mob-fall	3	false	3f800000	3
+mob-fall	3	false	40a00000	3
+mob-fall	3	false	40d33333	3
+mob-fall	3	false	41200000	3
+mob-fall	3	false	419ffdf4	3
+mob-fall	3	false	41a00000	3
+mob-fall	3	false	7fc00000	3
+mob-fall	3	false	7f800000	3
+mob-fall	3	true	0	3
+mob-fall	3	true	3f800000	3
+mob-fall	3	true	40a00000	4
+mob-fall	3	true	40d33333	6
+mob-fall	3	true	41200000	9
+mob-fall	3	true	419ffdf4	9
+mob-fall	3	true	41a00000	9
+mob-fall	3	true	7fc00000	3
+mob-fall	3	true	7f800000	9
+mob-target	0	survival	false	false	false	false	true	false
+mob-target	0	survival	false	true	false	false	true	false
+mob-target	0	survival	true	false	false	false	true	false
+mob-target	0	survival	true	true	false	false	true	false
+mob-target	0	creative	false	false	false	false	true	false
+mob-target	0	creative	false	true	false	false	true	false
+mob-target	0	creative	true	false	false	false	true	false
+mob-target	0	creative	true	true	false	false	true	false
+mob-target	0	spectator	false	false	false	false	true	false
+mob-target	0	spectator	false	true	false	false	true	false
+mob-target	0	spectator	true	false	false	false	true	false
+mob-target	0	spectator	true	true	false	false	true	false
+mob-target	1	survival	false	false	false	false	true	false
+mob-target	1	survival	false	true	true	true	true	true
+mob-target	1	survival	true	false	false	false	true	false
+mob-target	1	survival	true	true	false	false	true	false
+mob-target	1	creative	false	false	false	false	true	false
+mob-target	1	creative	false	true	false	false	true	true
+mob-target	1	creative	true	false	false	false	true	false
+mob-target	1	creative	true	true	false	false	true	false
+mob-target	1	spectator	false	false	false	false	true	false
+mob-target	1	spectator	false	true	false	false	true	false
+mob-target	1	spectator	true	false	false	false	true	false
+mob-target	1	spectator	true	true	false	false	true	false
+mob-target	2	survival	false	false	false	false	true	false
+mob-target	2	survival	false	true	true	true	true	true
+mob-target	2	survival	true	false	false	false	true	false
+mob-target	2	survival	true	true	false	false	true	false
+mob-target	2	creative	false	false	false	false	true	false
+mob-target	2	creative	false	true	false	false	true	true
+mob-target	2	creative	true	false	false	false	true	false
+mob-target	2	creative	true	true	false	false	true	false
+mob-target	2	spectator	false	false	false	false	true	false
+mob-target	2	spectator	false	true	false	false	true	false
+mob-target	2	spectator	true	false	false	false	true	false
+mob-target	2	spectator	true	true	false	false	true	false
+mob-target	3	survival	false	false	false	false	true	false
+mob-target	3	survival	false	true	true	true	true	true
+mob-target	3	survival	true	false	false	false	true	false
+mob-target	3	survival	true	true	false	false	true	false
+mob-target	3	creative	false	false	false	false	true	false
+mob-target	3	creative	false	true	false	false	true	true
+mob-target	3	creative	true	false	false	false	true	false
+mob-target	3	creative	true	true	false	false	true	false
+mob-target	3	spectator	false	false	false	false	true	false
+mob-target	3	spectator	false	true	false	false	true	false
+mob-target	3	spectator	true	false	false	false	true	false
+mob-target	3	spectator	true	true	false	false	true	false
+mob-tick	-2147483648	1	false	false	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	-2147483648	1	false	true	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	-2147483648	1	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	-2147483648	1	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	-2147483648	2	false	false	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	-2147483648	2	false	true	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	-2147483648	2	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	-2147483648	2	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	-2147483648	-2147483648	false	false	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	-2147483648	-2147483648	false	true	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	-2147483648	-2147483648	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	-2147483648	-2147483648	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	-2147483648	2147483647	false	false	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	-2147483648	2147483647	false	true	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	-2147483648	2147483647	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	-2147483648	2147483647	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	-1	1	false	false	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	-1	1	false	true	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	-1	1	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	-1	1	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	-1	2	false	false	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	-1	2	false	true	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	-1	2	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	-1	2	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	-1	-2147483648	false	false	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	-1	-2147483648	false	true	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	-1	-2147483648	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	-1	-2147483648	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	-1	2147483647	false	false	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	-1	2147483647	false	true	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	-1	2147483647	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	-1	2147483647	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	0	1	false	false	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	0	1	false	true	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	0	1	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	0	1	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	0	2	false	false	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	0	2	false	true	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	0	2	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	0	2	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	0	-2147483648	false	false	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	0	-2147483648	false	true	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	0	-2147483648	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	0	-2147483648	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	0	2147483647	false	false	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	0	2147483647	false	true	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	0	2147483647	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	0	2147483647	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	1	1	false	false	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	1	1	false	true	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	1	1	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	1	1	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	1	2	false	false	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	1	2	false	true	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	1	2	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	1	2	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	1	-2147483648	false	false	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	1	-2147483648	false	true	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	1	-2147483648	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	1	-2147483648	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	1	2147483647	false	false	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	1	2147483647	false	true	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	1	2147483647	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	1	2147483647	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	2	1	false	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	2	1	false	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	2	1	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	2	1	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	2	2	false	false	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	2	2	false	true	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	2	2	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	2	2	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	2	-2147483648	false	false	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	2	-2147483648	false	true	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	2	-2147483648	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	2	-2147483648	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	2	2147483647	false	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	2	2147483647	false	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	2	2147483647	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	2	2147483647	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	3	1	false	false	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	3	1	false	true	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	3	1	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	3	1	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	3	2	false	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	3	2	false	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	3	2	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	3	2	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	3	-2147483648	false	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	3	-2147483648	false	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	3	-2147483648	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	3	-2147483648	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	3	2147483647	false	false	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	3	2147483647	false	true	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	3	2147483647	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	3	2147483647	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	4	1	false	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	4	1	false	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	4	1	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	4	1	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	4	2	false	false	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	4	2	false	true	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	4	2	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	4	2	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	4	-2147483648	false	false	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	4	-2147483648	false	true	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	4	-2147483648	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	4	-2147483648	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	4	2147483647	false	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	4	2147483647	false	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	4	2147483647	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	4	2147483647	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	2147483647	1	false	false	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	2147483647	1	false	true	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	2147483647	1	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	2147483647	1	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	2147483647	2	false	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	2147483647	2	false	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	2147483647	2	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	2147483647	2	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	2147483647	-2147483648	false	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	2147483647	-2147483648	false	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	2147483647	-2147483648	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	2147483647	-2147483648	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	2147483647	2147483647	false	false	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	2147483647	2147483647	false	true	sensing:-2147483648;target:full;goal:full;navigation;custom;move;look;jump
+mob-tick	2147483647	2147483647	true	false	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump
+mob-tick	2147483647	2147483647	true	true	sensing:-2147483648;target:running:false;goal:running:false;navigation;custom;move;look;jump

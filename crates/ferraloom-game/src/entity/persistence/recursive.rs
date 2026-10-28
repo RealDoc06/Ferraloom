@@ -27,11 +27,14 @@ pub fn load_entity_recursive(
     load(tag, request, level, &mut post_load)
 }
 
-fn load(
+/// Port of EntityType#create(ValueInput, Level, EntitySpawnRequest). Only the
+/// receiver is loaded; saved Passengers are deliberately not constructed.
+/// The unpublished receiver owns one counted retain, which the caller releases
+/// on every exit. Unlike loadStaticEntity, malformed entity loads propagate.
+pub fn create_entity_from_tag(
     tag: &CompoundTag,
     request: EntitySpawnRequest,
     level: &mut Level,
-    post_load: &mut impl FnMut(EntityRef, &mut Level) -> Result<(), LevelError>,
 ) -> Result<Option<EntityRef>, EntityPersistenceError> {
     let kind = tag
         .get_string("id")
@@ -53,15 +56,31 @@ fn load(
         return Ok(None);
     }
     let entity = level.prepare_unmanaged_entity(kind)?;
-    let result = (|| {
-        match load_in_place(entity, tag, level) {
-            Ok(()) => {}
-            Err(error @ EntityPersistenceError::Base(_)) => {
-                eprintln!("Exception loading entity: {error}");
-                return Ok(None);
-            }
-            Err(error) => return Err(error),
+    if let Err(error) = load_in_place(entity, tag, level) {
+        level.release_entity(entity);
+        return Err(error);
+    }
+    Ok(Some(entity))
+}
+
+fn load(
+    tag: &CompoundTag,
+    request: EntitySpawnRequest,
+    level: &mut Level,
+    post_load: &mut impl FnMut(EntityRef, &mut Level) -> Result<(), LevelError>,
+) -> Result<Option<EntityRef>, EntityPersistenceError> {
+    let entity = match create_entity_from_tag(tag, request, level) {
+        Ok(Some(entity)) => entity,
+        Ok(None) => return Ok(None),
+        Err(error @ EntityPersistenceError::Base(_)) => {
+            // EntityType#loadStaticEntity catches malformed native loads;
+            // required unported behavior remains an error in either API.
+            eprintln!("Exception loading entity: {error}");
+            return Ok(None);
         }
+        Err(error) => return Err(error),
+    };
+    let result = (|| {
         post_load(entity, level)?;
         if let Some(passengers) = tag.get_list("Passengers") {
             for passenger_tag in passengers.iter().filter_map(Tag::as_compound) {

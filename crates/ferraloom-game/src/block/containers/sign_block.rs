@@ -112,6 +112,86 @@ impl BlockBehavior for SignBlock {
                 .allowed_player_editor
                 .is_none_or(|editor| editor == player.uuid)
         {
+            if item == ferraloom_data::Item::HONEYCOMB {
+                let slot =
+                    crate::block::interaction::hand_slot(level, context.player, context.hand)?;
+                let mut operation = crate::inventory::StackOperation::new(level);
+                let receiver = operation
+                    .pin(slot)
+                    .map_err(crate::item::stack::receiver_error)?;
+                return operation.level.with_block_entity_callback(handle, |level| {
+                    // The outer operation keeps this receiver pinned through
+                    // sign notifications, game-event listeners and consumption.
+                    if !crate::item::honeycomb::try_apply_to_sign(handle, level)? {
+                        return Ok(InteractionResult::TryWithEmptyHand);
+                    }
+                    let sign = level.block_entity::<SignBlockEntity>(handle)?;
+                    let text = if front {
+                        &sign.front_text
+                    } else {
+                        &sign.back_text
+                    };
+                    let filtered = level
+                        .entity::<ServerPlayer>(context.player)?
+                        .is_text_filtering_enabled();
+                    let lines = if filtered {
+                        text.filtered_messages.as_ref().unwrap_or(&text.messages)
+                    } else {
+                        &text.messages
+                    };
+                    let commands = lines.iter().any(|line| command(&line.style.click_event));
+                    if commands && sign.allow_op_features {
+                        return Err(LevelError::UnsupportedBlockMethod(
+                            state.block(),
+                            BlockMethod::UseItemOn,
+                        ));
+                    }
+                    if commands {
+                        let mut content =
+                            Component::translatable("sign.click_actions_disabled", Vec::new());
+                        content.style.color = Some(TextColor::parse("red").expect("native color"));
+                        level.emit(LevelEffect::PlayerPacket {
+                            recipients: vec![context.player],
+                            packet: Box::new(cb::Packet::SystemChat(Box::new(cb::SystemChat {
+                                content,
+                                overlay: true,
+                            }))),
+                        });
+                    }
+                    let item = level
+                        .stack(receiver)
+                        .map_err(crate::item::stack::receiver_error)?
+                        .item();
+                    crate::stats::award_stat(
+                        level,
+                        context.player,
+                        crate::stats::Stat::Used(item),
+                        1,
+                    )?;
+                    let sign_state = level
+                        .block_entity::<SignBlockEntity>(handle)?
+                        .parent
+                        .block_state;
+                    level.game_event(
+                        ferraloom_data::registries::game_event::Id::BLOCK_CHANGE,
+                        Vec3::new(
+                            handle.pos.x as f64 + 0.5,
+                            handle.pos.y as f64 + 0.5,
+                            handle.pos.z as f64 + 0.5,
+                        ),
+                        Some(context.player),
+                        Some(sign_state),
+                    )?;
+                    if !level.entity::<ServerPlayer>(context.player)?.instabuild() {
+                        let stack = level
+                            .stack_mut(receiver)
+                            .map_err(crate::item::stack::receiver_error)?;
+                        let count = crate::entity::player::inventory::count(stack);
+                        crate::entity::player::inventory::set_count(stack, count.wrapping_sub(1));
+                    }
+                    Ok(InteractionResult::SUCCESS)
+                });
+            }
             // Applicator canApply/tryApply must produce a real query result; a
             // skipped effect cannot manufacture TRY_WITH_EMPTY_HAND or success.
             return Err(LevelError::UnsupportedBlockMethod(
