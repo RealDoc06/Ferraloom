@@ -56,7 +56,7 @@ impl MoveControl {
 /// Port of MoveControl#rotlerp. Only one revolution is corrected, preserving
 /// native endpoint and out-of-range behavior rather than applying a modulo.
 pub fn rotlerp(from: f32, to: f32, max: f32) -> f32 {
-    let mut diff = mth::wrap_degrees(to - from);
+    let mut diff = mth::wrap_degrees_f32(to - from);
     if diff > max {
         diff = max;
     }
@@ -73,7 +73,7 @@ pub fn rotlerp(from: f32, to: f32, max: f32) -> f32 {
 }
 /// Port of Control#rotateTowards; this deliberately does not normalize the result.
 pub fn rotate_towards(from: f32, to: f32, max: f32) -> f32 {
-    from + mth::clamp(mth::degrees_difference(from, to), -max, max)
+    from + mth::clamp_f32(mth::degrees_difference(from, to), -max, max)
 }
 /// Port of LookControl's retained target and two-tick cooldown.
 #[derive(Debug, Default)]

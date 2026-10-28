@@ -29,6 +29,8 @@ pub enum AiOperation {
     TickRunningGoals(goal::SelectorKind),
     GoalSelectorMutation,
     NavigationTick,
+    NavigationIsDone,
+    NavigationPathType,
     Navigation(NavigationKind),
     MoveControlTick,
     MoveControl(MoveControlKind),
@@ -44,6 +46,8 @@ impl AiOperation {
             Self::TickSelector(_) => "GoalSelector#tick",
             Self::TickRunningGoals(_) => "GoalSelector#tickRunningGoals",
             Self::GoalSelectorMutation => "GoalSelector structural mutation during a goal callback",
+            Self::NavigationIsDone => "PathNavigation#isDone",
+            Self::NavigationPathType => "NodeEvaluator#getPathType",
             Self::NavigationTick => "PathNavigation#tick",
             Self::Navigation(NavigationKind::Ground) => "GroundPathNavigation#tick",
             Self::Navigation(NavigationKind::Water) => "WaterBoundPathNavigation#tick",
@@ -126,10 +130,10 @@ pub struct MobAi {
     pub target_selector: goal::GoalSelector,
     pub goals: GoalArena,
     pub navigation: Unported,
-    pub move_control: Unported,
-    pub look_control: Unported,
-    pub jump_control: Unported,
-    pub body_rotation_control: Unported,
+    pub move_control: control::MoveControl,
+    pub look_control: control::LookControl,
+    pub jump_control: control::JumpControl,
+    pub body_rotation_control: control::BodyRotationControl,
     pub sensing: Unported,
 }
 impl MobAi {
@@ -140,10 +144,10 @@ impl MobAi {
             target_selector: Default::default(),
             goals: Default::default(),
             navigation: Unported::new(AiOperation::Navigation(navigation)),
-            move_control: Unported::new(AiOperation::MoveControl(MoveControlKind::Ground)),
-            look_control: Unported::new(AiOperation::LookControl),
-            jump_control: Unported::new(AiOperation::JumpControl),
-            body_rotation_control: Unported::new(AiOperation::BodyRotationControl),
+            move_control: Default::default(),
+            look_control: Default::default(),
+            jump_control: Default::default(),
+            body_rotation_control: Default::default(),
             sensing: Unported::new(AiOperation::Sensing),
         }
     }
@@ -176,7 +180,7 @@ mod pending_tests {
             .add_entity(entity, EntityState::Cow(Box::new(cow)))
             .unwrap();
         type Entry = fn(EntityRef, &mut Level) -> Result<(), LevelError>;
-        let entries: [(AiOperation, Entry); 9] = [
+        let entries: [(AiOperation, Entry); 6] = [
             (AiOperation::Sensing, sensing::tick),
             (
                 AiOperation::TickSelector(goal::SelectorKind::Goal),
@@ -195,9 +199,6 @@ mod pending_tests {
                 |id, l| goal::tick_running_goals(id, goal::SelectorKind::Target, false, l),
             ),
             (AiOperation::NavigationTick, navigation::tick),
-            (AiOperation::MoveControlTick, control::tick_move),
-            (AiOperation::LookControl, control::tick_look),
-            (AiOperation::JumpControl, control::tick_jump),
         ];
         let mut captured = Vec::new();
         for (operation, entry) in entries {
