@@ -1,3 +1,32 @@
+use crate::entity::{LivingEntity, Mob, PathfinderMob};
+
+/// Port of Monster's canonical PathfinderMob parent and constructor XP reward.
+#[derive(Debug)]
+pub struct Monster {
+    pub parent: PathfinderMob,
+}
+impl Monster {
+    /// Port of Monster#Monster. Mob owns the sole XP reward and AI state.
+    pub fn with_parent(mut parent: Mob) -> Self {
+        parent.xp_reward = 5;
+        Self {
+            parent: PathfinderMob::with_parent(parent),
+        }
+    }
+    pub fn as_mob(&self) -> &Mob {
+        &self.parent.parent
+    }
+    pub fn as_mob_mut(&mut self) -> &mut Mob {
+        &mut self.parent.parent
+    }
+    pub fn as_living(&self) -> &LivingEntity {
+        &self.as_mob().parent
+    }
+    pub fn as_living_mut(&mut self) -> &mut LivingEntity {
+        &mut self.as_mob_mut().parent
+    }
+}
+
 pub mod cubemob;
 pub mod spider;
 pub mod zombie;
