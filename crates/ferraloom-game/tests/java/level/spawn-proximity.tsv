@@ -1,0 +1,12 @@
+counter	0	0	TRUE
+counter	5	5	TRUE
+counter	6	0	DEFAULT
+counter	8	0	DEFAULT
+counter	9	0	FALSE
+removed	0	0	FALSE
+player	8	0	8.0	64.0	8.0	false	false
+player	8	0	8.0001	64.0	8.0	false	true
+player	8	0	7.9999	64.0	8.0	false	false
+player	6	6	8.0	64.0	8.0	false	false
+player	6	5	8.0	10000.0	8.0	false	true
+player	6	5	8.0	64.0	8.0	true	false

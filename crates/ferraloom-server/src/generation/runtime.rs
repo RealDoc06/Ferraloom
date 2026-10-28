@@ -1007,6 +1007,11 @@ impl GenerationRuntime {
 }
 
 impl AcquireDriver for GenerationRuntime {
+    fn natural_spawn_chunk_distance(&self, pos: ChunkPos) -> Result<i32, LevelError> {
+        let mut manager = self.distance_manager.borrow_mut();
+        manager.natural_spawn.run_all_updates();
+        Ok(manager.natural_spawn.level(pos))
+    }
     /// Port of ChunkMap#updatePlayerStatus: use the canonical DistanceManager.
     fn update_player_tracking_status(
         &self,
