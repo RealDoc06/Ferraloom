@@ -34,3 +34,6 @@
 
 # Release-only compiled original exporter bundle.
 /exporters/
+
+# Ferraloom: shared caches in the main checkout and on the builder (decompiled source, vanilla jars, JDK).
+/.cache/
