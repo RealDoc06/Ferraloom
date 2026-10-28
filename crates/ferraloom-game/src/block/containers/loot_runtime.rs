@@ -143,6 +143,7 @@ impl LootRuntime for LiveLootRuntime<'_> {
         }
         let custom_name = match receiver {
             BlockEntityState::Banner(entity) => entity.custom_name.clone(),
+            BlockEntityState::Beacon(entity) => entity.custom_name.clone(),
             BlockEntityState::EnchantingTable(entity) => entity.custom_name.clone(),
             _ => receiver
                 .container()

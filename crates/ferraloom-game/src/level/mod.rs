@@ -271,6 +271,7 @@ pub struct LevelRules {
     pub keep_inventory: bool,
     pub limited_crafting: bool,
     pub send_command_feedback: bool,
+    pub spawner_blocks_work: bool,
     pub natural_health_regeneration: bool,
     pub debug: bool,
     pub can_have_weather: bool,
@@ -318,6 +319,7 @@ impl Default for LevelRules {
             keep_inventory: damage_default(GameRule::KeepInventory),
             limited_crafting: damage_default(GameRule::LimitedCrafting),
             send_command_feedback: damage_default(GameRule::SendCommandFeedback),
+            spawner_blocks_work: damage_default(GameRule::SpawnerBlocksWork),
             natural_health_regeneration: damage_default(GameRule::NaturalHealthRegeneration),
             debug: false,
             can_have_weather: true,
@@ -632,9 +634,11 @@ impl Level {
             .set(chunk.publication_generation);
         chunk.staged_publication = None;
         chunk.loaded.set(true);
-        region
-            .block_entity_state
-            .prepare_published_chunk(&mut chunk, region.game_time);
+        region.block_entity_state.prepare_published_chunk(
+            &mut chunk,
+            region.game_time,
+            region.min_y,
+        );
         let block_ticks = std::mem::take(&mut chunk.block_ticks);
         let fluid_ticks = std::mem::take(&mut chunk.fluid_ticks);
         // Listener roots must resolve the canonical receiver before native

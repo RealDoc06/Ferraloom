@@ -118,17 +118,30 @@ fn native_honeycomb_use_keeps_context_receiver_chest_effect_order_and_rng() {
         let f = line.split('\t').collect::<Vec<_>>();
         let old = BlockState::from_id(f[1].parse().unwrap()).unwrap();
         let separate = f[2] == "true";
-        // The native waxing result is captured above, but this receiver cannot
-        // be attached until the canonical CopperGolemStatue BE factory lands.
-        // Keep its required error explicit; these eight cases are not matches.
+        // The typed factory is available; native waxing still waits for the
+        // statue removal callback. These eight runtime cases remain pending.
         if old
             .block()
             .is_instance_of(BlockClass::CopperGolemStatueBlock)
         {
+            let receiver = entity::create(pos, old).unwrap();
             assert!(
-                matches!(entity::create(pos, old), Err(LevelError::UnsupportedBlockEntity(block)) if block == old.block()),
+                matches!(receiver, entity::BlockEntityState::CopperGolemStatue(_)),
                 "{line}"
             );
+            let data = receiver.data();
+            assert_eq!(
+                data.kind,
+                entity::BlockEntityType::COPPER_GOLEM_STATUE,
+                "{line}"
+            );
+            assert_eq!((data.pos, data.block_state), (pos, old), "{line}");
+            assert_eq!(
+                data.components,
+                ferraloom_protocol::component::DataComponentMap::default(),
+                "{line}"
+            );
+            assert!(!data.has_level && !data.removed, "{line}");
             pending_statues += 1;
             continue;
         }

@@ -4,7 +4,7 @@ use ferraloom_protocol::{
     component::{DataComponent, DataComponentMap},
 };
 
-pub(super) fn load(
+pub(crate) fn load(
     tag: Option<&CompoundTag>,
     registries: &dyn ferraloom_protocol::codec::RegistryContext,
 ) -> DataComponentMap {
@@ -27,6 +27,9 @@ pub(super) fn load(
                         }
                     })
             })
+            // DataComponentMap.CODEC retains valid entries as its partial;
+            // reuse each value codec's validator before keeping that entry.
+            .filter(|value| value.to_persistent().is_ok())
             .collect(),
     }
 }

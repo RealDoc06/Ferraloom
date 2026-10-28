@@ -1,5 +1,6 @@
 //! Vanilla's status graph and owned generation tasks. Runtime owns executors;
 //! no job borrows a live Level or chooses integration order by completion time.
+mod center;
 mod context;
 mod live_holder;
 mod proto;
@@ -7,6 +8,7 @@ mod pyramid;
 mod range;
 mod registries;
 mod task;
+pub use center::PreparedCenterStep;
 pub use context::WorldGenContext;
 pub use ferraloom_worldgen::region::ChunkStatus;
 pub use live_holder::{
