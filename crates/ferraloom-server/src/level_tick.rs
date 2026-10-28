@@ -29,9 +29,12 @@ impl MinecraftServer {
             .map_err(game_error)?;
         if runs {
             self.live_level_in_mut(dimension)?.level.tick_world_border();
+            let advance_weather = self
+                .game_rules
+                .boolean(ferraloom_game::gamerules::GameRule::AdvanceWeather);
             self.live_level_in_mut(dimension)?
                 .level
-                .advance_weather_cycle(true)
+                .advance_weather_cycle(advance_weather)
                 .map_err(game_error)?;
             self.apply_level_effects_in(dimension)?;
         }
@@ -322,10 +325,18 @@ impl MinecraftServer {
                 effect @ (LevelEffect::CheckLight(_) | LevelEffect::SectionEmptiness { .. }) => {
                     lighting.push(effect)
                 }
-                LevelEffect::WeatherEvent { event, param } => self.broadcast_in_level(
-                    dimension,
-                    cb::Packet::GameEvent(cb::GameEvent { event, param }),
-                )?,
+                LevelEffect::WeatherEvent {
+                    event,
+                    param,
+                    global,
+                } => {
+                    let packet = cb::Packet::GameEvent(cb::GameEvent { event, param });
+                    if global {
+                        self.broadcast(packet);
+                    } else {
+                        self.broadcast_in_level(dimension, packet)?;
+                    }
+                }
                 LevelEffect::LevelEvent { pos, id, data } => self.broadcast_in_level(
                     dimension,
                     cb::Packet::LevelEvent(cb::LevelEvent {

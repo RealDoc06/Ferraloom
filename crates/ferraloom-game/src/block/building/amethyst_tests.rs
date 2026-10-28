@@ -47,7 +47,7 @@ static TAGS: LazyLock<NativeTags> = LazyLock::new(|| {
     }
 });
 
-fn level(origin: BlockPos) -> Level {
+pub(super) fn level(origin: BlockPos) -> Level {
     let mut level = Level::new(Region::new(&EMPTY), LevelContext::fixture(0, 63));
     level.set_block_tags(Arc::clone(&TAGS.blocks));
     level.set_fluid_tags(Arc::clone(&TAGS.fluids));

@@ -133,6 +133,7 @@ impl Client {
         ))
         .await?;
         let mut registries = RegistrySet {
+            resources: std::sync::Arc::new(ferraloom_data::datapack::ResourceManager::default()),
             entries: BTreeMap::new(),
             tags: common::clientbound::UpdateTags { tags: Vec::new() },
         };

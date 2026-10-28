@@ -8,6 +8,8 @@ use ferraloom_protocol::component::{ComponentTypeId, DataComponentMap};
 pub struct ChestBlockEntity {
     pub parent: RandomizableContainerBlockEntity,
     pub open_count: i32,
+    /// ContainerOpenersCounter's transient search radius, updated after opener callbacks.
+    pub max_interaction_range: f64,
     pub lid_open: bool,
 }
 impl ChestBlockEntity {
@@ -15,6 +17,7 @@ impl ChestBlockEntity {
         Self {
             parent: RandomizableContainerBlockEntity::new(parent, 27),
             open_count: 0,
+            max_interaction_range: 0.0,
             lid_open: false,
         }
     }
@@ -73,12 +76,12 @@ impl BlockEntity for StorageBehavior {
         &self,
         state: &mut BlockEntityState,
         tag: &CompoundTag,
-        _registries: &dyn ferraloom_protocol::codec::RegistryContext,
+        registries: &dyn ferraloom_protocol::codec::RegistryContext,
     ) {
         state
             .randomizable_mut()
             .expect("randomizable container")
-            .load(tag);
+            .load(tag, registries);
     }
     fn save_additional(&self, state: &BlockEntityState) -> ferraloom_protocol::Result<CompoundTag> {
         state

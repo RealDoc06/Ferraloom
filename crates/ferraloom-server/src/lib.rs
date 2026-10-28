@@ -3,6 +3,7 @@ pub mod access;
 pub mod assets;
 pub mod chat;
 pub mod commands;
+mod datapacks;
 mod generation;
 #[cfg(test)]
 mod generation_tests;

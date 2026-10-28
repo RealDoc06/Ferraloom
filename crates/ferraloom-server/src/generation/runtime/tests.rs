@@ -150,14 +150,16 @@ async fn resumed_full_promotion_keeps_the_successful_entity_post_load_checkpoint
     };
     use std::path::Path;
     let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder vanilla jar");
-    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
-    let registries = Arc::new(RegistrySet::load(&resources).unwrap());
+    let resources = std::sync::Arc::new(ResourceManager::new(vec![
+        Pack::vanilla_jar(Path::new(&jar)).unwrap(),
+    ]));
+    let registries = Arc::new(RegistrySet::load(resources.clone()).unwrap());
     let mut properties = ServerProperties::from_values(Default::default());
     properties.set("level-seed", "0");
     properties.set("level-type", "minecraft:debug_all_block_states");
     let directory = tempfile::tempdir().unwrap();
     let mut world_root = WorldRoot::open(
-        directory.path(),
+        crate::world::WorldStartup::read(directory.path(), &properties).unwrap(),
         &properties,
         &resources,
         &registries,
@@ -498,14 +500,16 @@ async fn structure_status_reads_on_current_thread() {
     use std::path::Path;
 
     let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder vanilla jar");
-    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
-    let registries = Arc::new(RegistrySet::load(&resources).unwrap());
+    let resources = std::sync::Arc::new(ResourceManager::new(vec![
+        Pack::vanilla_jar(Path::new(&jar)).unwrap(),
+    ]));
+    let registries = Arc::new(RegistrySet::load(resources.clone()).unwrap());
     let mut properties = ServerProperties::from_values(Default::default());
     properties.set("level-seed", "0");
     properties.set("level-type", "minecraft:debug_all_block_states");
     let directory = tempfile::tempdir().unwrap();
     let mut root = WorldRoot::open(
-        directory.path(),
+        crate::world::WorldStartup::read(directory.path(), &properties).unwrap(),
         &properties,
         &resources,
         &registries,

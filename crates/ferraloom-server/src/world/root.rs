@@ -81,15 +81,17 @@ impl std::ops::Deref for WorldRoot {
 }
 impl WorldRoot {
     pub fn open(
-        root: &Path,
+        startup: crate::datapacks::WorldStartup,
         properties: &ServerProperties,
         resources: &ResourceManager,
         registries: &Arc<RegistrySet>,
         unported_behavior: ferraloom_game::block::UnportedBehavior,
     ) -> Result<Self> {
-        let access = Arc::new(LevelStorageAccess::open(
-            root.join(properties.get("level-name")),
-        )?);
+        let crate::datapacks::WorldStartup {
+            access,
+            saved_level_data,
+            configuration,
+        } = startup;
         let saved_data = SavedDataStorage::new(access.path().join("data"));
         let settings = saved_data.load::<CompoundTag>("minecraft:world_gen_settings")?;
         let seed = settings
@@ -162,11 +164,8 @@ impl WorldRoot {
                 )?,
             )
         };
-        let mut level_data = if access.path().join("level.dat").exists() {
-            access.read_level_data()?
-        } else {
-            new_level_data(properties)
-        };
+        let mut level_data = saved_level_data.unwrap_or_else(|| new_level_data(properties));
+        configuration.write_nbt(&mut level_data.data);
         // DedicatedServer#forceDifficulty ignores the saved lock at startup.
         force_initial_difficulty(&mut level_data.data, properties.get("difficulty"));
         access.save_level_data(&level_data)?;
@@ -323,10 +322,10 @@ mod tests {
     #[tokio::test]
     async fn native_world_flags_follow_overworld_data_in_every_dimension() {
         let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
-        let resources = ResourceManager::new(vec![
+        let resources = std::sync::Arc::new(ResourceManager::new(vec![
             ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
-        ]);
-        let registries = Arc::new(RegistrySet::load(&resources).unwrap());
+        ]));
+        let registries = Arc::new(RegistrySet::load(resources.clone()).unwrap());
         let cases: Vec<_> = include_str!("../../tests/java/world_data/flags.tsv")
             .lines()
             .map(|row| row.split('\t').collect::<Vec<_>>())
@@ -342,7 +341,7 @@ mod tests {
             properties.set("level-type", preset);
             properties.set("level-seed", 0);
             let mut root = WorldRoot::open(
-                directory.path(),
+                crate::world::WorldStartup::read(directory.path(), &properties).unwrap(),
                 &properties,
                 &resources,
                 &registries,
@@ -373,16 +372,16 @@ mod tests {
     #[tokio::test]
     async fn dimensions_share_one_root_and_keep_their_actual_generators_and_io() {
         let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
-        let resources = ResourceManager::new(vec![
+        let resources = std::sync::Arc::new(ResourceManager::new(vec![
             ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
-        ]);
-        let registries = Arc::new(RegistrySet::load(&resources).unwrap());
+        ]));
+        let registries = Arc::new(RegistrySet::load(resources.clone()).unwrap());
         let directory = tempfile::tempdir().unwrap();
         let mut properties = ServerProperties::from_values(Default::default());
         properties.set("level-type", "minecraft:flat");
         properties.set("level-seed", 1234);
         let mut root = WorldRoot::open(
-            directory.path(),
+            crate::world::WorldStartup::read(directory.path(), &properties).unwrap(),
             &properties,
             &resources,
             &registries,
@@ -463,6 +462,7 @@ mod tests {
             let mut level = Level::new(Region::new(&EMPTY), context);
             world.configure_live_rules(&mut level);
             assert_eq!(level.has_skylight().unwrap(), stem.dimension.has_skylight);
+            assert_eq!(level.rules().can_have_weather, key == "minecraft:overworld");
             let mut marker = CompoundTag::new();
             marker.insert("DataVersion", Tag::Int(storage::DATA_VERSION));
             marker.insert("dimension", Tag::String(key.into()));
@@ -519,14 +519,14 @@ mod tests {
     #[test]
     fn unknown_dimension_does_not_fall_back_to_overworld_or_mutate_metadata() {
         let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
-        let resources = ResourceManager::new(vec![
+        let resources = std::sync::Arc::new(ResourceManager::new(vec![
             ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
-        ]);
-        let registries = Arc::new(RegistrySet::load(&resources).unwrap());
+        ]));
+        let registries = Arc::new(RegistrySet::load(resources.clone()).unwrap());
         let directory = tempfile::tempdir().unwrap();
         let properties = ServerProperties::from_values(Default::default());
         let mut root = WorldRoot::open(
-            directory.path(),
+            crate::world::WorldStartup::read(directory.path(), &properties).unwrap(),
             &properties,
             &resources,
             &registries,

@@ -34,6 +34,158 @@ fn level() -> Level {
     level
 }
 
+/// Real bound tickers replay the native player gate, delay RNG/selection,
+/// notifications and zero/negative-count paths up to the required spawn service.
+#[test]
+fn native_spawner_countdown_selection_and_spawn_boundary_match() {
+    use crate::entity::{
+        EntityState,
+        player::{GameType, ServerPlayer},
+    };
+    use ferraloom_protocol::play::clientbound::Packet;
+    use ferraloom_util::{Uuid, Vec3};
+    let mut vectors = String::new();
+    flate2::read::GzDecoder::new(
+        include_bytes!("../../../../tests/java/blocks/entities/spawner-tick.tsv.gz").as_slice(),
+    )
+    .read_to_string(&mut vectors)
+    .unwrap();
+    let mut checked = 0;
+    for row in vectors.lines() {
+        let f: Vec<_> = row.split('\t').collect();
+        assert_eq!(f[0], "spawner-tick");
+        let mut level = level();
+        level.install_shared(Box::default());
+        let key = ChunkPos::containing(POS);
+        level
+            .set_chunk_loading_status(
+                key,
+                crate::level::distance_manager::FullChunkStatus::BlockTicking,
+                true,
+            )
+            .unwrap();
+        level.set_chunk_block_ticking(key, true).unwrap();
+        level
+            .update_entity_chunk_status(key, crate::level::entity::Visibility::Ticking)
+            .unwrap();
+        for request in level.take_entity_storage_requests() {
+            if let crate::level::entity::EntityStorageRequest::Load { id, .. } = request {
+                level.complete_entity_chunk_load(id, Ok(None)).unwrap();
+            }
+        }
+        level.process_pending_entity_loads().unwrap();
+        let mode = f[2];
+        level.rules_mut().spawner_blocks_work = mode != "disabled";
+        if mode != "none" {
+            let distance = match mode {
+                "boundary" => 16.0,
+                "inside" => 15.999,
+                "far" => 1000.0,
+                _ => 0.0,
+            };
+            let mut player = ServerPlayer::new(
+                Uuid::new(1, 2),
+                "spawner".into(),
+                level.next_entity_id().unwrap(),
+                Vec3::new(8.5 + distance, 64.5, 8.5),
+                match mode {
+                    "spectator" => GameType::Spectator,
+                    "creative" => GameType::Creative,
+                    _ => GameType::Survival,
+                },
+            );
+            if mode == "dead" {
+                player.set_health(0.0);
+            }
+            if mode == "removed" {
+                player.removed = true;
+            }
+            let id = level.next_entity_ref();
+            level
+                .add_entity(id, EntityState::Player(Box::new(player)))
+                .unwrap();
+        }
+        let state = Block::SPAWNER.default_state();
+        level.set_block_state(POS, state).unwrap();
+        let mut receiver = create(POS, state).unwrap();
+        receiver.load_with_components(
+            &parse_compound(f[1]).unwrap(),
+            level.context().registry_context().unwrap(),
+        );
+        level.set_block_entity(receiver).unwrap();
+        let handle = level.block_entity_ref(POS).unwrap().unwrap();
+        level.set_random_streams(
+            Random::Legacy(LegacyRandomSource::new(f[3].parse().unwrap())),
+            0,
+        );
+        level.take_effects();
+        for tick in &f[5..f.len() - 1] {
+            let expected: Vec<_> = tick.split('|').collect();
+            let result = level.tick_block_entities(true);
+            match expected[0] {
+                "ok" => result.unwrap(),
+                "spawn" => assert_eq!(
+                    result.unwrap_err().root(),
+                    &LevelError::UnsupportedBlockEntity(Block::SPAWNER),
+                    "{row}"
+                ),
+                _ => panic!("native tick result"),
+            }
+            assert_eq!(
+                level
+                    .block_entity_state(handle)
+                    .unwrap()
+                    .save_with_full_metadata()
+                    .unwrap(),
+                parse_compound(expected[1]).unwrap(),
+                "{row}"
+            );
+            level.run_block_events().unwrap();
+            let mut notifications = Vec::new();
+            let mut events = Vec::new();
+            for effect in level.take_effects() {
+                match effect {
+                    LevelEffect::BlockUpdated { pos, old, new } => {
+                        assert_eq!(pos, POS, "{row}");
+                        notifications.push(format!("{},{}", old.id(), new.id()));
+                    }
+                    LevelEffect::PlayerPacket { packet, .. } => {
+                        let Packet::BlockEvent(event) = *packet else {
+                            panic!("unexpected spawner packet: {row}");
+                        };
+                        assert_eq!(
+                            event.block.0,
+                            i32::from(Block::SPAWNER.protocol_id()),
+                            "{row}"
+                        );
+                        events.push(format!("{}:{}", event.b0, event.b1));
+                    }
+                    other => panic!("unexpected spawner tick effect {other:?}: {row}"),
+                }
+            }
+            let expected_notifications = expected[2]
+                .split(';')
+                .filter(|s| !s.is_empty())
+                .map(|s| {
+                    let (states, flags) = s.rsplit_once(',').unwrap();
+                    assert_eq!(flags, "260", "{row}");
+                    states
+                })
+                .collect::<Vec<_>>()
+                .join(";");
+            assert_eq!(notifications.join(";"), expected_notifications, "{row}");
+            assert_eq!(events.join(";"), expected[3], "{row}");
+        }
+        assert_eq!(
+            level.random().next_long(),
+            f.last().unwrap().parse::<i64>().unwrap(),
+            "{row}"
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, 600);
+}
+
 #[test]
 fn native_spawner_load_notifications_use_the_live_state_and_retained_generation() {
     let mut vectors = String::new();
