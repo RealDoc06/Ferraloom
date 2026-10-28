@@ -153,7 +153,11 @@ fn native_repository_bootstrap_selection_metadata_overlays_and_resource_stacks()
                 ])
             })
             .collect::<Vec<_>>();
-        let observed = json!({"name":case["name"],"available":available,"selected":repository.selected_ids(),"features":configuration.enabled_features.names(),"resource":resources.get(&id).map(resource),"stack":resources.stack(&id).into_iter().map(resource).collect::<Vec<_>>(),"listed":listed});
+        let mut observed = json!({"name":case["name"],"available":available,"selected":repository.selected_ids(),"features":configuration.enabled_features.names(),"resource":resources.get(&id).map(resource),"stack":resources.stack(&id).into_iter().map(resource).collect::<Vec<_>>(),"listed":listed});
+        // Gson omits null object members in the native bootstrap dump.
+        if resources.get(&id).is_none() {
+            observed.as_object_mut().unwrap().remove("resource");
+        }
         let mut expected = row.clone();
         let saved = expected.as_object_mut().unwrap().remove("encoded").unwrap();
         assert_eq!(observed, expected, "{}", case["name"]);

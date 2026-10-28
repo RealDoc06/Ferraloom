@@ -1,11 +1,7 @@
 //! One Strict disposable boot per backend for world-pack functions and live frames.
 use ferraloom_parity::{
     Bot, LaunchOptions, ObservationLog, Result, RunMode, Session, Ticks, WorldPreset, ensure,
-    protocol::{
-        codec::VarInt,
-        common::Utf8,
-        play::{clientbound as cb, serverbound as sb},
-    },
+    protocol::play::clientbound as cb,
 };
 use serde_json::{Value, json};
 use std::path::Path;
@@ -97,31 +93,29 @@ fn key(value: &Value) -> Option<&str> {
             _ => None,
         })
 }
-async fn barrier(bot: &mut Bot, id: i32) -> Result<()> {
-    bot.send(sb::Packet::CommandSuggestion(sb::CommandSuggestion {
-        id: VarInt(id),
-        command: Utf8("/function_parity_barrier_".into()),
-    }))
-    .await?;
-    bot.wait_for(
-        "function command barrier",
-        Ticks::DEFAULT,
-        |_, packet| matches!(packet,cb::Packet::CommandSuggestions(value) if value.id.0==id),
-    )
-    .await?;
-    Ok(())
+// Suggestions can complete on the network thread before the command executes.
+// A read-only command fences feedback on the same native command queue instead.
+async fn marker(bot: &mut Bot, serial: &mut i32) -> Result<String> {
+    *serial += 1;
+    let path = format!("function_capture_barrier_{serial}");
+    bot.command(&format!("data get storage test:capture_barrier {path}"))
+        .await?;
+    Ok(path)
+}
+fn is_marker(content: &Value, path: &str) -> bool {
+    translation(content, "arguments.nbtpath.nothing_found")
+        .is_some_and(|message| message["with"][0] == path)
 }
 async fn command(bot: &mut Bot, serial: &mut i32, text: &str) -> Result<Vec<Value>> {
-    *serial += 1;
-    barrier(bot, *serial).await?;
-    bot.command(text).await?;
-    *serial += 1;
-    let id = *serial;
-    bot.send(sb::Packet::CommandSuggestion(sb::CommandSuggestion {
-        id: VarInt(id),
-        command: Utf8("/function_parity_barrier_".into()),
-    }))
+    let before = marker(bot, serial).await?;
+    bot.wait_for("function capture start", Ticks::DEFAULT, |_, packet| {
+        matches!(packet, cb::Packet::SystemChat(value) if value.content.to_json()
+            .ok().and_then(|text| serde_json::from_str::<Value>(&text).ok())
+            .is_some_and(|content| is_marker(&content, &before)))
+    })
     .await?;
+    bot.command(text).await?;
+    let after = marker(bot, serial).await?;
     let mut messages = Vec::new();
     let mut error = None;
     bot.wait_for(text, Ticks::DEFAULT, |_, packet| {
@@ -131,11 +125,12 @@ async fn command(bot: &mut Bot, serial: &mut i32, text: &str) -> Result<Vec<Valu
                     ferraloom_parity::protocol::Error::invalid("component JSON", error.to_string())
                 })
             }) {
+                Ok(content) if is_marker(&content, &after) => return true,
                 Ok(content) => messages.push(json!({"content":content,"overlay":value.overlay})),
                 Err(cause) => error = Some(cause),
             }
         }
-        matches!(packet,cb::Packet::CommandSuggestions(value) if value.id.0==id)
+        false
     })
     .await?;
     if let Some(error) = error {
