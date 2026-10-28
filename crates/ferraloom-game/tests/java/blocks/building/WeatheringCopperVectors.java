@@ -102,12 +102,12 @@ final class WeatheringCopperVectors extends AnvilVectors {
         for(var block:copper())for(var state:block.getStateDefinition().getPossibleStates()) {
             for(long seed:new long[]{0,4096})sample("next",state,0,seed,POS,0);
             if(!(block instanceof WeatheringCopperChestBlock)) {
-                sample("change",state,0,107048004364969L,POS,0);
-                sample("random",state,0,107048004364969L,POS,0);
+                sample("change",state,0,107038380838084L,POS,0);
+                sample("random",state,0,107038380838084L,POS,0);
             }
         }
         for(var block:copper())for(int pattern=0;pattern<=8;pattern++)for(int index=0;index<12;index++) {
-            long seed=index*0x9e3779b97f4a7c15L;var state=block.defaultBlockState();
+            long seed=index==0?107038380838084L:index*0x9e3779b97f4a7c15L;var state=block.defaultBlockState();
             sample("next",state,pattern,seed,POS,0);
             if(!(block instanceof WeatheringCopperChestBlock)) {
                 sample("change",state,pattern,seed,POS,0);

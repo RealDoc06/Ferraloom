@@ -35,6 +35,8 @@ with tempfile.TemporaryDirectory(dir=CACHE / 'tools', prefix='weathering-') as t
     assert modes.count('change') == 7332
     assert modes.count('random') == 7332
     assert modes.count('guard') == 320
+    for mode in ('change', 'random'):
+        assert sum(line.split('\t')[0] == mode and bool(line.split('\t')[8]) for line in lines) > 500, 'missing successful aging witnesses'
     output = ('\n'.join(lines) + '\n').encode()
     target = HERE / 'weathering-copper.tsv.gz'
     if args.check:

@@ -50,6 +50,7 @@ fn replay(modes: &[&str], expected: usize, statues_only: Option<bool>) {
     let mut level = level();
     let mut previous = Vec::new();
     let mut checked = 0;
+    let mut writes = 0;
     for line in VECTORS
         .lines()
         .filter(|line| modes.contains(&line.split('\t').next().unwrap()))
@@ -124,6 +125,7 @@ fn replay(modes: &[&str], expected: usize, statues_only: Option<bool>) {
             .collect::<Vec<_>>()
             .join(";");
         assert_eq!(trace, f[8], "{line}");
+        writes += usize::from(!trace.is_empty());
         for (pos, expected) in cells(f[7]) {
             assert_eq!(
                 level.get_block_state(pos).unwrap(),
@@ -143,6 +145,12 @@ fn replay(modes: &[&str], expected: usize, statues_only: Option<bool>) {
         checked += 1;
     }
     assert_eq!(checked, expected);
+    if modes.contains(&"change") {
+        assert!(
+            writes > if statues_only == Some(true) { 0 } else { 500 },
+            "missing successful aging mutations"
+        );
+    }
 }
 #[test]
 fn shared_weathering_chance_matches_native_neighbor_ages_boundaries_wax_and_rng() {
