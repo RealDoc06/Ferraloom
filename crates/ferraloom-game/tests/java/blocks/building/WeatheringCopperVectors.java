@@ -14,12 +14,39 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.*;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.storage.LevelStorageSource;
+import net.minecraft.world.level.block.entity.ChestBlockEntity;
+import net.minecraft.world.level.entity.*;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.inventory.*;
+import net.minecraft.world.CompoundContainer;
+import net.minecraft.world.phys.AABB;
+import static org.mockito.Mockito.*;
 
 /** Actual shared aging methods and per-class random ticks. Fixtures contain
  * real blocks and real block entities; chest opener behavior is not replaced. */
 final class WeatheringCopperVectors extends AnvilVectors {
     final List<String> trace = new ArrayList<>();
     boolean observe;
+    LevelEntityGetter<Entity> testEntities;
+    @Override protected LevelEntityGetter<Entity> getEntities(){return testEntities==null?super.getEntities():testEntities;}
+    void opener(int input){
+        if(input<4)return;
+        var chest=(ChestBlockEntity)((LevelChunk)getChunkAt(POS)).getBlockEntities().get(POS);
+        var other=new ChestBlockEntity(POS,chest.getBlockState());
+        var player=mock(ServerPlayer.class);doReturn(player).when(player).getLivingEntity();
+        doReturn(input==5).when(player).isSpectator();doCallRealMethod().when(player).hasContainerOpen(any(),any());
+        double x=POS.getX()+(input==10?9.5:0.5);
+        doReturn(new AABB(x-0.5,64,8,x+0.5,65,9)).when(player).getBoundingBox();
+        if(input==6)player.containerMenu=mock(InventoryMenu.class);
+        else {
+            var menu=mock(ChestMenu.class);player.containerMenu=menu;
+            doReturn(switch(input){case 7->other;case 8->new CompoundContainer(chest,other);case 9->new CompoundContainer(other,chest);default->chest;}).when(menu).getContainer();
+        }
+        var sections=new EntitySectionStorage<Entity>(Entity.class,ignored->Visibility.TICKING);
+        sections.getOrCreateSection(SectionPos.asLong(BlockPos.containing(x,64,8))).add(player);
+        testEntities=new LevelEntityGetterAdapter<Entity>(new EntityLookup<Entity>(),sections);
+    }
     WeatheringCopperVectors(GameTestServer server, LevelStorageSource.LevelStorageAccess storage) { super(server,storage); }
     @Override public void sendBlockUpdated(BlockPos pos,BlockState old,BlockState state,int flags) {
         if(observe)trace.add(at(pos)+":"+Block.getId(old)+">"+Block.getId(state));
@@ -66,7 +93,7 @@ final class WeatheringCopperVectors extends AnvilVectors {
         return footprint;
     }
     void begin(LinkedHashMap<BlockPos,BlockState> footprint) {
-        observe=false;prepare(Blocks.AIR.defaultBlockState(),Blocks.AIR.defaultBlockState());
+        observe=false;testEntities=null;prepare(Blocks.AIR.defaultBlockState(),Blocks.AIR.defaultBlockState());
         for(var entry:footprint.entrySet())getChunkAt(entry.getKey()).setBlockState(entry.getKey(),entry.getValue(),816);
         trace.clear();observe=true;
     }
@@ -82,13 +109,14 @@ final class WeatheringCopperVectors extends AnvilVectors {
         if(guard==2)setup.put(POS,Blocks.FURNACE.defaultBlockState());
         begin(setup);
         if(guard==3)removeBlockEntity(POS);
+        opener(guard);
         var initial=world(setup.keySet());var before=((LevelChunk)getChunkAt(POS)).getBlockEntities().get(POS);
         trace.clear();random.setSeed(seed);int result=-1;
         var receiver=(WeatheringCopper)state.getBlock();
         switch(mode) {
             case "next" -> result=receiver.getNextState(state,this,callPos,random).map(Block::getId).orElse(-1);
             case "change" -> receiver.changeOverTime(state,this,callPos,random);
-            case "random", "guard" -> state.randomTick(this,callPos,random);
+            case "random", "guard", "chest" -> state.randomTick(this,callPos,random);
             default -> throw new AssertionError(mode);
         }
         observe=false;int chunksAfter=chunks.size();
@@ -114,6 +142,9 @@ final class WeatheringCopperVectors extends AnvilVectors {
                 sample("random",state,pattern,seed,POS,0);
             }
         }
+        for(var block:copper())if(block instanceof WeatheringCopperChestBlock)
+            for(var state:block.getStateDefinition().getPossibleStates())for(int opener:new int[]{0,3,4,5,6,7,8,9,10})
+                for(long seed:new long[]{0,107038380838084L})sample("chest",state,0,seed,POS,opener);
         for(var block:copper())for(var state:block.getStateDefinition().getPossibleStates()) {
             if(block instanceof WeatheringCopperDoorBlock&&state.getValue(DoorBlock.HALF)==DoubleBlockHalf.UPPER)
                 sample("guard",state,0,0,new BlockPos(82,64,-24),0);
