@@ -66,6 +66,7 @@ pub mod weather;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum LevelError {
+    Poi(poi::PoiError),
     /// Diagnostic context at a world dispatch boundary; the cause is unchanged.
     At {
         pos: BlockPos,
@@ -211,6 +212,7 @@ impl std::fmt::Display for LevelError {
                 write!(formatter, "{phase} at {pos:?}: {source}")
             }
             Self::BlockBreak(error) => std::fmt::Display::fmt(error.error(), formatter),
+            Self::Poi(error) => std::fmt::Display::fmt(error, formatter),
             Self::WorldgenMutationFailed { pos, source } => {
                 write!(formatter, "worldgen mutation at {pos:?}: {source}")
             }
@@ -246,6 +248,7 @@ impl std::error::Error for LevelError {
         match self {
             Self::At { source, .. } => Some(source.as_ref()),
             Self::BlockBreak(error) => Some(error.error()),
+            Self::Poi(error) => Some(error),
             Self::WorldgenMutationFailed { source, .. } => Some(source),
             _ => None,
         }
@@ -375,6 +378,7 @@ pub struct Region {
     entities: entity::EntityStorage,
     entity_tracker: entity_tracker::EntityTracker,
     waypoint_manager: waypoints::ServerWaypointManager,
+    poi: poi::PoiManager,
     entity_tick_list: entity::EntityTickList,
     block_ticks: LevelTicks,
     fluid_ticks: LevelTicks<ferraloom_data::registries::fluid::Id>,
@@ -421,6 +425,7 @@ impl Region {
             entities: entity::EntityStorage::default(),
             entity_tracker: Default::default(),
             waypoint_manager: Default::default(),
+            poi: Default::default(),
             entity_tick_list: entity::EntityTickList::default(),
             block_ticks: LevelTicks::default(),
             fluid_ticks: LevelTicks::default(),

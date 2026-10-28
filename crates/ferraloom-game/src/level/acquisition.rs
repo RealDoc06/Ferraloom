@@ -91,6 +91,14 @@ pub enum AcquireFailure {
 /// keep reentrant completions reachable, never evict, and never advance a tick.
 /// Worker failure/cancellation returns an error instead of an endless Pending.
 pub trait AcquireDriver: Send + Any {
+    /// SectionStorage#unpackChunk: an owned synchronous POI-only IO read.
+    /// Implementations release runtime guards before waiting on the independent IO worker.
+    fn load_poi_chunk(
+        &self,
+        _pos: ChunkPos,
+    ) -> Result<Option<ferraloom_storage::PoiChunk>, LevelError> {
+        Err(LevelError::Poi(super::poi::PoiError::MissingStorage))
+    }
     /// Port of ChunkMap#updatePlayerStatus's synchronous DistanceManager boundary.
     /// This mutates the existing ticket owner, with no queued publication.
     fn update_player_tracking_status(
