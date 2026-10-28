@@ -11,7 +11,9 @@ pub enum PoiUpdate {
     Add { pos: BlockPos, poi_type: PoiTypeId },
 }
 impl PoiUpdate {
-    fn for_block_change(pos: BlockPos, old: BlockState, new: BlockState) -> [Option<Self>; 2] {
+    /// Capture ServerLevel#updatePOIOnBlockStateChange's distinct remove/add tasks.
+    /// This reads immutable type data only and never loads or mutates a chunk.
+    pub fn for_block_change(pos: BlockPos, old: BlockState, new: BlockState) -> [Option<Self>; 2] {
         let old_type = PoiTypes::builtin().for_state(old);
         let new_type = PoiTypes::builtin().for_state(new);
         if old_type == new_type {
@@ -36,21 +38,20 @@ impl Level {
         std::mem::replace(&mut self.region_mut().poi_executor_running, running)
     }
     pub fn apply_poi_update(&mut self, update: PoiUpdate) -> Result<(), LevelError> {
-        self.ensure_poi_chunk_loaded(ChunkPos::containing(update.pos()))?;
+        self.apply_poi_update_shared(update)
+    }
+    /// Execute one already-dequeued main task, including inside managedBlock.
+    /// POI-only IO finishes before the short canonical manager guard is acquired;
+    /// neither branch dispatches block/entity callbacks or invokes caller code.
+    pub fn apply_poi_update_shared(&self, update: PoiUpdate) -> Result<(), LevelError> {
+        self.ensure_poi_chunk_loaded_shared(ChunkPos::containing(update.pos()))?;
+        let mut manager = self.region().poi.borrow_mut();
         match update {
             PoiUpdate::Remove { pos } => {
-                self.region_mut()
-                    .poi
-                    .get_mut()
-                    .remove(pos)
-                    .map_err(LevelError::Poi)?;
+                manager.remove(pos).map_err(LevelError::Poi)?;
             }
             PoiUpdate::Add { pos, poi_type } => {
-                self.region_mut()
-                    .poi
-                    .get_mut()
-                    .add(pos, poi_type)
-                    .map_err(LevelError::Poi)?;
+                manager.add(pos, poi_type).map_err(LevelError::Poi)?;
             }
         }
         Ok(())

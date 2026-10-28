@@ -2895,3 +2895,37 @@ fn worldgen_poi_enqueue_preserves_cross_chunk_write_order_without_inline_executi
         ]
     );
 }
+
+#[test]
+fn shared_poi_task_apply_uses_canonical_state_and_dirties_without_emitting() {
+    use super::poi::{PoiTypeId, PoiUpdate};
+    let mut level = empty_level(&EMPTY);
+    let pos = BlockPos::new(2, 0, 2);
+    let tasks =
+        PoiUpdate::for_block_change(pos, Block::AIR.default_state(), Block::BELL.default_state());
+    let shared: &Level = &level;
+    for update in tasks.into_iter().flatten() {
+        shared.apply_poi_update_shared(update).unwrap();
+    }
+    let saved = shared
+        .capture_poi_chunk_for_save(ChunkPos::ZERO)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        level.poi_manager().get_type(pos).unwrap(),
+        Some(PoiTypeId::MEETING)
+    );
+    level
+        .apply_poi_update_shared(PoiUpdate::Remove { pos })
+        .unwrap();
+    assert_eq!(level.poi_manager().get_type(pos).unwrap(), None);
+    assert!(
+        level
+            .capture_poi_chunk_for_save(ChunkPos::ZERO)
+            .unwrap()
+            .unwrap()
+            .revision
+            > saved.revision
+    );
+    assert!(level.take_effects().is_empty());
+}
