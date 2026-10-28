@@ -4,6 +4,9 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 
 | ID | Feature | Vanilla source | Test | Vanilla | Ferraloom |
 |---|---|---|---|---|---|
+| weather-time.time.tick-time | Advance shared gameTime at the overworld tickTime slot, independently of advance_time | `ServerLevel#tickTime; MinecraftServer#tickChildren` | [weather_time::stepped_time_and_daylight_rule_packets_match_vanilla](../crates/ferraloom-parity/tests/weather_time.rs) (three stepped 40-tick windows; unrun) | - | partial |
+| weather-time.time.daylight-rule | Pause world clocks under advance_time while gameTime continues; synchronize effective clock rates on rule changes | `ServerClockManager#tick/createFullSyncPacket; MinecraftServer#onGameRuleChanged` | [weather_time::stepped_time_and_daylight_rule_packets_match_vanilla](../crates/ferraloom-parity/tests/weather_time.rs) (both built-in clocks, enabled/disabled/enabled; unrun) | - | partial |
+| weather-time.time.periodic-packets | Send gameTime packets with an empty clock-update map, including while frozen | `MinecraftServer#forceGameTimeSynchronization` | [weather_time::stepped_time_and_daylight_rule_packets_match_vanilla](../crates/ferraloom-parity/tests/weather_time.rs) (observed stepped-window packets and frozen endpoint; unrun) | - | partial |
 | weather-time.clocks.independent | Maintain multiple registered world clocks with independent tick rate and pause state | `ServerClockManager` | | - | todo |
 | weather-time.clocks.markers | Resolve named time markers and move clocks using marker-aware command and sleep operations | `ServerClockManager#moveToTimeMarker; ClockTimeMarkers` | | - | todo |
 | weather-time.clocks.persist-sync | Persist total ticks, rate and paused state and synchronize full clock state to clients | `ServerClockManager#packState; ServerClockManager#createFullSyncPacket` | | - | todo |

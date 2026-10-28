@@ -404,21 +404,70 @@ impl LiveWorldGenLevel for Level {
         self.release_block_entity(handle);
         result
     }
+    /// Port of StructureTemplate#createEntityIgnoreException and placeEntities.
     fn place_template_entity(
         &mut self,
         _chunk: [i32; 2],
         tag: ferraloom_nbt::CompoundTag,
-        _mirror: ferraloom_util::Mirror,
-        _rotation: ferraloom_util::Rotation,
-        _finalize: bool,
+        mirror: ferraloom_util::Mirror,
+        rotation: ferraloom_util::Rotation,
+        finalize: bool,
     ) -> Result<(), Error> {
-        // A single-root EntityType#create and virtual rotate/mirror must share
-        // one retained receiver. Do not substitute the recursive summon loader.
-        let id = tag.get_string("id").map(|id| id.to_string_lossy());
-        Err(Error(format!(
-            "Unsupported: live template EntityType#create for {}",
-            id.as_deref().unwrap_or("[invalid]")
-        )))
+        use crate::entity::{
+            self, EntityData, EntityPersistenceError, EntitySpawnReason, EntitySpawnRequest,
+        };
+        // StructureTemplate already transformed Pos and removed UUID. Read that
+        // original position before Entity#load applies its coordinate clamps.
+        let coordinates = tag
+            .get_list("Pos")
+            .ok_or_else(|| Error("template entity missing transformed Pos".into()))?;
+        let coordinate = |index| {
+            coordinates
+                .0
+                .get(index)
+                .and_then(ferraloom_nbt::Tag::as_double)
+                .ok_or_else(|| Error("template entity invalid transformed Pos".into()))
+        };
+        let position = ferraloom_util::Vec3::new(coordinate(0)?, coordinate(1)?, coordinate(2)?);
+        let root = match entity::create_entity_from_tag(
+            &tag,
+            EntitySpawnRequest {
+                reason: EntitySpawnReason::Structure,
+                ignore_checks: false,
+            },
+            self,
+        ) {
+            Ok(Some(root)) => root,
+            Ok(None) | Err(EntityPersistenceError::Base(_)) => return Ok(()),
+            // Required unported factories/callbacks are never native malformed
+            // input skips, even though Java catches its actual load exceptions.
+            Err(error) => return Err(Error(format!("live template entity: {error}"))),
+        };
+        let result = (|| {
+            let behavior = required(self.entity_behavior(root))?;
+            let rotated = required(behavior.rotate(root, rotation, self))?;
+            let mirrored = required(behavior.mirror(root, mirror, self))?;
+            let base = required(self.entity::<EntityData>(root))?;
+            let yaw = rotated + (mirrored - base.yaw);
+            let pitch = base.pitch;
+            required(self.entity_mut::<EntityData>(root))?.snap_to(position, yaw, pitch);
+            required(behavior.set_y_body_rot(root, yaw, self))?;
+            required(behavior.set_y_head_rot(root, yaw, self))?;
+            if finalize && required(self.entity_state(root))?.as_mob().is_some() {
+                required(entity::mob::finalize_spawn(
+                    root,
+                    EntitySpawnReason::Structure,
+                    None,
+                    self,
+                ))?;
+            }
+            // Native addFreshEntityWithPassengers is void here: a rejected add
+            // does not change the enclosing template placement's success value.
+            required(self.try_add_fresh_entity_with_passengers(root))?;
+            Ok(())
+        })();
+        self.release_entity(root);
+        result
     }
 }
 

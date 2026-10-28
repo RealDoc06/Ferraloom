@@ -136,6 +136,14 @@ fn path<'a>(command: &'a PreparedCommand, name: &str) -> &'a NbtPath {
     };
     path
 }
+/// Port of DataCommands#getSingleTag, shared with FunctionCommand's argument reader.
+pub fn get_single_tag(data: CompoundTag, path: &NbtPath) -> Result<Tag, CommandSyntaxException> {
+    let mut tags = path.get(&Tag::Compound(data)).map_err(path_error)?;
+    if tags.len() != 1 {
+        return Err(error("commands.data.get.multiple", &[]));
+    }
+    Ok(tags.remove(0))
+}
 fn source(command: &PreparedCommand, host: &mut impl DataAccess) -> Result<Vec<Tag>, DataError> {
     if command.literals.iter().any(|literal| literal == "value") {
         let Some(ArgumentValue::Tag(value)) = command.argument("value") else {

@@ -79,6 +79,10 @@ pub enum Check {
         #[serde(default)]
         interior: Option<String>,
     },
+    BlockSnapshot {
+        min: [i32; 3],
+        max: [i32; 3],
+    },
     TickState {
         #[serde(deserialize_with = "tick_rate")]
         rate: f32,
@@ -637,6 +641,21 @@ impl Driver<'_> {
                     }
                     let snapshot = self.session.bot(actor)?.snapshot();
                     checks.push(json!({"blocks":(min[0]..=max[0]).flat_map(|x|(min[1]..=max[1]).flat_map(move|y|(min[2]..=max[2]).map(move|z|[x,y,z]))).map(|[x,y,z]|json!([x,y,z,snapshot.block(BlockPos::new(x,y,z)).unwrap().id()])).collect::<Vec<_>>()}));
+                }
+                Check::BlockSnapshot { min, max } => {
+                    let positions = (min[0]..=max[0]).flat_map(|x| (min[1]..=max[1]).flat_map(move |y| (min[2]..=max[2]).map(move |z| BlockPos::new(x,y,z)))).collect::<Vec<_>>();
+                    self.session.bot(actor)?.wait_for("placed template blocks", Ticks::DEFAULT, |state, _| {
+                        positions.iter().any(|pos| state.block(*pos).is_some_and(|state| !state.is_air()))
+                    }).await?;
+                    // The first section update can wake the bot before the rest
+                    // of the same flush. Fence the complete placement batch.
+                    events.extend(self.exchange(actor, None).await?);
+                    let snapshot = self.session.bot(actor)?.snapshot();
+                    let blocks = positions.into_iter().map(|pos| {
+                        snapshot.block(pos).map(|state| json!([pos.x,pos.y,pos.z,state.id()]))
+                            .ok_or_else(|| anyhow::anyhow!("template snapshot chunk missing at {pos:?}"))
+                    }).collect::<Result<Vec<_>>>()?;
+                    checks.push(json!({"block_snapshot":blocks}));
                 }
                 Check::Color { key, value } => {
                     let actual = events.iter().find_map(|event| translation(event, key))
