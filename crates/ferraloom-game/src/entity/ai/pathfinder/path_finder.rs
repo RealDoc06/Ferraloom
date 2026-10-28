@@ -67,48 +67,144 @@ impl PathFinder {
         reach_range: i32,
         multiplier: f32,
     ) -> Result<Option<Path>, SearchError<E::Error>> {
-        self.open_set.clear();
-        evaluator.prepare(data).map_err(SearchError::Evaluator)?;
-        let Some(from) = evaluator.get_start(data).map_err(SearchError::Evaluator)? else {
-            return Ok(None);
-        };
-        let mut targets = Vec::with_capacity(positions.len());
-        let mut map = HashMap::new();
-        for pos in positions.iter() {
-            let target = evaluator
-                .get_target(*pos, data)
-                .map_err(SearchError::Evaluator)?;
-            let key = data[target.node].key();
-            if map.insert(key, targets.len()).is_some() {
-                return Err(SearchError::DuplicateTarget);
-            }
-            targets.push((target, *pos));
+        find_path_with_runtime(
+            &mut BorrowedRuntime {
+                finder: self,
+                evaluator,
+                data,
+            },
+            positions,
+            max_path_length,
+            reach_range,
+            multiplier,
+        )
+    }
+}
+
+/// Port of PathFinder's canonical state and NodeEvaluator callback boundary.
+/// Live implementations resolve the owner again at each callback; no finder,
+/// PathData or Node borrow crosses a world/Mob call.
+pub trait PathFinderRuntime {
+    type Error;
+    fn state(&self) -> Result<(&PathFinder, &PathData), Self::Error>;
+    fn state_mut(&mut self) -> Result<(&mut PathFinder, &mut PathData), Self::Error>;
+    fn prepare(&mut self) -> Result<(), Self::Error>;
+    fn done(&mut self) -> Result<(), Self::Error>;
+    fn get_start(&mut self) -> Result<Option<NodeId>, Self::Error>;
+    fn get_target(&mut self, pos: BlockPos) -> Result<Target, Self::Error>;
+    fn get_neighbors(
+        &mut self,
+        node: NodeId,
+        neighbors: &mut Vec<NodeId>,
+    ) -> Result<(), Self::Error>;
+}
+
+struct BorrowedRuntime<'a, E> {
+    finder: &'a mut PathFinder,
+    evaluator: &'a mut E,
+    data: &'a mut PathData,
+}
+impl<E: NodeEvaluator> PathFinderRuntime for BorrowedRuntime<'_, E> {
+    type Error = E::Error;
+    fn state(&self) -> Result<(&PathFinder, &PathData), Self::Error> {
+        Ok((self.finder, self.data))
+    }
+    fn state_mut(&mut self) -> Result<(&mut PathFinder, &mut PathData), Self::Error> {
+        Ok((self.finder, self.data))
+    }
+    fn prepare(&mut self) -> Result<(), Self::Error> {
+        self.evaluator.prepare(self.data)
+    }
+    fn done(&mut self) -> Result<(), Self::Error> {
+        self.evaluator.done(self.data)
+    }
+    fn get_start(&mut self) -> Result<Option<NodeId>, Self::Error> {
+        self.evaluator.get_start(self.data)
+    }
+    fn get_target(&mut self, pos: BlockPos) -> Result<Target, Self::Error> {
+        self.evaluator.get_target(pos, self.data)
+    }
+    fn get_neighbors(
+        &mut self,
+        node: NodeId,
+        neighbors: &mut Vec<NodeId>,
+    ) -> Result<(), Self::Error> {
+        self.evaluator.get_neighbors(node, neighbors, self.data)
+    }
+}
+
+/// Port of PathFinder#findPath. The borrowed and live adapters share this body;
+/// only native scalar/handle captures survive evaluator callbacks.
+pub fn find_path_with_runtime<R: PathFinderRuntime>(
+    runtime: &mut R,
+    positions: &HashSet<BlockPos>,
+    max_path_length: f32,
+    reach_range: i32,
+    multiplier: f32,
+) -> Result<Option<Path>, SearchError<R::Error>> {
+    runtime
+        .state_mut()
+        .map_err(SearchError::Evaluator)?
+        .0
+        .open_set
+        .clear();
+    runtime.prepare().map_err(SearchError::Evaluator)?;
+    let Some(from) = runtime.get_start().map_err(SearchError::Evaluator)? else {
+        return Ok(None);
+    };
+    let mut targets = Vec::with_capacity(positions.len());
+    let mut map = HashMap::new();
+    for pos in positions.iter() {
+        let target = runtime.get_target(*pos).map_err(SearchError::Evaluator)?;
+        let key = runtime.state().map_err(SearchError::Evaluator)?.1[target.node].key();
+        if map.insert(key, targets.len()).is_some() {
+            return Err(SearchError::DuplicateTarget);
         }
-        let order: Vec<usize> = map.values().copied().collect();
+        targets.push((target, *pos));
+    }
+    let order: Vec<usize> = map.values().copied().collect();
+    {
+        let (finder, data) = runtime.state_mut().map_err(SearchError::Evaluator)?;
         data[from].g = 0.0;
         data[from].h = best_h(from, &order, &mut targets, data);
         data[from].f = data[from].h;
-        self.open_set.clear();
-        self.open_set
+        finder.open_set.clear();
+        finder
+            .open_set
             .insert(from, data)
             .map_err(SearchError::Heap)?;
-        let mut closed = HashMap::new();
-        // Guava Maps.capacity, used by Sets.newHashSetWithExpectedSize.
-        let capacity = if targets.len() < 3 {
-            targets.len() + 1
-        } else {
-            ((targets.len() as f32) / 0.75 + 1.0) as usize
-        };
-        let mut reached = HashSet::with_capacity(capacity);
-        let limit = (self.max_visited_nodes as f32 * multiplier) as i32;
-        let mut count = 0i32;
-        let mut neighbors = Vec::with_capacity(32);
-        while !self.open_set.is_empty() {
-            count = count.wrapping_add(1);
-            if count >= limit {
-                break;
-            }
-            let current = self.open_set.pop(data);
+    }
+    let mut closed = HashMap::new();
+    // Guava Maps.capacity, used by Sets.newHashSetWithExpectedSize.
+    let capacity = if targets.len() < 3 {
+        targets.len() + 1
+    } else {
+        ((targets.len() as f32) / 0.75 + 1.0) as usize
+    };
+    let mut reached = HashSet::with_capacity(capacity);
+    let limit = (runtime
+        .state()
+        .map_err(SearchError::Evaluator)?
+        .0
+        .max_visited_nodes as f32
+        * multiplier) as i32;
+    let mut count = 0i32;
+    let mut neighbors = Vec::with_capacity(32);
+    while !runtime
+        .state()
+        .map_err(SearchError::Evaluator)?
+        .0
+        .open_set
+        .is_empty()
+    {
+        count = count.wrapping_add(1);
+        if count >= limit {
+            break;
+        }
+        let current;
+        {
+            let (finder, data) = runtime.state_mut().map_err(SearchError::Evaluator)?;
+            current = finder.open_set.pop(data);
             data[current].closed = true;
             for &index in &order {
                 let target = &mut targets[index].0;
@@ -120,22 +216,25 @@ impl PathFinder {
             if !reached.is_empty() {
                 break;
             }
-            if self.capture_debug && !closed.contains_key(&data[current].key()) {
+            if finder.capture_debug && !closed.contains_key(&data[current].key()) {
                 closed.insert(data[current].key(), current);
             }
             if data[current].distance_to(data[from].pos) >= max_path_length {
                 continue;
             }
-            neighbors.clear();
-            evaluator
-                .get_neighbors(current, &mut neighbors, data)
-                .map_err(SearchError::Evaluator)?;
-            assert!(
-                neighbors.len() <= 32,
-                "NodeEvaluator returned more than 32 neighbors"
-            );
+        }
+        neighbors.clear();
+        runtime
+            .get_neighbors(current, &mut neighbors)
+            .map_err(SearchError::Evaluator)?;
+        assert!(
+            neighbors.len() <= 32,
+            "NodeEvaluator returned more than 32 neighbors"
+        );
+        {
+            let (finder, data) = runtime.state_mut().map_err(SearchError::Evaluator)?;
             for &neighbor in &neighbors {
-                let distance = match self.distance_metric {
+                let distance = match finder.distance_metric {
                     DistanceMetric::Euclidean => data[current].distance_to(data[neighbor].pos),
                     DistanceMetric::Horizontal => data[current].distance_to_xz(data[neighbor].pos),
                 };
@@ -149,23 +248,27 @@ impl PathFinder {
                     data[neighbor].h = best_h(neighbor, &order, &mut targets, data) * 1.5;
                     let cost = data[neighbor].g + data[neighbor].h;
                     if data[neighbor].in_open_set() {
-                        self.open_set.change_cost(neighbor, cost, data);
+                        finder.open_set.change_cost(neighbor, cost, data);
                     } else {
                         data[neighbor].f = cost;
-                        self.open_set
+                        finder
+                            .open_set
                             .insert(neighbor, data)
                             .map_err(SearchError::Heap)?;
                     }
                 }
             }
         }
-        let did_reach = !reached.is_empty();
-        let candidates: Vec<usize> = if did_reach {
-            reached.iter().map(|key| *map.peek(key).unwrap()).collect()
-        } else {
-            order.clone()
-        };
-        let mut best: Option<Path> = None;
+    }
+    let did_reach = !reached.is_empty();
+    let candidates: Vec<usize> = if did_reach {
+        reached.iter().map(|key| *map.peek(key).unwrap()).collect()
+    } else {
+        order.clone()
+    };
+    let mut best: Option<Path> = None;
+    {
+        let (finder, data) = runtime.state_mut().map_err(SearchError::Evaluator)?;
         for index in candidates {
             let (target, pos) = &targets[index];
             let mut id = target
@@ -191,7 +294,7 @@ impl PathFinder {
                 best = Some(path);
             }
         }
-        if self.capture_debug
+        if finder.capture_debug
             && let Some(path) = &mut best
         {
             let closed_nodes = closed.values().copied().collect();
@@ -200,7 +303,7 @@ impl PathFinder {
                 .map(|(target, _)| Some(target))
                 .collect();
             path.set_debug(DebugData {
-                open_set: self.open_set.get_heap(),
+                open_set: finder.open_set.get_heap(),
                 closed_set: closed_nodes,
                 targets: order
                     .iter()
@@ -208,10 +311,11 @@ impl PathFinder {
                     .collect(),
             });
         }
-        evaluator.done(data).map_err(SearchError::Evaluator)?;
-        Ok(best)
     }
+    runtime.done().map_err(SearchError::Evaluator)?;
+    Ok(best)
 }
+
 fn best_h(
     from: NodeId,
     order: &[usize],

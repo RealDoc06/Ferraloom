@@ -15,7 +15,10 @@ pub use binary_heap::{BinaryHeap, HeapError};
 pub use node::{Node, NodeId, NodeKey, PathData, PathNodesId};
 pub use path::{DebugData, Path};
 pub use path_computation_type::PathComputationType;
-pub use path_finder::{DistanceMetric, NodeEvaluator, PathFinder, SearchError};
+pub use path_finder::{
+    DistanceMetric, NodeEvaluator, PathFinder, PathFinderRuntime, SearchError,
+    find_path_with_runtime,
+};
 pub use path_type::PathType;
 pub use path_type_cache::PathTypeCache;
 pub use target::Target;
