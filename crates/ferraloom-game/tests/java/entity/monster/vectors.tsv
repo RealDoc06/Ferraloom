@@ -290,6 +290,26 @@ monster-attribute	minecraft:magma_cube	minecraft:waypoint_transmit_range	0
 monster-data	minecraft:magma_cube	16	AgeableMob	DATA_BABY_ID	8	false
 monster-data	minecraft:magma_cube	17	AgeableMob	AGE_LOCKED	8	false
 monster-data	minecraft:magma_cube	18	AbstractCubeMob	ID_SIZE	1	1
+zombie-nbt	minecraft:zombie	false	-2	false	false	-1	-2	3fcd70a3e0000000	true
+zombie-nbt	minecraft:zombie	false	-1	false	false	-1	-1	3fcd70a3e0000000	false
+zombie-nbt	minecraft:zombie	false	0	false	false	-1	0	3fcd70a3e0000000	true
+zombie-nbt	minecraft:zombie	false	300	false	false	-1	300	3fcd70a3e0000000	true
+zombie-nbt	minecraft:zombie	false	2147483647	false	false	-1	2147483647	3fcd70a3e0000000	true
+zombie-nbt	minecraft:zombie	true	-2	true	false	-1	-2	3fd6147ae8000000	true
+zombie-nbt	minecraft:zombie	true	-1	true	false	-1	-1	3fd6147ae8000000	false
+zombie-nbt	minecraft:zombie	true	0	true	false	-1	0	3fd6147ae8000000	true
+zombie-nbt	minecraft:zombie	true	300	true	false	-1	300	3fd6147ae8000000	true
+zombie-nbt	minecraft:zombie	true	2147483647	true	false	-1	2147483647	3fd6147ae8000000	true
+zombie-nbt	minecraft:husk	false	-2	false	false	-1	-2	3fcd70a3e0000000	true
+zombie-nbt	minecraft:husk	false	-1	false	false	-1	-1	3fcd70a3e0000000	false
+zombie-nbt	minecraft:husk	false	0	false	false	-1	0	3fcd70a3e0000000	true
+zombie-nbt	minecraft:husk	false	300	false	false	-1	300	3fcd70a3e0000000	true
+zombie-nbt	minecraft:husk	false	2147483647	false	false	-1	2147483647	3fcd70a3e0000000	true
+zombie-nbt	minecraft:husk	true	-2	true	false	-1	-2	3fd6147ae8000000	true
+zombie-nbt	minecraft:husk	true	-1	true	false	-1	-1	3fd6147ae8000000	false
+zombie-nbt	minecraft:husk	true	0	true	false	-1	0	3fd6147ae8000000	true
+zombie-nbt	minecraft:husk	true	300	true	false	-1	300	3fd6147ae8000000	true
+zombie-nbt	minecraft:husk	true	2147483647	true	false	-1	2147483647	3fd6147ae8000000	true
 cube-load	minecraft:slime	-10	false	1	3ff0000000000000	3fd3333340000000	3ff0000000000000	0	3f800000	1	true
 cube-load	minecraft:slime	-10	true	1	4054400000000000	3fe8dd2f1a9fbe77	404b800000000000	0	42a20000	1	true
 cube-load	minecraft:slime	-1	false	1	3ff0000000000000	3fd3333340000000	3ff0000000000000	0	3f800000	1	true

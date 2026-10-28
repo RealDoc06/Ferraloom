@@ -90,6 +90,27 @@ public final class MonsterVectors {
         data.profession().unwrapKey().orElseThrow().identifier()+"\t"+data.level()+"\t"+random.nextLong());
     }
   }
+
+  static void zombieNbt(Fixture level, EntityType<? extends Mob> type)throws Exception {
+    for(boolean baby:new boolean[]{false,true})for(int time:new int[]{-2,-1,0,300,Integer.MAX_VALUE}) {
+      var mob=(net.minecraft.world.entity.monster.zombie.Zombie)type.create(level,EntitySpawnReason.LOAD);
+      var input=new CompoundTag();input.putBoolean("IsBaby",baby);input.putInt("InWaterTime",37);
+      input.putInt("DrownedConversionTime",time);
+      mob.load(TagValueInput.create(ProblemReporter.DISCARDING,level.registryAccess(),input));
+      var output=net.minecraft.world.level.storage.TagValueOutput.createWithContext(ProblemReporter.DISCARDING,level.registryAccess());
+      mob.saveWithoutId(output);var saved=output.buildResult();
+      var again=(net.minecraft.world.entity.monster.zombie.Zombie)type.create(level,EntitySpawnReason.LOAD);
+      again.load(TagValueInput.create(ProblemReporter.DISCARDING,level.registryAccess(),saved));
+      var repeat=net.minecraft.world.level.storage.TagValueOutput.createWithContext(ProblemReporter.DISCARDING,level.registryAccess());
+      again.saveWithoutId(repeat);var repeated=repeat.buildResult();
+      for(var key:List.of("IsBaby","CanBreakDoors","InWaterTime","DrownedConversionTime"))
+        if(!Objects.equals(saved.get(key),repeated.get(key)))throw new AssertionError(key);
+      System.out.println("zombie-nbt\t"+id(type)+"\t"+baby+"\t"+time+"\t"+
+        saved.getBooleanOr("IsBaby",false)+"\t"+saved.getBooleanOr("CanBreakDoors",false)+"\t"+
+        saved.getIntOr("InWaterTime",0)+"\t"+saved.getIntOr("DrownedConversionTime",0)+"\t"+
+        bits(mob.getAttributeValue(Attributes.MOVEMENT_SPEED))+"\t"+mob.isUnderWaterConverting());
+    }
+  }
   public static void main(String[] args)throws Exception {
     var output=System.out;var errors=System.err;
     SharedConstants.tryDetectVersion();Bootstrap.bootStrap();System.setOut(output);System.setErr(errors);
@@ -99,6 +120,7 @@ public final class MonsterVectors {
     BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(context).forEach(net.minecraft.core.component.DataComponentInitializers.PendingComponents::apply);
     var level=new Fixture(registries);
     for(var type:types())constructor(level,type);
+    zombieNbt(level,EntityTypes.ZOMBIE);zombieNbt(level,EntityTypes.HUSK);
     cube(level,EntityTypes.SLIME);cube(level,EntityTypes.MAGMA_CUBE);villagerRandom();
   }
 }
