@@ -30,19 +30,19 @@ impl<'a, M: MobAccess> SwimNodeEvaluator<'a, M> {
         }
     }
     pub fn capabilities(&self) -> &Capabilities {
-        &self.context.capabilities
+        &self.context.state.capabilities
     }
     pub fn capabilities_mut(&mut self) -> &mut Capabilities {
-        &mut self.context.capabilities
+        &mut self.context.state.capabilities
     }
     /// Port of SwimNodeEvaluator#getPathTypeOfMob. BREACH returns immediately
     /// on the first air cell above a WATER-pathfindable block, before later cells.
     pub fn get_path_type(&self, pos: BlockPos) -> Result<PathType, LevelError> {
         let reader = self.context.reader()?;
         let mut last = pos;
-        for x in pos.x..pos.x + self.context.width {
-            for y in pos.y..pos.y + self.context.height {
-                for z in pos.z..pos.z + self.context.depth {
+        for x in pos.x..pos.x + self.context.state.width {
+            for y in pos.y..pos.y + self.context.state.height {
+                for z in pos.z..pos.z + self.context.state.depth {
                     last = BlockPos::new(x, y, z);
                     let state = reader.get_block_state(last)?;
                     let below = reader.get_block_state(last.below(1))?;

@@ -66,12 +66,10 @@ impl Default for Capabilities {
     }
 }
 
-/// Prepared NodeEvaluator/PathfindingContext state. Only native prepare-time
-/// dimensions and mobPosition are captured; all other receiver reads stay live.
-pub(super) struct Context<'a, M> {
-    pub region: &'a PathNavigationRegion,
-    pub level: &'a mut Level,
-    pub mob: &'a mut M,
+/// Port of NodeEvaluator's retained dimensions, capabilities and node identity map.
+/// This state has no Level borrow and can live in canonical Mob navigation.
+#[derive(Debug)]
+pub struct NodeEvaluatorState {
     pub capabilities: Capabilities,
     pub width: i32,
     pub height: i32,
@@ -79,12 +77,9 @@ pub(super) struct Context<'a, M> {
     pub mob_position: BlockPos,
     nodes: Int2ObjectOpenHashMap<NodeId>,
 }
-impl<'a, M: MobAccess> Context<'a, M> {
-    pub fn new(region: &'a PathNavigationRegion, level: &'a mut Level, mob: &'a mut M) -> Self {
+impl Default for NodeEvaluatorState {
+    fn default() -> Self {
         Self {
-            region,
-            level,
-            mob,
             capabilities: Capabilities::default(),
             width: 0,
             height: 0,
@@ -93,15 +88,9 @@ impl<'a, M: MobAccess> Context<'a, M> {
             nodes: Int2ObjectOpenHashMap::new(),
         }
     }
-    pub fn prepare(&mut self) -> Result<(), LevelError> {
-        self.mob_position = containing(self.mob.position(self.level)?);
-        self.nodes.clear();
-        let (width, height) = self.mob.dimensions(self.level)?;
-        self.width = (width + 1.0).floor() as i32;
-        self.height = (height + 1.0).floor() as i32;
-        self.depth = self.width;
-        Ok(())
-    }
+}
+impl NodeEvaluatorState {
+    /// Port of NodeEvaluator#getNode, preserving native int coordinate-hash aliasing.
     pub fn node(&mut self, pos: BlockPos, data: &mut PathData) -> NodeId {
         let hash = Node::create_hash(pos.x, pos.y, pos.z);
         if let Some(id) = self.nodes.get(&hash) {
@@ -110,6 +99,37 @@ impl<'a, M: MobAccess> Context<'a, M> {
         let id = data.add_node(Node::new(pos.x, pos.y, pos.z));
         self.nodes.insert(hash, id);
         id
+    }
+}
+
+/// Prepared NodeEvaluator/PathfindingContext state. Only native prepare-time
+/// dimensions and mobPosition are captured; all other receiver reads stay live.
+pub(super) struct Context<'a, M> {
+    pub region: &'a PathNavigationRegion,
+    pub level: &'a mut Level,
+    pub mob: &'a mut M,
+    pub state: NodeEvaluatorState,
+}
+impl<'a, M: MobAccess> Context<'a, M> {
+    pub fn new(region: &'a PathNavigationRegion, level: &'a mut Level, mob: &'a mut M) -> Self {
+        Self {
+            region,
+            level,
+            mob,
+            state: NodeEvaluatorState::default(),
+        }
+    }
+    pub fn prepare(&mut self) -> Result<(), LevelError> {
+        self.state.mob_position = containing(self.mob.position(self.level)?);
+        self.state.nodes.clear();
+        let (width, height) = self.mob.dimensions(self.level)?;
+        self.state.width = (width + 1.0).floor() as i32;
+        self.state.height = (height + 1.0).floor() as i32;
+        self.state.depth = self.state.width;
+        Ok(())
+    }
+    pub fn node(&mut self, pos: BlockPos, data: &mut PathData) -> NodeId {
+        self.state.node(pos, data)
     }
     pub fn reader(&self) -> Result<LevelReaderRef<'_, 'static>, LevelError> {
         self.region.reader(self.level)
