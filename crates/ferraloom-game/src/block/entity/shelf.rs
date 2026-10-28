@@ -1,6 +1,11 @@
 //! ShelfBlockEntity's fixed list and alignment state. Live swaps are a later port.
-use super::{BlockEntity, BlockEntityData, BlockEntityState};
-use crate::{block::containers::storage, inventory::StackGenerations};
+use super::{BlockEntity, BlockEntityData, BlockEntityRef, BlockEntityState};
+use crate::{
+    block::containers::storage,
+    inventory::StackGenerations,
+    level::{Level, LevelError},
+};
+use ferraloom_data::registries::game_event::Id as GameEvent;
 use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_protocol::component::{ComponentTypeId, DataComponentMap, ItemStack};
 
@@ -44,6 +49,13 @@ impl ShelfBlockEntity {
 pub(super) struct ShelfBehavior;
 pub(super) static SHELF_ENTITY: ShelfBehavior = ShelfBehavior;
 impl BlockEntity for ShelfBehavior {
+    fn set_changed_live(
+        &self,
+        handle: BlockEntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        set_changed_with_event(handle, Some(GameEvent::BLOCK_ACTIVATE), level)
+    }
     fn load_additional(
         &self,
         state: &mut BlockEntityState,
@@ -100,3 +112,37 @@ impl BlockEntity for ShelfBehavior {
         tag.remove("Items");
     }
 }
+
+/// Port of ShelfBlockEntity#setChanged(nullable event). The superclass callback,
+/// game event and update each observe the original receiver at their native point.
+pub(crate) fn set_changed_with_event(
+    handle: BlockEntityRef,
+    event: Option<GameEvent>,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    level.with_block_entity_callback(handle, |level| {
+        handle.set_changed_base(level)?;
+        let data = level.block_entity::<BlockEntityData>(handle)?;
+        if data.has_level {
+            if let Some(event) = event {
+                let state = data.block_state;
+                level.game_event(
+                    event,
+                    ferraloom_util::Vec3::new(
+                        f64::from(handle.pos.x) + 0.5,
+                        f64::from(handle.pos.y) + 0.5,
+                        f64::from(handle.pos.z) + 0.5,
+                    ),
+                    None,
+                    Some(state),
+                )?;
+            }
+            let state = level.block_entity::<BlockEntityData>(handle)?.block_state;
+            level.send_block_updated(handle.pos, state, state);
+        }
+        Ok(())
+    })
+}
+
+#[cfg(test)]
+mod tests;

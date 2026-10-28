@@ -1,0 +1,24 @@
+shelf-changed	false	4613	0	false	4613	
+shelf-changed	false	4613	0	true	4613	
+shelf-changed	false	4613	1	false	4613	
+shelf-changed	false	4613	1	true	4613	
+shelf-changed	false	4613	2	false	4613	
+shelf-changed	false	4613	2	true	4613	
+shelf-changed	false	4805	0	false	4805	
+shelf-changed	false	4805	0	true	4805	
+shelf-changed	false	4805	1	false	4805	
+shelf-changed	false	4805	1	true	4805	
+shelf-changed	false	4805	2	false	4805	
+shelf-changed	false	4805	2	true	4805	
+shelf-changed	true	4613	0	false	4613	changed;output:4613;event:minecraft:block_activate:4613;update:4613:4613:3
+shelf-changed	true	4613	0	true	4805	changed;output:4613;event:minecraft:block_activate:4805;update:4805:4805:3
+shelf-changed	true	4613	1	false	4613	changed;output:4613;update:4613:4613:3
+shelf-changed	true	4613	1	true	4805	changed;output:4613;update:4805:4805:3
+shelf-changed	true	4613	2	false	4613	changed;output:4613;event:minecraft:block_deactivate:4613;update:4613:4613:3
+shelf-changed	true	4613	2	true	4805	changed;output:4613;event:minecraft:block_deactivate:4805;update:4805:4805:3
+shelf-changed	true	4805	0	false	4805	changed;output:4805;event:minecraft:block_activate:4805;update:4805:4805:3
+shelf-changed	true	4805	0	true	4805	changed;output:4805;event:minecraft:block_activate:4805;update:4805:4805:3
+shelf-changed	true	4805	1	false	4805	changed;output:4805;update:4805:4805:3
+shelf-changed	true	4805	1	true	4805	changed;output:4805;update:4805:4805:3
+shelf-changed	true	4805	2	false	4805	changed;output:4805;event:minecraft:block_deactivate:4805;update:4805:4805:3
+shelf-changed	true	4805	2	true	4805	changed;output:4805;event:minecraft:block_deactivate:4805;update:4805:4805:3
