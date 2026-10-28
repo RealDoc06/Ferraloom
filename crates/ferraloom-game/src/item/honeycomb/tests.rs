@@ -113,38 +113,10 @@ fn native_wax_and_inverse_keep_every_state_property() {
 fn native_honeycomb_use_keeps_context_receiver_chest_effect_order_and_rng() {
     let pos = BlockPos::new(8, 5, 8);
     let mut count = 0;
-    let mut pending_statues = 0;
     for line in vectors().lines().filter(|line| line.starts_with("use\t")) {
         let f = line.split('\t').collect::<Vec<_>>();
         let old = BlockState::from_id(f[1].parse().unwrap()).unwrap();
         let separate = f[2] == "true";
-        // The typed factory is available; native waxing still waits for the
-        // statue removal callback. These eight runtime cases remain pending.
-        if old
-            .block()
-            .is_instance_of(BlockClass::CopperGolemStatueBlock)
-        {
-            let receiver = entity::create(pos, old).unwrap();
-            assert!(
-                matches!(receiver, entity::BlockEntityState::CopperGolemStatue(_)),
-                "{line}"
-            );
-            let data = receiver.data();
-            assert_eq!(
-                data.kind,
-                entity::BlockEntityType::COPPER_GOLEM_STATUE,
-                "{line}"
-            );
-            assert_eq!((data.pos, data.block_state), (pos, old), "{line}");
-            assert_eq!(
-                data.components,
-                ferraloom_protocol::component::DataComponentMap::default(),
-                "{line}"
-            );
-            assert!(!data.has_level && !data.removed, "{line}");
-            pending_statues += 1;
-            continue;
-        }
         let (mut level, player) = level();
         level
             .set_block_state(pos.below(1), Block::STONE.default_state())
@@ -235,8 +207,7 @@ fn native_honeycomb_use_keeps_context_receiver_chest_effect_order_and_rng() {
         );
         count += 1;
     }
-    assert_eq!(count, 302);
-    assert_eq!(pending_statues, 8);
+    assert_eq!(count, 310);
 }
 #[test]
 fn native_honeycomb_sign_application_marks_wax_once_without_consuming() {
