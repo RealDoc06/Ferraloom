@@ -316,6 +316,25 @@ piglin-anger	9223372036854775807	{anger_end_time:999L,angry_at:[I;1,2,3,4]}	999	
 piglin-anger	9223372036854775807	{anger_end_time:-1L,angry_at:[I;1,2,3,4]}	-1	[I;1,2,3,4]	true
 piglin-anger	9223372036854775807	{anger_end_time:'bad',AngerTime:5,angry_at:'bad'}	-9223372036854775804	-	true
 piglin-anger	9223372036854775807	{AngerTime:40,angry_at:[I;1,2,3,4]}	-9223372036854775769	[I;1,2,3,4]	true
+villager-constructor	0	minecraft:plains	minecraft:none	1	false	false	40a72bcf	4437113781045784766
+villager-constructor	1	minecraft:plains	minecraft:none	1	false	false	3f219c52	7564655870752979346
+villager-constructor	2	minecraft:plains	minecraft:toolsmith	1	false	false	3febf288	-1817970389778669801
+villager-constructor	3	minecraft:plains	minecraft:weaponsmith	1	false	false	40622871	1309571695633557482
+villager-constructor	12345	minecraft:plains	minecraft:armorer	1	false	false	404e5fb1	-1236052134575208584
+villager-constructor	-1	minecraft:plains	minecraft:leatherworker	1	false	false	4030c224	226341162490527646
+villager-constructor	-9223372036854775808	minecraft:plains	minecraft:none	1	false	false	40a72bcf	4437113781045784766
+villager-constructor	9223372036854775807	minecraft:plains	minecraft:leatherworker	1	false	false	4030c224	226341162490527646
+villager-nbt	{}	minecraft:plains	minecraft:none	1	false	false	-1	0	-	true	4437113781045784766
+villager-nbt	{VillagerData:{}}	minecraft:plains	minecraft:none	1	true	false	-1	0	-	true	4437113781045784766
+villager-nbt	{VillagerData:{type:'minecraft:desert',profession:'minecraft:farmer',level:5},Xp:42}	minecraft:desert	minecraft:farmer	5	true	false	-1	42	-	true	4437113781045784766
+villager-nbt	{VillagerData:{type:'no_such_type',profession:'unknown',level:0}}	minecraft:plains	minecraft:none	1	true	false	-1	0	-	true	4437113781045784766
+villager-nbt	{VillagerData:{type:3,profession:[],level:'bad'}}	minecraft:plains	minecraft:none	1	true	false	-1	0	-	true	4437113781045784766
+villager-nbt	{VillagerData:3}	minecraft:plains	minecraft:none	1	false	false	-1	0	-	true	4437113781045784766
+villager-nbt	{VillagerDataFinalized:true}	minecraft:plains	minecraft:cleric	1	true	false	-1	0	-	true	-7261648964369397258
+villager-nbt	{ConversionTime:0,Xp:-3}	minecraft:plains	minecraft:none	1	false	true	0	-3	-	true	4437113781045784766
+villager-nbt	{ConversionTime:300,ConversionPlayer:[I;1,2,3,4],Xp:99}	minecraft:plains	minecraft:none	1	false	true	300	99	[I;1,2,3,4]	true	4437113781045784766
+villager-nbt	{ConversionTime:-2,ConversionPlayer:[I;1,2,3,4]}	minecraft:plains	minecraft:none	1	false	true	-2	0	[I;1,2,3,4]	true	4437113781045784766
+villager-nbt	{ConversionTime:-1}	minecraft:plains	minecraft:none	1	false	false	-1	0	-	true	4437113781045784766
 zombie-nbt	minecraft:drowned	false	-2	false	false	-1	-2	3fcd70a3e0000000	true
 zombie-nbt	minecraft:drowned	false	-1	false	false	-1	-1	3fcd70a3e0000000	false
 zombie-nbt	minecraft:drowned	false	0	false	false	-1	0	3fcd70a3e0000000	true

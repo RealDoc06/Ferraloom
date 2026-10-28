@@ -34,7 +34,7 @@ run([str(JDK / 'javac'), '-cp', str(CLASSES) + ':' + CP, '-d', str(CLASSES),
 output = run([str(JDK / 'java'), '-Dnet.bytebuddy.experimental=true', '-Xmx512m', '-cp', str(CLASSES) + ':' + CP,
               'MonsterVectors'])
 vectors = '\n'.join(line for line in output.splitlines()
-                    if line.startswith(('monster-', 'cube-load\t', 'zombie-villager-random\t', 'zombie-nbt\t', 'piglin-anger\t'))) + '\n'
+                    if line.startswith(('monster-', 'cube-load\t', 'zombie-villager-random\t', 'zombie-nbt\t', 'piglin-anger\t', 'villager-constructor\t', 'villager-nbt\t'))) + '\n'
 path = HERE / 'vectors.tsv'
 if sys.argv[1:] == ['--check']:
     if path.read_text() != vectors:

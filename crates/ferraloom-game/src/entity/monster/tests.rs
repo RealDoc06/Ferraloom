@@ -144,6 +144,13 @@ fn canonical_constructors_match_native_parent_xp_health_and_navigation() {
         let kind = EntityType::from_name(f[1]).unwrap();
         let base = EntityData::new(kind, 1, 0);
         let (monster, navigation) = match kind {
+            EntityType::ZOMBIE_VILLAGER => (
+                zombie::villager::ZombieVillager::with_level(base, &level)
+                    .unwrap()
+                    .parent
+                    .parent,
+                NavigationKind::Ground,
+            ),
             EntityType::DROWNED => (
                 zombie::drowned::Drowned::with_level(base, &level)
                     .unwrap()
@@ -212,7 +219,7 @@ fn canonical_constructors_match_native_parent_xp_health_and_navigation() {
         );
         checked += 1;
     }
-    assert_eq!(checked, 6);
+    assert_eq!(checked, 7);
 }
 
 #[test]
@@ -394,4 +401,144 @@ fn native_piglin_anger_nbt_prioritizes_absolute_time_and_round_trips_references(
         checked += 1;
     }
     assert_eq!(checked, 24);
+}
+
+fn seeded_villager(level: &crate::level::Level, seed: i64) -> zombie::villager::ZombieVillager {
+    let mut base = EntityData::new(EntityType::ZOMBIE_VILLAGER, 1, 0);
+    // Match the native receiver's explicit reset immediately before the complete
+    // virtual metadata chain. UUID initialization has already finished.
+    base.random = ferraloom_util::random::LegacyRandomSource::new(seed);
+    zombie::villager::ZombieVillager::with_level(base, level).unwrap()
+}
+
+#[test]
+fn native_villager_profession_precedes_living_yaw_on_the_same_random_stream() {
+    use ferraloom_util::random::{LegacyRandomSource, RandomSource};
+    let level = crate::entity::tests::level(false);
+    let mut checked = 0;
+    for row in VECTORS
+        .lines()
+        .filter(|row| row.starts_with("zombie-villager-random\t"))
+    {
+        let f: Vec<_> = row.split('\t').collect();
+        let mut random = LegacyRandomSource::new(f[1].parse().unwrap());
+        let data = zombie::villager::initialize_zombie_villager_data(&mut random);
+        assert_eq!(data.villager_type.0.as_str(), f[2]);
+        assert_eq!(data.profession.0.as_str(), f[3]);
+        assert_eq!(data.level, f[4].parse::<i32>().unwrap());
+        assert_eq!(random.next_long(), f[5].parse::<i64>().unwrap());
+        checked += 1;
+    }
+    for row in VECTORS
+        .lines()
+        .filter(|row| row.starts_with("villager-constructor\t"))
+    {
+        let f: Vec<_> = row.split('\t').collect();
+        let mut actor = seeded_villager(&level, f[1].parse().unwrap());
+        assert_eq!(actor.villager_data().villager_type.0.as_str(), f[2]);
+        assert_eq!(actor.villager_data().profession.0.as_str(), f[3]);
+        assert_eq!(actor.villager_data().level, f[4].parse::<i32>().unwrap());
+        assert_eq!(actor.villager_data_finalized(), f[5] == "true");
+        assert_eq!(actor.is_converting(), f[6] == "true");
+        assert_eq!(
+            actor.parent.as_living().yaw.to_bits(),
+            u32::from_str_radix(f[7], 16).unwrap()
+        );
+        assert_eq!(
+            actor.parent.as_living_mut().random.next_long(),
+            f[8].parse::<i64>().unwrap()
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, 16);
+}
+
+#[test]
+fn native_villager_nbt_primitives_defaults_finalization_and_rng_match() {
+    use ferraloom_nbt::{CompoundTag, Tag};
+    use ferraloom_util::random::RandomSource;
+    let level = crate::entity::tests::level(false);
+    let mut checked = 0;
+    for row in VECTORS
+        .lines()
+        .filter(|row| row.starts_with("villager-nbt\t"))
+    {
+        let f: Vec<_> = row.split('\t').collect();
+        let input = ferraloom_nbt::parse_compound(f[1]).unwrap();
+        let mut actor = seeded_villager(&level, 0);
+        actor.read_villager_data_fields(&input);
+        actor.read_npc_data(&input).unwrap();
+        let continuation = actor.read_conversion_fields(&input);
+        if let Some(step) = continuation {
+            assert_eq!(step.time, f[7].parse::<i32>().unwrap());
+            assert_eq!(step.player, actor.conversion_starter);
+            // This slice measures the primitive prefix; the live root must run
+            // Weakness/Strength and event 16 before continuing to the XP read.
+        }
+        actor.read_villager_xp(&input);
+        assert_eq!(actor.villager_data().villager_type.0.as_str(), f[2]);
+        assert_eq!(actor.villager_data().profession.0.as_str(), f[3]);
+        assert_eq!(actor.villager_data().level, f[4].parse::<i32>().unwrap());
+        assert_eq!(actor.villager_data_finalized(), f[5] == "true");
+        assert_eq!(actor.is_converting(), f[6] == "true");
+        let mut saved = CompoundTag::new();
+        actor.add_villager_save_data(&mut saved);
+        assert_eq!(
+            saved.get_int_or("ConversionTime", 0),
+            f[7].parse::<i32>().unwrap()
+        );
+        assert_eq!(saved.get_int_or("Xp", 0), f[8].parse::<i32>().unwrap());
+        let expected_player = if f[9] == "-" {
+            None
+        } else {
+            Some(ferraloom_nbt::parse(f[9]).unwrap())
+        };
+        assert_eq!(saved.get("ConversionPlayer"), expected_player.as_ref());
+        assert_eq!(
+            saved
+                .get("VillagerData")
+                .and_then(Tag::as_compound)
+                .unwrap()
+                .get_int_or("level", 0),
+            actor.villager_data().level
+        );
+        assert!(!saved.contains_key("Offers"));
+        assert!(!saved.contains_key("Gossips"));
+        let mut again = seeded_villager(&level, 0);
+        again.read_villager_data_fields(&saved);
+        again.read_npc_data(&saved).unwrap();
+        let _continuation = again.read_conversion_fields(&saved);
+        again.read_villager_xp(&saved);
+        // Native always writes VillagerData, so the second load finalizes even
+        // an initially unfinalized villager. Do not normalize this transition.
+        assert_eq!(again.villager_data_finalized(), f[10] == "true");
+        assert_eq!(again.villager_data(), actor.villager_data());
+        assert_eq!(again.villager_xp, actor.villager_xp);
+        assert_eq!(
+            again.villager_conversion_time,
+            actor.villager_conversion_time
+        );
+        assert_eq!(
+            actor.parent.as_living_mut().random.next_long(),
+            f[11].parse::<i64>().unwrap()
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, 11);
+}
+
+#[test]
+fn villager_npc_collections_remain_required_before_conversion_and_xp() {
+    use zombie::villager::UnsupportedNpcData;
+    let level = crate::entity::tests::level(false);
+    let mut actor = seeded_villager(&level, 0);
+    for (input, expected) in [
+        ("{Offers:{},Gossips:[]}", UnsupportedNpcData::MerchantOffers),
+        ("{Gossips:[]}", UnsupportedNpcData::GossipContainer),
+    ] {
+        let input = ferraloom_nbt::parse_compound(input).unwrap();
+        assert_eq!(actor.read_npc_data(&input), Err(expected));
+        assert_eq!(actor.villager_xp, 0);
+        assert!(!actor.is_converting());
+    }
 }
