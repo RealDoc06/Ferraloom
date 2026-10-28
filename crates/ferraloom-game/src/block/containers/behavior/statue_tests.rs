@@ -5,7 +5,11 @@ use crate::{
 };
 use ferraloom_data::{Block, BlockClass, BlockState};
 use ferraloom_util::{BlockPos, ChunkPos, core::Plane};
-use std::{cell::RefCell, collections::BTreeSet, sync::Arc};
+use std::{
+    cell::RefCell,
+    collections::BTreeSet,
+    sync::{Arc, OnceLock},
+};
 
 const POS: BlockPos = BlockPos::new(8, 5, 8);
 thread_local! {
@@ -99,4 +103,84 @@ fn native_statue_removal_notifies_only_comparators_in_order() {
     }
     assert_eq!(rows, 16);
     assert_eq!(blocks.len(), 8);
+}
+
+/// COPPER_GOLEM_STATUES preserves the actual receiver through every age/wax
+/// transition. Replacing a statue with an unrelated block removes that receiver.
+#[test]
+fn native_statue_factories_and_weathering_keep_the_original_receiver() {
+    use crate::block::{
+        UPDATE_LIMIT, UpdateFlags,
+        entity::{self, copper_golem_statue::CopperGolemStatueBlockEntity},
+    };
+    use ferraloom_data::datapack::{Pack, ResourceManager, TagSet};
+    use ferraloom_nbt::parse_compound;
+    static TAGS: OnceLock<Arc<TagSet<Block>>> = OnceLock::new();
+    let tags = TAGS.get_or_init(|| {
+        let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder supplies vanilla jar");
+        let resources =
+            ResourceManager::new(vec![Pack::vanilla_jar(std::path::Path::new(&jar)).unwrap()]);
+        Arc::new(TagSet::<Block>::load(&resources).unwrap())
+    });
+    let mut checked = 0;
+    for row in include_str!("../../../../tests/java/blocks/entities/statue-retention.tsv").lines() {
+        let f: Vec<_> = row.split('\t').collect();
+        let old = BlockState::from_id(f[1].parse().unwrap()).unwrap();
+        let new = BlockState::from_id(f[2].parse().unwrap()).unwrap();
+        let keep = f[3] == "true";
+        let mut level = level();
+        level.set_block_tags(Arc::clone(tags));
+        level.set_block_state(POS, old).unwrap();
+        assert!(entity::supports(old.block()));
+        assert!(entity::supports_creation(old.block()));
+        let mut receiver = entity::new_block_entity(POS, old).unwrap().unwrap();
+        receiver.data_mut().components = entity::components::load(
+            Some(&parse_compound("{'minecraft:custom_name':'kept'}").unwrap()),
+            level.context().registry_context().unwrap(),
+        );
+        level.set_block_entity(receiver).unwrap();
+        let handle = level.block_entity_ref(POS).unwrap().unwrap();
+        level.retain_block_entity(handle).unwrap();
+        assert_eq!(
+            entity::registry::should_changed_state_keep_block_entity(new, old, tags),
+            keep,
+            "{row}"
+        );
+        if old != new {
+            level
+                .set_block(
+                    POS,
+                    new,
+                    UpdateFlags::CLIENTS | UpdateFlags::KNOWN_SHAPE | UpdateFlags::SKIP_ON_PLACE,
+                    UPDATE_LIMIT,
+                )
+                .unwrap();
+        }
+        assert_eq!(
+            level.block_entity_ref(POS).unwrap(),
+            keep.then_some(handle),
+            "{row}"
+        );
+        let original = level
+            .block_entity::<CopperGolemStatueBlockEntity>(handle)
+            .unwrap();
+        assert_eq!(original.parent.removed, !keep, "{row}");
+        assert_eq!(
+            original.parent.block_state,
+            if keep { new } else { old },
+            "{row}"
+        );
+        assert_eq!(
+            level
+                .block_entity_state(handle)
+                .unwrap()
+                .save_with_full_metadata()
+                .unwrap(),
+            parse_compound(f[4]).unwrap(),
+            "{row}"
+        );
+        level.release_block_entity(handle);
+        checked += 1;
+    }
+    assert_eq!(checked, 72);
 }

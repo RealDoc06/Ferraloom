@@ -13,7 +13,8 @@ cp = ':'.join(map(str, [classes, vanilla / 'versions/26.3/server-26.3.jar',
     *sorted((vanilla / 'libraries').rglob('*.jar')),
     *sorted((vanilla / 'tree-harness').rglob('*.jar'))]))
 for command in [
-    [str(jdk / 'javac'), '-cp', cp, '-d', str(classes), str(source / 'CopperGolemStatueRemovalVectors.java')],
+    [str(jdk / 'javac'), '-cp', cp, '-d', str(classes),
+     str(source.parent.parent / 'level/NeighborVectors.java'), str(source / 'CopperGolemStatueRemovalVectors.java')],
     [str(jdk / 'java'), '-Xmx512m', '-XX:+EnableDynamicAgentLoading',
      '-Dnet.bytebuddy.experimental=true', '-cp', cp, 'CopperGolemStatueRemovalVectors'],
 ]:
@@ -26,3 +27,7 @@ rows = [line for line in result.stdout.splitlines() if line.startswith('statue-r
 assert len(rows) == 16, len(rows)
 (source / 'statue-removal.tsv').write_text('\n'.join(rows) + '\n')
 print(f'{len(rows)} native statue removal observations')
+rows = [line for line in result.stdout.splitlines() if line.startswith('statue-keep\t')]
+assert len(rows) == 72, len(rows)
+(source / 'statue-retention.tsv').write_text('\n'.join(rows) + '\n')
+print(f'{len(rows)} native statue factory and weathering-retention observations')

@@ -1,10 +1,13 @@
 import java.util.*;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.*;
+import net.minecraft.core.component.*;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.*;
+import net.minecraft.world.level.block.entity.*;
 import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.*;
 
@@ -15,7 +18,21 @@ public final class CopperGolemStatueRemovalVectors {
     SharedConstants.tryDetectVersion();
     Bootstrap.bootStrap();
     System.setOut(output);
+    var world = NeighborVectors.load();
+    var builtin = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+    var registries = HolderLookup.Provider.create(java.util.stream.Stream.concat(builtin.listRegistries(), world.listRegistries()));
     var pos = new BlockPos(8, 5, 8);
+    var statues = new ArrayList<Block>();
+    for (var block : BuiltInRegistries.BLOCK) if (block instanceof CopperGolemStatueBlock) statues.add(block);
+    var replacements = new ArrayList<>(statues); replacements.add(Blocks.STONE);
+    for (var old : statues) for (var replacement : replacements) {
+      var receiver = ((EntityBlock)old).newBlockEntity(pos, old.defaultBlockState());
+      if (!(receiver instanceof CopperGolemStatueBlockEntity)) throw new AssertionError(old);
+      receiver.setComponents(DataComponentMap.builder().set(DataComponents.CUSTOM_NAME, Component.literal("kept")).build());
+      boolean keep = replacement.defaultBlockState().shouldChangedStateKeepBlockEntity(old.defaultBlockState());
+      if (keep) receiver.setBlockState(replacement.defaultBlockState());
+      System.out.println("statue-keep\t" + Block.getId(old.defaultBlockState()) + "\t" + Block.getId(replacement.defaultBlockState()) + "\t" + keep + "\t" + receiver.saveWithFullMetadata(registries));
+    }
     for (var block : BuiltInRegistries.BLOCK) {
       if (!(block instanceof CopperGolemStatueBlock)) continue;
       for (boolean moved : List.of(false, true)) {
