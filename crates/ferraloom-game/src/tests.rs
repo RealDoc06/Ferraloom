@@ -24,7 +24,9 @@ impl Entity for TestCow {
     }
 
     fn tick(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
-        CowBehavior.tick(entity, level)?;
+        // This synthetic dispatcher tests base bookkeeping and reentrant
+        // damage callbacks, independently of Mob AI, controls and travel.
+        crate::entity::base_tick(self, entity, level)?;
         // These borrows end before damage calls back into this active entity.
         let target = level.entity::<Cow>(entity)?.as_mob().target;
         if let Some(mut target) = target {
