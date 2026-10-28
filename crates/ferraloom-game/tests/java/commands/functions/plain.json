@@ -1,0 +1,200 @@
+[
+  {
+    "lines": [],
+    "permission": 2,
+    "entries": []
+  },
+  {
+    "lines": [
+      "  # comment\t",
+      "",
+      " say hello ",
+      "return 7"
+    ],
+    "permission": 2,
+    "entries": [
+      "say hello",
+      "return 7"
+    ]
+  },
+  {
+    "lines": [
+      "say one\\",
+      "   two"
+    ],
+    "permission": 2,
+    "entries": [
+      "say onetwo"
+    ]
+  },
+  {
+    "lines": [
+      "#ignored\\",
+      "return 9",
+      "return fail"
+    ],
+    "permission": 2,
+    "entries": [
+      "return fail"
+    ]
+  },
+  {
+    "lines": [
+      "say A\\",
+      " \\ ",
+      "B"
+    ],
+    "permission": 2,
+    "entries": [
+      "say AB"
+    ]
+  },
+  {
+    "lines": [
+      "say ends\\"
+    ],
+    "permission": 2,
+    "error": "Line continuation at end of file",
+    "error_type": "IllegalArgumentException"
+  },
+  {
+    "lines": [
+      "// comment"
+    ],
+    "permission": 2,
+    "error": "Unknown or invalid command '// comment' on line 1 (if you intended to make a comment, use '#' not '//')",
+    "error_type": "IllegalArgumentException"
+  },
+  {
+    "lines": [
+      "/say hello"
+    ],
+    "permission": 2,
+    "error": "Unknown or invalid command '/say hello' on line 1 (did you mean 'say'? Do not use a preceding forwards slash.)",
+    "error_type": "IllegalArgumentException"
+  },
+  {
+    "lines": [
+      "/minecraft:say hello"
+    ],
+    "permission": 2,
+    "error": "Unknown or invalid command '/minecraft:say hello' on line 1 (did you mean 'minecraft'? Do not use a preceding forwards slash.)",
+    "error_type": "IllegalArgumentException"
+  },
+  {
+    "lines": [
+      "/"
+    ],
+    "permission": 2,
+    "error": "Index 1 out of bounds for length 1",
+    "error_type": "StringIndexOutOfBoundsException"
+  },
+  {
+    "lines": [
+      "unknown"
+    ],
+    "permission": 2,
+    "error": "Whilst parsing command on line 1: Unknown or incomplete command. See below for error at position 0: <--[HERE]",
+    "error_type": "IllegalArgumentException"
+  },
+  {
+    "lines": [
+      "return"
+    ],
+    "permission": 2,
+    "error": "Whilst parsing command on line 1: Unknown or incomplete command. See below for error at position 6: return<--[HERE]",
+    "error_type": "IllegalArgumentException"
+  },
+  {
+    "lines": [
+      "say"
+    ],
+    "permission": 2,
+    "error": "Whilst parsing command on line 1: Unknown or incomplete command. See below for error at position 3: say<--[HERE]",
+    "error_type": "IllegalArgumentException"
+  },
+  {
+    "lines": [
+      "return 2147483648"
+    ],
+    "permission": 2,
+    "error": "Whilst parsing command on line 1: Invalid integer '2147483648' at position 7: return <--[HERE]",
+    "error_type": "IllegalArgumentException"
+  },
+  {
+    "lines": [
+      "return run say nested"
+    ],
+    "permission": 2,
+    "entries": [
+      "return run say nested"
+    ]
+  },
+  {
+    "lines": [
+      "function test:other"
+    ],
+    "permission": 2,
+    "entries": [
+      "function test:other"
+    ]
+  },
+  {
+    "lines": [
+      "\u0000\u000bsay trimmed\u001f"
+    ],
+    "permission": 2,
+    "entries": [
+      "say trimmed"
+    ]
+  },
+  {
+    "lines": [
+      " say not_trimmed"
+    ],
+    "permission": 2,
+    "error": "Whilst parsing command on line 1: Unknown or incomplete command. See below for error at position 0: <--[HERE]",
+    "error_type": "IllegalArgumentException"
+  },
+  {
+    "lines": [
+      " say not_trimmed"
+    ],
+    "permission": 2,
+    "error": "Whilst parsing command on line 1: Unknown or incomplete command. See below for error at position 0: <--[HERE]",
+    "error_type": "IllegalArgumentException"
+  },
+  {
+    "lines": [
+      "return 7"
+    ],
+    "permission": 1,
+    "error": "Whilst parsing command on line 1: Unknown or incomplete command. See below for error at position 0: <--[HERE]",
+    "error_type": "IllegalArgumentException"
+  },
+  {
+    "lines": [
+      "# only comment"
+    ],
+    "permission": 2,
+    "entries": []
+  },
+  {
+    "lines": [
+      "say hash # is not a comment"
+    ],
+    "permission": 2,
+    "entries": [
+      "say hash # is not a comment"
+    ]
+  },
+  {
+    "lines": [
+      "say 😀 hello"
+    ],
+    "permission": 2,
+    "entries": [
+      "say 😀 hello"
+    ]
+  }
+]

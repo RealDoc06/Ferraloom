@@ -39,6 +39,9 @@ pub(crate) fn ported_behavior(
     method: BlockMethod,
 ) -> Option<&'static dyn BlockBehavior> {
     use BlockMethod as M;
+    if method == M::TriggerEvent && block.class() == BlockClass::EndGatewayBlock {
+        return Some(&CONTAINER_BLOCK);
+    }
     if block.class() == BlockClass::ChiseledBookShelfBlock
         && matches!(
             method,
