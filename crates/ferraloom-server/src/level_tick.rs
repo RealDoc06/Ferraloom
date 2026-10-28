@@ -346,6 +346,7 @@ impl MinecraftServer {
                         global_event: false,
                     }),
                 )?,
+                LevelEffect::PoiUpdate(update) => self.queue_poi_update(dimension.clone(), update),
                 LevelEffect::PoiChanged { .. } => self.pending_level_hooks.poi += 1,
                 LevelEffect::BlockUpdated { .. } => self.pending_level_hooks.navigation += 1,
                 LevelEffect::DestroyParticles { .. } => self.pending_level_hooks.particles += 1,

@@ -14,7 +14,8 @@ mod level_tick;
 #[path = "levels.rs"]
 mod levels;
 #[path = "packet_processor.rs"]
-mod packet_processor;
+pub(crate) mod packet_processor;
+use packet_processor::MainThreadTaskQueue;
 #[path = "player_io.rs"]
 mod player_io;
 #[path = "player_spawn.rs"]
@@ -227,7 +228,7 @@ pub struct MinecraftServer {
     players: Vec<ConnectionId>,
     ingress: mpsc::Receiver<Ingress>,
     packet_processor: VecDeque<packet_processor::PacketEvent>,
-    pending_tasks: VecDeque<packet_processor::TickTask>,
+    pending_tasks: MainThreadTaskQueue,
     status: watch::Sender<status::ServerStatus>,
     shutdown: watch::Sender<bool>,
     tick: u64,
@@ -630,7 +631,7 @@ impl MinecraftServer {
             players: Vec::new(),
             ingress,
             packet_processor: VecDeque::new(),
-            pending_tasks: VecDeque::new(),
+            pending_tasks: MainThreadTaskQueue::default(),
             status,
             shutdown,
             tick: 0,
@@ -825,6 +826,15 @@ impl MinecraftServer {
         }
         Ok(())
     }
+    /// The same FIFO consumed by pollTask, lent to dimension runtime handles.
+    #[expect(
+        dead_code,
+        reason = "canonical queue installation is wired by pipeline"
+    )]
+    pub(crate) fn main_task_queue(&self) -> MainThreadTaskQueue {
+        self.pending_tasks.clone()
+    }
+
     /// TickChildren retains level-before-connection and chunk-send-after-player order.
     async fn tick_server(&mut self) -> Result<()> {
         let started = Instant::now();
@@ -841,6 +851,7 @@ impl MinecraftServer {
         self.was_paused = paused;
         if !paused {
             self.tick = self.tick.wrapping_add(1);
+            self.pending_tasks.set_tick(self.tick);
             self.tick_rate_manager.tick();
             // Functions precede the canonical server clocks in this serial slot.
             if self.tick_rate_manager.runs_normally() {

@@ -26,6 +26,7 @@ pub mod clip;
 mod container_runtime;
 mod context;
 pub use context::LevelContext;
+pub mod difficulty;
 pub mod distance_manager;
 pub mod effects;
 pub mod emission;
@@ -39,9 +40,11 @@ pub mod generation;
 pub mod heightmap;
 pub mod interaction;
 mod lighting;
+mod lightning;
 pub mod loot_facts;
 mod mutation;
 pub mod path_navigation_region;
+pub mod poi;
 mod post_processing;
 pub mod publication;
 mod random;
@@ -63,6 +66,7 @@ pub mod weather;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum LevelError {
+    Poi(poi::PoiError),
     /// Diagnostic context at a world dispatch boundary; the cause is unchanged.
     At {
         pos: BlockPos,
@@ -209,6 +213,7 @@ impl std::fmt::Display for LevelError {
                 write!(formatter, "{phase} at {pos:?}: {source}")
             }
             Self::BlockBreak(error) => std::fmt::Display::fmt(error.error(), formatter),
+            Self::Poi(error) => std::fmt::Display::fmt(error, formatter),
             Self::WorldgenMutationFailed { pos, source } => {
                 write!(formatter, "worldgen mutation at {pos:?}: {source}")
             }
@@ -244,6 +249,7 @@ impl std::error::Error for LevelError {
         match self {
             Self::At { source, .. } => Some(source.as_ref()),
             Self::BlockBreak(error) => Some(error.error()),
+            Self::Poi(error) => Some(error),
             Self::WorldgenMutationFailed { source, .. } => Some(source),
             _ => None,
         }
@@ -375,6 +381,9 @@ pub struct Region {
     entities: entity::EntityStorage,
     entity_tracker: entity_tracker::EntityTracker,
     waypoint_manager: waypoints::ServerWaypointManager,
+    // Cold canonical POI updates use short private guards; never guard IO or callbacks.
+    poi: RefCell<poi::PoiManager>,
+    poi_executor_running: bool,
     entity_tick_list: entity::EntityTickList,
     block_ticks: LevelTicks,
     fluid_ticks: LevelTicks<ferraloom_data::registries::fluid::Id>,
@@ -421,6 +430,8 @@ impl Region {
             entities: entity::EntityStorage::default(),
             entity_tracker: Default::default(),
             waypoint_manager: Default::default(),
+            poi: Default::default(),
+            poi_executor_running: false,
             entity_tick_list: entity::EntityTickList::default(),
             block_ticks: LevelTicks::default(),
             fluid_ticks: LevelTicks::default(),
@@ -654,6 +665,8 @@ impl Level {
         let region = self.region_mut();
         region.block_ticks.add_container(pos, block_ticks);
         region.fluid_ticks.add_container(pos, fluid_ticks);
+        #[cfg(test)]
+        self.complete_poi_chunk_load(pos, None)?;
         Ok(())
     }
     /// Port of ServerLevel#startTickingChunk, after generation post-processing.

@@ -16,10 +16,125 @@ pub(super) enum PacketEvent {
 }
 
 /// Port of TickTask: the birth tick controls MinecraftServer#shouldRun's
-/// starvation guard. Only tryHandleChat's server.execute calls enter this queue.
+/// starvation guard. Chat/commands and captured server.execute POI work share
+/// the native queue, preserving removal/addition order across task callbacks.
 pub(super) struct TickTask {
     tick: u64,
-    packet: ListenerAndPacket,
+    action: MainThreadAction,
+}
+
+pub(super) enum MainThreadAction {
+    Packet(ListenerAndPacket),
+    Poi {
+        dimension: protocol::Identifier,
+        update: ferraloom_game::level::poi::PoiUpdate,
+    },
+}
+
+/// Shared handle to MinecraftServer's one TickTask FIFO. The cold queue mutex
+/// protects only owned task movement; callers execute tasks after it is dropped.
+#[derive(Clone, Default)]
+pub(crate) struct MainThreadTaskQueue {
+    state: Arc<std::sync::Mutex<MainThreadTaskQueueState>>,
+}
+
+#[derive(Default)]
+struct MainThreadTaskQueueState {
+    tick: u64,
+    tasks: VecDeque<TickTask>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum MainTaskBlocker {
+    Packet,
+    Poi { dimension: protocol::Identifier },
+}
+
+/// A parked dimension may consume only its own POI task at the FIFO head.
+/// Blocked leaves the head intact; it is never permission to skip a task.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum PoiTaskPoll {
+    Empty,
+    Ready(ferraloom_game::level::poi::PoiUpdate),
+    Blocked(MainTaskBlocker),
+}
+
+impl MainThreadTaskQueue {
+    pub(super) fn set_tick(&self, tick: u64) {
+        self.state.lock().expect("main-task queue poisoned").tick = tick;
+    }
+
+    fn enqueue_packet(&self, packet: ListenerAndPacket) {
+        let mut state = self.state.lock().expect("main-task queue poisoned");
+        let tick = state.tick;
+        state.tasks.push_back(TickTask {
+            tick,
+            action: MainThreadAction::Packet(packet),
+        });
+    }
+
+    pub(crate) fn enqueue_poi(
+        &self,
+        dimension: protocol::Identifier,
+        update: ferraloom_game::level::poi::PoiUpdate,
+    ) {
+        let mut state = self.state.lock().expect("main-task queue poisoned");
+        let tick = state.tick;
+        state.tasks.push_back(TickTask {
+            tick,
+            action: MainThreadAction::Poi { dimension, update },
+        });
+    }
+
+    /// Inspect the canonical FIFO without consuming a blocked head. A save
+    /// depends on that head only if this dimension still has queued POI work.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "shared managed POI save barriers are wired by pipeline"
+        )
+    )]
+    pub(crate) fn has_pending_poi_for_level(&self, dimension: &protocol::Identifier) -> bool {
+        let state = self.state.lock().expect("main-task queue poisoned");
+        state.tasks.iter().any(|task| {
+            matches!(&task.action, MainThreadAction::Poi { dimension: target, .. } if target == dimension)
+        })
+    }
+
+    fn pop(&self, deadline: Option<tokio::time::Instant>) -> Option<TickTask> {
+        let mut state = self.state.lock().expect("main-task queue poisoned");
+        let tick = state.tick;
+        state.tasks.pop_front_if(|task| {
+            task.tick.wrapping_add(3) < tick
+                || deadline.is_none_or(|deadline| tokio::time::Instant::now() < deadline)
+        })
+    }
+
+    // Pipeline's managed pump installs this handle in its next IO slice.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "shared managed POI pumping is wired by pipeline")
+    )]
+    pub(crate) fn pop_poi_for_level(&self, dimension: &protocol::Identifier) -> PoiTaskPoll {
+        let mut state = self.state.lock().expect("main-task queue poisoned");
+        match state.tasks.front().map(|task| &task.action) {
+            None => PoiTaskPoll::Empty,
+            Some(MainThreadAction::Packet(_)) => PoiTaskPoll::Blocked(MainTaskBlocker::Packet),
+            Some(MainThreadAction::Poi {
+                dimension: target, ..
+            }) if target != dimension => PoiTaskPoll::Blocked(MainTaskBlocker::Poi {
+                dimension: target.clone(),
+            }),
+            Some(MainThreadAction::Poi { .. }) => {
+                let task = state.tasks.pop_front().expect("observed FIFO head");
+                let MainThreadAction::Poi { update, .. } = task.action else {
+                    unreachable!("head inspected under the same queue guard");
+                };
+                PoiTaskPoll::Ready(update)
+            }
+        }
+    }
 }
 
 /// MinecraftServer#haveTime's two deadlines during waitUntilNextTick. A
@@ -160,10 +275,7 @@ impl MinecraftServer {
                 let main_executor = packet.uses_main_executor();
                 let packet = ListenerAndPacket { id, packet };
                 if main_executor {
-                    self.pending_tasks.push_back(TickTask {
-                        tick: self.tick,
-                        packet,
-                    });
+                    self.pending_tasks.enqueue_packet(packet);
                 } else {
                     self.packet_processor.push_back(PacketEvent::Packet(packet));
                 }
@@ -174,6 +286,14 @@ impl MinecraftServer {
                 .push_back(PacketEvent::Console(command)),
         }
         Ok(())
+    }
+
+    pub(super) fn queue_poi_update(
+        &mut self,
+        dimension: protocol::Identifier,
+        update: ferraloom_game::level::poi::PoiUpdate,
+    ) {
+        self.pending_tasks.enqueue_poi(dimension, update);
     }
 
     fn receive_available_ingress(&mut self) -> Result<()> {
@@ -268,11 +388,21 @@ impl MinecraftServer {
         // Login/control replies also flush outside tickChildren, even when no
         // chat task is ready. No holder changes are drained here.
         self.flush_outbound();
-        if let Some(task) = self.pending_tasks.pop_front_if(|task| {
-            task.tick.wrapping_add(3) < self.tick
-                || deadline.is_none_or(|deadline| tokio::time::Instant::now() < deadline)
-        }) {
-            self.handle_queued_packet(task.packet).await?;
+        if let Some(task) = self.pending_tasks.pop(deadline) {
+            let previous = self
+                .live_levels_mut()
+                .map(|live| live.level.set_poi_executor_running(true))
+                .collect::<Vec<_>>();
+            let result = match task.action {
+                MainThreadAction::Packet(packet) => self.handle_queued_packet(packet).await,
+                MainThreadAction::Poi { dimension, update } => self
+                    .live_level_in_mut(&dimension)
+                    .and_then(|live| live.level.apply_poi_update(update).map_err(game_error)),
+            };
+            for (live, previous) in self.live_levels_mut().zip(previous) {
+                live.level.set_poi_executor_running(previous);
+            }
+            result?;
             self.flush_outbound();
             return Ok(true);
         }
@@ -349,5 +479,79 @@ impl MinecraftServer {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod queue_tests {
+    use super::*;
+    use ferraloom_game::level::poi::PoiUpdate;
+
+    #[test]
+    fn shared_poi_pop_keeps_packet_and_foreign_dimension_heads_in_the_canonical_fifo() {
+        let queue = MainThreadTaskQueue::default();
+        let runtime = queue.clone();
+        let overworld: protocol::Identifier = "minecraft:overworld".parse().unwrap();
+        let nether: protocol::Identifier = "minecraft:the_nether".parse().unwrap();
+        let a = PoiUpdate::Remove {
+            pos: BlockPos::ZERO,
+        };
+        let b = PoiUpdate::Remove {
+            pos: BlockPos::new(16, 0, 0),
+        };
+        queue.enqueue_packet(ListenerAndPacket {
+            id: 1,
+            packet: Incoming::Configuration(cfg::ServerboundPacket::FinishConfiguration(
+                cfg::FinishConfiguration {},
+            )),
+        });
+        runtime.enqueue_poi(nether.clone(), a);
+        assert!(!runtime.has_pending_poi_for_level(&overworld));
+        runtime.enqueue_poi(overworld.clone(), b);
+        assert!(runtime.has_pending_poi_for_level(&overworld));
+        assert_eq!(
+            runtime.pop_poi_for_level(&overworld),
+            PoiTaskPoll::Blocked(MainTaskBlocker::Packet)
+        );
+        assert!(matches!(
+            queue.pop(None).unwrap().action,
+            MainThreadAction::Packet(_)
+        ));
+        for _ in 0..2 {
+            assert!(runtime.has_pending_poi_for_level(&overworld));
+            assert_eq!(
+                runtime.pop_poi_for_level(&overworld),
+                PoiTaskPoll::Blocked(MainTaskBlocker::Poi {
+                    dimension: nether.clone()
+                })
+            );
+        }
+        assert_eq!(runtime.pop_poi_for_level(&nether), PoiTaskPoll::Ready(a));
+        assert!(!runtime.has_pending_poi_for_level(&nether));
+        assert!(runtime.has_pending_poi_for_level(&overworld));
+        // A callback may enqueue into the same queue after pop without a held guard.
+        runtime.enqueue_poi(overworld.clone(), a);
+        assert_eq!(runtime.pop_poi_for_level(&overworld), PoiTaskPoll::Ready(b));
+        assert_eq!(runtime.pop_poi_for_level(&overworld), PoiTaskPoll::Ready(a));
+        assert!(!runtime.has_pending_poi_for_level(&overworld));
+        assert_eq!(runtime.pop_poi_for_level(&overworld), PoiTaskPoll::Empty);
+    }
+
+    #[tokio::test]
+    async fn canonical_task_birth_tick_preserves_native_three_tick_starvation_rule() {
+        let queue = MainThreadTaskQueue::default();
+        queue.set_tick(10);
+        queue.enqueue_poi(
+            "minecraft:overworld".parse().unwrap(),
+            PoiUpdate::Remove {
+                pos: BlockPos::ZERO,
+            },
+        );
+        let expired = Some(tokio::time::Instant::now());
+        assert!(queue.pop(expired).is_none());
+        queue.set_tick(13);
+        assert!(queue.pop(expired).is_none());
+        queue.set_tick(14);
+        assert_eq!(queue.pop(expired).unwrap().tick, 10);
     }
 }

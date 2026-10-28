@@ -2683,3 +2683,249 @@ fn precipitation_layer_growth_pushes_entities_before_publishing_and_stops_at_rul
         );
     }
 }
+
+#[test]
+fn native_lightning_living_target_filter_fallback_and_random_consumption() {
+    use crate::entity::{EntityState, animal::Cow};
+    use ferraloom_util::{
+        Vec3,
+        random::{LegacyRandomSource, Random, RandomSource},
+    };
+    let mut count = 0;
+    for row in include_str!("../../tests/java/level/lightning-targets.tsv").lines() {
+        count += 1;
+        let fields: Vec<_> = row.split('\t').collect();
+        let seed = fields[0].parse().unwrap();
+        let mode: i32 = fields[1].parse().unwrap();
+        let y = fields[2].parse().unwrap();
+        let mut level = empty_level(&EMPTY);
+        level.set_has_skylight(true);
+        let mut sky = ferraloom_light::DataLayer::new(15);
+        for index in 0..4 {
+            let mut cow = Cow::default();
+            cow.as_living_mut().parent.set_pos(Vec3::new(
+                7.5 + f64::from(index),
+                1.0 + f64::from(index),
+                8.5,
+            ));
+            if index == 1 || mode == 0 {
+                cow.as_living_mut().set_health(0.0);
+            }
+            let visible = index != 2 && (mode != 2 || index == 3);
+            if !visible {
+                sky.set(7 + index, 1 + index, 8, 0);
+            }
+            let reference = level.next_entity_ref();
+            level
+                .add_entity(reference, EntityState::Cow(Box::new(cow)))
+                .unwrap();
+        }
+        level.set_light_snapshot(
+            ChunkPos::ZERO,
+            weather::ChunkLightSnapshot {
+                sky: [(0, sky)].into_iter().collect(),
+                block: Default::default(),
+            },
+        );
+        *level.random() = Random::Legacy(LegacyRandomSource::new(seed));
+        let target = level
+            .find_lightning_target_among_entities(BlockPos::new(8, y, 8))
+            .unwrap();
+        assert_eq!(
+            format!("{},{},{}", target.x, target.y, target.z),
+            fields[3],
+            "{row}"
+        );
+        assert_eq!(
+            level.random().next_int(),
+            fields[4].parse::<i32>().unwrap(),
+            "{row}"
+        );
+    }
+    assert_eq!(count, 30);
+}
+
+#[test]
+fn poi_command_task_queues_remove_add_while_tick_time_mutation_is_immediate() {
+    use super::poi::{PoiTypeId, PoiUpdate};
+    let mut level = empty_level(&EMPTY);
+    let pos = BlockPos::new(1, 0, 1);
+    let old = Block::STONE.default_state();
+    let bell = Block::BELL.default_state();
+    assert!(!level.set_poi_executor_running(true));
+    level
+        .update_poi_on_block_state_change(pos, old, bell)
+        .unwrap();
+    assert_eq!(level.poi_manager().get_type(pos).unwrap(), None);
+    assert_eq!(
+        level.take_effects(),
+        vec![LevelEffect::PoiUpdate(PoiUpdate::Add {
+            pos,
+            poi_type: PoiTypeId::MEETING
+        })]
+    );
+    assert!(level.set_poi_executor_running(false));
+    level
+        .apply_poi_update(PoiUpdate::Add {
+            pos,
+            poi_type: PoiTypeId::MEETING,
+        })
+        .unwrap();
+    assert_eq!(
+        level.poi_manager().get_type(pos).unwrap(),
+        Some(PoiTypeId::MEETING)
+    );
+    level
+        .update_poi_on_block_state_change(pos, bell, old)
+        .unwrap();
+    assert_eq!(level.poi_manager().get_type(pos).unwrap(), None);
+    assert!(level.take_effects().is_empty());
+    level
+        .apply_poi_update(PoiUpdate::Add {
+            pos,
+            poi_type: PoiTypeId::MEETING,
+        })
+        .unwrap();
+    level.set_poi_executor_running(true);
+    level
+        .update_poi_on_block_state_change(pos, bell, Block::LODESTONE.default_state())
+        .unwrap();
+    assert_eq!(
+        level.take_effects(),
+        vec![
+            LevelEffect::PoiUpdate(PoiUpdate::Remove { pos }),
+            LevelEffect::PoiUpdate(PoiUpdate::Add {
+                pos,
+                poi_type: PoiTypeId::LODESTONE
+            }),
+        ]
+    );
+    assert_eq!(
+        level.poi_manager().get_type(pos).unwrap(),
+        Some(PoiTypeId::MEETING)
+    );
+}
+
+#[test]
+fn shared_poi_neighbor_load_order_preserves_identical_canonical_state() {
+    use super::poi::PoiTypeId;
+    use ferraloom_storage::{IntArray, PoiChunk, PoiRecord, PoiSection};
+
+    fn data(pos: BlockPos) -> PoiChunk {
+        PoiChunk {
+            sections: Some(
+                [(
+                    "0".into(),
+                    PoiSection {
+                        valid: Some(true),
+                        records: Some(vec![PoiRecord {
+                            position: Some(IntArray(vec![pos.x, pos.y, pos.z])),
+                            poi_type: Some(PoiTypeId::MEETING.name().into()),
+                            free_tickets: Some(17),
+                            ..Default::default()
+                        }]),
+                        ..Default::default()
+                    },
+                )]
+                .into_iter()
+                .collect(),
+            ),
+            ..Default::default()
+        }
+    }
+
+    let mut first = empty_level(&EMPTY);
+    let mut second = empty_level(&EMPTY);
+    let positions = [BlockPos::new(33, 0, 1), BlockPos::new(49, 0, 1)];
+    for (level, order) in [(&first, [0, 1]), (&second, [1, 0])] {
+        for index in order {
+            let pos = positions[index];
+            let chunk = ChunkPos::containing(pos);
+            level
+                .complete_poi_chunk_load_shared(chunk, Some(data(pos)))
+                .unwrap();
+            // Valid persisted sections ignore an empty block scan. All operations
+            // use &Level, as a lower-status managed chunk load does.
+            let section = empty_chunk(chunk).sections().next().unwrap().clone();
+            level
+                .check_poi_consistency_with_sections_shared(chunk, 0, &[section])
+                .unwrap();
+            // A late absent prefetch cannot erase the canonical loaded record.
+            level.complete_poi_chunk_load_shared(chunk, None).unwrap();
+        }
+    }
+    assert_eq!(
+        format!("{:?}", first.poi_manager()),
+        format!("{:?}", second.poi_manager())
+    );
+    for pos in positions {
+        assert_eq!(first.poi_manager().get_free_tickets(pos).unwrap(), 17);
+    }
+}
+
+#[test]
+fn worldgen_poi_enqueue_preserves_cross_chunk_write_order_without_inline_execution() {
+    use super::poi::{PoiTypeId, PoiUpdate};
+    let mut level = empty_level(&EMPTY);
+    let a = BlockPos::new(1, 0, 1);
+    let b = BlockPos::new(17, 0, 1);
+    let air = Block::AIR.default_state();
+    let bell = Block::BELL.default_state();
+    level.enqueue_poi_block_state_change(a, air, bell);
+    level.enqueue_poi_block_state_change(b, air, bell);
+    level.enqueue_poi_block_state_change(a, bell, Block::LODESTONE.default_state());
+    level.enqueue_poi_block_state_change(a, bell, bell);
+    assert_eq!(level.poi_manager().get_type(a).unwrap(), None);
+    assert_eq!(
+        level.take_effects(),
+        vec![
+            LevelEffect::PoiUpdate(PoiUpdate::Add {
+                pos: a,
+                poi_type: PoiTypeId::MEETING
+            }),
+            LevelEffect::PoiUpdate(PoiUpdate::Add {
+                pos: b,
+                poi_type: PoiTypeId::MEETING
+            }),
+            LevelEffect::PoiUpdate(PoiUpdate::Remove { pos: a }),
+            LevelEffect::PoiUpdate(PoiUpdate::Add {
+                pos: a,
+                poi_type: PoiTypeId::LODESTONE
+            }),
+        ]
+    );
+}
+
+#[test]
+fn shared_poi_task_apply_uses_canonical_state_and_dirties_without_emitting() {
+    use super::poi::{PoiTypeId, PoiUpdate};
+    let mut level = empty_level(&EMPTY);
+    let pos = BlockPos::new(2, 0, 2);
+    let tasks =
+        PoiUpdate::for_block_change(pos, Block::AIR.default_state(), Block::BELL.default_state());
+    let shared: &Level = &level;
+    for update in tasks.into_iter().flatten() {
+        shared.apply_poi_update_shared(update).unwrap();
+    }
+    let saved = shared
+        .capture_poi_chunk_for_save(ChunkPos::ZERO)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        level.poi_manager().get_type(pos).unwrap(),
+        Some(PoiTypeId::MEETING)
+    );
+    level
+        .apply_poi_update_shared(PoiUpdate::Remove { pos })
+        .unwrap();
+    assert_eq!(level.poi_manager().get_type(pos).unwrap(), None);
+    assert!(
+        level
+            .capture_poi_chunk_for_save(ChunkPos::ZERO)
+            .unwrap()
+            .unwrap()
+            .revision
+            > saved.revision
+    );
+    assert!(level.take_effects().is_empty());
+}
