@@ -312,6 +312,15 @@ fn native_command_and_utility_placement_callbacks() {
             }
             "jukebox-placed" => {
                 let mut level = bare_level();
+                // Level#setBlock only sends CLIENTS updates for a block-ticking
+                // server chunk, matching the native placement write observer.
+                level
+                    .set_chunk_loading_status(
+                        ChunkPos::new(0, 0),
+                        crate::level::distance_manager::FullChunkStatus::BlockTicking,
+                        true,
+                    )
+                    .unwrap();
                 let state = Block::JUKEBOX.default_state();
                 level.set_block_state(POS, state).unwrap();
                 let kind: u8 = f[1].parse().unwrap();
