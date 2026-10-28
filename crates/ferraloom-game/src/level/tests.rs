@@ -2683,3 +2683,64 @@ fn precipitation_layer_growth_pushes_entities_before_publishing_and_stops_at_rul
         );
     }
 }
+
+#[test]
+fn native_lightning_living_target_filter_fallback_and_random_consumption() {
+    use crate::entity::{EntityState, animal::Cow};
+    use ferraloom_util::{
+        Vec3,
+        random::{LegacyRandomSource, Random, RandomSource},
+    };
+    let mut count = 0;
+    for row in include_str!("../../tests/java/level/lightning-targets.tsv").lines() {
+        count += 1;
+        let fields: Vec<_> = row.split('\t').collect();
+        let seed = fields[0].parse().unwrap();
+        let mode: i32 = fields[1].parse().unwrap();
+        let y = fields[2].parse().unwrap();
+        let mut level = empty_level(&EMPTY);
+        level.set_has_skylight(true);
+        let mut sky = ferraloom_light::DataLayer::new(15);
+        for index in 0..4 {
+            let mut cow = Cow::default();
+            cow.as_living_mut().parent.set_pos(Vec3::new(
+                7.5 + f64::from(index),
+                1.0 + f64::from(index),
+                8.5,
+            ));
+            if index == 1 || mode == 0 {
+                cow.as_living_mut().set_health(0.0);
+            }
+            let visible = index != 2 && (mode != 2 || index == 3);
+            if !visible {
+                sky.set(7 + index, 1 + index, 8, 0);
+            }
+            let reference = level.next_entity_ref();
+            level
+                .add_entity(reference, EntityState::Cow(Box::new(cow)))
+                .unwrap();
+        }
+        level.set_light_snapshot(
+            ChunkPos::ZERO,
+            weather::ChunkLightSnapshot {
+                sky: [(0, sky)].into_iter().collect(),
+                block: Default::default(),
+            },
+        );
+        *level.random() = Random::Legacy(LegacyRandomSource::new(seed));
+        let target = level
+            .find_lightning_target_among_entities(BlockPos::new(8, y, 8))
+            .unwrap();
+        assert_eq!(
+            format!("{},{},{}", target.x, target.y, target.z),
+            fields[3],
+            "{row}"
+        );
+        assert_eq!(
+            level.random().next_int(),
+            fields[4].parse::<i32>().unwrap(),
+            "{row}"
+        );
+    }
+    assert_eq!(count, 30);
+}
