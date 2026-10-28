@@ -51,6 +51,8 @@ mod stairs;
 mod tests;
 mod weathering_copper;
 #[cfg(test)]
+mod weathering_tests;
+#[cfg(test)]
 mod workstation_tests;
 mod workstations;
 

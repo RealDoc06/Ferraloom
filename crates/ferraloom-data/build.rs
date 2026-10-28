@@ -991,7 +991,6 @@ fn main() {
     std::fs::write(
         Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("copper_wax.rs"),
         wax,
-
     )
     .unwrap();
     let fluid_random_ticking = load(root, "fluid_random_ticking");
