@@ -11,7 +11,9 @@ mod attribute_updates;
 pub use attribute_updates::{on_attribute_updated_parent, refresh_dirty_attributes};
 pub mod climbable;
 pub mod damage_state;
+pub mod death;
 mod equipment;
+pub(crate) use equipment::on_equip_item_parent;
 pub use equipment::on_equipped_item_broken;
 pub(crate) use equipment::on_equipped_item_broken_parent;
 pub mod fall_damage;
@@ -34,6 +36,8 @@ pub struct FallSounds {
 #[derive(Debug)]
 pub struct LivingEntity {
     pub parent: EntityData,
+    /// Server-side handler selected by LivingEntity#createInterpolationHandler.
+    pub(crate) interpolation_tracker: super::tracking::codec::SteppedInterpolationTracker,
     pub attributes: AttributeMap,
     pub equipment: EntityEquipment,
     /// Port of LivingEntity#locatorBarIcon; the persistent icon, before team color overrides.
@@ -65,6 +69,8 @@ pub struct LivingEntity {
     pub hurt_time: i32,
     pub hurt_duration: i32,
     pub death_time: i32,
+    pub(super) dead: bool,
+    pub(super) skip_drop_experience: bool,
     pub(super) combat_tracker: super::damage::combat_tracker::CombatTracker,
     pub(super) no_action_time: i32,
     pub(super) absorption_amount: f32,
@@ -80,8 +86,15 @@ pub struct LivingEntity {
     current_impulse_impact_pos: Option<ferraloom_util::Vec3>,
 }
 impl LivingEntity {
-    /// Port of LivingEntity's constructor after Entity's derived metadata build.
+    /// Port of LivingEntity's constructor for subclasses with no additional
+    /// metadata-phase work. Mob's derived metadata callback uses the same phases.
     pub(crate) fn with_parent(mut parent: EntityData) -> Self {
+        Self::define_synched_data(&mut parent);
+        Self::with_prepared_parent(parent)
+    }
+    /// LivingEntity#defineSynchedData runs inside Entity's constructor, before
+    /// LivingEntity's field initializers and constructor RNG draws.
+    pub(crate) fn define_synched_data(parent: &mut EntityData) {
         let entity_data = &mut parent.entity_data;
         entity_data.define(data::LIVING_ENTITY_FLAGS, 0);
         entity_data.define(data::HEALTH, 1.0);
@@ -90,9 +103,13 @@ impl LivingEntity {
         entity_data.define(data::ARROW_COUNT, VarInt(0));
         entity_data.define(data::STINGER_COUNT, VarInt(0));
         entity_data.define(data::SLEEPING_POS, None);
+    }
+    /// Continue only after the complete derived metadata chain has been defined.
+    pub(crate) fn with_prepared_parent(parent: EntityData) -> Self {
         let attributes = AttributeMap::new(parent.entity_type);
         let mut living = Self {
             parent,
+            interpolation_tracker: Default::default(),
             attributes,
             equipment: EntityEquipment::default(),
             locator_bar_icon: crate::level::waypoints::default_icon(),
@@ -122,6 +139,8 @@ impl LivingEntity {
             hurt_time: 0,
             hurt_duration: 0,
             death_time: 0,
+            dead: false,
+            skip_drop_experience: false,
             combat_tracker: Default::default(),
             no_action_time: 0,
             absorption_amount: 0.0,
@@ -143,6 +162,11 @@ impl LivingEntity {
         living.parent.set_y_rot(rotation);
         living.y_head_rot = living.parent.yaw;
         living
+    }
+    /// Port of LivingEntity#setSpeed's parent body. Use Entity::set_speed for
+    /// virtual calls so Mob also updates forward input at its native point.
+    pub fn set_speed(&mut self, speed: f32) {
+        self.speed = speed;
     }
     pub fn is_swinging(&self) -> bool {
         self.swing_state.is_swinging()

@@ -9,8 +9,10 @@
 //! ```
 
 mod block_methods;
+mod block_names;
 mod building_properties;
 mod copper_chest_properties;
+pub mod copper_wax;
 pub mod dispenser_properties;
 mod environment_attributes;
 mod game_events;

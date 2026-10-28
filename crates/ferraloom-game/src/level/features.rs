@@ -45,6 +45,11 @@ impl Level {
 }
 
 impl LiveWorldGenLevel for Level {
+    fn structure_templates(
+        &self,
+    ) -> Result<&ferraloom_worldgen::structure::template::StructureTemplateManager, Error> {
+        required(self.context().structure_templates()).map(std::sync::Arc::as_ref)
+    }
     fn min_y(&self) -> i32 {
         self.min_build_height()
     }
@@ -360,6 +365,109 @@ impl LiveWorldGenLevel for Level {
     }
     fn has_block_entity_at(&self, p: [i32; 3]) -> Result<bool, Error> {
         required(self.block_entity_ref(pos(p))).map(|handle| handle.is_some())
+    }
+    /// Port of StructureTemplate#placeInWorld's retained loadWithComponents call.
+    fn load_block_entity(
+        &mut self,
+        p: [i32; 3],
+        mut tag: ferraloom_nbt::CompoundTag,
+        random: &mut FeatureRandomSelector<'_>,
+    ) -> Result<(), Error> {
+        let Some(handle) = required(self.get_or_promote_block_entity(pos(p)))? else {
+            return Ok(());
+        };
+        required(self.retain_block_entity(handle))?;
+        let result = (|| {
+            if required(self.block_entity_state(handle))?
+                .randomizable()
+                .is_some()
+            {
+                let seed = match random {
+                    FeatureRandomSelector::Canonical => self.random().next_long(),
+                    FeatureRandomSelector::External(random) => random.next_long(),
+                };
+                tag.insert("LootTableSeed", ferraloom_nbt::Tag::Long(seed));
+            }
+            // This canonical handle load owns component decoding and class
+            // callbacks through the actual Level, including registry services.
+            required(handle.load_with_components(&tag, self))
+        })();
+        self.release_block_entity(handle);
+        result
+    }
+    fn mark_template_block_entity_changed(&mut self, p: [i32; 3]) -> Result<(), Error> {
+        let Some(handle) = required(self.get_or_promote_block_entity(pos(p)))? else {
+            return Ok(());
+        };
+        required(self.retain_block_entity(handle))?;
+        let result = required(handle.set_changed(self));
+        self.release_block_entity(handle);
+        result
+    }
+    /// Port of StructureTemplate#createEntityIgnoreException and placeEntities.
+    fn place_template_entity(
+        &mut self,
+        _chunk: [i32; 2],
+        tag: ferraloom_nbt::CompoundTag,
+        mirror: ferraloom_util::Mirror,
+        rotation: ferraloom_util::Rotation,
+        finalize: bool,
+    ) -> Result<(), Error> {
+        use crate::entity::{
+            self, EntityData, EntityPersistenceError, EntitySpawnReason, EntitySpawnRequest,
+        };
+        // StructureTemplate already transformed Pos and removed UUID. Read that
+        // original position before Entity#load applies its coordinate clamps.
+        let coordinates = tag
+            .get_list("Pos")
+            .ok_or_else(|| Error("template entity missing transformed Pos".into()))?;
+        let coordinate = |index| {
+            coordinates
+                .0
+                .get(index)
+                .and_then(ferraloom_nbt::Tag::as_double)
+                .ok_or_else(|| Error("template entity invalid transformed Pos".into()))
+        };
+        let position = ferraloom_util::Vec3::new(coordinate(0)?, coordinate(1)?, coordinate(2)?);
+        let root = match entity::create_entity_from_tag(
+            &tag,
+            EntitySpawnRequest {
+                reason: EntitySpawnReason::Structure,
+                ignore_checks: false,
+            },
+            self,
+        ) {
+            Ok(Some(root)) => root,
+            Ok(None) | Err(EntityPersistenceError::Base(_)) => return Ok(()),
+            // Required unported factories/callbacks are never native malformed
+            // input skips, even though Java catches its actual load exceptions.
+            Err(error) => return Err(Error(format!("live template entity: {error}"))),
+        };
+        let result = (|| {
+            let behavior = required(self.entity_behavior(root))?;
+            let rotated = required(behavior.rotate(root, rotation, self))?;
+            let mirrored = required(behavior.mirror(root, mirror, self))?;
+            let base = required(self.entity::<EntityData>(root))?;
+            let yaw = rotated + (mirrored - base.yaw);
+            let pitch = base.pitch;
+            required(self.entity_mut::<EntityData>(root))?.snap_to(position, yaw, pitch);
+            required(behavior.set_y_body_rot(root, yaw, self))?;
+            required(behavior.set_y_head_rot(root, yaw, self))?;
+            if finalize && required(self.entity_state(root))?.as_mob().is_some() {
+                required(entity::mob::finalize_spawn(
+                    root,
+                    EntitySpawnReason::Structure,
+                    None,
+                    self,
+                ))?;
+            }
+            // Native addFreshEntityWithPassengers is void here: a rejected add
+            // does not change the enclosing template placement's success value.
+            required(self.try_add_fresh_entity_with_passengers(root))?;
+            Ok(())
+        })();
+        self.release_entity(root);
+        result
     }
 }
 

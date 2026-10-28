@@ -1,0 +1,136 @@
+death-xp-cow	0	false	false	true	1	d4d951383d93cb7a	false
+death-xp-cow	0	false	true	true	1	d4d951383d93cb7a	true
+death-xp-cow	0	true	false	false	1	d4d951383d93cb7a	false
+death-xp-cow	0	true	true	false	1	d4d951383d93cb7a	true
+death-xp-cow	1	false	false	true	1	19b89cd868fb0e6f	false
+death-xp-cow	1	false	true	true	1	19b89cd868fb0e6f	true
+death-xp-cow	1	true	false	false	1	19b89cd868fb0e6f	false
+death-xp-cow	1	true	true	false	1	19b89cd868fb0e6f	true
+death-xp-cow	2	false	false	true	2	4b1ab9f7e6c54590	false
+death-xp-cow	2	false	true	true	2	4b1ab9f7e6c54590	true
+death-xp-cow	2	true	false	false	2	4b1ab9f7e6c54590	false
+death-xp-cow	2	true	true	false	2	4b1ab9f7e6c54590	true
+death-xp-cow	7	false	false	true	2	a3773417bfc9945a	false
+death-xp-cow	7	false	true	true	2	a3773417bfc9945a	true
+death-xp-cow	7	true	false	false	2	a3773417bfc9945a	false
+death-xp-cow	7	true	true	false	2	a3773417bfc9945a	true
+death-xp-cow	98	false	false	true	1	1ed715f42d7e6186	false
+death-xp-cow	98	false	true	true	1	1ed715f42d7e6186	true
+death-xp-cow	98	true	false	false	1	1ed715f42d7e6186	false
+death-xp-cow	98	true	true	false	1	1ed715f42d7e6186	true
+death-xp-cow	1234	false	false	true	3	428197d1f38c2dda	false
+death-xp-cow	1234	false	true	true	3	428197d1f38c2dda	true
+death-xp-cow	1234	true	false	false	3	428197d1f38c2dda	false
+death-xp-cow	1234	true	true	false	3	428197d1f38c2dda	true
+death-xp-cow	-1	false	false	true	3	708722c303242017	false
+death-xp-cow	-1	false	true	true	3	708722c303242017	true
+death-xp-cow	-1	true	false	false	3	708722c303242017	false
+death-xp-cow	-1	true	true	false	3	708722c303242017	true
+death-xp-cow	-9223372036854775808	false	false	true	1	d4d951383d93cb7a	false
+death-xp-cow	-9223372036854775808	false	true	true	1	d4d951383d93cb7a	true
+death-xp-cow	-9223372036854775808	true	false	false	1	d4d951383d93cb7a	false
+death-xp-cow	-9223372036854775808	true	true	false	1	d4d951383d93cb7a	true
+death-xp-player	false	false	-306783377	none	-2147483639
+death-xp-player	false	false	-306783377	living	-2147483648
+death-xp-player	false	false	-306783377	nonliving	-2147483639
+death-xp-player	false	false	-1	none	-7
+death-xp-player	false	false	-1	living	-7
+death-xp-player	false	false	-1	nonliving	-7
+death-xp-player	false	false	0	none	0
+death-xp-player	false	false	0	living	0
+death-xp-player	false	false	0	nonliving	0
+death-xp-player	false	false	1	none	7
+death-xp-player	false	false	1	living	7
+death-xp-player	false	false	1	nonliving	7
+death-xp-player	false	false	14	none	98
+death-xp-player	false	false	14	living	98
+death-xp-player	false	false	14	nonliving	98
+death-xp-player	false	false	15	none	100
+death-xp-player	false	false	15	living	100
+death-xp-player	false	false	15	nonliving	100
+death-xp-player	false	false	100	none	100
+death-xp-player	false	false	100	living	100
+death-xp-player	false	false	100	nonliving	100
+death-xp-player	false	false	2147483647	none	100
+death-xp-player	false	false	2147483647	living	100
+death-xp-player	false	false	2147483647	nonliving	100
+death-xp-player	false	true	-306783377	none	0
+death-xp-player	false	true	-306783377	living	0
+death-xp-player	false	true	-306783377	nonliving	0
+death-xp-player	false	true	-1	none	0
+death-xp-player	false	true	-1	living	0
+death-xp-player	false	true	-1	nonliving	0
+death-xp-player	false	true	0	none	0
+death-xp-player	false	true	0	living	0
+death-xp-player	false	true	0	nonliving	0
+death-xp-player	false	true	1	none	0
+death-xp-player	false	true	1	living	0
+death-xp-player	false	true	1	nonliving	0
+death-xp-player	false	true	14	none	0
+death-xp-player	false	true	14	living	0
+death-xp-player	false	true	14	nonliving	0
+death-xp-player	false	true	15	none	0
+death-xp-player	false	true	15	living	0
+death-xp-player	false	true	15	nonliving	0
+death-xp-player	false	true	100	none	0
+death-xp-player	false	true	100	living	0
+death-xp-player	false	true	100	nonliving	0
+death-xp-player	false	true	2147483647	none	0
+death-xp-player	false	true	2147483647	living	0
+death-xp-player	false	true	2147483647	nonliving	0
+death-xp-player	true	false	-306783377	none	0
+death-xp-player	true	false	-306783377	living	0
+death-xp-player	true	false	-306783377	nonliving	0
+death-xp-player	true	false	-1	none	0
+death-xp-player	true	false	-1	living	0
+death-xp-player	true	false	-1	nonliving	0
+death-xp-player	true	false	0	none	0
+death-xp-player	true	false	0	living	0
+death-xp-player	true	false	0	nonliving	0
+death-xp-player	true	false	1	none	0
+death-xp-player	true	false	1	living	0
+death-xp-player	true	false	1	nonliving	0
+death-xp-player	true	false	14	none	0
+death-xp-player	true	false	14	living	0
+death-xp-player	true	false	14	nonliving	0
+death-xp-player	true	false	15	none	0
+death-xp-player	true	false	15	living	0
+death-xp-player	true	false	15	nonliving	0
+death-xp-player	true	false	100	none	0
+death-xp-player	true	false	100	living	0
+death-xp-player	true	false	100	nonliving	0
+death-xp-player	true	false	2147483647	none	0
+death-xp-player	true	false	2147483647	living	0
+death-xp-player	true	false	2147483647	nonliving	0
+death-xp-player	true	true	-306783377	none	0
+death-xp-player	true	true	-306783377	living	0
+death-xp-player	true	true	-306783377	nonliving	0
+death-xp-player	true	true	-1	none	0
+death-xp-player	true	true	-1	living	0
+death-xp-player	true	true	-1	nonliving	0
+death-xp-player	true	true	0	none	0
+death-xp-player	true	true	0	living	0
+death-xp-player	true	true	0	nonliving	0
+death-xp-player	true	true	1	none	0
+death-xp-player	true	true	1	living	0
+death-xp-player	true	true	1	nonliving	0
+death-xp-player	true	true	14	none	0
+death-xp-player	true	true	14	living	0
+death-xp-player	true	true	14	nonliving	0
+death-xp-player	true	true	15	none	0
+death-xp-player	true	true	15	living	0
+death-xp-player	true	true	15	nonliving	0
+death-xp-player	true	true	100	none	0
+death-xp-player	true	true	100	living	0
+death-xp-player	true	true	100	nonliving	0
+death-xp-player	true	true	2147483647	none	0
+death-xp-player	true	true	2147483647	living	0
+death-xp-player	true	true	2147483647	nonliving	0
+death-prefix	false	false	false	pending-loot	killing:false;event:minecraft:entity_die:true:false:true:0;loot:true:false
+death-prefix	false	false	true	pending-loot	killing:false;event:minecraft:entity_die:true:false:true:0;loot:true:true
+death-prefix	false	true	false	pending-loot	killing:false;event:minecraft:entity_die:true:true:true:0;loot:true:true
+death-prefix	false	true	true	pending-loot	killing:false;event:minecraft:entity_die:true:true:true:0;loot:true:true
+death-prefix	true	false	false	ok	
+death-prefix	true	false	true	ok	
+death-prefix	true	true	false	ok	
+death-prefix	true	true	true	ok	

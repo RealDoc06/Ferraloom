@@ -189,3 +189,7 @@ base `Block` implementation redispatches the latter with a null source. The
 only former-method override is `StrawBedBlock` (level event 2014);
 `BaseFireBlock` overrides the latter with no particles. DestroyBlock's breaker
 is loot/game-event context and is not excluded from level event 2001.
+
+`ExtractBuildingProperties` records FireBlock ignition and burn odds for every
+state through the actual private native queries, including waterlogged zeroes.
+The runtime getters index those immutable tables; no block-name lists select rates.

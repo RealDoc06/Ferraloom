@@ -312,6 +312,15 @@ fn native_command_and_utility_placement_callbacks() {
             }
             "jukebox-placed" => {
                 let mut level = bare_level();
+                // Level#setBlock only sends CLIENTS updates for a block-ticking
+                // server chunk, matching the native placement write observer.
+                level
+                    .set_chunk_loading_status(
+                        ChunkPos::new(0, 0),
+                        crate::level::distance_manager::FullChunkStatus::BlockTicking,
+                        true,
+                    )
+                    .unwrap();
                 let state = Block::JUKEBOX.default_state();
                 level.set_block_state(POS, state).unwrap();
                 let kind: u8 = f[1].parse().unwrap();
@@ -329,17 +338,43 @@ fn native_command_and_utility_placement_callbacks() {
                     _ => {}
                 }
                 let stack = held(Block::JUKEBOX, (kind != 0).then_some(tag));
-                let result = level.set_placed_by(state, POS, None, StackView::Borrowed(&stack));
+                level
+                    .set_placed_by(state, POS, None, StackView::Borrowed(&stack))
+                    .unwrap();
+                let expected = self::state(f[2]);
+                assert_eq!(level.get_block_state(POS).unwrap(), expected, "{line}");
+                // The native vectors include malformed RecordItem values and
+                // the exact CLIENTS update. Placement sets the flag, not a song.
+                let updates: Vec<_> = level
+                    .take_effects()
+                    .into_iter()
+                    .filter_map(|effect| match effect {
+                        LevelEffect::BlockUpdated { pos, old, new } => {
+                            assert_eq!(pos, POS, "{line}");
+                            assert_eq!(old, state, "{line}");
+                            Some(new.id())
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                let native_updates: Vec<u16> = f[3]
+                    .split(',')
+                    .filter(|write| !write.is_empty())
+                    .map(|write| {
+                        let (state, flags) = write.split_once(':').unwrap();
+                        assert_eq!(flags, "2", "native CLIENTS flag: {line}");
+                        state.parse().unwrap()
+                    })
+                    .collect();
+                assert_eq!(updates, native_updates, "{line}");
                 if matches!(kind, 1 | 2) {
-                    // Positive native callback reaches the actual required factory;
-                    // the record-playing BE is still unported, so no fake success.
-                    assert!(matches!(
-                        result,
-                        Err(LevelError::UnsupportedBlockEntity(Block::JUKEBOX))
-                    ));
-                } else {
-                    result.unwrap();
-                    assert_eq!(level.get_block_state(POS).unwrap(), self::state(f[2]));
+                    let handle = level.block_entity_ref(POS).unwrap().unwrap();
+                    let jukebox = level
+                        .block_entity::<entity::jukebox::JukeboxBlockEntity>(handle)
+                        .unwrap();
+                    assert_eq!(jukebox.parent.block_state, expected, "{line}");
+                    assert!(jukebox.item.is_empty(), "{line}");
+                    assert!(jukebox.song_player.song.is_none(), "{line}");
                 }
                 jukebox_queries += 1;
             }

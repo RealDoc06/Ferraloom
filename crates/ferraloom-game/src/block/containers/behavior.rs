@@ -49,6 +49,9 @@ pub(crate) fn ported_behavior(
     {
         return Some(&CONTAINER_BLOCK);
     }
+    if method == M::TriggerEvent && block.class() == BlockClass::EndGatewayBlock {
+        return Some(&CONTAINER_BLOCK);
+    }
     if block.class() == BlockClass::ChiseledBookShelfBlock
         && matches!(
             method,

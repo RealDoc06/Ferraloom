@@ -86,7 +86,7 @@ impl BlockEntity for BeaconBehavior {
         &self,
         state: &mut BlockEntityState,
         tag: &CompoundTag,
-        _registries: &dyn ferraloom_protocol::codec::RegistryContext,
+        registries: &dyn ferraloom_protocol::codec::RegistryContext,
     ) {
         let BlockEntityState::Beacon(entity) = state else {
             unreachable!()
@@ -96,7 +96,7 @@ impl BlockEntity for BeaconBehavior {
         entity.custom_name = tag
             .get("CustomName")
             .and_then(|tag| Component::from_nbt(tag.clone()).ok());
-        entity.lock = tag.get("lock").and_then(|tag| LockCode::from_nbt(tag).ok());
+        entity.lock = storage::load_lock(tag, registries);
     }
     fn save_additional(&self, state: &BlockEntityState) -> ferraloom_protocol::Result<CompoundTag> {
         let BlockEntityState::Beacon(entity) = state else {

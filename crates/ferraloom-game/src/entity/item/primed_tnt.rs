@@ -141,6 +141,14 @@ impl EntityDataView for PrimedTnt {
 }
 pub struct PrimedTntBehavior;
 impl Entity for PrimedTntBehavior {
+    fn get_owner(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+    ) -> Result<Option<EntityRef>, LevelError> {
+        get_owner(entity, level)
+    }
+
     fn trace_entity_refs(
         &self,
         state: &crate::entity::EntityState,

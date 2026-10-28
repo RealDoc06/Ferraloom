@@ -1,5 +1,5 @@
 //! Immutable worldgen context and job-local execution of a single status step.
-use super::{ChunkStatus, ChunkStatusTask, ChunkStep};
+use super::{ChunkStatus, ChunkStatusTask, ChunkStep, WorldGenRegistries};
 use crate::block::GameWorldgenBlockBehavior;
 use ferraloom_data::datapack::ResourceManager;
 use ferraloom_util::random::RandomSource;
@@ -15,13 +15,10 @@ use ferraloom_worldgen::{
     settings::DimensionType,
     structure::{
         Beardifier,
-        decoration::{RegionStructureDecoration, StructureStep},
-        generation::{StructureGenerationContext, StructureGenerators},
-        pipeline::{self, StructureRegistry},
+        decoration::RegionStructureDecoration,
+        generation::StructureGenerationContext,
+        pipeline,
         placement::{BiomeSet, ChunkGeneratorStructureState, StructurePlacement, find_ring_biome},
-        pool::StructurePools,
-        rule::BlockTags,
-        template::StructureTemplateManager,
     },
 };
 use std::sync::Arc;
@@ -33,15 +30,10 @@ pub struct WorldGenContext {
     pub generator: Arc<ChunkGenerator>,
     pub dimension: DimensionType,
     pub seed: i64,
-    pub resources: ResourceManager,
-    pub features: FeatureRegistry,
-    pub structures: StructureGenerators,
-    pub templates: StructureTemplateManager,
-    pub pools: StructurePools,
+    pub registries: Arc<WorldGenRegistries>,
+    flat_features: Option<FeatureRegistry>,
     pub structure_state: ChunkGeneratorStructureState,
     pub possible_sets: Vec<Identifier>,
-    pub structure_steps: Vec<StructureStep>,
-    pub tags: BlockTags,
     pub decoration: DecorationPlan,
     pub generate_structures: bool,
     pub environment: Arc<EnvironmentDefinitions>,
@@ -58,18 +50,36 @@ impl WorldGenContext {
         environment: Arc<EnvironmentDefinitions>,
         dimension_environment: DimensionEnvironment,
     ) -> Result<Self, Error> {
-        let mut loader = FeatureLoader::new(resources)?;
-        let registry = StructureRegistry::load(resources, generator.data())?;
-        let structures = StructureGenerators::load(resources, registry, &mut |v| loader.placed(v))?;
-        let pools = StructurePools::load(resources, &mut |v| loader.placed(v))?;
-        let features = match generator.as_ref() {
-            ChunkGenerator::Flat(flat) => flat.feature_registry(resources)?,
-            _ => loader.load_all()?,
+        let registries = Arc::new(WorldGenRegistries::load(resources, generator.data())?);
+        Self::from_registries(
+            registries,
+            generator,
+            dimension,
+            seed,
+            generate_structures,
+            environment,
+            dimension_environment,
+        )
+    }
+    /// Bind one level to the server's immutable definitions. Flat retains its
+    /// own adjusted features; rings and decoration indices depend on the generator.
+    pub fn from_registries(
+        registries: Arc<WorldGenRegistries>,
+        generator: Arc<ChunkGenerator>,
+        dimension: DimensionType,
+        seed: i64,
+        generate_structures: bool,
+        environment: Arc<EnvironmentDefinitions>,
+        dimension_environment: DimensionEnvironment,
+    ) -> Result<Self, Error> {
+        let resources = &registries.resources;
+        let flat_features = match generator.as_ref() {
+            ChunkGenerator::Flat(flat) => Some(flat.feature_registry(resources)?),
+            _ => None,
         };
-        let templates = StructureTemplateManager::load_all(resources)?;
         let mut structure_state =
             ChunkGeneratorStructureState::load(resources, seed, generator.get_origin()?)?;
-        let mut possible_sets = structures.registry.possible_structure_sets(
+        let mut possible_sets = registries.structures.registry.possible_structure_sets(
             &structure_state,
             &generator.biome_source().possible_biomes(),
         )?;
@@ -121,28 +131,29 @@ impl WorldGenContext {
                 structure_state.rings.push((rings.clone(), positions));
             }
         }
+        let features = flat_features.as_ref().unwrap_or(&registries.features);
         let decoration =
-            DecorationPlan::new(&features, &generator.biome_source().possible_biomes())?;
+            DecorationPlan::new(features, &generator.biome_source().possible_biomes())?;
         Ok(Self {
             registry_context: None,
             generator,
             dimension,
             seed,
-            resources: resources.clone(),
-            features,
-            structures,
-            templates,
-            pools,
+            registries,
+            flat_features,
             structure_state,
             possible_sets,
-            structure_steps: StructureStep::load(resources)?,
-            tags: BlockTags::load(resources)?,
             decoration,
             generate_structures,
             environment,
             dimension_environment,
             unported_behavior: crate::block::UnportedBehavior::Strict,
         })
+    }
+    pub fn features(&self) -> &FeatureRegistry {
+        self.flat_features
+            .as_ref()
+            .unwrap_or(&self.registries.features)
     }
     /// The synchronized registry owner is shared with LevelContext, including
     /// initial spawn generation before a live level has been constructed.
@@ -157,9 +168,13 @@ impl WorldGenContext {
     /// TERRAIN even though its biome palette can be created without noise.
     pub fn empty_chunk(&self, position: [i32; 2]) -> Result<RegionChunk, Error> {
         let generated = match self.generator.as_ref() {
-            ChunkGenerator::Noise(noise) => noise.new_chunk_in_dimension(position, self.dimension),
-            ChunkGenerator::Debug(debug) => debug.build_terrain(position, self.dimension),
-            ChunkGenerator::Flat(flat) => flat.new_chunk_in_dimension(position, self.dimension),
+            ChunkGenerator::Noise(noise) => {
+                noise.new_chunk_in_dimension(position, self.dimension.clone())
+            }
+            ChunkGenerator::Debug(debug) => debug.build_terrain(position, self.dimension.clone()),
+            ChunkGenerator::Flat(flat) => {
+                flat.new_chunk_in_dimension(position, self.dimension.clone())
+            }
         };
         Ok(RegionChunk::new(generated, ChunkStatus::Empty))
     }
@@ -182,6 +197,7 @@ impl WorldGenContext {
         if let Some(context) = self.registry_context.as_deref() {
             region.set_registry_context(context);
         }
+        region.set_structure_templates(&self.registries.templates);
         region.set_skip_unsupported(self.unported_behavior == crate::block::UnportedBehavior::Warn);
         region.set_has_skylight(self.dimension.has_skylight);
         region.set_fast_lava(self.dimension.fast_lava);
@@ -252,7 +268,7 @@ impl WorldGenContext {
                     &self.possible_sets,
                     &mut chunks[index].structures,
                     &mut |id, references| {
-                        self.structures.generate(
+                        self.registries.structures.generate(
                             id,
                             references,
                             &mut StructureGenerationContext {
@@ -261,8 +277,8 @@ impl WorldGenContext {
                                 min_y: self.dimension.min_y,
                                 height: self.dimension.height,
                                 generator: self.generator.as_ref(),
-                                templates: &self.templates,
-                                pools: &self.pools,
+                                templates: &self.registries.templates,
+                                pools: &self.registries.pools,
                                 biome: &mut biome,
                             },
                         )
@@ -291,6 +307,7 @@ impl WorldGenContext {
             ChunkStatusTask::BuildTerrain => {
                 let region = self.region(chunks, center, step)?;
                 let order = self
+                    .registries
                     .structure_steps
                     .iter()
                     .map(|s| s.id.clone())
@@ -310,7 +327,7 @@ impl WorldGenContext {
                     }
                     _ => self.generator.build_terrain(
                         center,
-                        self.dimension,
+                        self.dimension.clone(),
                         Some(Arc::new(beardifier)),
                     )?,
                 };
@@ -343,17 +360,17 @@ impl WorldGenContext {
                     _ => self.decoration.apply_biome_decoration(
                         &mut region,
                         self.generator.as_ref(),
-                        &self.features,
+                        self.features(),
                         &mut RegionStructureDecoration::new(
                             if self.generate_structures {
-                                &self.structure_steps
+                                &self.registries.structure_steps
                             } else {
                                 &[]
                             },
-                            &self.templates,
-                            &self.tags,
+                            &self.registries.templates,
+                            &self.registries.tags,
                             self.generator.as_ref(),
-                            &self.features,
+                            self.features(),
                         ),
                     )?,
                 }
@@ -376,14 +393,14 @@ impl WorldGenContext {
         position: [i32; 2],
         tag: &ferraloom_nbt::CompoundTag,
     ) -> Result<pipeline::ChunkStructures, Error> {
-        let mut loader = FeatureLoader::new(&self.resources)?;
+        let mut loader = FeatureLoader::new(&self.registries.resources)?;
         pipeline::ChunkStructures::load_from_nbt(
             position,
             self.seed,
             tag,
-            &self.structures.registry,
-            &self.templates,
-            &self.resources,
+            &self.registries.structures.registry,
+            &self.registries.templates,
+            &self.registries.resources,
             &mut |v| loader.placed(v),
         )
     }

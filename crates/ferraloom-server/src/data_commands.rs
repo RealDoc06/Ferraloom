@@ -152,6 +152,54 @@ impl DataAccess for DataHost<'_> {
     }
 }
 impl MinecraftServer {
+    /// FunctionCommand reads the same retained DataAccessor receivers as /data,
+    /// even when a plain function will not consume the resulting arguments.
+    pub(in crate::server) fn function_arguments(
+        &mut self,
+        command: &PreparedCommand,
+    ) -> Result<Option<CompoundTag>> {
+        if let Some(ArgumentValue::Tag(Tag::Compound(value))) = command.argument("arguments") {
+            return Ok(Some(value.clone()));
+        }
+        let Some(index) = command
+            .literals
+            .iter()
+            .position(|literal| literal == "with")
+        else {
+            return Ok(None);
+        };
+        let result = (|| -> std::result::Result<CompoundTag, DataError> {
+            let mut host = DataHost {
+                server: self,
+                roots: Vec::new(),
+                entity_roots: Vec::new(),
+            };
+            let accessor = host.resolve(command, &command.literals[index + 1], "source")?;
+            let data = host.get_data(&accessor)?;
+            let Some(ArgumentValue::Path(path)) = command.argument("path") else {
+                return Ok(data);
+            };
+            let value = data::get_single_tag(data, path)?;
+            if let Tag::Compound(value) = value {
+                Ok(value)
+            } else {
+                // TagType#getName, rather than the SNBT type or value spelling.
+                const NAMES: [&str; 13] = [
+                    "END", "BYTE", "SHORT", "INT", "LONG", "FLOAT", "DOUBLE", "BYTE[]", "STRING",
+                    "LIST", "COMPOUND", "INT[]", "LONG[]",
+                ];
+                Err(exceptions::error(
+                    "commands.function.error.argument_not_compound",
+                    &[NAMES[value.id() as usize].into()],
+                )
+                .into())
+            }
+        })();
+        result.map(Some).map_err(|error| match error {
+            DataError::Syntax(error) => anyhow::Error::new(error),
+            error => anyhow::Error::new(error),
+        })
+    }
     pub(in crate::server) fn data_command(
         &mut self,
         command: &PreparedCommand,

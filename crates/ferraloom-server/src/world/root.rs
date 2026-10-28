@@ -11,7 +11,7 @@ pub struct WorldServices {
     dimension_types: std::collections::BTreeMap<Identifier, Option<Identifier>>,
     pub registry: Arc<RegistryAdapter>,
     pub registry_context: Arc<RegistrySet>,
-    pub(super) resources: Arc<ResourceManager>,
+    pub(super) worldgen: Arc<ferraloom_game::level::generation::WorldGenRegistries>,
     pub(super) generate_structures: bool,
     pub(super) bonus_chest: bool,
     pub(super) unported_behavior: ferraloom_game::block::UnportedBehavior,
@@ -20,6 +20,11 @@ pub struct WorldServices {
     pub(super) saving: Arc<JobPool>,
 }
 impl WorldServices {
+    /// Immutable worldgen definitions shared by generation and live placement.
+    pub(crate) fn worldgen(&self) -> &Arc<ferraloom_game::level::generation::WorldGenRegistries> {
+        &self.worldgen
+    }
+
     /// Port of WorldDimensions#specialWorldProperty: debug/flat are global
     /// WorldData flags, including when the player's current level is not OW.
     pub fn is_debug_world(&self) -> bool {
@@ -112,7 +117,7 @@ impl WorldRoot {
             WorldPreset::decode(
                 &nbt_json(&Tag::Compound(settings.value().clone()))?,
                 resources,
-                data,
+                data.clone(),
                 seed,
             )?
         } else {
@@ -127,7 +132,7 @@ impl WorldRoot {
                 properties.get("level-type"),
                 &generator_settings,
                 resources,
-                data,
+                data.clone(),
                 seed,
             )?;
             let mut settings = json_nbt(&preset.definition)
@@ -147,6 +152,16 @@ impl WorldRoot {
             preset
         };
         let dimension_types = dimension_type_keys(&preset.definition)?;
+        let worldgen = {
+            let _timing = crate::generation::profile::Span::new("worldgen_registries", None);
+            Arc::new(
+                ferraloom_game::level::generation::WorldGenRegistries::load_for_world(
+                    resources,
+                    &data,
+                    access.path(),
+                )?,
+            )
+        };
         let mut level_data = if access.path().join("level.dat").exists() {
             access.read_level_data()?
         } else {
@@ -163,7 +178,7 @@ impl WorldRoot {
                 dimension_types,
                 registry: Arc::new(RegistryAdapter::new(registries)?),
                 registry_context: registries.clone(),
-                resources: registries.resources.clone(),
+                worldgen,
                 generate_structures,
                 bonus_chest,
                 unported_behavior,
@@ -440,6 +455,10 @@ mod tests {
             assert_eq!(context.seed, 1234);
             assert_eq!(context.sea_level, stem.generator.sea_level());
             assert!(Arc::ptr_eq(&context.generator, &stem.generator));
+            assert_eq!(
+                context.dimension_type().unwrap().infiniburn,
+                stem.dimension.infiniburn
+            );
             static EMPTY: Behaviors = Behaviors::EMPTY;
             let mut level = Level::new(Region::new(&EMPTY), context);
             world.configure_live_rules(&mut level);

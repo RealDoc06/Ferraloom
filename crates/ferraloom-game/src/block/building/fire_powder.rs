@@ -73,7 +73,10 @@ fn fire_placement(pos: BlockPos, level: &LevelReaderRef<'_, '_>) -> Result<Block
 }
 /// Port of BaseFireBlock#getState. Unlike FireBlock's placement override, this
 /// helper selects soul fire, including FireBlock#getStateWithAge's update path.
-fn fire_state(pos: BlockPos, level: &LevelReaderRef<'_, '_>) -> Result<BlockState, LevelError> {
+pub(super) fn fire_state(
+    pos: BlockPos,
+    level: &LevelReaderRef<'_, '_>,
+) -> Result<BlockState, LevelError> {
     if soul_base(level.get_block_state(pos.below(1))?, level)? {
         Ok(Block::SOUL_FIRE.default_state())
     } else {

@@ -11,6 +11,8 @@ mod center_support;
 mod command_block_properties;
 #[path = "build/copper_chest_properties.rs"]
 mod copper_chest_properties;
+#[path = "build/copper_wax.rs"]
+mod copper_wax;
 #[path = "build/environment_attributes.rs"]
 mod environment_attributes;
 #[path = "build/feature_requirements.rs"]
@@ -311,6 +313,17 @@ fn blocks(
     assert_eq!(states.len(), render_shapes.len());
     assert!(states.len() <= u16::MAX as usize + 1);
     assert_eq!(blocks.len(), reports.as_object().unwrap().len());
+    let descriptions: Vec<_> = blocks
+        .iter()
+        .map(|block| string(&block["description_id"]))
+        .collect();
+    writeln!(
+        out,
+        "static BLOCK_DESCRIPTION_IDS: [&str; {}] = {:?};",
+        descriptions.len(),
+        descriptions
+    )
+    .unwrap();
     out.push_str("pub const BLOCKS: &[BlockData] = &[\n");
     for (id, block) in blocks.iter().enumerate() {
         assert_eq!(id as u64, number(&block["id"]));
@@ -953,6 +966,17 @@ fn main() {
     std::fs::write(
         Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("copper_chest_properties.rs"),
         copper,
+    )
+    .unwrap();
+    let mut wax = String::new();
+    copper_wax::generate(
+        &mut wax,
+        &load(root, "copper_wax"),
+        block_report.as_object().unwrap().len(),
+    );
+    std::fs::write(
+        Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("copper_wax.rs"),
+        wax,
     )
     .unwrap();
     let fluid_random_ticking = load(root, "fluid_random_ticking");
