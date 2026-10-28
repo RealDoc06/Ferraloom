@@ -5,6 +5,8 @@ use std::collections::BTreeMap;
 
 #[derive(Default, Debug)]
 struct LoadedChunk {
+    // Per-chunk grouping of SectionStorage's section-long map. Queries and saves
+    // explicitly visit section Y ascending; no native hash-map order is exposed.
     sections: BTreeMap<i32, PoiSection>,
     revision: u64,
     dirty: bool,
@@ -19,7 +21,9 @@ pub struct PoiChunkSave {
 /// in chunks includes a known-absent disk read. There is no eviction in this slice.
 #[derive(Debug)]
 pub struct PoiManager {
-    chunks: BTreeMap<ChunkPos, LoadedChunk>,
+    // SectionStorage's loaded-chunk index, keyed by native ChunkPos#toLong.
+    // Index iteration is not query order: queries use rangeClosed explicitly.
+    chunks: BTreeMap<i64, LoadedChunk>,
     min_section: i32,
     max_section: i32,
     next_revision: u64,
@@ -43,7 +47,7 @@ impl PoiManager {
         self.max_section = max_section;
     }
     pub fn is_chunk_loaded(&self, pos: ChunkPos) -> bool {
-        self.chunks.contains_key(&pos)
+        self.chunks.contains_key(&pos.pack())
     }
     pub fn complete_chunk_load(
         &mut self,
@@ -67,7 +71,7 @@ impl PoiManager {
                 }
             }
         }
-        self.chunks.insert(pos, loaded);
+        self.chunks.insert(pos.pack(), loaded);
         Ok(())
     }
     fn dirty(&mut self, pos: ChunkPos) {
@@ -75,7 +79,7 @@ impl PoiManager {
             .next_revision
             .checked_add(1)
             .expect("POI revision exhausted");
-        let chunk = self.chunks.get_mut(&pos).expect("loaded POI chunk");
+        let chunk = self.chunks.get_mut(&pos.pack()).expect("loaded POI chunk");
         chunk.dirty = true;
         chunk.revision = self.next_revision;
     }
@@ -89,7 +93,9 @@ impl PoiManager {
         }
     }
     fn chunk(&self, pos: ChunkPos) -> Result<&LoadedChunk, PoiError> {
-        self.chunks.get(&pos).ok_or(PoiError::UnloadedChunk(pos))
+        self.chunks
+            .get(&pos.pack())
+            .ok_or(PoiError::UnloadedChunk(pos))
     }
     pub fn add(&mut self, pos: BlockPos, kind: PoiTypeId) -> Result<bool, PoiError> {
         self.check_y(pos)?;
@@ -97,7 +103,7 @@ impl PoiManager {
         self.chunk(chunk)?;
         let changed = self
             .chunks
-            .get_mut(&chunk)
+            .get_mut(&chunk.pack())
             .unwrap()
             .sections
             .entry(pos.y >> 4)
@@ -113,7 +119,7 @@ impl PoiManager {
         self.chunk(chunk)?;
         let changed = self
             .chunks
-            .get_mut(&chunk)
+            .get_mut(&chunk.pack())
             .unwrap()
             .sections
             .get_mut(&(pos.y >> 4))
@@ -151,7 +157,7 @@ impl PoiManager {
         self.chunk(chunk)?;
         let record = self
             .chunks
-            .get_mut(&chunk)
+            .get_mut(&chunk.pack())
             .unwrap()
             .sections
             .get_mut(&(pos.y >> 4))
@@ -345,7 +351,8 @@ impl PoiManager {
         mut village_type: impl FnMut(PoiTypeId) -> bool,
     ) -> i32 {
         let mut result = 7;
-        for (chunk, data) in &self.chunks {
+        for (key, data) in &self.chunks {
+            let chunk = ChunkPos::unpack(*key);
             for (y, records) in &data.sections {
                 if !records
                     .records(&mut village_type, Occupancy::IsOccupied)
@@ -373,7 +380,7 @@ impl PoiManager {
                 let chunk = ChunkPos::containing(record.pos);
                 let record = self
                     .chunks
-                    .get_mut(&chunk)
+                    .get_mut(&chunk.pack())
                     .unwrap()
                     .sections
                     .get_mut(&(record.pos.y >> 4))
@@ -414,7 +421,7 @@ impl PoiManager {
         points: Vec<(BlockPos, PoiTypeId)>,
     ) -> Result<(), PoiError> {
         self.chunk(chunk)?;
-        let sections = &mut self.chunks.get_mut(&chunk).unwrap().sections;
+        let sections = &mut self.chunks.get_mut(&chunk.pack()).unwrap().sections;
         let changed = if let Some(section) = sections.get_mut(&section_y) {
             section.refresh(points)
         } else if points.is_empty() {
@@ -458,7 +465,7 @@ impl PoiManager {
         revision: u64,
     ) -> Result<(), PoiError> {
         self.chunk(pos)?;
-        let chunk = self.chunks.get_mut(&pos).unwrap();
+        let chunk = self.chunks.get_mut(&pos.pack()).unwrap();
         if chunk.revision == revision {
             chunk.dirty = false;
         }

@@ -9,11 +9,16 @@ use std::collections::BTreeMap;
 #[derive(Clone, Debug)]
 pub struct PoiSection {
     pub valid: bool,
+    // Native Short2ObjectOpenHashMap; its value traversal determines pack order.
     records: Short2ObjectOpenHashMap<PoiRecord>,
+    // Native identity-keyed HashMap order is non-parity; use registry-id order.
+    // Each value retains native position-hashed HashSet traversal for queries.
     by_type: BTreeMap<PoiTypeId, HashSet<BlockPos>>,
     // Native add logs mismatched duplicates and retains the earlier record in
     // its old type set. These are distinct objects, not mirrored primary state.
-    replaced: BTreeMap<(PoiTypeId, BlockPos), PoiRecord>,
+    // Lookup-only ownership of those retained objects. The section-local short
+    // is the primary record key; this map is never traversed to emit records.
+    replaced: BTreeMap<(PoiTypeId, i16), PoiRecord>,
 }
 impl Default for PoiSection {
     fn default() -> Self {
@@ -43,7 +48,9 @@ impl PoiSection {
             return false;
         }
         if let Some(old) = self.get(record.pos).cloned() {
-            self.replaced.entry((old.poi_type, old.pos)).or_insert(old);
+            self.replaced
+                .entry((old.poi_type, Self::key(old.pos)))
+                .or_insert(old);
         }
         self.by_type
             .entry(record.poi_type)
@@ -54,7 +61,7 @@ impl PoiSection {
     }
     pub fn remove(&mut self, pos: BlockPos) -> bool {
         if let Some(record) = self.records.remove(&Self::key(pos)) {
-            self.replaced.remove(&(record.poi_type, pos));
+            self.replaced.remove(&(record.poi_type, Self::key(pos)));
             self.by_type
                 .get_mut(&record.poi_type)
                 .expect("indexed record")
@@ -77,7 +84,7 @@ impl PoiSection {
                 for pos in positions.iter() {
                     let record = self
                         .replaced
-                        .get(&(*kind, *pos))
+                        .get(&(*kind, Self::key(*pos)))
                         .or_else(|| self.get(*pos))
                         .expect("indexed POI");
                     if occupancy.test(record) {
@@ -93,8 +100,8 @@ impl PoiSection {
         kind: PoiTypeId,
         pos: BlockPos,
     ) -> Option<&mut PoiRecord> {
-        if self.replaced.contains_key(&(kind, pos)) {
-            self.replaced.get_mut(&(kind, pos))
+        if self.replaced.contains_key(&(kind, Self::key(pos))) {
+            self.replaced.get_mut(&(kind, Self::key(pos)))
         } else {
             self.get_mut(pos).filter(|record| record.poi_type == kind)
         }

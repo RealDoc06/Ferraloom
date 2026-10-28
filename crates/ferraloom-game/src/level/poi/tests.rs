@@ -212,3 +212,22 @@ fn village_distance_tracks_occupied_sources_and_caps_at_seven_without_loading() 
         7
     );
 }
+
+#[test]
+fn packed_chunk_keys_keep_signed_neighbor_chunks_distinct() {
+    let mut manager = loaded();
+    let positions = [
+        BlockPos::new(-1, 0, -1),
+        BlockPos::new(0, 0, -1),
+        BlockPos::new(-1, 0, 0),
+        BlockPos::ZERO,
+    ];
+    for pos in positions {
+        manager.add(pos, PoiTypeId::HOME).unwrap();
+    }
+    manager.remove(positions[0]).unwrap();
+    assert_eq!(manager.get_type(positions[0]).unwrap(), None);
+    for pos in positions.into_iter().skip(1) {
+        assert_eq!(manager.get_type(pos).unwrap(), Some(PoiTypeId::HOME));
+    }
+}
