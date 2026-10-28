@@ -15,7 +15,7 @@ async fn default_noise_reaches_full_without_skips_and_synthetic_unported_is_reje
     for policy in [UnportedBehavior::Strict, UnportedBehavior::Warn] {
         let directory = tempfile::tempdir()?;
         let mut world_root = WorldRoot::open(
-            directory.path(),
+            ferraloom_server::world::WorldStartup::read(directory.path(), &properties).unwrap(),
             &properties,
             &resources,
             &registries,
