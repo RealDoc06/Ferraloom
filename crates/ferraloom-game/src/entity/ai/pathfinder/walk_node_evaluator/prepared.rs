@@ -10,22 +10,40 @@ use ferraloom_data::{Block, tags::FluidTags};
 use ferraloom_util::{Aabb, Axis, BlockPos, Direction, Vec3};
 use std::collections::HashMap;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(in crate::entity::ai::pathfinder) enum WalkKind {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum WalkKind {
     Walk,
     Fly,
     Amphibious { prefers_shallow: bool },
+}
+
+/// Port of WalkNodeEvaluator's retained class-specific caches and malus captures.
+/// Kept separate from the temporary Level/region access frame for live navigation.
+#[derive(Debug)]
+pub(crate) struct WalkEvaluatorState {
+    pub(crate) kind: WalkKind,
+    types: HashMap<i64, PathType>,
+    collisions: HashMap<[u64; 6], bool>,
+    old_walkable: f32,
+    old_water_border: f32,
+}
+impl WalkEvaluatorState {
+    pub(crate) fn new(kind: WalkKind) -> Self {
+        Self {
+            kind,
+            types: HashMap::new(),
+            collisions: HashMap::new(),
+            old_walkable: 0.0,
+            old_water_border: 0.0,
+        }
+    }
 }
 
 /// Port of WalkNodeEvaluator. The prepared frame borrows the canonical Mob
 /// access and the level; it owns only native per-search caches and node handles.
 pub struct WalkNodeEvaluator<'a, M> {
     pub(in crate::entity::ai::pathfinder) context: Context<'a, M>,
-    pub(in crate::entity::ai::pathfinder) kind: WalkKind,
-    types: HashMap<i64, PathType>,
-    collisions: HashMap<[u64; 6], bool>,
-    old_walkable: f32,
-    old_water_border: f32,
+    state: WalkEvaluatorState,
 }
 impl<'a, M: MobAccess> WalkNodeEvaluator<'a, M> {
     pub fn new(region: &'a PathNavigationRegion, level: &'a mut Level, mob: &'a mut M) -> Self {
@@ -39,25 +57,21 @@ impl<'a, M: MobAccess> WalkNodeEvaluator<'a, M> {
     ) -> Self {
         Self {
             context: Context::new(region, level, mob),
-            kind,
-            types: HashMap::new(),
-            collisions: HashMap::new(),
-            old_walkable: 0.0,
-            old_water_border: 0.0,
+            state: WalkEvaluatorState::new(kind),
         }
     }
     pub fn capabilities(&self) -> &Capabilities {
-        &self.context.capabilities
+        &self.context.state.capabilities
     }
     pub fn capabilities_mut(&mut self) -> &mut Capabilities {
-        &mut self.context.capabilities
+        &mut self.context.state.capabilities
     }
     fn amphibious(&self) -> bool {
-        matches!(self.kind, WalkKind::Amphibious { .. })
+        matches!(self.state.kind, WalkKind::Amphibious { .. })
     }
     /// Port of WalkNodeEvaluator#getPathType, with the two subclass projections.
     pub fn get_path_type(&mut self, pos: BlockPos) -> Result<PathType, LevelError> {
-        if self.kind == WalkKind::Fly {
+        if self.state.kind == WalkKind::Fly {
             return self.fly_path_type(pos);
         }
         if self.amphibious() && self.context.raw_type(pos)? == PathType::Water {
@@ -76,11 +90,11 @@ impl<'a, M: MobAccess> WalkNodeEvaluator<'a, M> {
     /// represented by a bit per native ordinal, never a hash-set traversal.
     pub fn get_path_type_within_mob_bb(&mut self, pos: BlockPos) -> Result<u32, LevelError> {
         let mut types = 0;
-        for dx in 0..self.context.width {
-            for dy in 0..self.context.height {
-                for dz in 0..self.context.depth {
+        for dx in 0..self.context.state.width {
+            for dy in 0..self.context.state.height {
+                for dz in 0..self.context.state.depth {
                     let mut path_type = self.get_path_type(pos.offset(dx, dy, dz))?;
-                    let caps = self.context.capabilities;
+                    let caps = self.context.state.capabilities;
                     if path_type == PathType::DoorWoodClosed
                         && caps.can_open_doors
                         && caps.can_pass_doors
@@ -129,7 +143,7 @@ impl<'a, M: MobAccess> WalkNodeEvaluator<'a, M> {
             }
         }
         let current = self.get_path_type(pos)?;
-        Ok(if self.context.width > 1 {
+        Ok(if self.context.state.width > 1 {
             if self.context.malus(current)? < cost
                 && self.context.malus(PathType::BigMobsCloseToDanger)? < cost
             {
@@ -147,11 +161,11 @@ impl<'a, M: MobAccess> WalkNodeEvaluator<'a, M> {
         &mut self,
         pos: BlockPos,
     ) -> Result<PathType, LevelError> {
-        if let Some(value) = self.types.get(&pos.as_long()) {
+        if let Some(value) = self.state.types.get(&pos.as_long()) {
             return Ok(*value);
         }
         let value = self.get_path_type_of_mob(pos)?;
-        self.types.insert(pos.as_long(), value);
+        self.state.types.insert(pos.as_long(), value);
         Ok(value)
     }
     pub(in crate::entity::ai::pathfinder) fn start_node(
@@ -171,8 +185,10 @@ impl<'a, M: MobAccess> WalkNodeEvaluator<'a, M> {
         pos: BlockPos,
     ) -> Result<bool, LevelError> {
         let path_type = self.cached_type(pos)?;
-        Ok((self.kind == WalkKind::Fly || path_type != PathType::Open)
-            && self.context.malus(path_type)? >= 0.0)
+        Ok(
+            (self.state.kind == WalkKind::Fly || path_type != PathType::Open)
+                && self.context.malus(path_type)? >= 0.0,
+        )
     }
     fn walk_start(&mut self, data: &mut PathData) -> Result<NodeId, LevelError> {
         let position = self.context.mob.position(self.context.level)?;
@@ -185,7 +201,7 @@ impl<'a, M: MobAccess> WalkNodeEvaluator<'a, M> {
             .mob
             .can_stand_on_fluid(state.data().fluid, self.context.level)?
         {
-            if self.context.capabilities.can_float
+            if self.context.state.capabilities.can_float
                 && self.context.mob.is_in_floatable_fluid(self.context.level)?
             {
                 while self
@@ -253,7 +269,7 @@ impl<'a, M: MobAccess> WalkNodeEvaluator<'a, M> {
         pos: BlockPos,
     ) -> Result<f64, LevelError> {
         let reader = self.context.reader()?;
-        if (self.context.capabilities.can_float || self.amphibious())
+        if (self.context.state.capabilities.can_float || self.amphibious())
             && reader.fluid_tags()?.contains_key(
                 FluidTags::ENTITY_FLOATABLE,
                 reader.get_fluid_state(pos)?.fluid_type,
@@ -280,11 +296,11 @@ impl<'a, M: MobAccess> WalkNodeEvaluator<'a, M> {
             bb.max_y.to_bits(),
             bb.max_z.to_bits(),
         ];
-        if let Some(value) = self.collisions.get(&key) {
+        if let Some(value) = self.state.collisions.get(&key) {
             return Ok(*value);
         }
         let value = !self.context.no_collision(bb)?;
-        self.collisions.insert(key, value);
+        self.state.collisions.insert(key, value);
         Ok(value)
     }
     fn can_reach_without_collision(
@@ -364,7 +380,8 @@ impl<'a, M: MobAccess> WalkNodeEvaluator<'a, M> {
         }
         if best.is_none_or(|id| data[id].cost_malus < 0.0)
             && jump > 0
-            && (path_type != PathType::Fence || self.context.capabilities.can_walk_over_fences)
+            && (path_type != PathType::Fence
+                || self.context.state.capabilities.can_walk_over_fences)
             && !matches!(
                 path_type,
                 PathType::UnpassableRail | PathType::Trapdoor | PathType::PowderSnow
@@ -395,7 +412,7 @@ impl<'a, M: MobAccess> WalkNodeEvaluator<'a, M> {
             }
         } else if !self.amphibious()
             && path_type == PathType::Water
-            && !self.context.capabilities.can_float
+            && !self.context.state.capabilities.can_float
         {
             let mut below = pos.below(1);
             while below.y > self.context.region.min_y() {
@@ -551,7 +568,7 @@ impl<'a, M: MobAccess> WalkNodeEvaluator<'a, M> {
                     neighbors.push(node);
                 }
             }
-            if self.kind
+            if self.state.kind
                 == (WalkKind::Amphibious {
                     prefers_shallow: true,
                 })
@@ -573,19 +590,19 @@ impl<M: MobAccess> NodeEvaluator for WalkNodeEvaluator<'_, M> {
     fn prepare(&mut self, _data: &mut PathData) -> Result<(), LevelError> {
         self.context.prepare()?;
         self.context.mob.on_pathfinding_start(self.context.level)?;
-        if self.kind == WalkKind::Fly {
-            self.types.clear();
+        if self.state.kind == WalkKind::Fly {
+            self.state.types.clear();
             self.context.mob.on_pathfinding_start(self.context.level)?;
         }
         if self.amphibious() {
             self.context
                 .mob
                 .set_pathfinding_malus(PathType::Water, 0.0, self.context.level)?;
-            self.old_walkable = self.context.malus(PathType::Walkable)?;
+            self.state.old_walkable = self.context.malus(PathType::Walkable)?;
             self.context
                 .mob
                 .set_pathfinding_malus(PathType::Walkable, 6.0, self.context.level)?;
-            self.old_water_border = self.context.malus(PathType::WaterBorder)?;
+            self.state.old_water_border = self.context.malus(PathType::WaterBorder)?;
             self.context.mob.set_pathfinding_malus(
                 PathType::WaterBorder,
                 4.0,
@@ -598,26 +615,26 @@ impl<M: MobAccess> NodeEvaluator for WalkNodeEvaluator<'_, M> {
         if self.amphibious() {
             self.context.mob.set_pathfinding_malus(
                 PathType::Walkable,
-                self.old_walkable,
+                self.state.old_walkable,
                 self.context.level,
             )?;
             self.context.mob.set_pathfinding_malus(
                 PathType::WaterBorder,
-                self.old_water_border,
+                self.state.old_water_border,
                 self.context.level,
             )?;
         }
-        if self.kind == WalkKind::Fly {
+        if self.state.kind == WalkKind::Fly {
             self.context.mob.on_pathfinding_done(self.context.level)?;
-            self.types.clear();
+            self.state.types.clear();
         }
         self.context.mob.on_pathfinding_done(self.context.level)?;
-        self.types.clear();
-        self.collisions.clear();
+        self.state.types.clear();
+        self.state.collisions.clear();
         Ok(())
     }
     fn get_start(&mut self, data: &mut PathData) -> Result<Option<NodeId>, LevelError> {
-        let node = if self.kind == WalkKind::Fly {
+        let node = if self.state.kind == WalkKind::Fly {
             self.fly_start(data)?
         } else if self.amphibious() && self.context.mob.is_in_water(self.context.level)? {
             let bb = self.context.mob.bounding_box(self.context.level)?;
@@ -640,7 +657,7 @@ impl<M: MobAccess> NodeEvaluator for WalkNodeEvaluator<'_, M> {
         neighbors: &mut Vec<NodeId>,
         data: &mut PathData,
     ) -> Result<(), LevelError> {
-        if self.kind == WalkKind::Fly {
+        if self.state.kind == WalkKind::Fly {
             self.fly_neighbors(node, neighbors, data)
         } else {
             self.walk_neighbors(node, neighbors, data)
@@ -675,7 +692,7 @@ impl<M: MobAccess> WalkNodeEvaluator<'_, M> {
                 PathType::Damaging => path_type = PathType::Damaging,
                 PathType::Cocoa => path_type = PathType::Cocoa,
                 PathType::Fence => {
-                    if below != self.context.mob_position {
+                    if below != self.context.state.mob_position {
                         path_type = PathType::Fence;
                     }
                 }
@@ -701,7 +718,7 @@ impl<M: MobAccess> WalkNodeEvaluator<'_, M> {
     fn fly_start(&mut self, data: &mut PathData) -> Result<NodeId, LevelError> {
         let position = self.context.mob.position(self.context.level)?;
         let mut y;
-        if self.context.capabilities.can_float
+        if self.context.state.capabilities.can_float
             && self.context.mob.is_in_water(self.context.level)?
         {
             y = position.y.floor() as i32;

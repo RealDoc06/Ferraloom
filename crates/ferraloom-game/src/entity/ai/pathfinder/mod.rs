@@ -30,7 +30,7 @@ mod pathfindability_tests;
 mod tests;
 
 mod mob_access;
-pub use mob_access::{Capabilities, MobAccess};
+pub use mob_access::{Capabilities, MobAccess, NodeEvaluatorState};
 pub mod amphibious_node_evaluator;
 pub mod fly_node_evaluator;
 pub mod swim_node_evaluator;
