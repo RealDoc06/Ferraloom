@@ -123,7 +123,7 @@ impl GoalArena {
     }
 }
 /// Port of Mob's single owned AI state. Native empty selectors are available;
-/// unported controls/navigation/sensing remain typed required boundaries.
+/// navigation/sensing remain typed required boundaries until their ports land.
 #[derive(Debug)]
 pub struct MobAi {
     pub goal_selector: goal::GoalSelector,
@@ -143,11 +143,11 @@ impl MobAi {
             goal_selector: Default::default(),
             target_selector: Default::default(),
             goals: Default::default(),
-            navigation: Unported::new(AiOperation::Navigation(navigation)),
-            move_control: Default::default(),
             look_control: Default::default(),
+            move_control: Default::default(),
             jump_control: Default::default(),
             body_rotation_control: Default::default(),
+            navigation: Unported::new(AiOperation::Navigation(navigation)),
             sensing: Unported::new(AiOperation::Sensing),
         }
     }

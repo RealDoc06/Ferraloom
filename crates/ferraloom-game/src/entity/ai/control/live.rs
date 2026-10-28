@@ -127,17 +127,17 @@ pub fn tick_move(entity: EntityRef, level: &mut Level) -> Result<(), LevelError>
     if kind != super::super::MoveControlKind::Ground {
         return super::super::pending(entity, super::super::AiOperation::MoveControl(kind), level);
     }
-    retained(entity, level, runtime::tick_move)
+    retained(entity, level, |r| runtime::tick_move(r))
 }
 /// Port of LookControl#tick's live base-controller entry.
 pub fn tick_look(entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
-    retained(entity, level, runtime::tick_look)
+    retained(entity, level, |r| runtime::tick_look(r))
 }
 /// Port of JumpControl#tick's live base-controller entry.
 pub fn tick_jump(entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
-    retained(entity, level, runtime::tick_jump)
+    retained(entity, level, |r| runtime::tick_jump(r))
 }
 /// Port of BodyRotationControl#clientTick's live base-controller entry.
 pub fn tick_body_rotation(entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
-    retained(entity, level, runtime::tick_body)
+    retained(entity, level, |r| runtime::tick_body(r))
 }
