@@ -238,8 +238,7 @@ pub(crate) fn can_receive(
         && frequency(event) != 0
         && super::sensor::can_activate(state))
 }
-/// Port of SculkShriekerBlockEntity#tryGetPlayer. Projectile subclasses retain
-/// their explicit entity-family seam until their canonical owner virtual lands.
+/// Port of SculkShriekerBlockEntity#tryGetPlayer.
 fn try_get_player(
     source: Option<EntityRef>,
     level: &mut Level,
@@ -257,8 +256,12 @@ fn try_get_player(
     {
         return Ok(Some(passenger));
     }
-    if matches!(level.entity_state(source)?, EntityState::Item(_)) {
-        return Ok(crate::entity::item::item_entity::get_owner(source, level)?
+    if level.entity_state(source)?.as_projectile().is_some()
+        || matches!(level.entity_state(source)?, EntityState::Item(_))
+    {
+        return Ok(level
+            .entity_behavior(source)?
+            .get_owner(source, level)?
             .filter(|&owner| level.entity::<ServerPlayer>(owner).is_ok()));
     }
     Ok(None)
@@ -296,18 +299,17 @@ pub(crate) fn force_schedule(
         .source_entity
         .map(|source| level.entity::<EntityData>(source).map(|data| data.uuid))
         .transpose()?;
-    // All currently canonical EntityState variants are non-projectiles. A new
-    // projectile variant must resolve Projectile#getOwner at this native slot.
-    if let Some(source) = context.source_entity {
-        match level.entity_state(source)? {
-            EntityState::Player(_)
-            | EntityState::Cow(_)
-            | EntityState::Item(_)
-            | EntityState::PrimedTnt(_)
-            | EntityState::FallingBlock(_)
-            | EntityState::ExperienceOrb(_) => {}
-        }
-    }
+    let projectile_owner_uuid = if let Some(source) = context.source_entity
+        && level.entity_state(source)?.as_projectile().is_some()
+    {
+        level
+            .entity_behavior(source)?
+            .get_owner(source, level)?
+            .map(|owner| level.entity::<EntityData>(owner).map(|data| data.uuid))
+            .transpose()?
+    } else {
+        None
+    };
     let info = VibrationInfo {
         game_event: event,
         distance: origin
@@ -315,7 +317,7 @@ pub(crate) fn force_schedule(
             .sqrt() as f32,
         pos: origin,
         uuid,
-        projectile_owner_uuid: None,
+        projectile_owner_uuid,
         entity: context.source_entity,
     };
     let time = level.game_time();
@@ -470,9 +472,19 @@ fn receive(receiver: BlockEntityRef, level: &mut Level) -> Result<bool, LevelErr
     let source = info
         .entity
         .or_else(|| info.uuid.and_then(|uuid| level.entity_by_uuid(uuid)));
-    let projectile_owner = info
-        .projectile_owner_uuid
-        .and_then(|uuid| level.entity_by_uuid(uuid));
+    // VibrationInfo#getProjectileOwner prefers the live projectile owner over
+    // the UUID captured when the vibration was scheduled.
+    let projectile_owner = if let Some(source) = source
+        && level.entity_state(source)?.as_projectile().is_some()
+    {
+        level.entity_behavior(source)?.get_owner(source, level)?
+    } else {
+        None
+    }
+    .or_else(|| {
+        info.projectile_owner_uuid
+            .and_then(|uuid| level.entity_by_uuid(uuid))
+    });
     let retained = [source, projectile_owner];
     for (count, entity) in retained.into_iter().flatten().enumerate() {
         if let Err(error) = level.retain_entity(entity) {
