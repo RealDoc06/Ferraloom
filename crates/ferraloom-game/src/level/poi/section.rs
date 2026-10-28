@@ -32,7 +32,7 @@ impl Default for PoiSection {
 }
 impl PoiSection {
     fn key(pos: BlockPos) -> i16 {
-        SectionPos::section_relative_pos(pos) as i16
+        SectionPos::section_relative_pos(pos)
     }
     pub fn get(&self, pos: BlockPos) -> Option<&PoiRecord> {
         self.records.get(&Self::key(pos))
@@ -112,8 +112,20 @@ impl PoiSection {
         PackedSection {
             valid: Some(self.valid),
             records: Some(
+                // PoiSection#pack uses values().stream(): fastutil's
+                // ValueSpliterator visits zero first, then slots ascending.
+                // The ordinary iterator visits slots descending. Reversing its
+                // nonzero entries retains the actual collision/rehash layout.
                 self.records
-                    .values()
+                    .get(&0)
+                    .into_iter()
+                    .chain(
+                        self.records
+                            .iter()
+                            .rev()
+                            .filter(|(key, _)| **key != 0)
+                            .map(|(_, record)| record),
+                    )
                     .map(|record| PackedRecord {
                         position: Some(IntArray(vec![record.pos.x, record.pos.y, record.pos.z])),
                         poi_type: Some(record.poi_type.name().into()),

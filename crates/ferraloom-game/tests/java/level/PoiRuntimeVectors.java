@@ -42,6 +42,12 @@ public final class PoiRuntimeVectors {
         section(output,"section.refresh",invalid);
         invalid.refresh(consumer->{});section(output,"section.valid.no_refresh",invalid);
 
+        var resized=new PoiSection(()->{});
+        for(int index=0;index<40;index++) resized.add(new BlockPos(index&15,(index>>4)&15,(index*7)&15),home);
+        section(output,"section.resize",resized);
+        for(int index=0;index<35;index++) resized.remove(new BlockPos(index&15,(index>>4)&15,(index*7)&15));
+        section(output,"section.shrink",resized);
+
         var sections=new HashMap<Long,PoiSection>();
         for (BlockPos pos:List.of(new BlockPos(-17,-1,0),new BlockPos(-1,0,0),BlockPos.ZERO,new BlockPos(1,0,1),new BlockPos(15,0,0),new BlockPos(16,1,0),new BlockPos(0,15,16),new BlockPos(0,-16,0))) {
             sections.computeIfAbsent(SectionPos.asLong(pos),key->new PoiSection(()->{})).add(pos,home);

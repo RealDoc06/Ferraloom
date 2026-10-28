@@ -60,6 +60,22 @@ fn native_section_pack_refresh_and_manager_queries_preserve_value_defined_order(
     let mut rows = |key: &str, value: String| {
         assert!(actual.insert(key.into(), value).is_none());
     };
+    let mut resized = PoiSection::default();
+    for index in 0..40 {
+        resized.add(PoiRecord::new(
+            BlockPos::new(index & 15, (index >> 4) & 15, (index * 7) & 15),
+            PoiTypeId::HOME,
+        ));
+    }
+    rows("section.resize", section(&resized));
+    for index in 0..35 {
+        resized.remove(BlockPos::new(
+            index & 15,
+            (index >> 4) & 15,
+            (index * 7) & 15,
+        ));
+    }
+    rows("section.shrink", section(&resized));
     let mut records = PoiSection::default();
     for pos in [
         BlockPos::ZERO,
