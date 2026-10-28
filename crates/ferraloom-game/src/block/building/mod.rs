@@ -5,12 +5,18 @@ use crate::level::LevelError;
 use ferraloom_data::{Block, BlockState, properties as p, registries::fluid::Id as Fluid};
 use ferraloom_util::{BlockPos, Direction};
 
+mod amethyst;
+#[cfg(test)]
+mod amethyst_tests;
 pub mod anvil;
 #[cfg(test)]
 mod anvil_tests;
 #[cfg(test)]
 mod attachment_tests;
 mod attachments;
+mod cauldron;
+#[cfg(test)]
+mod cauldron_tests;
 #[cfg(test)]
 mod connected_tests;
 mod connections;
@@ -26,8 +32,11 @@ mod fire_powder;
 mod fire_tests;
 pub(crate) use fire::lava_random_tick;
 #[cfg(test)]
+mod dripstone_tests;
+#[cfg(test)]
 mod fire_powder_tests;
 mod orientation;
+mod pointed_dripstone;
 mod portal_shape;
 mod scaffolding;
 pub use scaffolding::scaffolding_distance;
@@ -48,6 +57,19 @@ pub(crate) fn ported_behavior(
     block: Block,
     method: BlockMethod,
 ) -> Option<&'static dyn BlockBehavior> {
+    if block == Block::BUDDING_AMETHYST && method == BlockMethod::RandomTick {
+        return Some(&amethyst::BUDDING_AMETHYST);
+    }
+    if block == Block::POINTED_DRIPSTONE && method == BlockMethod::RandomTick {
+        return Some(&pointed_dripstone::POINTED_DRIPSTONE);
+    }
+    if matches!(
+        block,
+        Block::CAULDRON | Block::WATER_CAULDRON | Block::POWDER_SNOW_CAULDRON
+    ) && method == BlockMethod::HandlePrecipitation
+    {
+        return Some(&cauldron::CAULDRON);
+    }
     if fire::supports(block, method) {
         return Some(&fire::FIRE);
     }

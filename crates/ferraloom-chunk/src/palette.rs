@@ -1,4 +1,8 @@
-use std::{collections::HashMap, hash::Hash, sync::Arc};
+use std::{
+    collections::HashMap,
+    hash::Hash,
+    sync::{Arc, OnceLock},
+};
 
 use ferraloom_data::BlockState;
 
@@ -135,13 +139,16 @@ impl<T: Copy + Eq + Hash> Strategy<T> {
 
 impl Strategy<BlockState> {
     pub fn block_states() -> Self {
-        let states = (0..ferraloom_data::BLOCK_STATES.len())
-            .map(|i| BlockState::from_id(i as u16).expect("generated block state ID"))
-            .collect();
-        Self::new(
-            ContainerKind::BlockStates,
-            Arc::new(IdMap::new(states).expect("generated registry")),
-        )
+        // The generated block-state registry is process-wide, as in vanilla's
+        // Block.BLOCK_STATE_REGISTRY. Sections share its immutable ID mapping.
+        static REGISTRY: OnceLock<Arc<IdMap<BlockState>>> = OnceLock::new();
+        let registry = REGISTRY.get_or_init(|| {
+            let states = (0..ferraloom_data::BLOCK_STATES.len())
+                .map(|i| BlockState::from_id(i as u16).expect("generated block state ID"))
+                .collect();
+            Arc::new(IdMap::new(states).expect("generated registry"))
+        });
+        Self::new(ContainerKind::BlockStates, registry.clone())
     }
 }
 
@@ -452,5 +459,25 @@ impl<T: Copy + Eq + Hash> PalettedContainer<T> {
             palette,
             storage,
         })
+    }
+}
+
+#[cfg(test)]
+mod registry_tests {
+    use super::*;
+
+    #[test]
+    fn block_state_strategies_share_the_canonical_generated_registry() {
+        let first = Strategy::block_states();
+        let second = Strategy::block_states();
+        assert!(Arc::ptr_eq(&first.registry, &second.registry));
+        assert_eq!(
+            first.registry.values().len(),
+            ferraloom_data::BLOCK_STATES.len()
+        );
+        for (id, &state) in first.registry.values().iter().enumerate() {
+            assert_eq!(first.registry.id(state), Some(id as u32));
+            assert_eq!(state, BlockState::from_id(id as u16).unwrap());
+        }
     }
 }

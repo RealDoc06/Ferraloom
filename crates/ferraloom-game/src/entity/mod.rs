@@ -16,6 +16,7 @@ pub mod item;
 pub mod mob;
 pub mod monster;
 pub mod player;
+pub mod projectile;
 pub mod pushing;
 mod stuck;
 pub mod variant;
@@ -131,6 +132,7 @@ pub use lifecycle::{
 };
 pub mod persistence;
 pub mod reference;
+mod registration;
 pub use reference::EntityReference;
 pub mod synched_data;
 pub mod tracking;
@@ -141,6 +143,9 @@ pub use base::{EntityData, EntityDimensions, Movement, RemovalReason};
 pub struct Mob {
     pub parent: LivingEntity,
     pub target: Option<EntityRef>,
+    pub ai: ai::MobAi,
+    pub xp_reward: i32,
+    pub(crate) pathfinding_malus: [Option<f32>; ai::pathfinder::PathType::ALL.len()],
     pub can_pick_up_loot: bool,
     pub persistence_required: bool,
     pub drop_chances: mob::DropChances,
@@ -185,6 +190,30 @@ impl EntityState {
             Self::Item(_) => EntityType::ITEM,
             Self::FallingBlock(_) => EntityType::FALLING_BLOCK,
             Self::ExperienceOrb(_) => EntityType::EXPERIENCE_ORB,
+        }
+    }
+
+    /// Native instanceof Projectile classification. Every current concrete
+    /// variant is explicitly non-projectile; a new variant must supply its
+    /// embedded Projectile here rather than silently inheriting a false result.
+    pub fn as_projectile(&self) -> Option<&projectile::Projectile> {
+        match self {
+            Self::Cow(_)
+            | Self::Player(_)
+            | Self::PrimedTnt(_)
+            | Self::Item(_)
+            | Self::FallingBlock(_)
+            | Self::ExperienceOrb(_) => None,
+        }
+    }
+    pub fn as_projectile_mut(&mut self) -> Option<&mut projectile::Projectile> {
+        match self {
+            Self::Cow(_)
+            | Self::Player(_)
+            | Self::PrimedTnt(_)
+            | Self::Item(_)
+            | Self::FallingBlock(_)
+            | Self::ExperienceOrb(_) => None,
         }
     }
 
@@ -265,6 +294,28 @@ impl EntityDataView for EntityData {
         Some(state.as_entity_mut())
     }
 }
+impl EntityDataView for Mob {
+    fn view(state: &EntityState) -> Option<&Self> {
+        state.as_mob()
+    }
+    fn view_mut(state: &mut EntityState) -> Option<&mut Self> {
+        state.as_mob_mut()
+    }
+}
+impl EntityDataView for PathfinderMob {
+    fn view(state: &EntityState) -> Option<&Self> {
+        match state {
+            EntityState::Cow(cow) => Some(&cow.parent.parent.parent.parent),
+            _ => None,
+        }
+    }
+    fn view_mut(state: &mut EntityState) -> Option<&mut Self> {
+        match state {
+            EntityState::Cow(cow) => Some(&mut cow.parent.parent.parent.parent),
+            _ => None,
+        }
+    }
+}
 impl EntityDataView for LivingEntity {
     fn view(state: &EntityState) -> Option<&Self> {
         state.as_living()
@@ -293,6 +344,11 @@ pub enum EntityMethod {
     StopSleeping,
     CheckTotemDeathProtection,
     Die,
+    DropAllDeathLoot,
+    AwardKillScore,
+    KilledEntity,
+    DeathMessage,
+    ProcessMobExperience,
     LoadSleepingPosition,
     LoadBrain,
     CowVariantBehavior,
@@ -322,6 +378,11 @@ impl EntityMethod {
             Self::CowVariantBehavior => "Cow#getSoundSet",
             Self::FinalizeSpawn => "Mob#finalizeSpawn",
             Self::Die => "LivingEntity#die",
+            Self::DropAllDeathLoot => "LivingEntity#dropAllDeathLoot",
+            Self::AwardKillScore => "awardKillScore",
+            Self::KilledEntity => "Player#killedEntity",
+            Self::DeathMessage => "CombatTracker#getDeathMessage",
+            Self::ProcessMobExperience => "EnchantmentHelper#processMobExperience",
         }
     }
 }
@@ -336,6 +397,27 @@ pub fn trace_base_entity_refs(base: &EntityData, references: &mut Vec<EntityRef>
 ///
 /// Dispatch objects are stateless. Never hold a state borrow across a world call.
 pub trait Entity: Sync {
+    /// TraceableEntity#getOwner. Non-traceable base entities have no owner;
+    /// ItemEntity and PrimedTnt retain their respective native typed overrides.
+    fn get_owner(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+    ) -> Result<Option<EntityRef>, LevelError> {
+        if level.entity_state(entity)?.as_projectile().is_some() {
+            projectile::get_owner(entity, level)
+        } else {
+            Ok(None)
+        }
+    }
+    /// Port of Projectile#getEffectSource, using its owner when resolvable.
+    fn effect_source(&self, entity: EntityRef, level: &mut Level) -> Result<EntityRef, LevelError> {
+        if level.entity_state(entity)?.as_projectile().is_some() {
+            Ok(self.get_owner(entity, level)?.unwrap_or(entity))
+        } else {
+            Ok(entity)
+        }
+    }
     /// Port of Entity#rotate. Returns the transformed angle without changing yaw.
     fn rotate(
         &self,
@@ -653,12 +735,122 @@ pub trait Entity: Sync {
     ) -> Result<(), LevelError> {
         level.entity_behavior(other)?.push(other, entity, level)
     }
+    /// Port of Mob#getControllingPassenger; Entity's parent returns null.
     fn controlling_passenger(
+        &self,
+        entity: EntityRef,
+        level: &Level,
+    ) -> Result<Option<EntityRef>, LevelError> {
+        let state = level.entity_state(entity)?;
+        let Some(mob) = state.as_mob() else {
+            return Ok(None);
+        };
+        if mob.is_no_ai() {
+            return Ok(None);
+        }
+        let Some(&first) = state.as_entity().passengers.first() else {
+            return Ok(None);
+        };
+        if level.entity_state(first)?.as_mob().is_some()
+            && level
+                .entity_behavior(first)?
+                .can_control_vehicle(first, level)?
+        {
+            Ok(Some(first))
+        } else {
+            Ok(None)
+        }
+    }
+    fn can_control_vehicle(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        Ok(!level.entity_type_tags()?.contains_key(
+            ferraloom_data::tags::EntityTypeTags::NON_CONTROLLING_RIDER,
+            level.entity::<EntityData>(entity)?.entity_type,
+        ))
+    }
+    fn should_passengers_inherit_malus(
         &self,
         _entity: EntityRef,
         _level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(false)
+    }
+    fn get_pathfinding_malus(
+        &self,
+        entity: EntityRef,
+        path_type: ai::pathfinder::PathType,
+        level: &Level,
+    ) -> Result<f32, LevelError> {
+        mob::get_pathfinding_malus(entity, path_type, level)
+    }
+    fn set_pathfinding_malus(
+        &self,
+        entity: EntityRef,
+        path_type: ai::pathfinder::PathType,
+        cost: f32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        mob::set_pathfinding_malus(entity, path_type, cost, level)
+    }
+    /// Native Mob parent bodies are empty; subclasses may override these hooks.
+    fn on_pathfinding_start(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        level.entity::<Mob>(entity)?;
+        Ok(())
+    }
+    fn on_pathfinding_done(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        level.entity::<Mob>(entity)?;
+        Ok(())
+    }
+    fn get_target(
+        &self,
+        entity: EntityRef,
+        level: &Level,
     ) -> Result<Option<EntityRef>, LevelError> {
-        Ok(None)
+        mob::get_target(entity, level)
+    }
+    fn can_be_seen_by_anyone(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        Ok(!self.is_spectator(entity, level)? && self.is_alive(entity, level)?)
+    }
+    fn can_be_seen_as_enemy(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        mob::can_be_seen_as_enemy_parent(self, entity, level)
+    }
+    fn can_attack(
+        &self,
+        entity: EntityRef,
+        target: EntityRef,
+        level: &Level,
+    ) -> Result<bool, LevelError> {
+        mob::can_attack(entity, target, level)
+    }
+    fn get_max_fall_distance(&self, entity: EntityRef, level: &Level) -> Result<i32, LevelError> {
+        if level.entity_state(entity)?.as_mob().is_some() {
+            mob::max_fall_distance(entity, level)
+        } else {
+            Ok(3)
+        }
+    }
+    fn is_in_floatable_fluid(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        Ok(level
+            .entity::<EntityData>(entity)?
+            .fluid_interaction
+            .height(ferraloom_data::tags::FluidTags::ENTITY_FLOATABLE, level)?
+            > 0.0)
+    }
+    /// Mob dispatches its native component order; LivingEntity's parent body is empty.
+    fn server_ai_step(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        if level.entity_state(entity)?.as_mob().is_some() {
+            mob::server_ai_step(entity, level)
+        } else {
+            Ok(())
+        }
+    }
+    /// Port of Mob#customServerAiStep, overridden by concrete Brain consumers.
+    fn custom_server_ai_step(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        level.entity::<Mob>(entity)?;
+        Ok(())
     }
     fn sound_source(&self) -> ferraloom_protocol::play::SoundSource {
         ferraloom_protocol::play::SoundSource::Neutral
@@ -880,6 +1072,26 @@ pub trait Entity: Sync {
     fn default_gravity(&self, _entity: EntityRef, _level: &Level) -> Result<f64, LevelError> {
         Ok(0.0)
     }
+    /// Root integration hook for subclass work that native readAdditionalSaveData
+    /// performs before invoking super (for example AbstractCubeMob#setSize).
+    fn read_additional_before_parent(
+        &self,
+        _entity: EntityRef,
+        _tag: &ferraloom_nbt::CompoundTag,
+        _level: &mut Level,
+    ) -> Result<(), EntityPersistenceError> {
+        Ok(())
+    }
+    /// Matching post-parent subclass phase. These hooks are not a second loader;
+    /// Entity#load still owns UUID/position and the root owns every parent phase.
+    fn read_additional_after_parent(
+        &self,
+        _entity: EntityRef,
+        _tag: &ferraloom_nbt::CompoundTag,
+        _level: &mut Level,
+    ) -> Result<(), EntityPersistenceError> {
+        Ok(())
+    }
     /// Full native readAdditionalSaveData chain on the same canonical receiver.
     fn read_additional_save_data(
         &self,
@@ -907,28 +1119,93 @@ pub trait Entity: Sync {
     ) -> Result<(), LevelError> {
         Ok(())
     }
+    /// LivingEntity owns head rotation; Entity's parent body is empty.
     fn set_y_head_rot(
         &self,
-        _entity: EntityRef,
-        _value: f32,
-        _level: &mut Level,
+        entity: EntityRef,
+        value: f32,
+        level: &mut Level,
     ) -> Result<(), LevelError> {
+        if let Some(living) = level.entity_state_mut(entity)?.as_living_mut() {
+            living.y_head_rot = value;
+        }
         Ok(())
     }
+    /// LivingEntity owns body rotation; Entity's parent body is empty.
     fn set_y_body_rot(
         &self,
-        _entity: EntityRef,
-        _value: f32,
-        _level: &mut Level,
+        entity: EntityRef,
+        value: f32,
+        level: &mut Level,
     ) -> Result<(), LevelError> {
+        if let Some(living) = level.entity_state_mut(entity)?.as_living_mut() {
+            living.y_body_rot = value;
+        }
         Ok(())
     }
     /// Port of Entity#repositionEntityAfterLoad's inherited true result.
     fn reposition_entity_after_load(&self) -> bool {
         true
     }
-    fn y_head_rot(&self, _entity: EntityRef, _level: &Level) -> Result<f32, LevelError> {
-        Ok(0.0)
+    fn y_head_rot(&self, entity: EntityRef, level: &Level) -> Result<f32, LevelError> {
+        Ok(level
+            .entity_state(entity)?
+            .as_living()
+            .map_or(0.0, |living| living.y_head_rot))
+    }
+    /// Port of LivingEntity#setSpeed and Mob's forward-input override.
+    fn set_speed(
+        &self,
+        entity: EntityRef,
+        speed: f32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        if level.entity_state(entity)?.as_mob().is_some() {
+            mob::set_speed(self, entity, speed, level)
+        } else {
+            level.entity_mut::<LivingEntity>(entity)?.set_speed(speed);
+            Ok(())
+        }
+    }
+    /// Port of Mob#setZza, dispatched after the parent speed write.
+    fn set_zza(&self, entity: EntityRef, value: f32, level: &mut Level) -> Result<(), LevelError> {
+        level.entity_mut::<Mob>(entity)?.parent.zza = value;
+        Ok(())
+    }
+    /// Port of Mob#setXxa.
+    fn set_xxa(&self, entity: EntityRef, value: f32, level: &mut Level) -> Result<(), LevelError> {
+        level.entity_mut::<Mob>(entity)?.parent.xxa = value;
+        Ok(())
+    }
+    /// Port of Mob#setYya.
+    fn set_yya(&self, entity: EntityRef, value: f32, level: &mut Level) -> Result<(), LevelError> {
+        level.entity_mut::<Mob>(entity)?.parent.yya = value;
+        Ok(())
+    }
+    /// Port of LivingEntity#setJumping.
+    fn set_jumping(
+        &self,
+        entity: EntityRef,
+        value: bool,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        level.entity_mut::<LivingEntity>(entity)?.jumping = value;
+        Ok(())
+    }
+    /// Port of Mob#getMaxHeadXRot. Concrete family overrides remain virtual.
+    fn get_max_head_x_rot(&self, entity: EntityRef, level: &Level) -> Result<i32, LevelError> {
+        level.entity::<Mob>(entity)?;
+        Ok(40)
+    }
+    /// Port of Mob#getMaxHeadYRot.
+    fn get_max_head_y_rot(&self, entity: EntityRef, level: &Level) -> Result<i32, LevelError> {
+        level.entity::<Mob>(entity)?;
+        Ok(75)
+    }
+    /// Port of Mob#getHeadRotSpeed; native base is a constant, not an attribute.
+    fn get_head_rot_speed(&self, entity: EntityRef, level: &Level) -> Result<i32, LevelError> {
+        level.entity::<Mob>(entity)?;
+        Ok(10)
     }
     fn effective_gravity(&self, entity: EntityRef, level: &Level) -> Result<f64, LevelError> {
         base_effective_gravity(self, entity, level)
@@ -1363,7 +1640,67 @@ pub trait Entity: Sync {
     fn voice_pitch(&self, entity: EntityRef, level: &mut Level) -> Result<f32, LevelError> {
         living::hurt::voice_pitch(self, entity, level)
     }
-    fn die(
+    /// Port of LivingEntity#shouldDropExperience, including the baby virtual.
+    fn should_drop_experience(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        level.entity::<LivingEntity>(entity)?;
+        Ok(!self.is_baby(entity, level)?)
+    }
+    /// LivingEntity#getBaseExperienceReward's parent returns zero.
+    fn base_experience_reward(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+    ) -> Result<i32, LevelError> {
+        level.entity::<LivingEntity>(entity)?;
+        Ok(0)
+    }
+    fn get_experience_reward(
+        &self,
+        entity: EntityRef,
+        killer: Option<EntityRef>,
+        level: &mut Level,
+    ) -> Result<i32, LevelError> {
+        living::death::experience_reward(self, entity, killer, level)
+    }
+    fn award_kill_score(
+        &self,
+        entity: EntityRef,
+        victim: EntityRef,
+        _source: &DamageSource,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        if matches!(level.entity_state(entity)?, EntityState::Player(_))
+            || matches!(level.entity_state(victim)?, EntityState::Player(_))
+        {
+            return Err(LevelError::UnsupportedEntityMethod(
+                level.entity_state(entity)?.entity_type(),
+                EntityMethod::AwardKillScore,
+            ));
+        }
+        Ok(())
+    }
+    /// Entity#killedEntity is true; Player's statistic-producing override remains required.
+    fn killed_entity(
+        &self,
+        entity: EntityRef,
+        _victim: EntityRef,
+        _source: &DamageSource,
+        level: &mut Level,
+    ) -> Result<bool, LevelError> {
+        if matches!(level.entity_state(entity)?, EntityState::Player(_)) {
+            return Err(LevelError::UnsupportedEntityMethod(
+                level.entity_state(entity)?.entity_type(),
+                EntityMethod::KilledEntity,
+            ));
+        }
+        Ok(true)
+    }
+    /// Port of LivingEntity#handleKillingBlow's native virtual boundary.
+    fn handle_killing_blow(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        level.entity_mut::<LivingEntity>(entity)?.dead = true;
+        Ok(())
+    }
+    fn drop_all_death_loot(
         &self,
         entity: EntityRef,
         _source: &DamageSource,
@@ -1371,8 +1708,23 @@ pub trait Entity: Sync {
     ) -> Result<(), LevelError> {
         Err(LevelError::UnsupportedEntityMethod(
             level.entity_state(entity)?.entity_type(),
-            EntityMethod::Die,
+            EntityMethod::DropAllDeathLoot,
         ))
+    }
+    fn die(
+        &self,
+        entity: EntityRef,
+        source: &DamageSource,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        if level.entity_state(entity)?.as_living().is_some() {
+            living::death::die_parent(self, entity, source, level)
+        } else {
+            Err(LevelError::UnsupportedEntityMethod(
+                level.entity_state(entity)?.entity_type(),
+                EntityMethod::Die,
+            ))
+        }
     }
     fn hurt_server(
         &self,
@@ -1444,15 +1796,7 @@ pub(crate) fn hurt_unarmored(
 
 /// Built-in stateless dispatchers. Explicit behavior tables still override these.
 pub fn vanilla_behavior(kind: EntityType) -> Option<&'static dyn Entity> {
-    match kind {
-        EntityType::COW => Some(&animal::CowBehavior),
-        EntityType::PLAYER => Some(&player::PlayerBehavior),
-        EntityType::TNT => Some(&item::PrimedTntBehavior),
-        EntityType::ITEM => Some(&item::ItemEntityBehavior),
-        EntityType::FALLING_BLOCK => Some(&item::FallingBlockBehavior),
-        EntityType::EXPERIENCE_ORB => Some(&experience_orb::ExperienceOrbBehavior),
-        _ => None,
-    }
+    registration::for_type(kind).map(|entry| entry.behavior)
 }
 
 #[cfg(test)]

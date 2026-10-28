@@ -131,6 +131,7 @@ pub(crate) fn read_additional_save_data<E: Entity + ?Sized>(
     level: &mut Level,
 ) -> Result<(), EntityPersistenceError> {
     let kind = level.entity_state(entity)?.entity_type();
+    behavior.read_additional_before_parent(entity, tag, level)?;
     if kind == ferraloom_data::EntityType::COW {
         living_data(entity, tag, level, false)?;
         crate::entity::animal::persistence::read_cow_data(behavior, entity, tag, level)?;
@@ -175,5 +176,5 @@ pub(crate) fn read_additional_save_data<E: Entity + ?Sized>(
             }
         }
     }
-    Ok(())
+    behavior.read_additional_after_parent(entity, tag, level)
 }
