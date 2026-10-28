@@ -86,6 +86,22 @@ impl MainThreadTaskQueue {
         });
     }
 
+    /// Inspect the canonical FIFO without consuming a blocked head. A save
+    /// depends on that head only if this dimension still has queued POI work.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "shared managed POI save barriers are wired by pipeline"
+        )
+    )]
+    pub(crate) fn has_pending_poi_for_level(&self, dimension: &protocol::Identifier) -> bool {
+        let state = self.state.lock().expect("main-task queue poisoned");
+        state.tasks.iter().any(|task| {
+            matches!(&task.action, MainThreadAction::Poi { dimension: target, .. } if target == dimension)
+        })
+    }
+
     fn pop(&self, deadline: Option<tokio::time::Instant>) -> Option<TickTask> {
         let mut state = self.state.lock().expect("main-task queue poisoned");
         let tick = state.tick;
@@ -490,7 +506,9 @@ mod queue_tests {
             )),
         });
         runtime.enqueue_poi(nether.clone(), a);
+        assert!(!runtime.has_pending_poi_for_level(&overworld));
         runtime.enqueue_poi(overworld.clone(), b);
+        assert!(runtime.has_pending_poi_for_level(&overworld));
         assert_eq!(
             runtime.pop_poi_for_level(&overworld),
             PoiTaskPoll::Blocked(MainTaskBlocker::Packet)
@@ -500,6 +518,7 @@ mod queue_tests {
             MainThreadAction::Packet(_)
         ));
         for _ in 0..2 {
+            assert!(runtime.has_pending_poi_for_level(&overworld));
             assert_eq!(
                 runtime.pop_poi_for_level(&overworld),
                 PoiTaskPoll::Blocked(MainTaskBlocker::Poi {
@@ -508,10 +527,13 @@ mod queue_tests {
             );
         }
         assert_eq!(runtime.pop_poi_for_level(&nether), PoiTaskPoll::Ready(a));
+        assert!(!runtime.has_pending_poi_for_level(&nether));
+        assert!(runtime.has_pending_poi_for_level(&overworld));
         // A callback may enqueue into the same queue after pop without a held guard.
         runtime.enqueue_poi(overworld.clone(), a);
         assert_eq!(runtime.pop_poi_for_level(&overworld), PoiTaskPoll::Ready(b));
         assert_eq!(runtime.pop_poi_for_level(&overworld), PoiTaskPoll::Ready(a));
+        assert!(!runtime.has_pending_poi_for_level(&overworld));
         assert_eq!(runtime.pop_poi_for_level(&overworld), PoiTaskPoll::Empty);
     }
 
