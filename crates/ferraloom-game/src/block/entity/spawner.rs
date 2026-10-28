@@ -217,27 +217,46 @@ impl BaseSpawner {
         let index = if let Some(index) = self.next {
             index
         } else {
-            let total = self
-                .potentials
-                .iter()
-                .map(|(_, weight)| *weight)
-                .sum::<i32>();
-            let index = if total == 0 {
-                self.insert(SpawnData::default())
-            } else {
-                let mut selected = random.next_int_bound(total);
-                self.potentials
-                    .iter()
-                    .find_map(|&(index, weight)| {
-                        selected -= weight;
-                        (selected < 0).then_some(index)
-                    })
-                    .expect("validated weighted spawn data")
-            };
+            let index = self
+                .select_potential(random)
+                .unwrap_or_else(|| self.insert(SpawnData::default()));
             self.next = Some(index);
             index
         };
         &mut self.data[index]
+    }
+    /// Port of WeightedList#getRandom, shared by delay and first selection.
+    fn select_potential(&self, random: &mut dyn RandomSource) -> Option<usize> {
+        let total = self
+            .potentials
+            .iter()
+            .map(|(_, weight)| *weight)
+            .sum::<i32>();
+        if total == 0 {
+            return None;
+        }
+        let mut selected = random.next_int_bound(total);
+        self.potentials.iter().find_map(|&(index, weight)| {
+            selected -= weight;
+            (selected < 0).then_some(index)
+        })
+    }
+    /// Port of BaseSpawner#delay's state/RNG prefix. The caller delivers the
+    /// setNextSpawnData notification before broadcasting event 1.
+    fn delay(&mut self, random: &mut dyn RandomSource) -> bool {
+        self.spawn_delay = if self.max_spawn_delay <= self.min_spawn_delay {
+            self.min_spawn_delay
+        } else {
+            self.min_spawn_delay.wrapping_add(
+                random.next_int_bound(self.max_spawn_delay.wrapping_sub(self.min_spawn_delay)),
+            )
+        };
+        if let Some(index) = self.select_potential(random) {
+            self.next = Some(index);
+            true
+        } else {
+            false
+        }
     }
     /// Port of BaseSpawner#setEntityId. Mutate the selected actual SpawnData,
     /// including the weighted entry when both references name that object.
@@ -348,8 +367,8 @@ impl BaseSpawner {
         tag
     }
 }
-/// Port of SpawnerBlockEntity's embedded BaseSpawner. Server spawning remains
-/// required Unsupported until the entity spawning hook is ported.
+/// Port of SpawnerBlockEntity's embedded BaseSpawner. Due, positive-count
+/// spawn attempts remain required Unsupported until the spawn service is ported.
 #[derive(Clone, Debug)]
 pub struct SpawnerBlockEntity {
     pub parent: BlockEntityData,
@@ -369,8 +388,12 @@ impl BlockEntity for SpawnerBehavior {
     fn has_server_ticker(&self) -> bool {
         true
     }
-    fn tick(&self, _handle: BlockEntityRef, _level: &mut Level) -> Result<(), LevelError> {
-        Err(LevelError::UnsupportedBlockEntity(Block::SPAWNER))
+    fn tick(&self, handle: BlockEntityRef, level: &mut Level) -> Result<(), LevelError> {
+        server_tick(handle, level)
+    }
+    /// Port of BaseSpawner#onEventTriggered on the server (no client reset).
+    fn trigger_event(&self, _state: &mut BlockEntityState, a: i32, _b: i32) -> bool {
+        a == 1
     }
     fn load_additional(
         &self,
@@ -420,6 +443,104 @@ impl BlockEntity for SpawnerBehavior {
         tag.remove("SpawnPotentials");
         Ok(tag)
     }
+}
+
+/// Port of BaseSpawner#isNearPlayer through EntityGetter#hasNearbyAlivePlayer.
+/// The query includes creative players, excludes spectators/dead players, and
+/// uses the strict squared-distance comparison (negative range is unlimited).
+fn is_near_player(handle: BlockEntityRef, level: &Level) -> Result<bool, LevelError> {
+    use crate::entity::{EntityState, player::GameType};
+    let range = f64::from(
+        level
+            .block_entity::<SpawnerBlockEntity>(handle)?
+            .spawner
+            .required_player_range,
+    );
+    let center = ferraloom_util::Vec3::new(
+        f64::from(handle.pos.x) + 0.5,
+        f64::from(handle.pos.y) + 0.5,
+        f64::from(handle.pos.z) + 0.5,
+    );
+    for id in level.all_entities() {
+        let EntityState::Player(player) = level.entity_state(id)? else {
+            continue;
+        };
+        if player.game_mode != GameType::Spectator
+            && level.entity_behavior(id)?.is_alive(id, level)?
+            && (range < 0.0 || (player.position - center).length_sqr() < range * range)
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// Port of SpawnerBlockEntity's setNextSpawnData notification. Read the current
+/// world's state after changing the original receiver, including detached ones.
+fn notify_next_spawn_data(handle: BlockEntityRef, level: &mut Level) -> Result<(), LevelError> {
+    let state = level.get_block_state(handle.pos)?;
+    level.send_block_updated(handle.pos, state, state);
+    Ok(())
+}
+
+/// Port of BaseSpawner#serverTick through the spawn-attempt boundary. Selection
+/// still happens for nonpositive spawnCount; pre-creation validation and entity
+/// creation are one required spawning service, never an assumed failed spawn.
+fn server_tick(handle: BlockEntityRef, level: &mut Level) -> Result<(), LevelError> {
+    if !is_near_player(handle, level)? || !level.rules().spawner_blocks_work {
+        return Ok(());
+    }
+    if level
+        .block_entity::<SpawnerBlockEntity>(handle)?
+        .spawner
+        .spawn_delay
+        == -1
+    {
+        let notify = level.with_block_entity_and_loot_sources(handle, |state, sources| {
+            let BlockEntityState::Spawner(entity) = state else {
+                unreachable!("spawner ticker receiver")
+            };
+            entity.spawner.delay(sources.level_random)
+        })?;
+        if notify {
+            notify_next_spawn_data(handle, level)?;
+        }
+        level.block_event(crate::level::events::BlockEvent {
+            pos: handle.pos,
+            block: Block::SPAWNER,
+            param_a: 1,
+            param_b: 0,
+        });
+    }
+    let spawner = &mut level
+        .block_entity_mut::<SpawnerBlockEntity>(handle)?
+        .spawner;
+    if spawner.spawn_delay > 0 {
+        spawner.spawn_delay -= 1;
+        return Ok(());
+    }
+    let notify = level.with_block_entity_and_loot_sources(handle, |state, sources| {
+        let BlockEntityState::Spawner(entity) = state else {
+            unreachable!("spawner ticker receiver")
+        };
+        let notify = entity.spawner.next.is_none();
+        entity
+            .spawner
+            .get_or_create_next_spawn_data(sources.level_random);
+        notify
+    })?;
+    if notify {
+        notify_next_spawn_data(handle, level)?;
+    }
+    if level
+        .block_entity::<SpawnerBlockEntity>(handle)?
+        .spawner
+        .spawn_count
+        > 0
+    {
+        return Err(LevelError::UnsupportedBlockEntity(Block::SPAWNER));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
