@@ -22,25 +22,21 @@
   {
     "block": 1202,
     "weathering_stage": 0,
-    "is_waxed": true,
-    "unwaxed": 1198
+    "is_waxed": true
   },
   {
     "block": 1203,
     "weathering_stage": 1,
-    "is_waxed": true,
-    "unwaxed": 1199
+    "is_waxed": true
   },
   {
     "block": 1204,
     "weathering_stage": 2,
-    "is_waxed": true,
-    "unwaxed": 1200
+    "is_waxed": true
   },
   {
     "block": 1205,
     "weathering_stage": 3,
-    "is_waxed": true,
-    "unwaxed": 1201
+    "is_waxed": true
   }
 ]

@@ -20,10 +20,11 @@ pub fn generate(out: &mut String, report: &Value, block_count: usize) {
         let stage = row["weathering_stage"].as_u64().unwrap();
         assert!(stage < 4);
         let waxed = row["is_waxed"].as_bool().unwrap();
-        let unwaxed = row["unwaxed"]
-            .as_u64()
-            .map_or_else(|| "None".to_owned(), |id| format!("Some(Block({id}))"));
-        writeln!(out, "Some(CopperChestProperties {{ weathering_stage: {stage}, is_waxed: {waxed}, unwaxed: {unwaxed} }}),").unwrap();
+        writeln!(
+            out,
+            "Some(CopperChestProperties {{ weathering_stage: {stage}, is_waxed: {waxed} }}),"
+        )
+        .unwrap();
     }
     out.push_str("];\n");
 }
