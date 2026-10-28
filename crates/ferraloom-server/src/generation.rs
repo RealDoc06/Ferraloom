@@ -347,6 +347,53 @@ impl GenerationState {
         self.finish_light(result)
     }
 
+    /// Decode and publish one owned EMPTY result in logical submission order.
+    /// IO completion does not grant permission to mutate the generation cache.
+    pub(crate) fn integrate_chunk_read(
+        &mut self,
+        position: ChunkPos,
+        loaded: storage::Result<Option<ferraloom_nbt::CompoundTag>>,
+        registry: &RegistryAdapter,
+        timing: &mut profile::Span,
+    ) -> Result<()> {
+        let key = position.pack();
+        let loaded = (|| -> Result<ProtoChunk> {
+            if let Some(tag) = loaded? {
+                timing.measure("decode", || {
+                    ProtoChunk::load(
+                        &self.context,
+                        registry,
+                        position,
+                        SerializableChunkData::parse(tag)?,
+                    )
+                    .map_err(anyhow::Error::msg)
+                })
+            } else {
+                timing.measure("empty_chunk", || {
+                    Ok(ProtoChunk::empty(&self.context, position)?)
+                })
+            }
+        })();
+        let proto = match loaded {
+            Ok(proto) => proto,
+            Err(error) => {
+                self.failed_loads.insert(
+                    key,
+                    ferraloom_game::level::generation::GenerationError::Failed {
+                        position,
+                        status: ChunkStatus::Empty,
+                        message: error.to_string(),
+                    },
+                );
+                return Err(error);
+            }
+        };
+        let persisted = proto.region.status;
+        self.holders
+            .insert(key, GenerationChunkHolder::new(proto, persisted));
+        Ok(())
+    }
+
     /// Execute just one owned holder/status transition. No live Level is borrowed.
     pub(crate) fn execute_step(
         &mut self,
@@ -363,40 +410,9 @@ impl GenerationState {
             if let Some(error) = self.failed_loads.get(&key) {
                 anyhow::bail!("generation dependency failed: {error:?}");
             }
-            if let std::collections::btree_map::Entry::Vacant(entry) = self.holders.entry(key) {
-                let loaded = (|| -> Result<ProtoChunk> {
-                    if let Some(tag) = timing.measure("read_wait", || io.load(position).wait())? {
-                        timing.measure("decode", || {
-                            ProtoChunk::load(
-                                &self.context,
-                                registry,
-                                position,
-                                SerializableChunkData::parse(tag)?,
-                            )
-                            .map_err(anyhow::Error::msg)
-                        })
-                    } else {
-                        timing.measure("empty_chunk", || {
-                            Ok(ProtoChunk::empty(&self.context, position)?)
-                        })
-                    }
-                })();
-                let proto = match loaded {
-                    Ok(proto) => proto,
-                    Err(error) => {
-                        self.failed_loads.insert(
-                            key,
-                            ferraloom_game::level::generation::GenerationError::Failed {
-                                position,
-                                status: ChunkStatus::Empty,
-                                message: error.to_string(),
-                            },
-                        );
-                        return Err(error);
-                    }
-                };
-                let persisted = proto.region.status;
-                entry.insert(GenerationChunkHolder::new(proto, persisted));
+            if !self.holders.contains_key(&key) {
+                let loaded = timing.measure("read_wait", || io.load(position).wait());
+                self.integrate_chunk_read(position, loaded, registry, timing)?;
             }
             return Ok(());
         }

@@ -7,7 +7,7 @@ use ferraloom_storage::IoWorker;
 use ferraloom_util::ChunkPos;
 use std::sync::Arc;
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeSet, VecDeque},
     sync::atomic::{AtomicBool, Ordering},
 };
 use tokio::sync::oneshot;
@@ -133,6 +133,11 @@ struct GenerationStepResult {
     result: Result<()>,
 }
 
+type PendingChunkRead = (
+    ChunkPos,
+    ferraloom_storage::IoTask<Option<ferraloom_nbt::CompoundTag>>,
+);
+
 /// One serial request continuation, owned by exactly one queued/active unit.
 /// The FULL response remains reachable without requiring a tick between steps.
 struct GenerationExecution {
@@ -145,6 +150,7 @@ struct GenerationExecution {
     pool: Arc<JobPool>,
     done: oneshot::Sender<GenerationCompletion>,
     job_timing: profile::Span,
+    reads: VecDeque<PendingChunkRead>,
 }
 pub(crate) fn dispatch_generation(
     mut state: GenerationState,
@@ -168,6 +174,7 @@ pub(crate) fn dispatch_generation(
         pool,
         done,
         job_timing,
+        reads: VecDeque::new(),
     }
     .dispatch_next();
     Ok(result)
@@ -178,6 +185,12 @@ impl GenerationExecution {
             .progress
             .next_step(&self.state, Some(&self.request.cancelled))
         {
+            Ok(Some(step))
+                if step.status == ChunkStatus::Empty
+                    && !self.state.failed_loads.contains_key(&step.position.pack()) =>
+            {
+                self.dispatch_read(step);
+            }
             Ok(Some(step)) => {
                 let pool = self.pool.clone();
                 // The request has its own response channel. Each unit returns
@@ -191,6 +204,50 @@ impl GenerationExecution {
             Err(error) => self.queue_finish(Some(error)),
         }
     }
+    /// Read ahead only inside the current EMPTY layer. IO runs on its existing
+    /// actor; completion queues work without relying on the parked server executor.
+    /// Decode/publication still follow the layer's X-major/Z-minor order.
+    fn dispatch_read(mut self, step: GenerationStep) {
+        const READ_WINDOW: usize = 8;
+        if self.reads.is_empty() {
+            self.reads
+                .push_back((step.position, self.io.load(step.position)));
+        }
+        let layer = self.progress.layer.as_ref().expect("EMPTY layer");
+        for position in layer.positions.clone() {
+            if self.reads.len() == READ_WINDOW {
+                break;
+            }
+            if !self.state.holders.contains_key(&position.pack())
+                && !self.state.failed_loads.contains_key(&position.pack())
+                && !self.reads.iter().any(|(queued, _)| *queued == position)
+            {
+                self.reads.push_back((position, self.io.load(position)));
+            }
+        }
+        let (position, read) = self.reads.pop_front().expect("current read");
+        assert_eq!(position, step.position);
+        let mut timing = self.progress.take_step_timing();
+        let wait = profile::Span::new("chunk_read_wait", Some((self.request.id, position)));
+        read.on_complete(move |loaded| {
+            drop(wait);
+            let pool = self.pool.clone();
+            drop(pool.submit(move || {
+                let _work =
+                    profile::Span::new("generation_step", Some((self.request.id, position)))
+                        .status(ChunkStatus::Empty);
+                let result =
+                    self.state
+                        .integrate_chunk_read(position, loaded, &self.registry, &mut timing);
+                self.integrate_step(GenerationStepResult {
+                    timing,
+                    effects: GenerationStepEffects::default(),
+                    result,
+                });
+            }));
+        });
+    }
+
     fn execute(mut self, step: GenerationStep) -> (Self, GenerationStepResult) {
         let _work = profile::Span::new("generation_step", Some((self.request.id, step.position)))
             .status(step.status);
@@ -216,7 +273,16 @@ impl GenerationExecution {
             Err(error) => self.queue_finish(Some(error)),
         }
     }
-    fn queue_finish(self, failure: Option<anyhow::Error>) {
+    fn queue_finish(mut self, failure: Option<anyhow::Error>) {
+        if let Some((_, read)) = self.reads.pop_front() {
+            read.on_complete(move |_| {
+                // Schedule even ready completions rather than recursively
+                // executing cleanup on the IO actor or registering thread.
+                let pool = self.pool.clone();
+                drop(pool.submit(move || self.queue_finish(failure)));
+            });
+            return;
+        }
         let pool = self.pool.clone();
         drop(pool.submit(move || self.finish(failure)));
     }
@@ -231,6 +297,7 @@ impl GenerationExecution {
             pool,
             done,
             job_timing,
+            reads: _,
         } = self;
         let result = match failure {
             Some(error) => Err(error),

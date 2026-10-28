@@ -86,8 +86,15 @@ pub struct LivingEntity {
     current_impulse_impact_pos: Option<ferraloom_util::Vec3>,
 }
 impl LivingEntity {
-    /// Port of LivingEntity's constructor after Entity's derived metadata build.
+    /// Port of LivingEntity's constructor for subclasses with no additional
+    /// metadata-phase work. Mob's derived metadata callback uses the same phases.
     pub(crate) fn with_parent(mut parent: EntityData) -> Self {
+        Self::define_synched_data(&mut parent);
+        Self::with_prepared_parent(parent)
+    }
+    /// LivingEntity#defineSynchedData runs inside Entity's constructor, before
+    /// LivingEntity's field initializers and constructor RNG draws.
+    pub(crate) fn define_synched_data(parent: &mut EntityData) {
         let entity_data = &mut parent.entity_data;
         entity_data.define(data::LIVING_ENTITY_FLAGS, 0);
         entity_data.define(data::HEALTH, 1.0);
@@ -96,6 +103,9 @@ impl LivingEntity {
         entity_data.define(data::ARROW_COUNT, VarInt(0));
         entity_data.define(data::STINGER_COUNT, VarInt(0));
         entity_data.define(data::SLEEPING_POS, None);
+    }
+    /// Continue only after the complete derived metadata chain has been defined.
+    pub(crate) fn with_prepared_parent(parent: EntityData) -> Self {
         let attributes = AttributeMap::new(parent.entity_type);
         let mut living = Self {
             parent,
@@ -152,6 +162,11 @@ impl LivingEntity {
         living.parent.set_y_rot(rotation);
         living.y_head_rot = living.parent.yaw;
         living
+    }
+    /// Port of LivingEntity#setSpeed's parent body. Use Entity::set_speed for
+    /// virtual calls so Mob also updates forward input at its native point.
+    pub fn set_speed(&mut self, speed: f32) {
+        self.speed = speed;
     }
     pub fn is_swinging(&self) -> bool {
         self.swing_state.is_swinging()
