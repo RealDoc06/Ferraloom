@@ -1,6 +1,6 @@
 //! ChangeOverTimeBlock and WeatheringCopper's shared native aging algorithm.
 use crate::{
-    block::{BlockBehavior, BlockMethod, entity::BlockEntityState},
+    block::{BlockBehavior, entity::BlockEntityState},
     level::{
         Level, LevelError,
         blockscan::{BlockMatcher, Continuation},
@@ -78,16 +78,6 @@ pub(super) fn change_over_time(
     }
     Ok(())
 }
-fn required_query(state: BlockState, pos: BlockPos, phase: &'static str) -> LevelError {
-    LevelError::At {
-        pos,
-        phase,
-        source: Box::new(LevelError::UnsupportedBlockMethod(
-            state.block(),
-            BlockMethod::RandomTick,
-        )),
-    }
-}
 impl BlockBehavior for WeatheringCopper {
     /// Native classes delegate to changeOverTime. Doors require LOWER first;
     /// chests skip RIGHT before resolving a receiver or drawing any randomness.
@@ -105,31 +95,17 @@ impl BlockBehavior for WeatheringCopper {
                 if state.get(p::TYPE_) == Some(p::Type::Right) {
                     return Ok(());
                 }
-                let Some(handle) = level.get_or_promote_block_entity(pos)? else {
-                    // Native Level#getBlockEntity uses IMMEDIATE creation. A
-                    // genuinely BE-free cell can skip; a missing receiver for
-                    // an EntityBlock cannot be fabricated as an absent chest.
-                    return if level.get_block_state(pos)?.has_block_entity() {
-                        Err(required_query(
-                            state,
-                            pos,
-                            "WeatheringCopperChestBlock#randomTick requires canonical IMMEDIATE block entity resolution",
-                        ))
-                    } else {
-                        Ok(())
-                    };
+                let Some(handle) = level.get_block_entity(pos)? else {
+                    return Ok(());
                 };
-                if matches!(
+                if !matches!(
                     level.block_entity_state(handle)?,
                     BlockEntityState::Chest(_)
-                ) {
-                    return Err(required_query(
-                        state,
-                        pos,
-                        "WeatheringCopperChestBlock#getEntitiesWithContainerOpen requires the canonical opener query",
-                    ));
+                ) || crate::block::containers::menu::has_entities_with_container_open(
+                    handle, level,
+                )? {
+                    return Ok(());
                 }
-                return Ok(());
             }
             _ => {}
         }
