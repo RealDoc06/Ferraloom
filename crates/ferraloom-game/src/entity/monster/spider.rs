@@ -29,7 +29,8 @@ impl Spider {
         mob.ai.navigation =
             crate::entity::ai::Unported::new(crate::entity::ai::AiOperation::Navigation(
                 crate::entity::ai::NavigationKind::WallClimber,
-            ));
+            ))
+            .into();
         Ok(Self {
             parent: super::Monster::with_parent(mob),
         })
