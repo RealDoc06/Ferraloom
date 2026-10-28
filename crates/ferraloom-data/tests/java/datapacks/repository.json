@@ -1,0 +1,2038 @@
+[
+  {
+    "name": "new-default",
+    "available": [
+      {
+        "id": "file/a_low",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": [
+          "active"
+        ]
+      },
+      {
+        "id": "file/a𐀀",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/a",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/feature_world",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:minecart_improvements"
+        ],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/old",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "TOO_OLD",
+        "features": [],
+        "description": "old",
+        "overlays": []
+      },
+      {
+        "id": "file/z top.zip",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "minecart_improvements",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:minecart_improvements"
+        ],
+        "description": {
+          "translate": "dataPack.minecart_improvements.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "redstone_experiments",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:redstone_experiments"
+        ],
+        "description": {
+          "translate": "dataPack.redstone_experiments.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "trade_rebalance",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:trade_rebalance"
+        ],
+        "description": {
+          "translate": "dataPack.trade_rebalance.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "vanilla",
+        "source": "BuiltIn",
+        "required": false,
+        "fixed": false,
+        "position": "BOTTOM",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:vanilla"
+        ],
+        "description": {
+          "translate": "dataPack.vanilla.description"
+        },
+        "overlays": []
+      }
+    ],
+    "selected": [
+      "vanilla",
+      "file/a_low",
+      "file/a𐀀",
+      "file/a",
+      "file/feature_world",
+      "file/old",
+      "file/z top.zip"
+    ],
+    "features": [
+      "minecraft:vanilla",
+      "minecraft:minecart_improvements"
+    ],
+    "encoded": "{DataPacks:{Disabled:[\"minecart_improvements\",\"redstone_experiments\",\"trade_rebalance\"],Enabled:[\"vanilla\",\"file/a_low\",\"file/a𐀀\",\"file/a\",\"file/feature_world\",\"file/old\",\"file/z top.zip\"]},enabled_features:[\"minecraft:vanilla\",\"minecraft:minecart_improvements\"]}",
+    "resource": [
+      "file/z top.zip",
+      "return 22\n"
+    ],
+    "stack": [
+      [
+        "file/a_low",
+        "return 33\n"
+      ],
+      [
+        "file/z top.zip",
+        "return 22\n"
+      ]
+    ],
+    "listed": [
+      [
+        "test:function/feature.mcfunction",
+        "file/feature_world",
+        "return 8\n"
+      ],
+      [
+        "test:function/old.mcfunction",
+        "file/old",
+        "return 1\n"
+      ],
+      [
+        "test:function/ordered.mcfunction",
+        "file/z top.zip",
+        "return 22\n"
+      ],
+      [
+        "test:function/top.mcfunction",
+        "file/z top.zip",
+        "return 2\n"
+      ]
+    ]
+  },
+  {
+    "name": "existing-default",
+    "available": [
+      {
+        "id": "file/a_low",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": [
+          "active"
+        ]
+      },
+      {
+        "id": "file/a𐀀",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/a",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/feature_world",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:minecart_improvements"
+        ],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/old",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "TOO_OLD",
+        "features": [],
+        "description": "old",
+        "overlays": []
+      },
+      {
+        "id": "file/z top.zip",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "minecart_improvements",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:minecart_improvements"
+        ],
+        "description": {
+          "translate": "dataPack.minecart_improvements.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "redstone_experiments",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:redstone_experiments"
+        ],
+        "description": {
+          "translate": "dataPack.redstone_experiments.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "trade_rebalance",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:trade_rebalance"
+        ],
+        "description": {
+          "translate": "dataPack.trade_rebalance.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "vanilla",
+        "source": "BuiltIn",
+        "required": false,
+        "fixed": false,
+        "position": "BOTTOM",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:vanilla"
+        ],
+        "description": {
+          "translate": "dataPack.vanilla.description"
+        },
+        "overlays": []
+      }
+    ],
+    "selected": [
+      "vanilla",
+      "file/a_low",
+      "file/a𐀀",
+      "file/a",
+      "file/old",
+      "file/z top.zip"
+    ],
+    "features": [
+      "minecraft:vanilla"
+    ],
+    "encoded": "{DataPacks:{Disabled:[\"file/feature_world\",\"minecart_improvements\",\"redstone_experiments\",\"trade_rebalance\"],Enabled:[\"vanilla\",\"file/a_low\",\"file/a𐀀\",\"file/a\",\"file/old\",\"file/z top.zip\"]}}",
+    "resource": [
+      "file/z top.zip",
+      "return 22\n"
+    ],
+    "stack": [
+      [
+        "file/a_low",
+        "return 33\n"
+      ],
+      [
+        "file/z top.zip",
+        "return 22\n"
+      ]
+    ],
+    "listed": [
+      [
+        "test:function/old.mcfunction",
+        "file/old",
+        "return 1\n"
+      ],
+      [
+        "test:function/ordered.mcfunction",
+        "file/z top.zip",
+        "return 22\n"
+      ],
+      [
+        "test:function/top.mcfunction",
+        "file/z top.zip",
+        "return 2\n"
+      ]
+    ]
+  },
+  {
+    "name": "explicit-priority",
+    "available": [
+      {
+        "id": "file/a_low",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": [
+          "active"
+        ]
+      },
+      {
+        "id": "file/a𐀀",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/a",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/feature_world",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:minecart_improvements"
+        ],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/old",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "TOO_OLD",
+        "features": [],
+        "description": "old",
+        "overlays": []
+      },
+      {
+        "id": "file/z top.zip",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "minecart_improvements",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:minecart_improvements"
+        ],
+        "description": {
+          "translate": "dataPack.minecart_improvements.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "redstone_experiments",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:redstone_experiments"
+        ],
+        "description": {
+          "translate": "dataPack.redstone_experiments.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "trade_rebalance",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:trade_rebalance"
+        ],
+        "description": {
+          "translate": "dataPack.trade_rebalance.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "vanilla",
+        "source": "BuiltIn",
+        "required": false,
+        "fixed": false,
+        "position": "BOTTOM",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:vanilla"
+        ],
+        "description": {
+          "translate": "dataPack.vanilla.description"
+        },
+        "overlays": []
+      }
+    ],
+    "selected": [
+      "file/z top.zip",
+      "vanilla",
+      "file/a_low",
+      "file/a𐀀",
+      "file/a",
+      "file/old"
+    ],
+    "features": [
+      "minecraft:vanilla"
+    ],
+    "encoded": "{DataPacks:{Disabled:[\"file/feature_world\",\"minecart_improvements\",\"redstone_experiments\",\"trade_rebalance\"],Enabled:[\"file/z top.zip\",\"vanilla\",\"file/a_low\",\"file/a𐀀\",\"file/a\",\"file/old\"]}}",
+    "resource": [
+      "file/a_low",
+      "return 33\n"
+    ],
+    "stack": [
+      [
+        "file/z top.zip",
+        "return 22\n"
+      ],
+      [
+        "file/a_low",
+        "return 33\n"
+      ]
+    ],
+    "listed": [
+      [
+        "test:function/old.mcfunction",
+        "file/old",
+        "return 1\n"
+      ],
+      [
+        "test:function/ordered.mcfunction",
+        "file/a_low",
+        "return 33\n"
+      ],
+      [
+        "test:function/top.mcfunction",
+        "file/z top.zip",
+        "return 2\n"
+      ]
+    ]
+  },
+  {
+    "name": "duplicate-enabled",
+    "available": [
+      {
+        "id": "file/a_low",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": [
+          "active"
+        ]
+      },
+      {
+        "id": "file/a𐀀",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/a",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/feature_world",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:minecart_improvements"
+        ],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/old",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "TOO_OLD",
+        "features": [],
+        "description": "old",
+        "overlays": []
+      },
+      {
+        "id": "file/z top.zip",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "minecart_improvements",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:minecart_improvements"
+        ],
+        "description": {
+          "translate": "dataPack.minecart_improvements.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "redstone_experiments",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:redstone_experiments"
+        ],
+        "description": {
+          "translate": "dataPack.redstone_experiments.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "trade_rebalance",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:trade_rebalance"
+        ],
+        "description": {
+          "translate": "dataPack.trade_rebalance.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "vanilla",
+        "source": "BuiltIn",
+        "required": false,
+        "fixed": false,
+        "position": "BOTTOM",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:vanilla"
+        ],
+        "description": {
+          "translate": "dataPack.vanilla.description"
+        },
+        "overlays": []
+      }
+    ],
+    "selected": [
+      "vanilla",
+      "file/a_low",
+      "file/a𐀀",
+      "file/a",
+      "file/old"
+    ],
+    "features": [
+      "minecraft:vanilla"
+    ],
+    "encoded": "{DataPacks:{Disabled:[\"file/feature_world\",\"file/z top.zip\",\"minecart_improvements\",\"redstone_experiments\",\"trade_rebalance\"],Enabled:[\"vanilla\",\"file/a_low\",\"file/a𐀀\",\"file/a\",\"file/old\"]}}",
+    "resource": [
+      "file/a_low",
+      "return 33\n"
+    ],
+    "stack": [
+      [
+        "file/a_low",
+        "return 33\n"
+      ]
+    ],
+    "listed": [
+      [
+        "test:function/old.mcfunction",
+        "file/old",
+        "return 1\n"
+      ],
+      [
+        "test:function/ordered.mcfunction",
+        "file/a_low",
+        "return 33\n"
+      ]
+    ]
+  },
+  {
+    "name": "missing-force-vanilla",
+    "available": [
+      {
+        "id": "file/a_low",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": [
+          "active"
+        ]
+      },
+      {
+        "id": "file/a𐀀",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/a",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/feature_world",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:minecart_improvements"
+        ],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/old",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "TOO_OLD",
+        "features": [],
+        "description": "old",
+        "overlays": []
+      },
+      {
+        "id": "file/z top.zip",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "minecart_improvements",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:minecart_improvements"
+        ],
+        "description": {
+          "translate": "dataPack.minecart_improvements.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "redstone_experiments",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:redstone_experiments"
+        ],
+        "description": {
+          "translate": "dataPack.redstone_experiments.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "trade_rebalance",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:trade_rebalance"
+        ],
+        "description": {
+          "translate": "dataPack.trade_rebalance.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "vanilla",
+        "source": "BuiltIn",
+        "required": false,
+        "fixed": false,
+        "position": "BOTTOM",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:vanilla"
+        ],
+        "description": {
+          "translate": "dataPack.vanilla.description"
+        },
+        "overlays": []
+      }
+    ],
+    "selected": [
+      "vanilla"
+    ],
+    "features": [
+      "minecraft:vanilla"
+    ],
+    "encoded": "{DataPacks:{Disabled:[\"file/a_low\",\"file/a𐀀\",\"file/a\",\"file/feature_world\",\"file/old\",\"file/z top.zip\",\"minecart_improvements\",\"redstone_experiments\",\"trade_rebalance\"],Enabled:[\"vanilla\"]}}",
+    "stack": [],
+    "listed": []
+  },
+  {
+    "name": "force-saved-feature",
+    "available": [
+      {
+        "id": "file/a_low",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": [
+          "active"
+        ]
+      },
+      {
+        "id": "file/a𐀀",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/a",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/feature_world",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:minecart_improvements"
+        ],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/old",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "TOO_OLD",
+        "features": [],
+        "description": "old",
+        "overlays": []
+      },
+      {
+        "id": "file/z top.zip",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "minecart_improvements",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:minecart_improvements"
+        ],
+        "description": {
+          "translate": "dataPack.minecart_improvements.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "redstone_experiments",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:redstone_experiments"
+        ],
+        "description": {
+          "translate": "dataPack.redstone_experiments.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "trade_rebalance",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:trade_rebalance"
+        ],
+        "description": {
+          "translate": "dataPack.trade_rebalance.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "vanilla",
+        "source": "BuiltIn",
+        "required": false,
+        "fixed": false,
+        "position": "BOTTOM",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:vanilla"
+        ],
+        "description": {
+          "translate": "dataPack.vanilla.description"
+        },
+        "overlays": []
+      }
+    ],
+    "selected": [
+      "vanilla",
+      "file/a_low",
+      "file/a𐀀",
+      "file/a",
+      "file/old",
+      "file/z top.zip",
+      "minecart_improvements"
+    ],
+    "features": [
+      "minecraft:vanilla",
+      "minecraft:minecart_improvements"
+    ],
+    "encoded": "{DataPacks:{Disabled:[\"file/feature_world\",\"redstone_experiments\",\"trade_rebalance\"],Enabled:[\"vanilla\",\"file/a_low\",\"file/a𐀀\",\"file/a\",\"file/old\",\"file/z top.zip\",\"minecart_improvements\"]},enabled_features:[\"minecraft:vanilla\",\"minecraft:minecart_improvements\"]}",
+    "resource": [
+      "file/z top.zip",
+      "return 22\n"
+    ],
+    "stack": [
+      [
+        "file/a_low",
+        "return 33\n"
+      ],
+      [
+        "file/z top.zip",
+        "return 22\n"
+      ]
+    ],
+    "listed": [
+      [
+        "test:function/old.mcfunction",
+        "file/old",
+        "return 1\n"
+      ],
+      [
+        "test:function/ordered.mcfunction",
+        "file/z top.zip",
+        "return 22\n"
+      ],
+      [
+        "test:function/top.mcfunction",
+        "file/z top.zip",
+        "return 2\n"
+      ]
+    ]
+  },
+  {
+    "name": "safe-forced-feature",
+    "available": [
+      {
+        "id": "file/a_low",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": [
+          "active"
+        ]
+      },
+      {
+        "id": "file/a𐀀",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/a",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/feature_world",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:minecart_improvements"
+        ],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/old",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "TOO_OLD",
+        "features": [],
+        "description": "old",
+        "overlays": []
+      },
+      {
+        "id": "file/z top.zip",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "minecart_improvements",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:minecart_improvements"
+        ],
+        "description": {
+          "translate": "dataPack.minecart_improvements.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "redstone_experiments",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:redstone_experiments"
+        ],
+        "description": {
+          "translate": "dataPack.redstone_experiments.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "trade_rebalance",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:trade_rebalance"
+        ],
+        "description": {
+          "translate": "dataPack.trade_rebalance.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "vanilla",
+        "source": "BuiltIn",
+        "required": false,
+        "fixed": false,
+        "position": "BOTTOM",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:vanilla"
+        ],
+        "description": {
+          "translate": "dataPack.vanilla.description"
+        },
+        "overlays": []
+      }
+    ],
+    "selected": [
+      "vanilla",
+      "minecart_improvements"
+    ],
+    "features": [
+      "minecraft:vanilla",
+      "minecraft:minecart_improvements"
+    ],
+    "encoded": "{DataPacks:{Disabled:[],Enabled:[\"vanilla\",\"minecart_improvements\"]},enabled_features:[\"minecraft:vanilla\",\"minecraft:minecart_improvements\"]}",
+    "stack": [],
+    "listed": []
+  },
+  {
+    "name": "new-explicit-experiment",
+    "available": [
+      {
+        "id": "file/a_low",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": [
+          "active"
+        ]
+      },
+      {
+        "id": "file/a𐀀",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/a",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/feature_world",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:minecart_improvements"
+        ],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/old",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "TOO_OLD",
+        "features": [],
+        "description": "old",
+        "overlays": []
+      },
+      {
+        "id": "file/z top.zip",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "minecart_improvements",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:minecart_improvements"
+        ],
+        "description": {
+          "translate": "dataPack.minecart_improvements.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "redstone_experiments",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:redstone_experiments"
+        ],
+        "description": {
+          "translate": "dataPack.redstone_experiments.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "trade_rebalance",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:trade_rebalance"
+        ],
+        "description": {
+          "translate": "dataPack.trade_rebalance.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "vanilla",
+        "source": "BuiltIn",
+        "required": false,
+        "fixed": false,
+        "position": "BOTTOM",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:vanilla"
+        ],
+        "description": {
+          "translate": "dataPack.vanilla.description"
+        },
+        "overlays": []
+      }
+    ],
+    "selected": [
+      "vanilla",
+      "trade_rebalance",
+      "file/a_low",
+      "file/a𐀀",
+      "file/a",
+      "file/old",
+      "file/z top.zip"
+    ],
+    "features": [
+      "minecraft:vanilla",
+      "minecraft:trade_rebalance"
+    ],
+    "encoded": "{DataPacks:{Disabled:[\"file/feature_world\",\"minecart_improvements\",\"redstone_experiments\"],Enabled:[\"vanilla\",\"trade_rebalance\",\"file/a_low\",\"file/a𐀀\",\"file/a\",\"file/old\",\"file/z top.zip\"]},enabled_features:[\"minecraft:vanilla\",\"minecraft:trade_rebalance\"]}",
+    "resource": [
+      "file/z top.zip",
+      "return 22\n"
+    ],
+    "stack": [
+      [
+        "file/a_low",
+        "return 33\n"
+      ],
+      [
+        "file/z top.zip",
+        "return 22\n"
+      ]
+    ],
+    "listed": [
+      [
+        "test:function/old.mcfunction",
+        "file/old",
+        "return 1\n"
+      ],
+      [
+        "test:function/ordered.mcfunction",
+        "file/z top.zip",
+        "return 22\n"
+      ],
+      [
+        "test:function/top.mcfunction",
+        "file/z top.zip",
+        "return 2\n"
+      ]
+    ]
+  },
+  {
+    "name": "existing-disallowed-experiment",
+    "available": [
+      {
+        "id": "file/a_low",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": [
+          "active"
+        ]
+      },
+      {
+        "id": "file/a𐀀",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/a",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/feature_world",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:minecart_improvements"
+        ],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/old",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "TOO_OLD",
+        "features": [],
+        "description": "old",
+        "overlays": []
+      },
+      {
+        "id": "file/z top.zip",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "minecart_improvements",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:minecart_improvements"
+        ],
+        "description": {
+          "translate": "dataPack.minecart_improvements.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "redstone_experiments",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:redstone_experiments"
+        ],
+        "description": {
+          "translate": "dataPack.redstone_experiments.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "trade_rebalance",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:trade_rebalance"
+        ],
+        "description": {
+          "translate": "dataPack.trade_rebalance.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "vanilla",
+        "source": "BuiltIn",
+        "required": false,
+        "fixed": false,
+        "position": "BOTTOM",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:vanilla"
+        ],
+        "description": {
+          "translate": "dataPack.vanilla.description"
+        },
+        "overlays": []
+      }
+    ],
+    "selected": [
+      "vanilla",
+      "file/a_low",
+      "file/a𐀀",
+      "file/a",
+      "file/old",
+      "file/z top.zip"
+    ],
+    "features": [
+      "minecraft:vanilla"
+    ],
+    "encoded": "{DataPacks:{Disabled:[\"file/feature_world\",\"minecart_improvements\",\"redstone_experiments\",\"trade_rebalance\"],Enabled:[\"vanilla\",\"file/a_low\",\"file/a𐀀\",\"file/a\",\"file/old\",\"file/z top.zip\"]}}",
+    "resource": [
+      "file/z top.zip",
+      "return 22\n"
+    ],
+    "stack": [
+      [
+        "file/a_low",
+        "return 33\n"
+      ],
+      [
+        "file/z top.zip",
+        "return 22\n"
+      ]
+    ],
+    "listed": [
+      [
+        "test:function/old.mcfunction",
+        "file/old",
+        "return 1\n"
+      ],
+      [
+        "test:function/ordered.mcfunction",
+        "file/z top.zip",
+        "return 22\n"
+      ],
+      [
+        "test:function/top.mcfunction",
+        "file/z top.zip",
+        "return 2\n"
+      ]
+    ]
+  },
+  {
+    "name": "enabled-disabled-conflict",
+    "available": [
+      {
+        "id": "file/a_low",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": [
+          "active"
+        ]
+      },
+      {
+        "id": "file/a𐀀",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/a",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/feature_world",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:minecart_improvements"
+        ],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/old",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "TOO_OLD",
+        "features": [],
+        "description": "old",
+        "overlays": []
+      },
+      {
+        "id": "file/z top.zip",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "minecart_improvements",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:minecart_improvements"
+        ],
+        "description": {
+          "translate": "dataPack.minecart_improvements.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "redstone_experiments",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:redstone_experiments"
+        ],
+        "description": {
+          "translate": "dataPack.redstone_experiments.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "trade_rebalance",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:trade_rebalance"
+        ],
+        "description": {
+          "translate": "dataPack.trade_rebalance.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "vanilla",
+        "source": "BuiltIn",
+        "required": false,
+        "fixed": false,
+        "position": "BOTTOM",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:vanilla"
+        ],
+        "description": {
+          "translate": "dataPack.vanilla.description"
+        },
+        "overlays": []
+      }
+    ],
+    "selected": [
+      "vanilla",
+      "trade_rebalance",
+      "file/a_low",
+      "file/a𐀀",
+      "file/a",
+      "file/old",
+      "file/z top.zip"
+    ],
+    "features": [
+      "minecraft:vanilla",
+      "minecraft:trade_rebalance"
+    ],
+    "encoded": "{DataPacks:{Disabled:[\"file/feature_world\",\"minecart_improvements\",\"redstone_experiments\"],Enabled:[\"vanilla\",\"trade_rebalance\",\"file/a_low\",\"file/a𐀀\",\"file/a\",\"file/old\",\"file/z top.zip\"]},enabled_features:[\"minecraft:vanilla\",\"minecraft:trade_rebalance\"]}",
+    "resource": [
+      "file/z top.zip",
+      "return 22\n"
+    ],
+    "stack": [
+      [
+        "file/a_low",
+        "return 33\n"
+      ],
+      [
+        "file/z top.zip",
+        "return 22\n"
+      ]
+    ],
+    "listed": [
+      [
+        "test:function/old.mcfunction",
+        "file/old",
+        "return 1\n"
+      ],
+      [
+        "test:function/ordered.mcfunction",
+        "file/z top.zip",
+        "return 22\n"
+      ],
+      [
+        "test:function/top.mcfunction",
+        "file/z top.zip",
+        "return 2\n"
+      ]
+    ]
+  },
+  {
+    "name": "no-vanilla",
+    "available": [
+      {
+        "id": "file/a_low",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": [
+          "active"
+        ]
+      },
+      {
+        "id": "file/a𐀀",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/a",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/feature_world",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:minecart_improvements"
+        ],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/old",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "TOO_OLD",
+        "features": [],
+        "description": "old",
+        "overlays": []
+      },
+      {
+        "id": "file/z top.zip",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "minecart_improvements",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:minecart_improvements"
+        ],
+        "description": {
+          "translate": "dataPack.minecart_improvements.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "redstone_experiments",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:redstone_experiments"
+        ],
+        "description": {
+          "translate": "dataPack.redstone_experiments.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "trade_rebalance",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:trade_rebalance"
+        ],
+        "description": {
+          "translate": "dataPack.trade_rebalance.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "vanilla",
+        "source": "BuiltIn",
+        "required": false,
+        "fixed": false,
+        "position": "BOTTOM",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:vanilla"
+        ],
+        "description": {
+          "translate": "dataPack.vanilla.description"
+        },
+        "overlays": []
+      }
+    ],
+    "selected": [
+      "file/a_low",
+      "file/a𐀀",
+      "file/a",
+      "file/old",
+      "file/z top.zip"
+    ],
+    "features": [],
+    "encoded": "{DataPacks:{Disabled:[\"file/feature_world\",\"minecart_improvements\",\"redstone_experiments\",\"trade_rebalance\",\"vanilla\"],Enabled:[\"file/a_low\",\"file/a𐀀\",\"file/a\",\"file/old\",\"file/z top.zip\"]},enabled_features:[]}",
+    "resource": [
+      "file/z top.zip",
+      "return 22\n"
+    ],
+    "stack": [
+      [
+        "file/a_low",
+        "return 33\n"
+      ],
+      [
+        "file/z top.zip",
+        "return 22\n"
+      ]
+    ],
+    "listed": [
+      [
+        "test:function/old.mcfunction",
+        "file/old",
+        "return 1\n"
+      ],
+      [
+        "test:function/ordered.mcfunction",
+        "file/z top.zip",
+        "return 22\n"
+      ],
+      [
+        "test:function/top.mcfunction",
+        "file/z top.zip",
+        "return 2\n"
+      ]
+    ]
+  },
+  {
+    "name": "safe-new",
+    "available": [
+      {
+        "id": "file/a_low",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": [
+          "active"
+        ]
+      },
+      {
+        "id": "file/a𐀀",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/a",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/feature_world",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:minecart_improvements"
+        ],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "file/old",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "TOO_OLD",
+        "features": [],
+        "description": "old",
+        "overlays": []
+      },
+      {
+        "id": "file/z top.zip",
+        "source": "World",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [],
+        "description": "fixture",
+        "overlays": []
+      },
+      {
+        "id": "minecart_improvements",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:minecart_improvements"
+        ],
+        "description": {
+          "translate": "dataPack.minecart_improvements.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "redstone_experiments",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:redstone_experiments"
+        ],
+        "description": {
+          "translate": "dataPack.redstone_experiments.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "trade_rebalance",
+        "source": "Feature",
+        "required": false,
+        "fixed": false,
+        "position": "TOP",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:trade_rebalance"
+        ],
+        "description": {
+          "translate": "dataPack.trade_rebalance.description"
+        },
+        "overlays": []
+      },
+      {
+        "id": "vanilla",
+        "source": "BuiltIn",
+        "required": false,
+        "fixed": false,
+        "position": "BOTTOM",
+        "compatibility": "COMPATIBLE",
+        "features": [
+          "minecraft:vanilla"
+        ],
+        "description": {
+          "translate": "dataPack.vanilla.description"
+        },
+        "overlays": []
+      }
+    ],
+    "selected": [
+      "vanilla"
+    ],
+    "features": [
+      "minecraft:vanilla"
+    ],
+    "encoded": "{DataPacks:{Disabled:[],Enabled:[\"vanilla\"]}}",
+    "stack": [],
+    "listed": []
+  }
+]

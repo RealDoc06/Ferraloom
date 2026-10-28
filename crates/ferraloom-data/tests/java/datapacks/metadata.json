@@ -1,0 +1,838 @@
+[
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "min_format": 121,
+        "max_format": 121
+      }
+    },
+    "loaded": true,
+    "compatibility": "COMPATIBLE",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "range": [
+      [
+        121,
+        0
+      ],
+      [
+        121,
+        2147483647
+      ]
+    ]
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "pack_format": 81
+      }
+    },
+    "loaded": true,
+    "compatibility": "TOO_OLD",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "range": [
+      [
+        81,
+        0
+      ],
+      [
+        81,
+        0
+      ]
+    ]
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "pack_format": 121
+      }
+    },
+    "loaded": true,
+    "compatibility": "UNKNOWN",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "fallback": true
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "pack_format": -1
+      }
+    },
+    "loaded": true,
+    "compatibility": "TOO_OLD",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "range": [
+      [
+        -1,
+        0
+      ],
+      [
+        -1,
+        0
+      ]
+    ]
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "min_format": 121
+      }
+    },
+    "loaded": true,
+    "compatibility": "UNKNOWN",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "fallback": true
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "max_format": 121
+      }
+    },
+    "loaded": true,
+    "compatibility": "UNKNOWN",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "fallback": true
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "min_format": 122,
+        "max_format": 121
+      }
+    },
+    "loaded": true,
+    "compatibility": "UNKNOWN",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "fallback": true
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "min_format": 121.9,
+        "max_format": 121.1
+      }
+    },
+    "loaded": true,
+    "compatibility": "COMPATIBLE",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "range": [
+      [
+        121,
+        0
+      ],
+      [
+        121,
+        2147483647
+      ]
+    ]
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "min_format": [
+          121
+        ],
+        "max_format": [
+          121
+        ]
+      }
+    },
+    "loaded": true,
+    "compatibility": "COMPATIBLE",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "range": [
+      [
+        121,
+        0
+      ],
+      [
+        121,
+        2147483647
+      ]
+    ]
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "min_format": [
+          121,
+          1
+        ],
+        "max_format": 121
+      }
+    },
+    "loaded": true,
+    "compatibility": "TOO_NEW",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "range": [
+      [
+        121,
+        1
+      ],
+      [
+        121,
+        2147483647
+      ]
+    ]
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "min_format": [
+          121,
+          0,
+          5
+        ],
+        "max_format": 121
+      }
+    },
+    "loaded": true,
+    "compatibility": "COMPATIBLE",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "range": [
+      [
+        121,
+        0
+      ],
+      [
+        121,
+        2147483647
+      ]
+    ]
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "min_format": [
+          121,
+          0,
+          -1
+        ],
+        "max_format": 121
+      }
+    },
+    "loaded": true,
+    "compatibility": "UNKNOWN",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "fallback": true
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "min_format": [
+          121,
+          0,
+          "bad"
+        ],
+        "max_format": 121
+      }
+    },
+    "loaded": true,
+    "compatibility": "UNKNOWN",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "fallback": true
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "min_format": [],
+        "max_format": 121
+      }
+    },
+    "loaded": true,
+    "compatibility": "UNKNOWN",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "fallback": true
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "min_format": -1,
+        "max_format": 121
+      }
+    },
+    "loaded": true,
+    "compatibility": "UNKNOWN",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "fallback": true
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "min_format": 121,
+        "max_format": 121,
+        "supported_formats": [
+          121,
+          121
+        ]
+      }
+    },
+    "loaded": true,
+    "compatibility": "UNKNOWN",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "fallback": true
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "min_format": 121,
+        "max_format": 121,
+        "pack_format": 122
+      }
+    },
+    "loaded": true,
+    "compatibility": "UNKNOWN",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "fallback": true
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "pack_format": 15,
+        "supported_formats": [
+          15,
+          81
+        ]
+      }
+    },
+    "loaded": true,
+    "compatibility": "TOO_OLD",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "range": [
+      [
+        15,
+        0
+      ],
+      [
+        81,
+        0
+      ]
+    ]
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "pack_format": 15,
+        "supported_formats": {
+          "min_inclusive": 15,
+          "max_inclusive": 81
+        }
+      }
+    },
+    "loaded": true,
+    "compatibility": "TOO_OLD",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "range": [
+      [
+        15,
+        0
+      ],
+      [
+        81,
+        0
+      ]
+    ]
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "supported_formats": [
+          15,
+          81
+        ]
+      }
+    },
+    "loaded": true,
+    "compatibility": "UNKNOWN",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "fallback": true
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "pack_format": 14,
+        "supported_formats": [
+          14,
+          81
+        ]
+      }
+    },
+    "loaded": true,
+    "compatibility": "UNKNOWN",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "fallback": true
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "pack_format": 15,
+        "min_format": 15,
+        "max_format": 121,
+        "supported_formats": [
+          15,
+          81
+        ]
+      }
+    },
+    "loaded": true,
+    "compatibility": "COMPATIBLE",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "range": [
+      [
+        15,
+        0
+      ],
+      [
+        121,
+        2147483647
+      ]
+    ]
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "pack_format": 15,
+        "min_format": 15,
+        "max_format": 121,
+        "supported_formats": [
+          15,
+          121
+        ]
+      }
+    },
+    "loaded": true,
+    "compatibility": "COMPATIBLE",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "range": [
+      [
+        15,
+        0
+      ],
+      [
+        121,
+        2147483647
+      ]
+    ]
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "max_format": 121
+      }
+    },
+    "loaded": true,
+    "compatibility": "UNKNOWN",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "fallback": true
+  },
+  {
+    "input": {},
+    "loaded": false
+  },
+  {
+    "input": {
+      "pack": {}
+    },
+    "loaded": false
+  },
+  {
+    "input": {
+      "pack": {
+        "description": 42,
+        "min_format": 121,
+        "max_format": 121
+      }
+    },
+    "loaded": false
+  },
+  {
+    "input": {
+      "pack": {
+        "description": {
+          "translate": "dataPack.vanilla.description",
+          "color": "yellow"
+        },
+        "min_format": 121,
+        "max_format": 121
+      }
+    },
+    "loaded": true,
+    "compatibility": "COMPATIBLE",
+    "description": {
+      "translate": "dataPack.vanilla.description",
+      "color": "yellow"
+    },
+    "features": [],
+    "overlays": [],
+    "range": [
+      [
+        121,
+        0
+      ],
+      [
+        121,
+        2147483647
+      ]
+    ]
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "min_format": 121,
+        "max_format": 121
+      },
+      "features": {
+        "enabled": []
+      }
+    },
+    "loaded": true,
+    "compatibility": "COMPATIBLE",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "range": [
+      [
+        121,
+        0
+      ],
+      [
+        121,
+        2147483647
+      ]
+    ]
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "min_format": 121,
+        "max_format": 121
+      },
+      "features": {
+        "enabled": [
+          "trade_rebalance"
+        ]
+      }
+    },
+    "loaded": true,
+    "compatibility": "COMPATIBLE",
+    "description": "test",
+    "features": [
+      "minecraft:trade_rebalance"
+    ],
+    "overlays": [],
+    "range": [
+      [
+        121,
+        0
+      ],
+      [
+        121,
+        2147483647
+      ]
+    ]
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "min_format": 121,
+        "max_format": 121
+      },
+      "features": {
+        "enabled": [
+          "unknown"
+        ]
+      }
+    },
+    "loaded": false
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "min_format": 121,
+        "max_format": 121
+      },
+      "features": {}
+    },
+    "loaded": false
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "min_format": 121,
+        "max_format": 121
+      },
+      "features": {
+        "enabled": [
+          1
+        ]
+      }
+    },
+    "loaded": false
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "min_format": 121,
+        "max_format": 121
+      },
+      "overlays": {}
+    },
+    "loaded": false
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "min_format": 121,
+        "max_format": 121
+      },
+      "overlays": {
+        "entries": []
+      }
+    },
+    "loaded": true,
+    "compatibility": "COMPATIBLE",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "range": [
+      [
+        121,
+        0
+      ],
+      [
+        121,
+        2147483647
+      ]
+    ]
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "min_format": 121,
+        "max_format": 121
+      },
+      "overlays": {
+        "entries": [
+          {
+            "directory": "a",
+            "min_format": 121,
+            "max_format": 121
+          },
+          {
+            "directory": "b",
+            "min_format": 122,
+            "max_format": 122
+          }
+        ]
+      }
+    },
+    "loaded": true,
+    "compatibility": "COMPATIBLE",
+    "description": "test",
+    "features": [],
+    "overlays": [
+      "a"
+    ],
+    "range": [
+      [
+        121,
+        0
+      ],
+      [
+        121,
+        2147483647
+      ]
+    ]
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "min_format": 121,
+        "max_format": 121
+      },
+      "overlays": {
+        "entries": [
+          {
+            "directory": "ignored"
+          }
+        ]
+      }
+    },
+    "loaded": true,
+    "compatibility": "COMPATIBLE",
+    "description": "test",
+    "features": [],
+    "overlays": [],
+    "range": [
+      [
+        121,
+        0
+      ],
+      [
+        121,
+        2147483647
+      ]
+    ]
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "min_format": 121,
+        "max_format": 121
+      },
+      "overlays": {
+        "entries": [
+          {
+            "directory": "../x",
+            "min_format": 121,
+            "max_format": 121
+          }
+        ]
+      }
+    },
+    "loaded": false
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "min_format": 121,
+        "max_format": 121
+      },
+      "overlays": {
+        "entries": [
+          {
+            "directory": "..",
+            "min_format": 121,
+            "max_format": 121
+          }
+        ]
+      }
+    },
+    "loaded": true,
+    "compatibility": "COMPATIBLE",
+    "description": "test",
+    "features": [],
+    "overlays": [
+      ".."
+    ],
+    "range": [
+      [
+        121,
+        0
+      ],
+      [
+        121,
+        2147483647
+      ]
+    ]
+  },
+  {
+    "input": {
+      "pack": {
+        "description": "test",
+        "min_format": 121,
+        "max_format": 121
+      },
+      "overlays": {
+        "entries": [
+          {
+            "directory": "old",
+            "formats": [
+              80,
+              81
+            ]
+          },
+          {
+            "directory": "new",
+            "min_format": 121,
+            "max_format": 121
+          }
+        ]
+      }
+    },
+    "loaded": false
+  }
+]

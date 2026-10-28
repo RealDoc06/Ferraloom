@@ -81,15 +81,17 @@ impl std::ops::Deref for WorldRoot {
 }
 impl WorldRoot {
     pub fn open(
-        root: &Path,
+        startup: crate::datapacks::WorldStartup,
         properties: &ServerProperties,
         resources: &ResourceManager,
         registries: &Arc<RegistrySet>,
         unported_behavior: ferraloom_game::block::UnportedBehavior,
     ) -> Result<Self> {
-        let access = Arc::new(LevelStorageAccess::open(
-            root.join(properties.get("level-name")),
-        )?);
+        let crate::datapacks::WorldStartup {
+            access,
+            saved_level_data,
+            configuration,
+        } = startup;
         let saved_data = SavedDataStorage::new(access.path().join("data"));
         let settings = saved_data.load::<CompoundTag>("minecraft:world_gen_settings")?;
         let seed = settings
@@ -162,11 +164,8 @@ impl WorldRoot {
                 )?,
             )
         };
-        let mut level_data = if access.path().join("level.dat").exists() {
-            access.read_level_data()?
-        } else {
-            new_level_data(properties)
-        };
+        let mut level_data = saved_level_data.unwrap_or_else(|| new_level_data(properties));
+        configuration.write_nbt(&mut level_data.data);
         // DedicatedServer#forceDifficulty ignores the saved lock at startup.
         force_initial_difficulty(&mut level_data.data, properties.get("difficulty"));
         access.save_level_data(&level_data)?;
@@ -342,7 +341,7 @@ mod tests {
             properties.set("level-type", preset);
             properties.set("level-seed", 0);
             let mut root = WorldRoot::open(
-                directory.path(),
+                crate::world::WorldStartup::read(directory.path(), &properties).unwrap(),
                 &properties,
                 &resources,
                 &registries,
@@ -382,7 +381,7 @@ mod tests {
         properties.set("level-type", "minecraft:flat");
         properties.set("level-seed", 1234);
         let mut root = WorldRoot::open(
-            directory.path(),
+            crate::world::WorldStartup::read(directory.path(), &properties).unwrap(),
             &properties,
             &resources,
             &registries,
@@ -527,7 +526,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let properties = ServerProperties::from_values(Default::default());
         let mut root = WorldRoot::open(
-            directory.path(),
+            crate::world::WorldStartup::read(directory.path(), &properties).unwrap(),
             &properties,
             &resources,
             &registries,
