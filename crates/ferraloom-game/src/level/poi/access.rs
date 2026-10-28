@@ -33,33 +33,44 @@ fn section_points(
     points
 }
 impl Level {
-    fn configure_poi_bounds(&mut self) {
-        let min = self.min_build_height() >> 4;
-        let max = self.max_build_height() >> 4;
-        self.region_mut().poi.set_section_bounds(min, max);
-    }
-    pub fn poi_manager(&self) -> &PoiManager {
-        &self.region().poi
+    /// Exclusive query access cannot retain a shared-state guard across predicates.
+    pub fn poi_manager(&mut self) -> &mut PoiManager {
+        self.region_mut().poi.get_mut()
     }
     /// Port of SectionStorage#getOrLoad. No FULL request, ticket or tick advance.
     pub fn ensure_poi_chunk_loaded(&mut self, pos: ChunkPos) -> Result<(), LevelError> {
-        if self.poi_manager().is_chunk_loaded(pos) {
+        self.ensure_poi_chunk_loaded_shared(pos)
+    }
+    /// POI-only read. The loaded-state guard ends before driver or storage calls.
+    pub fn ensure_poi_chunk_loaded_shared(&self, pos: ChunkPos) -> Result<(), LevelError> {
+        if self.region().poi.borrow().is_chunk_loaded(pos) {
             return Ok(());
         }
         let data = self
             .acquire_driver()
             .ok_or(LevelError::Poi(PoiError::MissingStorage))?
             .load_poi_chunk(pos)?;
-        self.complete_poi_chunk_load(pos, data)
+        self.complete_poi_chunk_load_shared(pos, data)
     }
     pub fn complete_poi_chunk_load(
         &mut self,
         pos: ChunkPos,
         data: Option<ferraloom_storage::PoiChunk>,
     ) -> Result<(), LevelError> {
-        self.configure_poi_bounds();
-        self.region_mut()
-            .poi
+        self.complete_poi_chunk_load_shared(pos, data)
+    }
+    /// SectionStorage load completion only: no IO, callbacks or world dispatch.
+    /// First completion wins, including a nested synchronous load's known absence.
+    pub fn complete_poi_chunk_load_shared(
+        &self,
+        pos: ChunkPos,
+        data: Option<ferraloom_storage::PoiChunk>,
+    ) -> Result<(), LevelError> {
+        let min = self.min_build_height() >> 4;
+        let max = self.max_build_height() >> 4;
+        let mut manager = self.region().poi.borrow_mut();
+        manager.set_section_bounds(min, max);
+        manager
             .complete_chunk_load(pos, data)
             .map_err(LevelError::Poi)
     }
@@ -70,12 +81,22 @@ impl Level {
         min_section: i32,
         sections: &[LevelChunkSection],
     ) -> Result<(), LevelError> {
-        self.ensure_poi_chunk_loaded(pos)?;
+        self.check_poi_consistency_with_sections_shared(pos, min_section, sections)
+    }
+    /// Scan immutable registry/section data before borrowing the canonical manager.
+    pub fn check_poi_consistency_with_sections_shared(
+        &self,
+        pos: ChunkPos,
+        min_section: i32,
+        sections: &[LevelChunkSection],
+    ) -> Result<(), LevelError> {
+        self.ensure_poi_chunk_loaded_shared(pos)?;
         for (index, section) in sections.iter().enumerate() {
             let y = min_section + index as i32;
             let points = section_points(pos, y, section);
-            self.region_mut()
+            self.region()
                 .poi
+                .borrow_mut()
                 .check_consistency(pos, y, points)
                 .map_err(LevelError::Poi)?;
         }
@@ -95,6 +116,7 @@ impl Level {
         for (y, points) in points {
             self.region_mut()
                 .poi
+                .get_mut()
                 .check_consistency(pos, y, points)
                 .map_err(LevelError::Poi)?;
         }
@@ -104,7 +126,9 @@ impl Level {
         &self,
         pos: ChunkPos,
     ) -> Result<Option<PoiChunkSave>, LevelError> {
-        self.poi_manager()
+        self.region()
+            .poi
+            .borrow()
             .capture_chunk_for_save(pos)
             .map_err(LevelError::Poi)
     }
@@ -115,6 +139,7 @@ impl Level {
     ) -> Result<(), LevelError> {
         self.region_mut()
             .poi
+            .get_mut()
             .acknowledge_chunk_saved(pos, revision)
             .map_err(LevelError::Poi)
     }

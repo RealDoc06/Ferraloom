@@ -378,7 +378,8 @@ pub struct Region {
     entities: entity::EntityStorage,
     entity_tracker: entity_tracker::EntityTracker,
     waypoint_manager: waypoints::ServerWaypointManager,
-    poi: poi::PoiManager,
+    // Cold canonical POI updates use short private guards; never guard IO or callbacks.
+    poi: RefCell<poi::PoiManager>,
     poi_executor_running: bool,
     entity_tick_list: entity::EntityTickList,
     block_ticks: LevelTicks,

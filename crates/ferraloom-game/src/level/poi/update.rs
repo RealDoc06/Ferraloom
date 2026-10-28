@@ -27,11 +27,16 @@ impl Level {
         self.ensure_poi_chunk_loaded(ChunkPos::containing(update.pos()))?;
         match update {
             PoiUpdate::Remove { pos } => {
-                self.region_mut().poi.remove(pos).map_err(LevelError::Poi)?;
+                self.region_mut()
+                    .poi
+                    .get_mut()
+                    .remove(pos)
+                    .map_err(LevelError::Poi)?;
             }
             PoiUpdate::Add { pos, poi_type } => {
                 self.region_mut()
                     .poi
+                    .get_mut()
                     .add(pos, poi_type)
                     .map_err(LevelError::Poi)?;
             }

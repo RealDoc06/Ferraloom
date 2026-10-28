@@ -2805,3 +2805,60 @@ fn poi_command_task_queues_remove_add_while_tick_time_mutation_is_immediate() {
         Some(PoiTypeId::MEETING)
     );
 }
+
+#[test]
+fn shared_poi_neighbor_load_order_preserves_identical_canonical_state() {
+    use super::poi::PoiTypeId;
+    use ferraloom_storage::{IntArray, PoiChunk, PoiRecord, PoiSection};
+
+    fn data(pos: BlockPos) -> PoiChunk {
+        PoiChunk {
+            sections: Some(
+                [(
+                    "0".into(),
+                    PoiSection {
+                        valid: Some(true),
+                        records: Some(vec![PoiRecord {
+                            position: Some(IntArray(vec![pos.x, pos.y, pos.z])),
+                            poi_type: Some(PoiTypeId::MEETING.name().into()),
+                            free_tickets: Some(17),
+                            ..Default::default()
+                        }]),
+                        ..Default::default()
+                    },
+                )]
+                .into_iter()
+                .collect(),
+            ),
+            ..Default::default()
+        }
+    }
+
+    let mut first = empty_level(&EMPTY);
+    let mut second = empty_level(&EMPTY);
+    let positions = [BlockPos::new(33, 0, 1), BlockPos::new(49, 0, 1)];
+    for (level, order) in [(&first, [0, 1]), (&second, [1, 0])] {
+        for index in order {
+            let pos = positions[index];
+            let chunk = ChunkPos::containing(pos);
+            level
+                .complete_poi_chunk_load_shared(chunk, Some(data(pos)))
+                .unwrap();
+            // Valid persisted sections ignore an empty block scan. All operations
+            // use &Level, as a lower-status managed chunk load does.
+            let section = empty_chunk(chunk).sections().next().unwrap().clone();
+            level
+                .check_poi_consistency_with_sections_shared(chunk, 0, &[section])
+                .unwrap();
+            // A late absent prefetch cannot erase the canonical loaded record.
+            level.complete_poi_chunk_load_shared(chunk, None).unwrap();
+        }
+    }
+    assert_eq!(
+        format!("{:?}", first.poi_manager()),
+        format!("{:?}", second.poi_manager())
+    );
+    for pos in positions {
+        assert_eq!(first.poi_manager().get_free_tickets(pos).unwrap(), 17);
+    }
+}
