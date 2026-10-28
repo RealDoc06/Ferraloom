@@ -1,0 +1,54 @@
+[
+  {
+    "values": [],
+    "any": false,
+    "sum": 0
+  },
+  {
+    "values": [
+      0
+    ],
+    "any": true,
+    "sum": 0
+  },
+  {
+    "values": [
+      7
+    ],
+    "any": true,
+    "sum": 7
+  },
+  {
+    "values": [
+      -4,
+      7
+    ],
+    "any": true,
+    "sum": 3
+  },
+  {
+    "values": [
+      2147483647,
+      1
+    ],
+    "any": true,
+    "sum": -2147483648
+  },
+  {
+    "values": [
+      -2147483648,
+      -1
+    ],
+    "any": true,
+    "sum": 2147483647
+  },
+  {
+    "values": [
+      2147483647,
+      2147483647,
+      2
+    ],
+    "any": true,
+    "sum": 0
+  }
+]

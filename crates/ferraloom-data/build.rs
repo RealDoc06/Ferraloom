@@ -11,6 +11,8 @@ mod center_support;
 mod command_block_properties;
 #[path = "build/copper_chest_properties.rs"]
 mod copper_chest_properties;
+#[path = "build/copper_wax.rs"]
+mod copper_wax;
 #[path = "build/environment_attributes.rs"]
 mod environment_attributes;
 #[path = "build/feature_requirements.rs"]
@@ -977,6 +979,19 @@ fn main() {
     std::fs::write(
         Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("weathering_copper.rs"),
         weathering,
+    )
+    .unwrap();
+
+    let mut wax = String::new();
+    copper_wax::generate(
+        &mut wax,
+        &load(root, "copper_wax"),
+        block_report.as_object().unwrap().len(),
+    );
+    std::fs::write(
+        Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("copper_wax.rs"),
+        wax,
+
     )
     .unwrap();
     let fluid_random_ticking = load(root, "fluid_random_ticking");
