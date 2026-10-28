@@ -853,7 +853,7 @@ pub trait Entity: Sync {
     /// LivingEntity's head/body update; Mob dispatches its owned body control.
     fn tick_head_turn(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
         if level.entity_state(entity)?.as_mob().is_some() {
-            ai::pending(entity, ai::AiOperation::BodyRotationControl, level)
+            ai::control::tick_body_rotation(entity, level)
         } else {
             living::tick_head_turn_parent(entity, level)
         }
