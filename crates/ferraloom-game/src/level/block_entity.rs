@@ -149,6 +149,35 @@ impl BlockEntityRuntime {
     }
 }
 impl Level {
+    /// Port of Level#getBlockEntity and LevelChunk#getBlockEntity(IMMEDIATE).
+    /// A removed entry returns null for this lookup; only a later lookup may
+    /// promote its pending replacement or create the current state's receiver.
+    pub fn get_block_entity(
+        &mut self,
+        pos: BlockPos,
+    ) -> Result<Option<BlockEntityRef>, LevelError> {
+        if !self.is_in_valid_bounds(pos) {
+            return Ok(None);
+        }
+        let had_entry = self
+            .get_full_chunk(ChunkPos::containing(pos))?
+            .block_entities
+            .get(pos)
+            .is_some();
+        let promoted = self.get_or_promote_block_entity(pos)?;
+        if had_entry || promoted.is_some() {
+            return Ok(promoted);
+        }
+        let state = self.get_block_state(pos)?;
+        // LevelChunk#createBlockEntity returns null before factory dispatch
+        // when the current state has no block entity.
+        if state.has_block_entity()
+            && let Some(entity) = crate::block::entity::new_block_entity(pos, state)?
+        {
+            self.set_block_entity(entity)?;
+        }
+        self.block_entity_ref(pos)
+    }
     /// Current positional receiver. Unactivated raw NBT is a required unsupported
     /// query in both policies, never an absent block entity.
     pub fn block_entity_ref(&self, pos: BlockPos) -> Result<Option<BlockEntityRef>, LevelError> {
@@ -726,6 +755,160 @@ mod tests {
         level.set_block_state(pos, state).unwrap();
         level.set_block_entity(create(pos, state).unwrap()).unwrap();
         level.block_entity_ref(pos).unwrap().unwrap()
+    }
+    #[test]
+    fn native_check_and_immediate_lookups_preserve_promotion_removed_and_receiver_identity() {
+        use ferraloom_nbt::parse_compound;
+        use ferraloom_util::random::RandomSource;
+        let pos = BlockPos::new(1, 1, 1);
+        let key = ChunkPos::ZERO;
+        let live = parse_compound("{id:'minecraft:chest',x:1,y:1,z:1,LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:17L}").unwrap();
+        let optional_tag = |text: &str| (text != "-").then(|| parse_compound(text).unwrap());
+        let mut checked = 0;
+        for row in include_str!("../../tests/java/level/block-entity-immediate.tsv").lines() {
+            let f: Vec<_> = row.split('\t').collect();
+            let mut level = level();
+            let state = ferraloom_data::BlockState::from_id(f[1].parse().unwrap()).unwrap();
+            level.set_block_state(pos, state).unwrap();
+            if let Some(raw) = optional_tag(f[3]) {
+                level
+                    .region_mut()
+                    .chunks
+                    .get_mut(&key)
+                    .unwrap()
+                    .pending_generation
+                    .block_entities
+                    .push(raw);
+            }
+            let old = if f[0].starts_with("live") || f[0].starts_with("removed") {
+                let entity = crate::block::entity::load_static(
+                    pos,
+                    state,
+                    &live,
+                    level.context().registry_context().unwrap(),
+                )
+                .unwrap()
+                .unwrap();
+                level.set_block_entity(entity).unwrap();
+                let handle = level.block_entity_ref(pos).unwrap().unwrap();
+                level.retain_block_entity(handle).unwrap();
+                if f[0].starts_with("removed") {
+                    level
+                        .block_entity_mut::<BlockEntityData>(handle)
+                        .unwrap()
+                        .removed = true;
+                }
+                Some(handle)
+            } else {
+                None
+            };
+            level.random().set_seed(12345);
+            let first = if f[2] == "IMMEDIATE" {
+                level.get_block_entity(pos)
+            } else {
+                level.get_or_promote_block_entity(pos)
+            }
+            .unwrap();
+            let saved = first.map(|handle| {
+                level
+                    .block_entity_state(handle)
+                    .unwrap()
+                    .save_with_full_metadata()
+                    .unwrap()
+            });
+            assert_eq!(saved, optional_tag(f[4]), "first save {row}");
+            assert_eq!(
+                level
+                    .chunk(key)
+                    .unwrap()
+                    .pending_block_entity_nbt()
+                    .first()
+                    .cloned(),
+                optional_tag(f[5]),
+                "first pending {row}"
+            );
+            assert_eq!(
+                level.chunk(key).unwrap().block_entities.get(pos).is_some(),
+                f[6] == "true",
+                "first stored {row}"
+            );
+            let second = if f[2] == "IMMEDIATE" {
+                level.get_block_entity(pos)
+            } else {
+                level.get_or_promote_block_entity(pos)
+            }
+            .unwrap();
+            let saved = second.map(|handle| {
+                level
+                    .block_entity_state(handle)
+                    .unwrap()
+                    .save_with_full_metadata()
+                    .unwrap()
+            });
+            assert_eq!(saved, optional_tag(f[7]), "second save {row}");
+            assert_eq!(
+                level
+                    .chunk(key)
+                    .unwrap()
+                    .pending_block_entity_nbt()
+                    .first()
+                    .cloned(),
+                optional_tag(f[8]),
+                "second pending {row}"
+            );
+            assert_eq!(
+                level.chunk(key).unwrap().block_entities.get(pos).is_some(),
+                f[9] == "true",
+                "second stored {row}"
+            );
+            assert_eq!(
+                first.is_some() && first == second,
+                f[10] == "true",
+                "same receiver {row}"
+            );
+            assert_eq!(
+                old.is_some() && old == first,
+                f[11] == "true",
+                "first original {row}"
+            );
+            assert_eq!(
+                old.is_some() && old == second,
+                f[12] == "true",
+                "second original {row}"
+            );
+            assert_eq!(
+                level.random().next_long(),
+                f[13].parse::<i64>().unwrap(),
+                "next RNG {row}"
+            );
+            if let Some(old) = old {
+                assert!(
+                    level.block_entity_state(old).is_ok(),
+                    "original operation root {row}"
+                );
+                level.release_block_entity(old);
+            }
+            checked += 1;
+        }
+        assert_eq!(checked, 28);
+    }
+    #[test]
+    fn immediate_lookup_keeps_bounds_guards_and_required_chunk_errors() {
+        for policy in [
+            crate::block::UnportedBehavior::Strict,
+            crate::block::UnportedBehavior::Warn,
+        ] {
+            let mut level = level();
+            level.set_unported_behavior(policy);
+            assert_eq!(
+                level.get_block_entity(BlockPos::new(0, i32::MAX, 0)),
+                Ok(None)
+            );
+            assert_eq!(
+                level.get_block_entity(BlockPos::new(48, 1, 0)),
+                Err(LevelError::MissingChunk(ChunkPos::new(3, 0)))
+            );
+        }
     }
     #[test]
     fn native_chunk_save_promotes_pending_and_marks_only_raw_fallbacks_packed() {
