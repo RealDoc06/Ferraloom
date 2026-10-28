@@ -11,6 +11,18 @@ pub enum PoiUpdate {
     Add { pos: BlockPos, poi_type: PoiTypeId },
 }
 impl PoiUpdate {
+    fn for_block_change(pos: BlockPos, old: BlockState, new: BlockState) -> [Option<Self>; 2] {
+        let old_type = PoiTypes::builtin().for_state(old);
+        let new_type = PoiTypes::builtin().for_state(new);
+        if old_type == new_type {
+            return [None, None];
+        }
+        [
+            old_type.map(|_| Self::Remove { pos }),
+            new_type.map(|poi_type| Self::Add { pos, poi_type }),
+        ]
+    }
+
     pub fn pos(self) -> BlockPos {
         match self {
             Self::Remove { pos } | Self::Add { pos, .. } => pos,
@@ -52,15 +64,9 @@ impl Level {
         old: BlockState,
         new: BlockState,
     ) -> Result<(), LevelError> {
-        let old_type = PoiTypes::builtin().for_state(old);
-        let new_type = PoiTypes::builtin().for_state(new);
-        if old_type == new_type {
-            return Ok(());
-        }
-        let actions = old_type
-            .map(|_| PoiUpdate::Remove { pos })
+        let actions = PoiUpdate::for_block_change(pos, old, new)
             .into_iter()
-            .chain(new_type.map(|poi_type| PoiUpdate::Add { pos, poi_type }));
+            .flatten();
         for action in actions {
             if self.region().poi_executor_running {
                 self.emit(LevelEffect::PoiUpdate(action));
@@ -69,5 +75,21 @@ impl Level {
             }
         }
         Ok(())
+    }
+    /// WorldGenRegion#setBlock submits these captured changes to server.execute.
+    /// Transport replays its global write journal here; execution remains on the
+    /// main-task queue even when transport completes outside a running task.
+    pub fn enqueue_poi_block_state_change(
+        &mut self,
+        pos: BlockPos,
+        old: BlockState,
+        new: BlockState,
+    ) {
+        for action in PoiUpdate::for_block_change(pos, old, new)
+            .into_iter()
+            .flatten()
+        {
+            self.emit(LevelEffect::PoiUpdate(action));
+        }
     }
 }

@@ -2862,3 +2862,36 @@ fn shared_poi_neighbor_load_order_preserves_identical_canonical_state() {
         assert_eq!(first.poi_manager().get_free_tickets(pos).unwrap(), 17);
     }
 }
+
+#[test]
+fn worldgen_poi_enqueue_preserves_cross_chunk_write_order_without_inline_execution() {
+    use super::poi::{PoiTypeId, PoiUpdate};
+    let mut level = empty_level(&EMPTY);
+    let a = BlockPos::new(1, 0, 1);
+    let b = BlockPos::new(17, 0, 1);
+    let air = Block::AIR.default_state();
+    let bell = Block::BELL.default_state();
+    level.enqueue_poi_block_state_change(a, air, bell);
+    level.enqueue_poi_block_state_change(b, air, bell);
+    level.enqueue_poi_block_state_change(a, bell, Block::LODESTONE.default_state());
+    level.enqueue_poi_block_state_change(a, bell, bell);
+    assert_eq!(level.poi_manager().get_type(a).unwrap(), None);
+    assert_eq!(
+        level.take_effects(),
+        vec![
+            LevelEffect::PoiUpdate(PoiUpdate::Add {
+                pos: a,
+                poi_type: PoiTypeId::MEETING
+            }),
+            LevelEffect::PoiUpdate(PoiUpdate::Add {
+                pos: b,
+                poi_type: PoiTypeId::MEETING
+            }),
+            LevelEffect::PoiUpdate(PoiUpdate::Remove { pos: a }),
+            LevelEffect::PoiUpdate(PoiUpdate::Add {
+                pos: a,
+                poi_type: PoiTypeId::LODESTONE
+            }),
+        ]
+    );
+}
