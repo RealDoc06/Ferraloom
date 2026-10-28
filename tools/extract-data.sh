@@ -29,3 +29,6 @@ done
 
 "$JAVA" -Xmx512M -cp "$CLASSES:$CP" ExtractCommandBlockProperties "$ROOT/data/generated/command_block_properties.json"
 "$JAVA" -Xmx512M -cp "$CLASSES:$CP" ExtractBuildingProperties "$ROOT/data/generated/building_properties.json"
+
+"$JAVAC" --release 25 -cp "$CP" -d "$CLASSES" "$ROOT/tools/extractor/ExtractWeatheringCopper.java"
+"$JAVA" -Xmx512M -cp "$CLASSES:$CP" ExtractWeatheringCopper "$ROOT/data/generated/weathering_copper.json"

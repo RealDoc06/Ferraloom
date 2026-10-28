@@ -273,12 +273,12 @@ impl BlockEntity for FurnaceBehavior {
         &self,
         state: &mut BlockEntityState,
         tag: &CompoundTag,
-        _registries: &dyn ferraloom_protocol::codec::RegistryContext,
+        registries: &dyn ferraloom_protocol::codec::RegistryContext,
     ) {
         let BlockEntityState::Furnace(entity) = state else {
             unreachable!()
         };
-        entity.parent.load_base(tag);
+        entity.parent.load_base(tag, registries);
         entity.parent.load_items(tag);
         entity.cooking_timer = tag.get_int_or("cooking_time_spent", 0);
         entity.cooking_total_time = tag.get_int_or("cooking_total_time", 0);

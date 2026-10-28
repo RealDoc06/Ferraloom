@@ -165,7 +165,7 @@ mod tests {
                     let receiver = PotentSulfurBlockEntity::view_mut(&mut entity).unwrap();
                     receiver.eruption_tick = f[2].parse().unwrap();
                     receiver.waiting_countdown = 7;
-                    entity.set_level(f[3].parse().unwrap());
+                    entity.set_level(f[3].parse().unwrap(), 0);
                     assert_eq!(
                         PotentSulfurBlockEntity::view(&entity)
                             .unwrap()
@@ -174,7 +174,7 @@ mod tests {
                         f[5],
                         "{line}"
                     );
-                    entity.set_level(f[4].parse().unwrap());
+                    entity.set_level(f[4].parse().unwrap(), 0);
                     let receiver = PotentSulfurBlockEntity::view(&entity).unwrap();
                     assert_eq!(receiver.eruption_tick.to_string(), f[6], "{line}");
                     assert_eq!(receiver.waiting_countdown.to_string(), f[7]);
