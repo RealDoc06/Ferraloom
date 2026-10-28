@@ -18,12 +18,14 @@ fn fixtures(bytes: &[u8]) -> serde_json::Value {
         .unwrap();
     serde_json::from_str(&text).unwrap()
 }
-pub(crate) fn resources() -> ResourceManager {
+pub(crate) fn resources() -> Arc<ResourceManager> {
     let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder provides vanilla jar");
-    ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()])
+    std::sync::Arc::new(ResourceManager::new(vec![
+        Pack::vanilla_jar(Path::new(&jar)).unwrap(),
+    ]))
 }
 pub(crate) fn generation_context(
-    resources: &ResourceManager,
+    resources: &Arc<ResourceManager>,
     generator: Arc<ChunkGenerator>,
     dimension: &str,
     seed: i64,
@@ -51,7 +53,7 @@ pub(crate) fn generation_context(
     )
     .unwrap()
     .with_registry_context(Arc::new(
-        crate::registries::RegistrySet::load(resources).unwrap(),
+        crate::registries::RegistrySet::load(resources.clone()).unwrap(),
     ))
 }
 #[test]
@@ -158,7 +160,7 @@ fn twenty_full_feature_chunks_match_vanilla_blocks_and_structure_nbt() {
                 ChunkGenerator::decode(&generator_json, &resources, data.clone(), seed).unwrap(),
             );
             let context = Arc::new(generation_context(&resources, generator, dimension, seed));
-            let registries = crate::registries::RegistrySet::load(&resources).unwrap();
+            let registries = crate::registries::RegistrySet::load(resources.clone()).unwrap();
             let registry = RegistryAdapter::new(&registries).unwrap();
             let directory = tempfile::tempdir().unwrap();
             let mut io =
@@ -252,7 +254,8 @@ fn saved_proto_resumes_and_full_reload_preserves_owned_payload_and_tick_delays()
         8675309,
     ));
     let registry =
-        RegistryAdapter::new(&crate::registries::RegistrySet::load(&resources).unwrap()).unwrap();
+        RegistryAdapter::new(&crate::registries::RegistrySet::load(resources.clone()).unwrap())
+            .unwrap();
     let directory = tempfile::tempdir().unwrap();
     let mut io =
         IoWorker::new(directory.path(), storage::RegionFileVersion::Deflate, false).unwrap();

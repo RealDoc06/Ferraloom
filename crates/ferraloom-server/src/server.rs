@@ -285,7 +285,8 @@ impl MinecraftServer {
         let mut world_startup = crate::datapacks::WorldStartup::read(&options.root, &properties)?;
         let (pack_repository, resources) =
             crate::datapacks::load_resources(&options.root, &jar, &mut world_startup)?;
-        let registries = Arc::new(RegistrySet::load(&resources)?);
+        let resources = Arc::new(resources);
+        let registries = Arc::new(RegistrySet::load(resources.clone())?);
         let recipe_manager = Arc::new(RecipeManager::load(&resources, &TagSet::load(&resources)?)?);
         let recipe_synchronization =
             Arc::new(RecipeSynchronization::new(&recipe_manager, |_| true));

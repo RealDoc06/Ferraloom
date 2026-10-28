@@ -1,16 +1,18 @@
 //! Port of BaseContainerBlockEntity, RandomizableContainerBlockEntity and ContainerHelper.
 use crate::entity::player::inventory::{count, max_stack_size, set_count};
 use crate::{
-    block::entity::BlockEntityData,
+    block::entity::{BlockEntityData, components},
     inventory::{Container, StackGenerations, StackReplacement},
 };
 use ferraloom_nbt::{CompoundTag, ListTag, Tag};
 use ferraloom_protocol::{
     Identifier,
     chat::Component,
+    codec::{HolderSet, RegistryContext},
     component::{
-        BoundedList, ComponentTypeId, DataComponent, DataComponentMap, ItemStack,
-        ItemStackTemplate, LockCode, Persistent, SeededContainerLoot,
+        BoundedList, ComponentPredicate, ComponentTypeId, DataComponent, DataComponentMap,
+        DataComponentMatchers, IntBounds, ItemSet, ItemStack, ItemStackTemplate, LockCode,
+        Persistent, SeededContainerLoot,
     },
 };
 
@@ -44,11 +46,11 @@ impl BaseContainerBlockEntity {
             self.replace_item(slot, stack);
         }
     }
-    pub fn load_base(&mut self, tag: &CompoundTag) {
+    pub fn load_base(&mut self, tag: &CompoundTag, registries: &dyn RegistryContext) {
         self.custom_name = tag
             .get("CustomName")
             .and_then(|tag| Component::from_nbt(tag.clone()).ok());
-        self.lock = tag.get("lock").and_then(|tag| LockCode::from_nbt(tag).ok());
+        self.lock = load_lock(tag, registries);
     }
     pub fn save_base(&self) -> ferraloom_protocol::Result<CompoundTag> {
         let mut tag = CompoundTag::new();
@@ -118,6 +120,94 @@ impl BaseContainerBlockEntity {
             )),
         );
     }
+}
+
+/// LockCode#fromTag through ValueInput#read: optional record fields retain
+/// their codec partials, while a non-map has no partial lock at all.
+pub(crate) fn load_lock(tag: &CompoundTag, registries: &dyn RegistryContext) -> Option<LockCode> {
+    let value = tag.get_compound("lock")?;
+    let item_registry = Identifier::parse("minecraft:item").expect("native registry key");
+    let items = value.get("items").and_then(|value| {
+        if let Some(size) = value.collection_len() {
+            // ListCodec keeps the successfully bound members as its partial.
+            let mut entries = Vec::new();
+            for index in 0..size {
+                let entry = value.collection_get(index)?;
+                if !matches!(entry, Tag::String(_)) {
+                    continue;
+                }
+                if let Ok(ItemSet(HolderSet::Direct(keys))) = ItemSet::from_nbt(&entry) {
+                    entries.extend(
+                        keys.into_iter()
+                            .filter(|key| registries.entry_id(&item_registry, key).is_some()),
+                    );
+                }
+            }
+            Some(ItemSet(HolderSet::Direct(entries)))
+        } else {
+            let items = ItemSet::from_nbt(value).ok()?;
+            let bound = match &items.0 {
+                HolderSet::Named(tag) => registries.has_tag(&item_registry, tag),
+                HolderSet::Direct(keys) => keys
+                    .iter()
+                    .all(|key| registries.entry_id(&item_registry, key).is_some()),
+            };
+            bound.then_some(items)
+        }
+    });
+    let count = value.get("count").map_or_else(IntBounds::default, |value| {
+        let bounds = if let Some(number) = codec_int(value) {
+            IntBounds {
+                min: Some(number),
+                max: Some(number),
+            }
+        } else if let Some(map) = value.as_compound() {
+            IntBounds {
+                min: map.get("min").and_then(codec_int),
+                max: map.get("max").and_then(codec_int),
+            }
+        } else {
+            IntBounds::default()
+        };
+        // Reuse the strict bounds validator after recovering optional fields.
+        if bounds.to_persistent().is_ok() {
+            bounds
+        } else {
+            IntBounds::default()
+        }
+    });
+    let exact = components::load(value.get_compound("components"), registries).entries;
+    let partial = value
+        .get_compound("predicates")
+        .into_iter()
+        .flat_map(CompoundTag::iter)
+        .filter_map(|(key, value)| {
+            Identifier::parse(&key.to_string_lossy())
+                .ok()
+                .and_then(|key| ComponentPredicate::from_key_nbt(&key, value).ok())
+        })
+        .filter(|value| value.to_persistent().is_ok())
+        .collect();
+    Some(LockCode {
+        items,
+        count,
+        components: DataComponentMatchers {
+            exact,
+            partial: BoundedList(partial),
+        },
+    })
+}
+// Codec.INT uses Number.intValue, not NumericTag's floor-based intValue.
+fn codec_int(value: &Tag) -> Option<i32> {
+    Some(match value {
+        Tag::Byte(v) => i32::from(*v),
+        Tag::Short(v) => i32::from(*v),
+        Tag::Int(v) => *v,
+        Tag::Long(v) => *v as i32,
+        Tag::Float(v) => *v as i32,
+        Tag::Double(v) => *v as i32,
+        _ => return None,
+    })
 }
 impl Container for BaseContainerBlockEntity {
     fn reassign_item(&mut self, slot: usize) -> crate::inventory::Result<()> {
@@ -191,8 +281,8 @@ impl RandomizableContainerBlockEntity {
             loot_table_seed: 0,
         }
     }
-    pub fn load(&mut self, tag: &CompoundTag) {
-        self.parent.load_base(tag);
+    pub fn load(&mut self, tag: &CompoundTag, registries: &dyn RegistryContext) {
+        self.parent.load_base(tag, registries);
         self.loot_table = tag
             .get_string("LootTable")
             .and_then(|id| Identifier::parse(&id.to_string_lossy()).ok());
