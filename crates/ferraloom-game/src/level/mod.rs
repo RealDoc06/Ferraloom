@@ -44,6 +44,7 @@ mod lightning;
 pub mod loot_facts;
 mod mutation;
 pub mod path_navigation_region;
+pub mod poi;
 mod post_processing;
 pub mod publication;
 mod random;
