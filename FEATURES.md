@@ -5,14 +5,14 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | Area | Rows | Ferraloom todo | Ferraloom partial | Ferraloom pass | Ferraloom fail |
 |---|---:|---:|---:|---:|---:|
 | [Advancements](features/advancements.md) | 1958 | 4 | 192 | 1762 | 0 |
-| [Block entities](features/block-entities.md) | 151 | 41 | 52 | 58 | 0 |
+| [Block entities](features/block-entities.md) | 153 | 41 | 54 | 58 | 0 |
 | [Blocks](features/blocks.md) | 454 | 240 | 140 | 74 | 0 |
 | [Chat and text components](features/chat.md) | 23 | 21 | 2 | 0 | 0 |
 | [Chunks and tickets](features/chunks.md) | 61 | 20 | 40 | 1 | 0 |
 | [Combat and damage](features/combat-damage.md) | 204 | 204 | 0 | 0 | 0 |
-| [Commands and argument types](features/commands.md) | 2699 | 1855 | 54 | 790 | 0 |
+| [Commands and argument types](features/commands.md) | 2700 | 1855 | 55 | 790 | 0 |
 | [Crafting and recipes](features/crafting-recipes.md) | 2137 | 2 | 29 | 2106 | 0 |
-| [Datapacks and resource reload](features/datapacks-reload.md) | 57 | 57 | 0 | 0 | 0 |
+| [Datapacks and resource reload](features/datapacks-reload.md) | 58 | 53 | 5 | 0 | 0 |
 | [Enchantments](features/enchantments.md) | 139 | 107 | 32 | 0 | 0 |
 | [Entities and AI](features/entities.md) | 816 | 659 | 140 | 17 | 0 |
 | [Fluids](features/fluids.md) | 32 | 25 | 6 | 1 | 0 |
@@ -47,7 +47,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Ticking, game events and vibrations](features/ticking.md) | 192 | 181 | 11 | 0 | 0 |
 | [Villages, trading and POI](features/villages-trading-poi.md) | 599 | 599 | 0 | 0 | 0 |
 | [Wandering traders](features/wandering-traders.md) | 5 | 5 | 0 | 0 | 0 |
-| [Weather, time and environment](features/weather-time.md) | 88 | 85 | 3 | 0 | 0 |
+| [Weather, time and environment](features/weather-time.md) | 88 | 82 | 3 | 3 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 308 | 305 | 3 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3120 | 2640 | 180 | 300 | 0 |
-| **Total** | **19694** | **8196** | **2915** | **8583** | **0** |
+| **Total** | **19698** | **8189** | **2923** | **8586** | **0** |
