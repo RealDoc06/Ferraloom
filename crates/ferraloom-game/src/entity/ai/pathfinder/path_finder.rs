@@ -84,6 +84,8 @@ impl PathFinder {
 /// Port of PathFinder's canonical state and NodeEvaluator callback boundary.
 /// Live implementations resolve the owner again at each callback; no finder,
 /// PathData or Node borrow crosses a world/Mob call.
+/// `state` and `state_mut` must be callback-free projections of the same canonical
+/// finder and PathData throughout the search; neither may invoke world/Mob callbacks.
 pub trait PathFinderRuntime {
     type Error;
     fn state(&self) -> Result<(&PathFinder, &PathData), Self::Error>;
