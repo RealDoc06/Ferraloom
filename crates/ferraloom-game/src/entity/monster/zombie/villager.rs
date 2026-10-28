@@ -1,6 +1,9 @@
 //! ZombieVillager's own synchronized fields; profession selection uses the entity RNG.
 use crate::entity::synched_data::{EntityDataAccessor, SynchedEntityData, SynchedValue};
-use ferraloom_protocol::entity_data::{EntityDataValue, VillagerData};
+use ferraloom_protocol::{
+    component::Persistent,
+    entity_data::{EntityDataValue, VillagerData},
+};
 
 /// Port of ZombieVillager#DATA_CONVERTING_ID.
 pub const DATA_CONVERTING_ID: EntityDataAccessor<bool> = EntityDataAccessor::new(19);
