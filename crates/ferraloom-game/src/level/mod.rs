@@ -657,6 +657,8 @@ impl Level {
         let region = self.region_mut();
         region.block_ticks.add_container(pos, block_ticks);
         region.fluid_ticks.add_container(pos, fluid_ticks);
+        #[cfg(test)]
+        self.complete_poi_chunk_load(pos, None)?;
         Ok(())
     }
     /// Port of ServerLevel#startTickingChunk, after generation post-processing.
