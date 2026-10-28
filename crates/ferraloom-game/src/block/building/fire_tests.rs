@@ -103,6 +103,7 @@ fn level(unloaded_corner: bool) -> Level {
         LevelContext::fixture(0, 63),
     );
     level.install_shared(Box::default());
+    crate::level::drop_fixtures::install(&mut level);
     let biome = ferraloom_chunk::BiomeId(0);
     for x in -1..=1 {
         for z in -1..=1 {
@@ -416,12 +417,10 @@ fn lava_ignition_matches_native_walk_obstructions_waterlogging_soul_base_and_rng
 }
 
 #[test]
-#[ignore = "requires Level::is_infiniburn (level core, t3/level-infiniburn) before FireBlock#tick can run"]
 fn fire_ticks_match_native_aging_burnout_neighbor_order_scheduling_and_rng_tail() {
     compare_ticks(&TICKS, false);
 }
 #[test]
-#[ignore = "requires Level::is_infiniburn (level core, t3/level-infiniburn) before FireBlock#tick can run"]
 fn fire_rain_extinguishing_and_roofs_match_native_weather_queries_and_rng_tail() {
     compare_ticks(&RAIN, true);
 }

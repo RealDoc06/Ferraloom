@@ -66,10 +66,10 @@ impl BlockEntity for DispenserEntityBehavior {
         &self,
         state: &mut BlockEntityState,
         tag: &CompoundTag,
-        _registries: &dyn ferraloom_protocol::codec::RegistryContext,
+        registries: &dyn ferraloom_protocol::codec::RegistryContext,
     ) {
         if let Some(e) = DispenserBlockEntity::view_mut(state) {
-            e.parent.load(tag);
+            e.parent.load(tag, registries);
         }
     }
     fn save_additional(&self, state: &BlockEntityState) -> ferraloom_protocol::Result<CompoundTag> {
@@ -112,10 +112,10 @@ impl BlockEntity for HopperEntityBehavior {
         &self,
         state: &mut BlockEntityState,
         tag: &CompoundTag,
-        _registries: &dyn ferraloom_protocol::codec::RegistryContext,
+        registries: &dyn ferraloom_protocol::codec::RegistryContext,
     ) {
         if let Some(e) = HopperBlockEntity::view_mut(state) {
-            e.parent.load(tag);
+            e.parent.load(tag, registries);
             e.cooldown_time = tag.get_int_or("TransferCooldown", -1);
         }
     }

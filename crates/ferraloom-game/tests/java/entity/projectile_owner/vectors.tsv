@@ -1,0 +1,16 @@
+projectile-nbt	{}	{HasBeenShot:0b}
+projectile-nbt	{Owner:[I;1,2,3,4]}	{HasBeenShot:0b,Owner:[I;1,2,3,4]}
+projectile-nbt	{Owner:[I;1,2,3]}	{HasBeenShot:0b}
+projectile-nbt	{HasBeenShot:1b,LeftOwner:1b,Owner:"bad"}	{HasBeenShot:1b,LeftOwner:1b}
+projectile-nbt	{HasBeenShot:"bad",LeftOwner:"bad"}	{HasBeenShot:0b}
+projectile-nbt	{HasBeenShot:0b,LeftOwner:0b}	{HasBeenShot:0b}
+projectile-nbt	{HasBeenShot:1b,LeftOwner:1b}	{HasBeenShot:1b,LeftOwner:1b}
+projectile-nbt	{can_break:{blocks:"minecraft:stone"}}	{HasBeenShot:0b,can_break:{blocks:"minecraft:stone"}}
+projectile-nbt	{can_break:[]}	{HasBeenShot:0b}
+projectile-owner	0	original	00000000-0000-0001-0000-000000000002	original	0
+projectile-owner	1	original	00000000-0000-0003-0000-000000000004	original	0
+projectile-owner	2	none	00000000-0000-0003-0000-000000000004	self	2
+projectile-owner	3	replacement	00000000-0000-0003-0000-000000000004	replacement	3
+projectile-owner	4	replacement	00000000-0000-0003-0000-000000000004	replacement	3
+projectile-owner	5	none	none	self	3
+projectile-owner	6	none	00000000-0000-0003-0000-000000000004	self	5

@@ -1,3 +1,10 @@
+pub mod cubemob;
+pub mod spider;
+pub mod zombie;
+
+#[cfg(test)]
+mod tests;
+
 pub mod piglin {
     pub mod ai {
         use crate::{

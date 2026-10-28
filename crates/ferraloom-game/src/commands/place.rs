@@ -266,4 +266,7 @@ mod block_entity_tests;
 #[path = "place/feature_tests.rs"]
 mod feature_tests;
 #[cfg(test)]
+#[path = "place/template_entities.rs"]
+mod template_entities;
+#[cfg(test)]
 mod tests;

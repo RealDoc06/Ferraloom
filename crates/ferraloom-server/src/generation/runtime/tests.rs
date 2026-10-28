@@ -150,8 +150,10 @@ async fn resumed_full_promotion_keeps_the_successful_entity_post_load_checkpoint
     };
     use std::path::Path;
     let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder vanilla jar");
-    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
-    let registries = Arc::new(RegistrySet::load(&resources).unwrap());
+    let resources = std::sync::Arc::new(ResourceManager::new(vec![
+        Pack::vanilla_jar(Path::new(&jar)).unwrap(),
+    ]));
+    let registries = Arc::new(RegistrySet::load(resources.clone()).unwrap());
     let mut properties = ServerProperties::from_values(Default::default());
     properties.set("level-seed", "0");
     properties.set("level-type", "minecraft:debug_all_block_states");
@@ -465,8 +467,29 @@ fn assert_entity_visibility_follows_holder_ranges(level: &mut Level, pos: ChunkP
     );
 }
 
-#[tokio::test]
-async fn structure_status_reads_settle_before_a_queued_full_tracking_failure() {
+#[test]
+fn structure_status_reads_settle_before_a_queued_full_tracking_failure() {
+    // A Tokio timeout cannot fire while its only executor thread is parked in
+    // getChunk. Bound the entire current-thread regression from outside it.
+    let (send, receive) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let result = std::panic::catch_unwind(|| {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(structure_status_reads_on_current_thread());
+        });
+        let _ = send.send(result);
+    });
+    match receive.recv_timeout(Duration::from_secs(120)) {
+        Ok(Ok(())) => {}
+        Ok(Err(panic)) => std::panic::resume_unwind(panic),
+        Err(error) => panic!("current-thread structure acquisition did not finish: {error}"),
+    }
+}
+
+async fn structure_status_reads_on_current_thread() {
     use crate::registries::RegistrySet;
     use ferraloom_data::datapack::{Pack, ResourceManager};
     use ferraloom_game::level::{
@@ -477,8 +500,10 @@ async fn structure_status_reads_settle_before_a_queued_full_tracking_failure() {
     use std::path::Path;
 
     let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder vanilla jar");
-    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
-    let registries = Arc::new(RegistrySet::load(&resources).unwrap());
+    let resources = std::sync::Arc::new(ResourceManager::new(vec![
+        Pack::vanilla_jar(Path::new(&jar)).unwrap(),
+    ]));
+    let registries = Arc::new(RegistrySet::load(resources.clone()).unwrap());
     let mut properties = ServerProperties::from_values(Default::default());
     properties.set("level-seed", "0");
     properties.set("level-type", "minecraft:debug_all_block_states");

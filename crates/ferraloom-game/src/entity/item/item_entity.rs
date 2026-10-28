@@ -289,6 +289,14 @@ pub fn player_touch(
 
 pub struct ItemEntityBehavior;
 impl Entity for ItemEntityBehavior {
+    fn get_owner(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+    ) -> Result<Option<EntityRef>, LevelError> {
+        get_owner(entity, level)
+    }
+
     fn get_slot(
         &self,
         entity: EntityRef,
