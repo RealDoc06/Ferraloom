@@ -125,6 +125,11 @@ pub trait RegistryContext: Send + Sync {
     fn entry_id(&self, registry: &Identifier, entry: &Identifier) -> Option<i32>;
     fn entry_key(&self, registry: &Identifier, id: i32) -> Option<Identifier>;
     fn has_tag(&self, registry: &Identifier, tag: &Identifier) -> bool;
+    /// Cold HolderLookup value read from the owning datapack snapshot. Metadata-
+    /// only wire contexts have no values; unknown or unpublished keys return None.
+    fn entry_value(&self, _registry: &Identifier, _key: &Identifier) -> Option<serde_json::Value> {
+        None
+    }
 }
 
 #[cfg(test)]

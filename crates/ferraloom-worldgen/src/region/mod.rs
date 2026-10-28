@@ -6,7 +6,7 @@ use ferraloom_chunk::BiomeId;
 use ferraloom_data::{Block, BlockState, FluidState};
 use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_protocol::codec::RegistryContext;
-use std::{cell::OnceCell, collections::BTreeMap};
+use std::{collections::BTreeMap, sync::OnceLock};
 
 mod block_entity;
 mod lighting;
@@ -106,7 +106,7 @@ pub struct RegionChunk {
     pub fluid_ticks: ProtoChunkTicks<ferraloom_data::registries::fluid::Id>,
     pub poi_changes: Vec<([i32; 3], BlockState, BlockState)>,
     sky_light_sources: ferraloom_light::ChunkSkyLightSources,
-    heightmaps: [OnceCell<[i32; 256]>; 6],
+    heightmaps: [OnceLock<[i32; 256]>; 6],
 }
 impl RegionChunk {
     /// ChunkAccess#getBlockEntityNbtForSaving prefers the actual receiver to a
@@ -151,8 +151,65 @@ impl RegionChunk {
         self.chunk.ocean_floor = chunk.ocean_floor;
     }
 
-    fn heightmap_caches(chunk: &GeneratedChunk) -> [OnceCell<[i32; 256]>; 6] {
-        let heightmaps: [OnceCell<[i32; 256]>; 6] = std::array::from_fn(|_| OnceCell::new());
+    /// ChunkAccess#getHeightmaps exposes only materialized canonical maps.
+    /// Saving must not rescan raw section writes or materialize absent maps.
+    pub fn heightmap_snapshots(&self) -> impl Iterator<Item = (Heightmap, &[i32; 256])> {
+        Heightmap::ALL.into_iter().filter_map(|map| {
+            self.heightmaps[map as usize]
+                .get()
+                .map(|heights| (map, heights))
+        })
+    }
+
+    /// Restore stored maps before priming missing maps required by saved status.
+    /// EMPTY construction also uses this to leave all native maps unmaterialized.
+    pub fn replace_heightmap_snapshots(
+        &mut self,
+        maps: impl IntoIterator<Item = (Heightmap, [i32; 256])>,
+    ) {
+        self.heightmaps = std::array::from_fn(|_| OnceLock::new());
+        for (map, heights) in maps {
+            match map {
+                Heightmap::WorldSurfaceWg => self.chunk.world_surface = heights,
+                Heightmap::OceanFloorWg => self.chunk.ocean_floor = heights,
+                _ => {}
+            }
+            self.heightmaps[map as usize].set(heights).unwrap();
+        }
+    }
+
+    /// Heightmap#primeHeightmaps, including buildTerrain's final-map thenApply.
+    pub fn prime_heightmaps(&mut self, maps: impl IntoIterator<Item = Heightmap>) {
+        for map in maps {
+            self.heightmaps[map as usize].get_or_init(|| {
+                std::array::from_fn(|index| {
+                    let x = (index & 15) as u8;
+                    let z = (index >> 4) as u8;
+                    // Native priming starts below empty upper sections.
+                    for (section_index, section) in self.chunk.sections.iter().enumerate().rev() {
+                        if section.has_only_air() {
+                            continue;
+                        }
+                        for y in (0..16).rev() {
+                            if self
+                                .chunk
+                                .heightmap_matches(map, section.get_block_state(x, y, z))
+                            {
+                                return self.chunk.min_y
+                                    + section_index as i32 * 16
+                                    + i32::from(y)
+                                    + 1;
+                            }
+                        }
+                    }
+                    self.chunk.min_y
+                })
+            });
+        }
+    }
+
+    fn heightmap_caches(chunk: &GeneratedChunk) -> [OnceLock<[i32; 256]>; 6] {
+        let heightmaps: [OnceLock<[i32; 256]>; 6] = std::array::from_fn(|_| OnceLock::new());
         heightmaps[Heightmap::WorldSurfaceWg as usize]
             .set(chunk.world_surface)
             .unwrap();
