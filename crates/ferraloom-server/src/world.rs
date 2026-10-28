@@ -36,11 +36,12 @@ use ferraloom_worldgen::{
     structure::pipeline::ChunkStructures,
 };
 use serde::Deserialize;
+#[cfg(test)]
+use std::path::Path;
 use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet, VecDeque},
     future::Future,
-    path::Path,
     pin::Pin,
     sync::{
         Arc,
@@ -52,6 +53,7 @@ use std::{
 use tokio::sync::oneshot;
 
 mod root;
+pub use crate::datapacks::WorldStartup;
 use root::StartupSpawn;
 pub use root::{WorldRoot, WorldServices};
 
@@ -2643,7 +2645,7 @@ mod generation_order_tests {
         properties.set("level-seed", 12345);
         properties.set("generate-structures", false);
         let mut root = WorldRoot::open(
-            directory.path(),
+            crate::world::WorldStartup::read(directory.path(), &properties).unwrap(),
             &properties,
             &resources,
             &registries,
@@ -2739,7 +2741,7 @@ mod generation_order_tests {
             properties.set("level-seed", 8675309);
             properties.set("generate-structures", generate_structures);
             let mut world_root = WorldRoot::open(
-                directory.path(),
+                crate::world::WorldStartup::read(directory.path(), &properties).unwrap(),
                 &properties,
                 &resources,
                 &registries,
@@ -2767,7 +2769,7 @@ mod generation_order_tests {
             properties.set("level-seed", 0);
             properties.set("level-type", "minecraft:flat");
             let mut world_root = WorldRoot::open(
-                directory.path(),
+                crate::world::WorldStartup::read(directory.path(), &properties).unwrap(),
                 &properties,
                 &resources,
                 &registries,
@@ -2805,7 +2807,7 @@ mod generation_order_tests {
                     .unwrap();
                 properties.set("generate-structures", false);
                 let mut world_root = WorldRoot::open(
-                    directory.path(),
+                    crate::world::WorldStartup::read(directory.path(), &properties).unwrap(),
                     &properties,
                     &resources,
                     &registries,
@@ -2909,7 +2911,7 @@ mod generation_order_tests {
         properties.set("level-type", "minecraft:debug_all_block_states");
         let directory = tempfile::tempdir().unwrap();
         let mut world_root = WorldRoot::open(
-            directory.path(),
+            crate::world::WorldStartup::read(directory.path(), &properties).unwrap(),
             &properties,
             &resources,
             &registries,
