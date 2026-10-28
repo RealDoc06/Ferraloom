@@ -42,6 +42,9 @@ pub enum LevelEffect {
     WeatherEvent {
         event: u8,
         param: f32,
+        /// Native threshold transitions reach all dimensions; interpolation
+        /// changes reach only players in this level.
+        global: bool,
     },
     PendingPrecipitation(BlockPos),
     /// Audience is captured at the call site, before subsequent movement or
