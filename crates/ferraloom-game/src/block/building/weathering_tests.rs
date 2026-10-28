@@ -136,13 +136,7 @@ fn replay(modes: &[&str], expected: usize, statues_only: Option<bool>) {
             set(&mut level, pos, Block::AIR.default_state());
         }
         for (pos, state) in cells(f[5]) {
-            // The shared state-only scan does not inspect neighbor BEs. Keep
-            // statues as cold states until their canonical factory is ported.
-            if statue(state) && statues_only != Some(true) {
-                level.set_block_state(pos, state).unwrap();
-            } else {
-                set(&mut level, pos, state);
-            }
+            set(&mut level, pos, state);
             previous.push(pos);
         }
         if f[4] == "3" {
@@ -209,9 +203,7 @@ fn replay(modes: &[&str], expected: usize, statues_only: Option<bool>) {
             previous.push(pos);
         }
         let after = level.block_entity_ref(POS).unwrap();
-        if !statue(original) {
-            assert_eq!(after.is_some(), f[9] == "true", "{line}");
-        }
+        assert_eq!(after.is_some(), f[9] == "true", "{line}");
         assert_eq!(before == after, f[10] == "true", "{line}");
         assert_eq!(f[11], "9");
         assert!(!level.has_chunk_at(BlockPos::new(82, 64, -24)), "{line}");
@@ -246,7 +238,6 @@ fn upper_doors_right_chests_and_non_chest_receivers_skip_before_queries_and_rng(
 }
 
 #[test]
-#[ignore = "requires canonical CopperGolemStatueBlockEntity factory and retained receiver lifecycle"]
 fn weathering_statue_ticks_match_native_retained_block_entity() {
     replay(&["change", "random"], 1120, Some(true));
 }
