@@ -122,16 +122,22 @@ impl Entity for CowBehavior {
         entity: super::EntityRef,
         level: &mut crate::level::Level,
     ) -> Result<(), crate::level::LevelError> {
-        level.entity_mut::<LivingEntity>(entity)?.swing_state.tick();
-        super::base_tick(self, entity, level)?;
-        // The live Mob AI/travel body remains pending; these are its inherited
-        // LivingEntity damage-state slots, before the future virtual aiStep.
-        super::living::damage_state::base_tick_damage_state(entity, level)?;
-        if level.entity::<EntityData>(entity)?.tick_count % 20 == 0 {
-            super::damage::combat_tracker::recheck_status(self, entity, level)?;
-        }
-        Ok(())
+        super::living::tick(
+            self,
+            entity,
+            level,
+            &crate::level::tick_rate::TickRateManager::default(),
+        )
     }
+    fn tick_with_tick_rate(
+        &self,
+        entity: super::EntityRef,
+        level: &mut crate::level::Level,
+        tick_rate: &crate::level::tick_rate::TickRateManager,
+    ) -> Result<(), crate::level::LevelError> {
+        super::living::tick(self, entity, level, tick_rate)
+    }
+
     fn is_invulnerable_to(
         &self,
         entity: super::EntityRef,

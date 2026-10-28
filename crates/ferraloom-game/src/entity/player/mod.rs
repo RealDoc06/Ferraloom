@@ -775,6 +775,26 @@ fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Resu
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {
+    fn is_effective_ai(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
+        Ok(true)
+    }
+    fn is_immobile(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        Ok(level.entity::<super::LivingEntity>(entity)?.health() <= 0.0
+            || level
+                .entity::<EntityData>(entity)?
+                .entity_data
+                .get(super::synched_data::SLEEPING_POS)
+                .is_some())
+    }
+    fn ai_step(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+        tick_rate: &crate::level::tick_rate::TickRateManager,
+    ) -> Result<(), LevelError> {
+        ai_step::ai_step(self, entity, level, tick_rate)
+    }
+
     fn can_be_seen_as_enemy(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
         Ok(
             !level.entity::<ServerPlayer>(entity)?.abilities.invulnerable

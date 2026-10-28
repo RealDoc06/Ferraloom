@@ -7,6 +7,10 @@ use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_protocol::{codec::VarInt, component::ItemStack};
 use ferraloom_util::random::RandomSource;
 
+mod ai_step;
+pub use ai_step::ai_step;
+mod tick;
+pub use tick::{tick, tick_head_turn_parent};
 mod attribute_updates;
 pub use attribute_updates::{on_attribute_updated_parent, refresh_dirty_attributes};
 pub mod climbable;
@@ -55,6 +59,10 @@ pub struct LivingEntity {
     pub zza: f32,
     pub no_jump_delay: i32,
     pub fall_fly_ticks: i32,
+    pub(crate) swim_amount: f32,
+    pub(crate) old_swim_amount: f32,
+    pub(crate) remove_arrow_time: i32,
+    pub(crate) remove_stinger_time: i32,
     /// Only startAutoSpinAttack (unported riptide) can make this positive.
     pub auto_spin_attack_ticks: i32,
     pub speed: f32,
@@ -126,6 +134,10 @@ impl LivingEntity {
             zza: 0.0,
             no_jump_delay: 0,
             fall_fly_ticks: 0,
+            swim_amount: 0.0,
+            old_swim_amount: 0.0,
+            remove_arrow_time: 0,
+            remove_stinger_time: 0,
             auto_spin_attack_ticks: 0,
             speed: 0.0,
             discard_friction: false,

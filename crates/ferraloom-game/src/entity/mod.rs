@@ -353,10 +353,24 @@ pub enum EntityMethod {
     LoadBrain,
     CowVariantBehavior,
     FinalizeSpawn,
+    TravelRidden,
+    SensitiveToWater,
+    UpdatingUsingItem,
+    TickEffects,
+    TickDeath,
+    TickSleeping,
+    MobLooting,
 }
 impl EntityMethod {
     pub const fn name(self) -> &'static str {
         match self {
+            Self::TravelRidden => "LivingEntity#travelRidden",
+            Self::SensitiveToWater => "LivingEntity#isInWaterOrRain",
+            Self::UpdatingUsingItem => "LivingEntity#updatingUsingItem",
+            Self::TickEffects => "LivingEntity#tickEffects",
+            Self::TickDeath => "LivingEntity#tickDeath",
+            Self::TickSleeping => "LivingEntity#checkBedExists",
+            Self::MobLooting => "Mob#pickUpItem",
             Self::PlayerTouch => "playerTouch",
             Self::PlayShoulderEntityAmbientSound => "playShoulderEntityAmbientSound",
             Self::RespawnEntityOnShoulder => "respawnEntityOnShoulder",
@@ -836,6 +850,63 @@ pub trait Entity: Sync {
             > 0.0)
     }
     /// Mob dispatches its native component order; LivingEntity's parent body is empty.
+    /// LivingEntity's head/body update; Mob dispatches its owned body control.
+    fn tick_head_turn(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        if level.entity_state(entity)?.as_mob().is_some() {
+            ai::pending(entity, ai::AiOperation::BodyRotationControl, level)
+        } else {
+            living::tick_head_turn_parent(entity, level)
+        }
+    }
+    /// Port of Entity#isEffectiveAi with Mob's native NoAI guard.
+    fn is_effective_ai(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        if !self.is_local_instance_authoritative(entity, level)? {
+            return Ok(false);
+        }
+        Ok(!level
+            .entity_state(entity)?
+            .as_mob()
+            .is_some_and(|mob| mob.is_no_ai()))
+    }
+    /// LivingEntity's parent isDeadOrDying guard; Player additionally sleeps.
+    fn is_immobile(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        Ok(level.entity::<LivingEntity>(entity)?.health() <= 0.0)
+    }
+    /// Port of LivingEntity#applyInput. Concrete overrides retain virtual writes.
+    fn apply_input(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        let state = level.entity_mut::<LivingEntity>(entity)?;
+        state.xxa *= 0.98;
+        state.zza *= 0.98;
+        Ok(())
+    }
+    fn is_sensitive_to_water(
+        &self,
+        _entity: EntityRef,
+        _level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(false)
+    }
+    /// Port of LivingEntity#aiStep, followed by the Mob looting tail when present.
+    fn ai_step(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+        tick_rate: &crate::level::tick_rate::TickRateManager,
+    ) -> Result<(), LevelError> {
+        living::ai_step(self, entity, level, tick_rate)?;
+        if let Some(mob) = level.entity_state(entity)?.as_mob()
+            && mob.can_pick_up_loot
+            && self.is_alive(entity, level)?
+            && !mob.parent.dead
+            && level.rules().mob_griefing
+        {
+            return Err(LevelError::UnsupportedEntityMethod(
+                level.entity_state(entity)?.entity_type(),
+                EntityMethod::MobLooting,
+            ));
+        }
+        Ok(())
+    }
     fn server_ai_step(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
         if level.entity_state(entity)?.as_mob().is_some() {
             mob::server_ai_step(entity, level)
