@@ -100,6 +100,10 @@ fn native_chest_opener_query_uses_counter_radius_spectator_and_container_identit
 #[test]
 fn native_chest_counter_range_tracks_increments_and_final_close() {
     let (mut level, receiver) = level();
+    // ServerLevel drains queued block events only in block-ticking chunks.
+    level
+        .set_chunk_block_ticking(ferraloom_util::ChunkPos::containing(POS), true)
+        .unwrap();
     // Sound dispatch for the counter uses the same inherited ChestBlock path.
     let player = level.next_entity_ref();
     level

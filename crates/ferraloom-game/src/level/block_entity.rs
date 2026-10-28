@@ -169,7 +169,11 @@ impl Level {
             return Ok(promoted);
         }
         let state = self.get_block_state(pos)?;
-        if let Some(entity) = crate::block::entity::new_block_entity(pos, state)? {
+        // LevelChunk#createBlockEntity returns null before factory dispatch
+        // when the current state has no block entity.
+        if state.has_block_entity()
+            && let Some(entity) = crate::block::entity::new_block_entity(pos, state)?
+        {
             self.set_block_entity(entity)?;
         }
         self.block_entity_ref(pos)
