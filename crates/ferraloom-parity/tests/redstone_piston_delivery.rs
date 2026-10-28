@@ -351,6 +351,11 @@ async fn piston_packets_preserve_payload_order_game_time_brackets_and_command_fe
     let fixture = phase_fixture()?;
     let mut options = redstone_support::options();
     options.fixture = Some(fixture.path().to_path_buf());
+    // ServerFunctionLibrary compiles at this property, independently of the
+    // invoking operator. TickCommand requires permission level three.
+    options
+        .properties
+        .insert("function-permission-level".into(), "3".into());
     let mut expected: Option<Vec<Delivery>> = None;
     let mut run_index = 0;
     // The first session and the Vanilla session inside Both are separate JVMs.
