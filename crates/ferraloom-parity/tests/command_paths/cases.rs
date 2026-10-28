@@ -194,6 +194,9 @@ fn data_storage() -> Result<Vec<Case>> {
     Ok(cases)
 }
 pub fn family(name: &str) -> Result<Vec<Case>> {
+    if name == "place_template" {
+        return Ok(super::place_template::cases());
+    }
     if name == "placement_nbt" {
         return Ok(super::placement_nbt::cases(false));
     }

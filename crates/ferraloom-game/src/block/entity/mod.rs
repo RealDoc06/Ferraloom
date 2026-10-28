@@ -17,7 +17,9 @@ pub mod creaking_heart;
 pub mod daylight_detector;
 pub mod decorated_pot;
 pub mod enchanting_table;
+pub mod end_gateway;
 pub mod ender_chest;
+pub mod jigsaw;
 pub mod lectern;
 pub mod potent_sulfur;
 pub mod sculk;
@@ -214,6 +216,8 @@ static THE_END_PORTAL: TheEndPortal = TheEndPortal;
 /// Canonical concrete states. Extend this enum when porting a subclass, never Any.
 #[derive(Clone, Debug)]
 pub enum BlockEntityState {
+    EndGateway(Box<end_gateway::TheEndGatewayBlockEntity>),
+    Jigsaw(Box<jigsaw::JigsawBlockEntity>),
     Campfire(Box<campfire::CampfireBlockEntity>),
     Bell(Box<bell::BellBlockEntity>),
     Lectern(Box<lectern::LecternBlockEntity>),
@@ -251,6 +255,8 @@ pub enum BlockEntityState {
 impl BlockEntityState {
     pub fn data(&self) -> &BlockEntityData {
         match self {
+            Self::EndGateway(entity) => &entity.parent,
+            Self::Jigsaw(entity) => &entity.parent,
             Self::Campfire(entity) => &entity.parent,
             Self::Bell(entity) => &entity.parent,
             Self::Lectern(entity) => &entity.parent,
@@ -288,6 +294,8 @@ impl BlockEntityState {
     }
     pub fn data_mut(&mut self) -> &mut BlockEntityData {
         match self {
+            Self::EndGateway(entity) => &mut entity.parent,
+            Self::Jigsaw(entity) => &mut entity.parent,
             Self::Campfire(entity) => &mut entity.parent,
             Self::Bell(entity) => &mut entity.parent,
             Self::Lectern(entity) => &mut entity.parent,
@@ -325,6 +333,8 @@ impl BlockEntityState {
     }
     pub fn behavior(&self) -> &'static dyn BlockEntity {
         match self {
+            Self::EndGateway(_) => &end_gateway::END_GATEWAY_ENTITY,
+            Self::Jigsaw(_) => &jigsaw::JIGSAW_ENTITY,
             Self::Campfire(_) => &campfire::CAMPFIRE_ENTITY,
             Self::Bell(_) => &bell::BELL_ENTITY,
             Self::Lectern(_) => &lectern::LECTERN_ENTITY,
@@ -546,6 +556,12 @@ pub fn create(pos: BlockPos, state: BlockState) -> Result<BlockEntityState, Leve
         .ok_or(LevelError::UnsupportedBlockEntity(state.block()))?;
     let data = BlockEntityData::new(kind, pos, state)?;
     match kind {
+        BlockEntityType::END_GATEWAY => Ok(BlockEntityState::EndGateway(Box::new(
+            end_gateway::TheEndGatewayBlockEntity::new(data),
+        ))),
+        BlockEntityType::JIGSAW => Ok(BlockEntityState::Jigsaw(Box::new(
+            jigsaw::JigsawBlockEntity::new(data),
+        ))),
         BlockEntityType::CAMPFIRE => Ok(BlockEntityState::Campfire(Box::new(
             campfire::CampfireBlockEntity::new(data),
         ))),
@@ -688,7 +704,9 @@ pub fn supports(block: Block) -> bool {
     matches!(
         registry::for_block(block),
         Some(
-            BlockEntityType::CAMPFIRE
+            BlockEntityType::END_GATEWAY
+                | BlockEntityType::JIGSAW
+                | BlockEntityType::CAMPFIRE
                 | BlockEntityType::BELL
                 | BlockEntityType::LECTERN
                 | BlockEntityType::DECORATED_POT
@@ -752,6 +770,8 @@ macro_rules! projection {
     };
 }
 projection!(super::containers::command::CommandBlockEntity, Command);
+projection!(end_gateway::TheEndGatewayBlockEntity, EndGateway);
+projection!(jigsaw::JigsawBlockEntity, Jigsaw);
 projection!(
     super::containers::structure::StructureBlockEntity,
     Structure

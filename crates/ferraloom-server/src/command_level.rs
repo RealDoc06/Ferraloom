@@ -152,6 +152,15 @@ impl MinecraftServer {
                 let result = self.summon_command(command)?;
                 self.apply_command_result(source, &command.source, result);
             }
+            "place"
+                if command
+                    .literals
+                    .get(1)
+                    .is_some_and(|literal| literal == "template") =>
+            {
+                let result = self.place_template_command(command)?;
+                self.apply_command_result(source, &command.source, result);
+            }
             "setblock" | "fill" => {
                 let result = placement::run(
                     command,
@@ -225,7 +234,10 @@ impl MinecraftServer {
                         connection: source,
                     },
                 )?;
-                command.source.callback.on_success(value);
+                command.source.callback.on_success(
+                    &mut command_runtime::callbacks::ServerCommandHost::new(self, source),
+                    value,
+                );
             }
             _ => return Ok(false),
         }
