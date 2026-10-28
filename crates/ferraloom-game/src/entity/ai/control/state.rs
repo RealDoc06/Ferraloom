@@ -12,15 +12,37 @@ pub enum Operation {
     Jumping,
 }
 /// Port of MoveControl's constructor state and requested movement commands.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct MoveControl {
+    kind: super::super::MoveControlKind,
     pub(crate) wanted: Vec3,
     pub(crate) speed_modifier: f64,
     pub(crate) strafe_forwards: f32,
     pub(crate) strafe_right: f32,
     pub(crate) operation: Operation,
 }
+impl Default for MoveControl {
+    fn default() -> Self {
+        Self::new(super::super::MoveControlKind::Ground)
+    }
+}
 impl MoveControl {
+    /// Port of Mob#createMoveControl and constructor replacement. Family bodies
+    /// stay required until their concrete controller algorithm is implemented.
+    pub fn new(kind: super::super::MoveControlKind) -> Self {
+        Self {
+            kind,
+            wanted: Vec3::ZERO,
+            speed_modifier: 0.0,
+            strafe_forwards: 0.0,
+            strafe_right: 0.0,
+            operation: Operation::Wait,
+        }
+    }
+    pub fn kind(&self) -> super::super::MoveControlKind {
+        self.kind
+    }
+
     /// Port of MoveControl#hasWanted.
     pub fn has_wanted(&self) -> bool {
         self.operation == Operation::MoveTo

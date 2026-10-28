@@ -123,6 +123,10 @@ fn retained(
 }
 /// Port of MoveControl#tick's live base-controller entry.
 pub fn tick_move(entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+    let kind = level.entity::<Mob>(entity)?.ai.move_control.kind();
+    if kind != super::super::MoveControlKind::Ground {
+        return super::super::pending(entity, super::super::AiOperation::MoveControl(kind), level);
+    }
     retained(entity, level, runtime::tick_move)
 }
 /// Port of LookControl#tick's live base-controller entry.
