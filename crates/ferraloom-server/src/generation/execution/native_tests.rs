@@ -43,7 +43,8 @@ fn compare_native(
                     for kind in [Heightmap::WorldSurfaceWg, Heightmap::OceanFloorWg] {
                         let heights = maps.iter().find(|(map, _)| *map == kind).unwrap().1;
                         assert_eq!(
-                            heights[dz * 16 + dx],
+                            // ChunkAccess#getHeight returns first-available Y minus one.
+                            heights[dz * 16 + dx] - 1,
                             int(&mut input),
                             "native {kind:?} at {pos:?}"
                         );

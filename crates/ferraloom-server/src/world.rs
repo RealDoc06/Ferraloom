@@ -102,12 +102,12 @@ impl SectionRegistry for RegistryAdapter {
     ) -> storage::Result<storage::BlockStatePaletteEntry> {
         Ok(storage::BlockStatePaletteEntry {
             name: Some(state.block().name().into()),
-            properties: Some(
+            properties: (state != state.block().default_state()).then(|| {
                 state
                     .properties()
                     .map(|(k, v)| (k.into(), v.into()))
-                    .collect(),
-            ),
+                    .collect()
+            }),
             shorthand: state == state.block().default_state(),
             extra: CompoundTag::new(),
         })
