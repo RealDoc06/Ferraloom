@@ -794,6 +794,19 @@ impl Streaming {
     /// that will not finish (past the area), its decorated proto chunk, as
     /// vanilla lights its last FULL ring against neighbours at FEATURES.
     fn light_region(&self, world: &World, x: i32, z: i32) -> Option<Box<Region>> {
+        // Ferraloom: check all nine neighbours before converting any proto. A
+        // column at the edge of loaded terrain waits here tick after tick, and
+        // converting its decorated neighbours (`light_view` copies every
+        // section) only to drop them made this the slowest part of the tick.
+        let available = |n: (i32, i32)| {
+            world.chunks.contains_key(&n)
+                || (!self.in_range(n.0, n.1, 1)
+                    && self.decorated.contains(&n)
+                    && matches!(self.protos.get(&n), Some(Some(_))))
+        };
+        if !(0..9).all(|i| available((x + i % 3 - 1, z + i / 3 - 1))) {
+            return None;
+        }
         let mut region: Region = Default::default();
         for dz in 0..3 {
             for dx in 0..3 {
