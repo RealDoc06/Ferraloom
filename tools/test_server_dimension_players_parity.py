@@ -10,6 +10,7 @@ through `execute in ... run tp`, and an End portal): Bob goes to the Nether and 
 follows her there, both come back to the Overworld, then Bob steps into an End portal and comes back. Between
 the steps each client sends its position (the reminder a still client sends every second). Each player's lines in each step are compared exactly.
 """
+import argparse
 import os
 from pathlib import Path
 import platform
@@ -105,6 +106,9 @@ def shown(lines):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--engine', type=Path, help='use an already-built engine instead of compiling the fast profile')
+    args = parser.parse_args()
     lock, jars, libraries = base.verify_artifacts()
     build = lab.LOCAL / NAME
     build.mkdir(parents=True, exist_ok=True)
@@ -118,12 +122,16 @@ def main():
     subprocess.run(['javac', '--release', str(lock['minecraft']['java_major']), '-proc:none', '-nowarn', '-sourcepath',
                     lab.ROOT / 'mods/horizon/src/test/java', '-cp', dependencies, '-d', classes, oracle],
                    cwd=lab.ROOT, check=True, capture_output=True)
-    subprocess.run(['cargo', 'build', '--profile', 'fast', '-p', 'horizon-client', '--bin', 'horizon-client'], cwd=lab.ROOT,
-                   check=True, capture_output=True)
-    import json
-    metadata = json.loads(subprocess.check_output(['cargo', 'metadata', '--no-deps', '--format-version', '1'],
-                                                  cwd=lab.ROOT, text=True))
-    binary = Path(metadata['target_directory']) / 'fast' / ('horizon-client.exe' if os.name == 'nt' else 'horizon-client')
+    if args.engine:
+        binary = args.engine.resolve(strict=True)
+    else:
+        subprocess.run(['cargo', 'build', '--locked', '--profile', 'fast', '-p', 'horizon-client',
+                        '--no-default-features', '--bin', 'horizon-client'], cwd=lab.ROOT,
+                       check=True, capture_output=True)
+        import json
+        metadata = json.loads(subprocess.check_output(['cargo', 'metadata', '--no-deps', '--format-version', '1'],
+                                                      cwd=lab.ROOT, text=True))
+        binary = Path(metadata['target_directory']) / 'fast' / ('horizon-client.exe' if os.name == 'nt' else 'horizon-client')
     vanilla_server = ['java', '-Xmx2g', '-Duser.timezone=UTC', '-cp', dependencies, 'net.minecraft.server.Main', 'nogui']
     horizon_server = [binary, '--resources', lab.LOCAL / 'horizon-client/26.3', '--dedicated', '--nogui']
     client = ['java', '-Xmx1g', '-cp', str(classes) + os.pathsep + dependencies, 'dev.horizonlab.parity.LocatorBarClient']
