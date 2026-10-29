@@ -209,6 +209,7 @@ impl<'w, 'c, W: BlockCollisionWorld> BlockCollisionScan<'w, 'c, W> {
             let chunk = match self.chunk {
                 Some((at, chunk)) if at == chunk_position => Some(chunk),
                 _ => {
+                    self.section = None;
                     let chunk = self
                         .world
                         .collision_chunk(chunk_position)

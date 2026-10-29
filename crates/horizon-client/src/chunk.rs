@@ -185,9 +185,13 @@ impl<'a> ChunkBlocks<'a> {
     }
     #[inline]
     pub fn select_section(mut self, section_y: i32) -> Self {
+        if self.section_y == section_y {
+            return self;
+        }
         self.section_y = section_y;
-        self.section = usize::try_from(section_y - (MIN_Y >> 4))
-            .ok()
+        self.section = section_y
+            .checked_sub(MIN_Y >> 4)
+            .and_then(|s| usize::try_from(s).ok())
             .and_then(|s| self.chunk.sections.get(s))
             .map(Arc::as_ref);
         self
