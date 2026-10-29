@@ -171,10 +171,8 @@ This budget cannot make already-overloaded simulation cheap: parallel regions
 remain necessary. Report TPS together with delivered/generated chunks and
 pull-backs, so throttling terrain is explicit rather than a disguised win.
 
-Earlier packet-pipeline/cache prototypes did not establish an explorer gain and
-are not shipped. Their extraction remains a later measured step. This milestone
-starts with the region coordinator's admission policy while retaining Horizon's
-world logic and serial execution order.
+This milestone starts with the region coordinator's admission policy while
+retaining Horizon's world logic and serial execution order.
 
 ## Migration with a gate at every step
 
@@ -207,3 +205,55 @@ remains available. Report mean/P95/P99 MSPT, TPS, delivered/full chunks,
 pull-backs, CPU and busiest thread against `4a661f939`. Report the cost of
 reduced terrain admission alongside the simulation gain; farm correctness
 remains mandatory.
+
+
+## Initial measurements
+
+Pinned CT 121, Xeon E5-2660 v3; seed 12345, view/simulation distance 10,
+60-second warmup and 180-second measurement, bots on devbox, builder idle.
+Explorers fly at 11 blocks/s. Each cell is one run, not a confidence interval.
+Baseline is `4a661f939`; the budgeted policy build is `b84aad467`.
+The later quota-sizing fix retains the measured 3/6 helper counts for these
+CPU sets; its additional coverage is a quota smaller than the allowed mask.
+
+| Workload | Baseline mean/P95/P99 ms | Budget mean/P95/P99 ms | TPS before → after |
+| --- | --- | --- | --- |
+| Explore 25, 4c | 86.17/104.48/119.65 | 57.83/66.57/75.14 | 11.60 → 17.29 |
+| Explore 25, 4c+SMT | 154.06/178.76/196.80 | 60.46/71.70/80.62 | 6.49 → 16.54 |
+| Normal 50, 4c | 26.61/37.41/48.01 | 29.10/41.17/51.33 | 20.00 → 20.00 |
+| Normal 50, 4c+SMT | 26.67/40.05/50.11 | 27.65/38.44/47.23 | 20.00 → 20.00 |
+
+Delivered counts are chunk packets, including initial joins; rates use the
+measurement window. Full chunks are counted in region files after shutdown.
+Pull-backs are correction events, not distinct players. CPU/busiest are mean
+percentages; 100% means one logical CPU.
+
+| Workload | Delivered/s (total), before → after | Full, before → after | Pull-backs, before → after | CPU/busiest %, before → after |
+| --- | --- | --- | --- | --- |
+| Explore 25, 4c | 117.13 (52,983) → 71.84 (37,587) | 8,886 → 9,590 | 24,763 → 31,336 | 342.19/98.88 → 228.82/98.77 |
+| Explore 25, 4c+SMT | 150.96 (62,840) → 72.75 (38,078) | 9,659 → 9,524 | 13,631 → 30,528 | 603.86/99.53 → 294.84/99.95 |
+| Normal 50, 4c | 316.22 (107,282) → 316.20 (107,049) | 2,188 → 2,188 | 0 → 0 | 93.78/53.26 → 100.99/58.68 |
+| Normal 50, 4c+SMT | 316.32 (107,277) → 316.19 (107,076) | 2,188 → 2,188 | 0 → 0 | 113.53/53.60 → 116.01/56.01 |
+
+Two columns reduce explorer mean MSPT by 33% at four cores and 61% with SMT,
+while delivered terrain falls and corrections rise. Normal play keeps 20 TPS
+and its delivery rate, with observed mean MSPT 2.49/0.98 ms higher. The tick
+thread remains saturated during exploration; the serial simulation and global
+decoration queue still need the later migration steps.
+
+A four-column trial at four cores produced 70.19/81.77/94.41 ms, 14.25 TPS,
+92.76 delivered chunks/s (46,605 total), 13,829 full chunks, 28,859 pull-backs,
+and 279.40% CPU / 99.89% busiest thread. Keep two as the conservative initial
+default for simulation time; four buys more terrain at higher tick cost.
+This is an explicit throughput tradeoff, not a sustained-20-TPS explorer result.
+Raw runs remain on CT 121 under `/root/bench/results/core-b84aad467` and
+`/root/bench/results/core-b84-count4`; the baseline is in `/root/bench/results`.
+
+Validation covers the focused budget/topology and streaming units, generation
+save/reload/restart in both modes, `chunk_status`, `chunk_stage`,
+`generation_tick`, `feature_region`, `decoration_region`, and the dedicated
+server's vanilla-codec transcript with limits/isolation enabled and disabled.
+The dedicated check uses `--server-only --engine target/release/horizon-client`;
+the rendered-client check is omitted. File-based selection widens conservatively
+through `Game` and the client manifest; this is scoped server validation, not a
+full client/rendering parity audit.
