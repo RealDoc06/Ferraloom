@@ -157,9 +157,10 @@ reference behavior.
 On Linux, `horizon-threads` captures the launcher's allowed CPU mask before
 workers start. The tick chooses its lowest logical CPU; streaming, save, encode
 and network helper lanes exclude that CPU and its SMT siblings. All masks stay
-inside the original `taskset`/cgroup intersection. Startup workers keep their
+inside the original `taskset`/cgroup intersection. Pool sizes also respect the
+CPU quota, captured before the tick thread is pinned. Startup workers keep their
 existing mask until selecting a lane; the tick pins when its loop starts. An
-unknown topology or a single physical core leaves affinity unchanged. OS calls
+unknown topology, single physical core or single-CPU quota leaves affinity unchanged. OS calls
 stay in Horizon's existing unsafe OS boundary, not in simulation/core policy.
 
 `FERRALOOM_INTEGRATION_US=0` disables admission limits for the reference path;
