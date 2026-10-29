@@ -1100,6 +1100,7 @@ fn build_with_gameplay<G: GameplayStateSource>(
         }
     }
     Ok(Behaviours {
+        hot_flags: Vec::new(),
         table,
         props,
         named,
@@ -1115,7 +1116,8 @@ fn build_with_gameplay<G: GameplayStateSource>(
         dynamic,
         occlusion_cache: Default::default(),
         growth: Default::default(),
-    })
+    }
+    .with_hot_flags())
 }
 
 /// `NoteBlockInstrument` serialized names in declaration order.

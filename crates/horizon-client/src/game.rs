@@ -3158,8 +3158,25 @@ impl Game<'_> {
             }
             touched.sort_unstable_by_key(|p| (p.x, p.y, p.z));
             touched.dedup();
+            let mut contact = horizon_world::level::ContactSections::default();
             for pos in inside.into_iter().chain(touched) {
-                b.entity_inside(level, ticks, pos);
+                let key = (pos.x >> 4, pos.y >> 4, pos.z >> 4);
+                // Recheck after every write, including writes made by an earlier
+                // contact callback. Never prefilter the remaining positions.
+                if contact.get(key, level.world.revision, || {
+                    level.world.chunks.get(&(key.0, key.2)).map_or_else(
+                        || b.has_entity_inside(level.world.air),
+                        |chunk| {
+                            let index = key.1 - (MIN_Y >> 4);
+                            chunk.sections.get(index as usize).map_or_else(
+                                || b.has_entity_inside(BlockStateId(0)),
+                                |section| section.blocks.has(|id| b.has_entity_inside(BlockStateId(id))),
+                            )
+                        },
+                    )
+                }) {
+                    b.entity_inside(level, ticks, pos);
+                }
             }
             for (pos, on_ground, feet_y) in standing {
                 b.entity_on_big_dripleaf(level, ticks, pos, on_ground, feet_y);
@@ -3173,7 +3190,8 @@ impl Game<'_> {
                 let mut read = None;
                 let mut sections = Default::default();
                 let pos = horizon_core::position::ChunkPos::new(x, z);
-                b.tick_chunk_random(level, ticks, pos, |level, from| {
+                let mut current_chunk = None;
+                b.tick_chunk_random_with_reader(level, ticks, pos, |level, from| {
                     if read != Some(level.world.revision) {
                         read = Some(level.world.revision);
                         sections = level
@@ -3185,6 +3203,12 @@ impl Game<'_> {
                             });
                     }
                     sections.from(from)
+                }, |level, at| {
+                    if current_chunk.as_ref().is_none_or(|(revision, _)| *revision != level.world.revision) {
+                        current_chunk = Some((level.world.revision, level.world.chunks.get(&(x, z)).cloned()));
+                    }
+                    current_chunk.as_ref().unwrap().1.as_ref()
+                        .map_or(level.world.air, |chunk| chunk.block(at.x & 15, at.y, at.z & 15))
                 });
             }
             b.run_block_events(level, ticks);

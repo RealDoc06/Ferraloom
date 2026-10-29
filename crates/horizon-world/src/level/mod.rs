@@ -107,6 +107,8 @@ mod falling;
 mod feature_world;
 mod fluids;
 mod growth;
+mod hot_sections;
+pub use hot_sections::ContactSections;
 mod hooks;
 mod interact;
 pub mod pistons;
@@ -481,6 +483,7 @@ pub trait GameplayStateSource {
 
 /// Immutable vanilla block-behaviour tables. Build once with [`Behaviours::load`].
 pub struct Behaviours {
+    hot_flags: Vec<u8>,
     pub table: StateTable,
     pub props: Props,
     pub named: Named,
@@ -527,6 +530,32 @@ impl Behaviours {
     /// of resolving the resources again. Without it, [`Self::load`] never caches.
     pub fn set_cache_dir(dir: std::path::PathBuf) {
         data::set_cache_dir(dir);
+    }
+    /// Immutable per-state hook eligibility, rebuilt on both resource and cache loads.
+    fn with_hot_flags(mut self) -> Self {
+        self.hot_flags = (0..self.table.state_count())
+            .map(|id| {
+                let state = BlockStateId(id as u32);
+                let data = self.data(state);
+                let contact = data.is(classes::Class::BasePressurePlate)
+                    || data.is(classes::Class::DetectorRail)
+                    || data.is(classes::Class::TripWire)
+                    || (data.is(classes::Class::Button)
+                        && data.set_type.as_ref().is_some_and(|s| s.arrows));
+                u8::from(contact)
+                    | (u8::from(self.is_randomly_ticking(state)) << 1)
+                    | (u8::from(matches!(
+                        self.fluid(state).kind(),
+                        FluidKind::Lava | FluidKind::FlowingLava
+                    )) << 2)
+            })
+            .collect();
+        self
+    }
+    /// Whether the generic entity-sensing hook can act on this state.
+    /// Big dripleaf and movement effects have separate entry points.
+    pub fn has_entity_inside(&self, state: BlockStateId) -> bool {
+        self.hot_flags[state.0 as usize] & 1 != 0
     }
     pub fn facts(&self, state: BlockStateId) -> &StateFacts {
         &self.facts[state.0 as usize]
@@ -789,7 +818,10 @@ impl Behaviours {
         ticks: &mut Ticks,
         pos: BlockPos,
     ) {
-        self.sim(level, ticks).entity_inside(pos);
+        let state = level.block_state(pos);
+        if self.has_entity_inside(state) {
+            self.sim(level, ticks).entity_inside_state(pos, state);
+        }
     }
     /// `DaylightDetectorBlock.tickEntity` of the daylight detector at `pos`:
     /// its signal follows the sky every 20 game ticks. The detector's ticker
