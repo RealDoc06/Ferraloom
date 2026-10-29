@@ -54,6 +54,7 @@ exactly:
 
 Online mode needs Mojang's session servers and is not tested.
 """
+import argparse
 import json
 import os
 from pathlib import Path
@@ -411,6 +412,12 @@ def horizon_client_joins(vanilla_server, binary, world, build, reference):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--server-only', action='store_true',
+                        help='compare both servers with the vanilla-codec client; omit the rendered Horizon client')
+    parser.add_argument('--engine', type=Path,
+                        help='use an already-built engine instead of compiling the fast profile')
+    args = parser.parse_args()
     lock, jars, libraries = base.verify_artifacts()
     build = lab.LOCAL / NAME
     build.mkdir(parents=True, exist_ok=True)
@@ -424,11 +431,14 @@ def main():
     oh.run_logged(['javac', '--release', lock['minecraft']['java_major'], '-proc:none', '-nowarn', '-sourcepath',
                    lab.ROOT / 'mods/horizon/src/test/java', '-cp', dependencies, '-d', classes, oracle],
                   build, 'compile-java')
-    oh.run_logged(['cargo', 'build', '--profile', 'fast', '-p', 'horizon-client', '--bin', 'horizon-client'], build,
-                  'compile-rust')
-    metadata = json.loads(subprocess.check_output(['cargo', 'metadata', '--no-deps', '--format-version', '1'],
-                                                  cwd=lab.ROOT, text=True))
-    binary = Path(metadata['target_directory']) / 'fast' / ('horizon-client.exe' if os.name == 'nt' else 'horizon-client')
+    if args.engine:
+        binary = args.engine.resolve(strict=True)
+    else:
+        oh.run_logged(['cargo', 'build', '--profile', 'fast', '-p', 'horizon-client', '--bin', 'horizon-client'], build,
+                      'compile-rust')
+        metadata = json.loads(subprocess.check_output(['cargo', 'metadata', '--no-deps', '--format-version', '1'],
+                                                      cwd=lab.ROOT, text=True))
+        binary = Path(metadata['target_directory']) / 'fast' / ('horizon-client.exe' if os.name == 'nt' else 'horizon-client')
     vanilla_server = ['java', '-Xmx2g', '-Duser.timezone=UTC', '-cp', dependencies, 'net.minecraft.server.Main', 'nogui']
     horizon_server = [binary, '--resources', lab.RESOURCES, '--dedicated', '--nogui']
 
@@ -475,7 +485,8 @@ def main():
         write_server_dir(directory, PROPERTIES_PORTS[label], world)
         results[label] = run_side(label, command, directory, client)
         (build / f'{label}.txt').write_text('\n'.join(results[label]) + '\n', encoding='utf-8')
-    client_checks = horizon_client_joins(vanilla_server, binary, world, build, results['vanilla'])
+    client_checks = ([] if args.server_only else
+                     horizon_client_joins(vanilla_server, binary, world, build, results['vanilla']))
     vanilla, horizon = results['vanilla'], results['horizon']
     errors = [l for l in vanilla + horizon if l.startswith('error')] + [l for l in client_checks if not l.endswith(': ok')]
     for line in client_checks:
@@ -499,6 +510,7 @@ def main():
     lab.write_json(report, dict(
         schema=1, minecraft=lock['minecraft']['version'], platform=platform.platform(),
         java=subprocess.check_output(['java', '--version'], text=True).splitlines()[0],
+        horizon_client_checked=not args.server_only,
         lines=len(vanilla), output_sha256=lab.digest(build / 'horizon.txt', 'sha256'),
         scope='Dedicated server seen by a vanilla-codec client: status, legacy ping, login, configuration, play '
               'start (recipes, advancements, command tree), chunks, chat, /list, failing commands\' replies, '

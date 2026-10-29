@@ -118,23 +118,38 @@ struct Session {
     streaming: Streaming,
     world: World,
     generator: Arc<Recorder>,
+    budgeted: bool,
 }
 impl Session {
-    fn new(generator: Arc<Recorder>, context: Arc<WorkerContext>) -> Self {
+    fn new(generator: Arc<Recorder>, context: Arc<WorkerContext>, budgeted: bool) -> Self {
         let mut streaming = Streaming::new(generator.clone(), context, 3);
         streaming.radius = 4;
         Self {
             streaming,
             world: World::new(BlockStateId(0), 0),
             generator,
+            budgeted,
         }
     }
     fn update(&mut self) {
+        let before = self.streaming.generated_total;
+        if self.budgeted {
+            self.streaming.begin_server_tick();
+        }
         let (_, unloaded) = self.streaming.update(&mut self.world);
         for chunk in unloaded {
             if self.world.modified.remove(&(chunk.x, chunk.z)) {
                 self.generator.save_chunk(&chunk);
             }
+        }
+        if self.budgeted {
+            let (_, extra) = self.streaming.update(&mut self.world);
+            for chunk in extra {
+                if self.world.modified.remove(&(chunk.x, chunk.z)) {
+                    self.generator.save_chunk(&chunk);
+                }
+            }
+            assert!(self.streaming.generated_total - before <= 2);
         }
     }
     /// Run until generation around `center` is done and nothing changes.
@@ -186,55 +201,57 @@ fn chunks_left_behind_keep_their_decoration() {
         assets,
         render: render.clone(),
     });
-    let generator = Arc::new(Recorder::default());
-    let mut session = Session::new(generator.clone(), context.clone());
-    // Generate an area, walk away from it in steps (its edge unloads a ring
-    // at a time), teleport far, come back past where the edge was; then
-    // save, restart and look again.
-    session.settle_at((0, 0));
-    for step in 1..=4 {
-        session.settle_at((step * 3, 0));
-        session.autosave();
-    }
-    session.settle_at((300, 300));
-    session.autosave();
-    session.settle_at((0, 0));
-    session.settle_at((-4, 0));
-    session.save();
-    drop(session);
-    let mut session = Session::new(generator.clone(), context);
-    session.settle_at((6, 0));
-    session.settle_at((0, 0));
-    let finished = generator.finished.lock().unwrap();
-    let mut checked = 0;
-    for (&(x, z), finishes) in finished.iter() {
-        assert_eq!(
-            finishes.len(),
-            1,
-            "({x}, {z}) was generated again after it was finished"
-        );
-        let column = &finishes[0];
-        assert!(column.decorated, "({x}, {z}) was finished undecorated");
-        let mut writes = column.writes.clone();
-        writes.sort_unstable();
-        let neighbours: Vec<(i32, i32)> = (-1..=1)
-            .flat_map(|dx| (-1..=1).map(move |dz| (x + dx, z + dz)))
-            .collect();
-        assert_eq!(
-            writes, neighbours,
-            "({x}, {z}) must hold each neighbour's decoration exactly once"
-        );
-        checked += 1;
-    }
-    for x in -4..=4 {
-        for z in (-4..=4).filter(|z| x * x + z * z <= 16) {
-            assert!(
-                session.world.chunks.contains_key(&(x, z)),
-                "({x}, {z}) did not load back"
-            );
+    for budgeted in [false, true] {
+        let generator = Arc::new(Recorder::default());
+        let mut session = Session::new(generator.clone(), context.clone(), budgeted);
+        // Generate an area, walk away from it in steps (its edge unloads a ring
+        // at a time), teleport far, come back past where the edge was; then
+        // save, restart and look again.
+        session.settle_at((0, 0));
+        for step in 1..=4 {
+            session.settle_at((step * 3, 0));
+            session.autosave();
         }
+        session.settle_at((300, 300));
+        session.autosave();
+        session.settle_at((0, 0));
+        session.settle_at((-4, 0));
+        session.save();
+        drop(session);
+        let mut session = Session::new(generator.clone(), context.clone(), budgeted);
+        session.settle_at((6, 0));
+        session.settle_at((0, 0));
+        let finished = generator.finished.lock().unwrap();
+        let mut checked = 0;
+        for (&(x, z), finishes) in finished.iter() {
+            assert_eq!(
+                finishes.len(),
+                1,
+                "({x}, {z}) was generated again after it was finished"
+            );
+            let column = &finishes[0];
+            assert!(column.decorated, "({x}, {z}) was finished undecorated");
+            let mut writes = column.writes.clone();
+            writes.sort_unstable();
+            let neighbours: Vec<(i32, i32)> = (-1..=1)
+                .flat_map(|dx| (-1..=1).map(move |dz| (x + dx, z + dz)))
+                .collect();
+            assert_eq!(
+                writes, neighbours,
+                "({x}, {z}) must hold each neighbour's decoration exactly once"
+            );
+            checked += 1;
+        }
+        for x in -4..=4 {
+            for z in (-4..=4).filter(|z| x * x + z * z <= 16) {
+                assert!(
+                    session.world.chunks.contains_key(&(x, z)),
+                    "({x}, {z}) did not load back"
+                );
+            }
+        }
+        assert!(checked > 200, "only {checked} columns finished");
     }
-    assert!(checked > 200, "only {checked} columns finished");
 }
 
 /// A saved proto chunk comes back exactly: the bastion region of #249, its
