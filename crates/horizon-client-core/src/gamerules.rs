@@ -6,7 +6,12 @@ use horizon_world::{
     compression::Compression,
     nbt::{self, Limits, NamedTag, Tag},
 };
-use std::{collections::BTreeMap, fs, path::Path};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fs,
+    path::Path,
+    sync::LazyLock,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Value {
@@ -126,19 +131,33 @@ pub const RULES: &[Rule] = &[
     b("water_source_conversion", "updates", true),
 ];
 pub fn rule(name: &str) -> Option<&'static Rule> {
-    let name = name.strip_prefix("minecraft:").unwrap_or(name);
-    RULES.iter().find(|r| r.name == name)
+    rule_id(name).map(|id| &RULES[id])
+}
+
+/// Resolve external names once per lookup, rather than scanning every rule.
+/// Stored values use the registration index, so defaults and overrides share
+/// the same numeric identity. The index is internal, never persisted.
+fn rule_id(name: &str) -> Option<usize> {
+    static IDS: LazyLock<HashMap<&'static str, usize>> = LazyLock::new(|| {
+        RULES
+            .iter()
+            .enumerate()
+            .map(|(id, rule)| (rule.name, id))
+            .collect()
+    });
+    IDS.get(name.strip_prefix("minecraft:").unwrap_or(name))
+        .copied()
 }
 
 /// Current values (defaults unless set).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct GameRules {
-    values: BTreeMap<&'static str, Value>,
+    values: BTreeMap<usize, Value>,
 }
 impl GameRules {
     pub fn get(&self, name: &str) -> Option<Value> {
-        let r = rule(name)?;
-        Some(self.values.get(r.name).copied().unwrap_or(r.default))
+        let id = rule_id(name)?;
+        Some(self.values.get(&id).copied().unwrap_or(RULES[id].default))
     }
     pub fn bool(&self, name: &str) -> bool {
         matches!(self.get(name), Some(Value::Bool(true)))
@@ -160,16 +179,19 @@ impl GameRules {
     }
     /// Set a rule; false if the name or value type is wrong.
     pub fn set(&mut self, name: &str, value: Value) -> bool {
-        let Some(r) = rule(name) else { return false };
+        let Some(id) = rule_id(name) else {
+            return false;
+        };
+        let r = &RULES[id];
         let ok = match (r.default, value) {
             (Value::Bool(_), Value::Bool(_)) => true,
             (Value::Int(_), Value::Int(v)) => (r.min..=r.max).contains(&v),
             _ => false,
         };
         if ok && value == r.default {
-            self.values.remove(r.name);
+            self.values.remove(&id);
         } else if ok {
-            self.values.insert(r.name, value);
+            self.values.insert(id, value);
         }
         ok
     }
@@ -178,8 +200,9 @@ impl GameRules {
     pub fn by_name(&self) -> BTreeMap<String, i32> {
         RULES
             .iter()
-            .map(|r| {
-                let v = match self.values.get(r.name).copied().unwrap_or(r.default) {
+            .enumerate()
+            .map(|(id, r)| {
+                let v = match self.values.get(&id).copied().unwrap_or(r.default) {
                     Value::Bool(b) => i32::from(b),
                     Value::Int(i) => i,
                 };
@@ -191,8 +214,9 @@ impl GameRules {
     pub fn to_nbt(&self) -> NamedTag {
         let data: Vec<(horizon_world::nbt::JavaString, Tag)> = RULES
             .iter()
-            .map(|r| {
-                let v = self.values.get(r.name).copied().unwrap_or(r.default);
+            .enumerate()
+            .map(|(id, r)| {
+                let v = self.values.get(&id).copied().unwrap_or(r.default);
                 let tag = match v {
                     Value::Bool(b) => Tag::Byte(i8::from(b)),
                     Value::Int(i) => Tag::Int(i),
@@ -259,6 +283,90 @@ impl GameRules {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn numeric_rules_keep_registration_identity_and_overrides() {
+        let mut rules = GameRules::default();
+        for (id, r) in RULES.iter().enumerate() {
+            assert_eq!(rule_id(r.name), Some(id));
+            assert_eq!(rule(r.name).unwrap().name, r.name);
+            let namespaced = format!("minecraft:{}", r.name);
+            assert_eq!(rules.get(&namespaced), Some(r.default));
+            let changed = match r.default {
+                Value::Bool(v) => Value::Bool(!v),
+                Value::Int(v) => Value::Int(if v < r.max { v + 1 } else { v - 1 }),
+            };
+            assert!(rules.set(&namespaced, changed));
+            assert_eq!(rules.get(r.name), Some(changed));
+        }
+        assert_eq!(GameRules::from_nbt(&rules.to_nbt().tag), rules);
+        for r in RULES {
+            assert!(rules.set(r.name, r.default));
+        }
+        assert_eq!(rules, GameRules::default());
+    }
+
+    /// Run with `cargo test --release -p horizon-client-core benchmark_rule_lookup -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "release micro-benchmark"]
+    fn benchmark_rule_lookup() {
+        use std::{hint::black_box, time::Instant};
+        // The nine lookups in Game::level_rules, on every adapter construction.
+        let names = [
+            "water_source_conversion",
+            "lava_source_conversion",
+            "random_tick_speed",
+            "block_drops",
+            "mob_griefing",
+            "max_snow_accumulation_height",
+            "spawn_mobs",
+            "spawn_monsters",
+            "fire_spread_radius_around_player",
+        ];
+        for overrides in [false, true] {
+            let mut rules = GameRules::default();
+            let mut old = BTreeMap::new();
+            if overrides {
+                for r in RULES {
+                    let value = match r.default {
+                        Value::Bool(v) => Value::Bool(!v),
+                        Value::Int(v) => Value::Int(v + 1),
+                    };
+                    if rules.set(r.name, value) {
+                        old.insert(r.name, value);
+                    }
+                }
+            }
+            for name in names {
+                let r = RULES.iter().find(|r| r.name == name).unwrap();
+                assert_eq!(
+                    rules.get(name),
+                    Some(old.get(r.name).copied().unwrap_or(r.default))
+                );
+            }
+            for round in 0..3 {
+                let start = Instant::now();
+                for _ in 0..200_000 {
+                    for name in black_box(names) {
+                        let name = black_box(name);
+                        let r = RULES.iter().find(|r| r.name == name).unwrap();
+                        black_box(old.get(r.name).copied().unwrap_or(r.default));
+                    }
+                }
+                let before = start.elapsed();
+                let start = Instant::now();
+                for _ in 0..200_000 {
+                    for name in black_box(names) {
+                        black_box(rules.get(black_box(name)));
+                    }
+                }
+                println!(
+                    "rules overrides={overrides} round={round}: old={before:?} numeric={:?}",
+                    start.elapsed()
+                );
+            }
+        }
+    }
 
     #[test]
     fn network_values_validate_rule_names_types_and_bounds() {
