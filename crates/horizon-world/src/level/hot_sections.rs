@@ -7,6 +7,7 @@ use std::collections::HashMap;
 #[derive(Default)]
 pub struct ContactSections {
     sections: HashMap<(i32, i32, i32), (u64, bool)>,
+    last: Option<((i32, i32, i32), u64, bool)>,
 }
 impl ContactSections {
     pub fn get(
@@ -15,7 +16,12 @@ impl ContactSections {
         revision: u64,
         scan: impl FnOnce() -> bool,
     ) -> bool {
-        match self.sections.entry(section) {
+        if let Some((key, read, answer)) = self.last {
+            if key == section && read == revision {
+                return answer;
+            }
+        }
+        let answer = match self.sections.entry(section) {
             std::collections::hash_map::Entry::Occupied(mut entry) => {
                 if entry.get().0 != revision {
                     entry.insert((revision, scan()));
@@ -23,7 +29,9 @@ impl ContactSections {
                 entry.get().1
             }
             std::collections::hash_map::Entry::Vacant(entry) => entry.insert((revision, scan())).1,
-        }
+        };
+        self.last = Some((section, revision, answer));
+        answer
     }
 }
 
