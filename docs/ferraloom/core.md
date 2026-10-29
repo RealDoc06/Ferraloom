@@ -252,18 +252,22 @@ A four-column trial at four cores produced 70.19/81.77/94.41 ms, 14.25 TPS,
 92.76 delivered chunks/s (46,605 total), 13,829 full chunks, 28,859 pull-backs,
 and 279.40% CPU / 99.89% busiest thread. Keep two as the conservative initial
 default for simulation time; four buys more terrain at higher tick cost.
-This is an explicit throughput tradeoff, not a sustained-20-TPS explorer result.
+This trades terrain throughput for simulation time. Exploration remains below
+20 TPS.
 Raw runs remain on CT 121 under `/root/bench/results/core-b84aad467` and
 `/root/bench/results/core-b84-count4`; the final idle-window SMT repeat is in
 `/root/bench/results/core-65fca9e64-ht-idle`. The baseline is in
 `/root/bench/results`.
 
-Validation covers the focused budget/topology and streaming units, generation
-save/reload/restart in both modes, `chunk_status`, `chunk_stage`,
-`generation_tick`, `feature_region`, `decoration_region`, and the dedicated
-server's vanilla-codec transcript with limits/isolation enabled and disabled.
+Validation covers 19 focused Rust/save tests and 13 publication-guard tests,
+including carried budgets, CPU topology/quota limits and generation
+save/reload/restart in both modes. Scoped vanilla harnesses pass:
+`chunk_status`, `chunk_stage`, `generation_tick`, `feature_region` and
+`decoration_region`. Both `dedicated_server` and `server_dimension_players`
+match vanilla-codec transcripts with limits/isolation enabled and disabled.
 The dedicated check uses `--server-only --engine target/release/horizon-client`;
-the rendered-client check is omitted. Publication-guard tests and the complete
-retained-history artifact audit also pass. File-based selection widens conservatively
-through `Game` and the client manifest; this is scoped server validation, not a
-full client/rendering parity audit.
+the rendered-client check is omitted. Java-server correctness fixtures can use
+RAM-backed scratch to avoid builder storage watchdogs; the performance runs
+use CT 121's region files. The complete retained-history artifact audit passes.
+File-based selection widens conservatively through `Game` and the client
+manifest; this is scoped server validation, not a full client/rendering audit.
