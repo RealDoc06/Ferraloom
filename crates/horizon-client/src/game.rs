@@ -3257,18 +3257,20 @@ impl Game<'_> {
                 continue;
             }
             loop {
-                let more = self.with_level(|b, level, ticks| loop {
-                    let more = b.scheduled_step(level, ticks, fluids);
-                    // Reuse the adapter until a tick changes caller-owned state.
-                    // Events and drops must be applied before the next tick:
-                    // they can summon entities, change rules or trigger blocks.
-                    if !more
-                        || !level.events.is_empty()
-                        || !level.spill.spawns.is_empty()
-                        || !level.spill.orbs.is_empty()
-                        || !level.spill.removed.is_empty()
-                    {
-                        break more;
+                let more = self.with_level(|b, level, ticks| {
+                    loop {
+                        let more = b.scheduled_step(level, ticks, fluids);
+                        // Reuse the adapter until a tick changes caller-owned state.
+                        // Events and drops must be applied before the next tick:
+                        // they can summon entities, change rules or trigger blocks.
+                        if !more
+                            || !level.events.is_empty()
+                            || !level.spill.spawns.is_empty()
+                            || !level.spill.orbs.is_empty()
+                            || !level.spill.removed.is_empty()
+                        {
+                            break more;
+                        }
                     }
                 });
                 if !self.level_events.is_empty() {
