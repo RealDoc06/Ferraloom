@@ -930,9 +930,36 @@ mod tests {
         let states: Vec<_> = (0..4096)
             .map(|id| EntityState { id, ..state(0.0) })
             .collect();
+        let riding = Riding::default();
+        // Compare the profiled map operation with its replacement in one binary.
+        for direct in [false, true] {
+            let mut map = crate::fast_hash::FxHashMap::default();
+            for e in &states {
+                map.insert(e.id, ServerEntity::new(e, Some(1), &riding));
+            }
+            let start = std::time::Instant::now();
+            for tick in 0..2000 {
+                for e in std::hint::black_box(&states) {
+                    let s = if direct {
+                        if !map.contains_key(&e.id) {
+                            map.insert(e.id, ServerEntity::new(e, Some(1), &riding));
+                        }
+                        map.get_mut(&e.id).unwrap()
+                    } else {
+                        map.entry(e.id)
+                            .or_insert_with(|| ServerEntity::new(e, Some(1), &riding))
+                    };
+                    s.seen = tick;
+                    std::hint::black_box(s);
+                }
+            }
+            eprintln!(
+                "tracking map direct={direct}, 4096 entities x 2000 ticks: {:?}",
+                start.elapsed()
+            );
+        }
         let refs: Vec<_> = states.iter().collect();
         let mut entities = Entities::default();
-        let riding = Riding::default();
         entities.tick(&refs, &riding, &mut [], |_| Some(1));
         let start = std::time::Instant::now();
         for _ in 0..2000 {
