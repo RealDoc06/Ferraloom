@@ -98,6 +98,9 @@ impl<W: BlockCollisionWorld> BlockCollisionWorld for EntityCollisions<'_, W> {
     ) -> std::result::Result<Option<Self::Chunk>, Self::Error> {
         self.blocks.collision_chunk(p)
     }
+    fn collision_section(&mut self, chunk: Self::Chunk, section_y: i32) -> Self::Chunk {
+        self.blocks.collision_section(chunk, section_y)
+    }
     fn collision_block(
         &mut self,
         chunk: Self::Chunk,
@@ -295,9 +298,16 @@ where
 impl<'w> BlockCollisionWorld for SceneCollisions<'w, '_> {
     type Error = io::Error;
     /// The resident column, looked up once per chunk the scan enters.
-    type Chunk = &'w crate::chunk::Chunk;
+    type Chunk = crate::chunk::ChunkBlocks<'w>;
     fn collision_chunk(&mut self, p: ChunkPos) -> io::Result<Option<Self::Chunk>> {
-        Ok(self.world.chunks.get(&(p.x, p.z)).map(|chunk| &**chunk))
+        Ok(self
+            .world
+            .chunks
+            .get(&(p.x, p.z))
+            .map(|chunk| crate::chunk::ChunkBlocks::new(chunk)))
+    }
+    fn collision_section(&mut self, chunk: Self::Chunk, section_y: i32) -> Self::Chunk {
+        chunk.select_section(section_y)
     }
     fn collision_block(&mut self, chunk: Self::Chunk, p: BlockPos) -> io::Result<CollisionBlock> {
         self.binding.collision_block(chunk.block(p.x, p.y, p.z))
@@ -305,10 +315,8 @@ impl<'w> BlockCollisionWorld for SceneCollisions<'w, '_> {
     /// From the section's palette, without reading its blocks; a palette
     /// of the whole registry reads every cell.
     fn may_reach_out(&mut self, chunk: Self::Chunk, section_y: i32) -> io::Result<bool> {
-        let blocks = usize::try_from(section_y - (crate::chunk::MIN_Y >> 4))
-            .ok()
-            .and_then(|s| chunk.sections.get(s))
-            .map(|section| &section.blocks);
+        let selected = chunk.select_section(section_y);
+        let blocks = selected.section().map(|section| &section.blocks);
         Ok(blocks.is_none_or(|blocks| {
             blocks.is_global() || blocks.maybe_has(|v| self.binding.reaches_out(BlockStateId(v)))
         }))

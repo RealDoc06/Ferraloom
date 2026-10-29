@@ -168,6 +168,45 @@ pub struct Chunk {
     /// with the state their placement has reached by then.
     pub structure_starts: Vec<Arc<horizon_world::worldgen::structure::start::StructureStart>>,
 }
+/// Borrowed block access with a selected section, without retaining an Arc.
+#[derive(Clone, Copy)]
+pub struct ChunkBlocks<'a> {
+    chunk: &'a Chunk,
+    section_y: i32,
+    section: Option<&'a Section>,
+}
+impl<'a> ChunkBlocks<'a> {
+    pub fn new(chunk: &'a Chunk) -> Self {
+        Self {
+            chunk,
+            section_y: i32::MIN,
+            section: None,
+        }
+    }
+    #[inline]
+    pub fn select_section(mut self, section_y: i32) -> Self {
+        self.section_y = section_y;
+        self.section = usize::try_from(section_y - (MIN_Y >> 4))
+            .ok()
+            .and_then(|s| self.chunk.sections.get(s))
+            .map(Arc::as_ref);
+        self
+    }
+    #[inline]
+    pub fn block(&self, x: i32, y: i32, z: i32) -> BlockStateId {
+        if y >> 4 != self.section_y {
+            return self.chunk.block(x, y, z);
+        }
+        BlockStateId(
+            self.section
+                .map_or(0, |section| section.get(index(x, y, z))),
+        )
+    }
+    #[inline]
+    pub fn section(&self) -> Option<&'a Section> {
+        self.section
+    }
+}
 impl Chunk {
     pub fn empty(x: i32, z: i32) -> Self {
         Self {

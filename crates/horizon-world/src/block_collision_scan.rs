@@ -22,6 +22,11 @@ pub trait BlockCollisionWorld {
     type Chunk: Copy;
     /// None is a missing collision chunk; native iteration retries missing chunks.
     fn collision_chunk(&mut self, position: ChunkPos) -> Result<Option<Self::Chunk>, Self::Error>;
+    /// Select a section for subsequent reads. Providers may return a borrowed
+    /// section in their chunk handle; the default keeps chunk-only providers.
+    fn collision_section(&mut self, chunk: Self::Chunk, _section_y: i32) -> Self::Chunk {
+        chunk
+    }
     fn collision_block(
         &mut self,
         chunk: Self::Chunk,
@@ -95,6 +100,7 @@ pub struct BlockCollisionScan<'w, 'c, W: BlockCollisionWorld> {
     count: usize,
     budget: usize,
     chunk: Option<(ChunkPos, W::Chunk)>,
+    section: Option<(ChunkPos, i32, W::Chunk)>,
     /// `may_reach_out` of the last section an outer cell was in.
     reach: Option<(ChunkPos, i32, bool)>,
     failed: bool,
@@ -147,6 +153,7 @@ impl<'w, 'c, W: BlockCollisionWorld> BlockCollisionScan<'w, 'c, W> {
             budget: candidate_budget,
             chunk: None,
             reach: None,
+            section: None,
             failed: false,
         })
     }
@@ -212,6 +219,15 @@ impl<'w, 'c, W: BlockCollisionWorld> BlockCollisionScan<'w, 'c, W> {
             };
             let Some(chunk) = chunk else {
                 continue;
+            };
+            let section_y = p.y >> 4;
+            let chunk = match self.section {
+                Some((at, y, section)) if at == chunk_position && y == section_y => section,
+                _ => {
+                    let section = self.world.collision_section(chunk, section_y);
+                    self.section = Some((chunk_position, section_y, section));
+                    section
+                }
             };
             // An outer cell only counts for a block reaching out of its own
             // cell: most sections hold none, so their outer cells go unread
