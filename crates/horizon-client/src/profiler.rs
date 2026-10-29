@@ -64,7 +64,19 @@ fn collect(settings: Settings) -> Result<(), Box<dyn std::error::Error>> {
         settings.hz
     );
     std::thread::sleep(Duration::from_secs(settings.seconds));
-    let report = guard.report().build()?;
+    // Remove the sampler and signal trampoline before attributing the interrupted leaf.
+    let report = guard
+        .report()
+        .frames_post_processor(|stack| {
+            if let Some(index) = stack.frames.iter().rposition(|symbols| {
+                symbols
+                    .iter()
+                    .any(|symbol| symbol.name().contains("perf_signal_handler"))
+            }) {
+                stack.frames.drain(..(index + 2).min(stack.frames.len()));
+            }
+        })
+        .build()?;
     drop(guard);
     let stem = format!(
         "profile-{}",
@@ -117,7 +129,7 @@ fn collect(settings: Settings) -> Result<(), Box<dyn std::error::Error>> {
     for ((name, id), count) in threads {
         writeln!(
             out,
-            "{:.2}% {count} {name} tid={id}",
+            "{:.2}% {count} {name} pthread={id}",
             100.0 * count as f64 / total.max(1) as f64
         )?;
     }
