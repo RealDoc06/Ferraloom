@@ -210,7 +210,10 @@ remains mandatory.
 ## Initial measurements
 
 Pinned CT 121, Xeon E5-2660 v3; seed 12345, view/simulation distance 10,
-60-second warmup and 180-second measurement, bots on devbox, builder idle.
+60-second warmup and 180-second measurement, bots on devbox. This branch
+submitted no builds during measurement. Separate profiling builds overlapped
+the later runs, on disjoint builder CPUs `2-3,10-12,14`; shared-host cache/clock
+noise remains possible. The four-core explorer run finished before that overlap.
 Explorers fly at 11 blocks/s. Each cell is one run, not a confidence interval.
 Baseline is `4a661f939`; the budgeted policy build is `b84aad467`.
 The later quota-sizing fix retains the measured 3/6 helper counts for these
