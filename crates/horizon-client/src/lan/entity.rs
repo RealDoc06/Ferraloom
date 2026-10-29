@@ -926,6 +926,10 @@ mod tests {
     /// Focused steady-state tracking benchmark, with no packet recipients.
     #[test]
     #[ignore = "release micro-benchmark"]
+    #[allow(
+        clippy::map_entry,
+        reason = "compares entry with the direct lookup path"
+    )]
     fn tracking_steady_state_benchmark() {
         let states: Vec<_> = (0..4096)
             .map(|id| EntityState { id, ..state(0.0) })
