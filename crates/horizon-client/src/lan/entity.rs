@@ -921,6 +921,22 @@ mod tests {
         }
     }
 
+    /// Focused steady-state tracking benchmark, with no packet recipients.
+    #[test]
+    #[ignore = "release micro-benchmark"]
+    fn tracking_steady_state_benchmark() {
+        let states: Vec<_> = (0..4096).map(|id| EntityState { id, ..state(0.0) }).collect();
+        let refs: Vec<_> = states.iter().collect();
+        let mut entities = Entities::default();
+        let riding = Riding::default();
+        entities.tick(&refs, &riding, &mut [], |_| Some(1));
+        let start = std::time::Instant::now();
+        for _ in 0..2000 {
+            entities.tick(std::hint::black_box(&refs), &riding, &mut [], |_| Some(1));
+        }
+        eprintln!("tracking 4096 entities x 2000 ticks: {:?}", start.elapsed());
+    }
+
     #[test]
     fn states_are_written_over_last_ticks_in_place() {
         let mut states = States::default();
