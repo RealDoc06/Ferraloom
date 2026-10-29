@@ -472,7 +472,10 @@ impl Lan {
         let (accept_shared, accept_stop) = (self.shared.clone(), stop.clone());
         let thread = std::thread::Builder::new()
             .name("horizon-lan-accept".into())
-            .spawn(move || accept_loop(listener, accept_shared, &accept_stop))?;
+            .spawn(move || {
+                horizon_threads::worker_affinity();
+                accept_loop(listener, accept_shared, &accept_stop)
+            })?;
         self._pinger = if announce {
             discovery::Pinger::start(self.shared.motd(), port).ok()
         } else {

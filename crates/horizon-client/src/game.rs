@@ -14307,6 +14307,7 @@ fn load_resources(
 ) -> Result<Loaded> {
     let requested_root = root.clone();
     let threads = settings.horizon.worker_threads();
+    let threads = horizon_threads::worker_threads().map_or(threads, |n| threads.min(n));
     // Stage A: the menu bundle (atlas and panorama). With a loading screen it is
     // published at once so the title screen can appear while the world bundle
     // loads; the synchronous launch instead carries it in `Loaded`.
@@ -15323,6 +15324,10 @@ pub fn run() -> Result<()> {
         && !dedicated::preflight(&mut options)?
     {
         return Ok(());
+    }
+    if options.dedicated.is_some() && std::env::var("FERRALOOM_TICK_AFFINITY").as_deref() != Ok("0")
+    {
+        horizon_threads::configure_server_affinity();
     }
     // Before any worker starts: on Linux they go behind the server thread
     // and the render thread.

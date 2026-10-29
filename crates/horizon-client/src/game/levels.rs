@@ -335,6 +335,9 @@ impl Game<'_> {
                 last: k + 1 == n,
             };
             self.update_dedicated_streaming();
+            if self.options.dedicated.is_some() {
+                self.streaming.begin_server_tick();
+            }
             self.update_world();
             // What server mods set in this level since its last tick.
             self.apply_mod_block_writes();

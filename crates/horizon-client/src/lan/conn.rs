@@ -339,6 +339,7 @@ fn post(batch: Vec<Posted>) {
         std::thread::Builder::new()
             .name("horizon-lan-post".to_owned())
             .spawn(move || {
+                horizon_threads::worker_affinity();
                 for batch in rx {
                     batch.into_iter().for_each(Posted::hand_over);
                 }

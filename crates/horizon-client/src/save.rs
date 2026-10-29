@@ -2085,6 +2085,7 @@ impl SaveDir {
         let thread = std::thread::Builder::new()
             .name("horizon-region-writer".into())
             .spawn(move || {
+                horizon_threads::worker_affinity();
                 for (kind, batch) in receive {
                     let cache = match kind {
                         Folder::Region => &regions,

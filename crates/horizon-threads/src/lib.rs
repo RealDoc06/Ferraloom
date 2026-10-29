@@ -1,6 +1,27 @@
 //! Scheduling hints for the game's threads: the few OS calls that the other
 //! crates, which forbid unsafe code, can't make themselves.
 
+#[cfg(target_os = "linux")]
+mod affinity;
+#[cfg(target_os = "linux")]
+pub use affinity::{configure_server_affinity, tick_affinity, worker_affinity, worker_threads};
+#[cfg(not(target_os = "linux"))]
+pub fn configure_server_affinity() -> bool {
+    false
+}
+#[cfg(not(target_os = "linux"))]
+pub fn tick_affinity() -> bool {
+    false
+}
+#[cfg(not(target_os = "linux"))]
+pub fn worker_affinity() -> bool {
+    false
+}
+#[cfg(not(target_os = "linux"))]
+pub fn worker_threads() -> Option<usize> {
+    None
+}
+
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Ask the OS to run the calling thread ahead of the process's other
@@ -103,6 +124,7 @@ pub fn put_helpers_behind() {
 /// wants its core. A tick or a frame then gets a core when it starts instead
 /// of waiting behind them. Nothing elsewhere. Whether the OS took it.
 pub fn behind_server() -> bool {
+    worker_affinity();
     HELPERS_BEHIND.load(Ordering::Relaxed) && behind()
 }
 

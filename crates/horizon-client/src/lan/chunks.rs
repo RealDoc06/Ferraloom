@@ -347,7 +347,8 @@ struct WarmPool {
 fn warm_pool() -> Option<&'static WarmPool> {
     static POOL: OnceLock<Option<Arc<WarmPool>>> = OnceLock::new();
     POOL.get_or_init(|| {
-        let threads = std::thread::available_parallelism().map_or(1, |n| n.get()) - 1;
+        let threads = horizon_threads::worker_threads()
+            .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, |n| n.get()) - 1);
         let pool = Arc::new(WarmPool {
             job: Default::default(),
             ready: Default::default(),
@@ -358,6 +359,7 @@ fn warm_pool() -> Option<&'static WarmPool> {
                 std::thread::Builder::new()
                     .name(format!("horizon-chunk-encode-{i}"))
                     .spawn(move || {
+                        horizon_threads::worker_affinity();
                         let mut done = 0;
                         loop {
                             let job = {

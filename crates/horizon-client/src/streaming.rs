@@ -252,7 +252,9 @@ pub struct Streaming {
     written: FxHashSet<(i32, i32)>,
     saves: Arc<dyn Saves>,
     /// Results received while `save` waited, for the next `update`.
-    deferred: Vec<Done>,
+    deferred: std::collections::VecDeque<Done>,
+    save_scanned: usize,
+    integration: ferraloom_core::IntegrationBudget,
     sequence: u64,
     pub center: (i32, i32),
     pub radius: i32,
@@ -581,7 +583,9 @@ impl Streaming {
             waiting_area: ((0, 0), 0, 0),
             written: Default::default(),
             saves,
-            deferred: Vec::new(),
+            deferred: Default::default(),
+            save_scanned: 0,
+            integration: Default::default(),
             sequence: 0,
             center: (0, 0),
             radius: 8,
@@ -903,6 +907,28 @@ impl Streaming {
             ("meshing", self.meshing.len()),
         ]
     }
+    /// Replenish once per server tick, not once per between-tick pump.
+    /// A zero time limit selects the unchanged unbounded reference path.
+    pub fn begin_server_tick(&mut self) {
+        static LIMITS: std::sync::OnceLock<Option<ferraloom_core::IntegrationLimits>> =
+            std::sync::OnceLock::new();
+        let limits = *LIMITS.get_or_init(|| {
+            let micros = std::env::var("FERRALOOM_INTEGRATION_US")
+                .ok()
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(2_000);
+            let columns = std::env::var("FERRALOOM_CHUNKS_PER_TICK")
+                .ok()
+                .and_then(|s| s.parse::<std::num::NonZeroUsize>().ok())
+                .unwrap_or(std::num::NonZeroUsize::new(2).unwrap());
+            (micros != 0).then_some(ferraloom_core::IntegrationLimits {
+                time: std::time::Duration::from_micros(micros),
+                columns,
+            })
+        });
+        self.integration = ferraloom_core::IntegrationBudget::new(limits);
+    }
+
     /// Advance streaming: collect finished work, then schedule more.
     /// Returns meshes ready for upload and columns that were unloaded.
     pub fn update(
@@ -919,9 +945,20 @@ impl Streaming {
         self.requeue();
         self.relight_edits(world);
         let span = crate::spans::scope("st_results");
-        let deferred = std::mem::take(&mut self.deferred);
-        let received = std::iter::from_fn(|| self.results.try_recv().ok());
-        for done in deferred.into_iter().chain(received.collect::<Vec<_>>()) {
+        let started = std::time::Instant::now();
+        // Preserve the existing polling snapshot and FIFO, including results
+        // saved by between-tick waits. Unconsumed completions remain owned.
+        self.deferred
+            .extend(std::iter::from_fn(|| self.results.try_recv().ok()));
+        self.save_scanned = 0;
+        let mut pending = std::mem::take(&mut self.deferred);
+        while let Some(done) = pending.pop_front() {
+            let column = matches!(&done, Done::Generated(_));
+            if !self.integration.can_start(started.elapsed(), column) {
+                pending.push_front(done);
+                break;
+            }
+            self.integration.complete(column);
             match done {
                 Done::Proto(x, z, proto, decorated) => {
                     self.generation_scan.exhausted = false;
@@ -991,6 +1028,8 @@ impl Streaming {
                 }
             }
         }
+        self.deferred.extend(pending);
+        self.integration.charge(started.elapsed());
         drop(span);
         let span = crate::spans::scope("st_unload");
         // Unload far columns.
@@ -1420,6 +1459,32 @@ impl Streaming {
     fn near_finished(&self, x: i32, z: i32, reach: i32) -> bool {
         self.ranges().near_finished(x, z, reach)
     }
+    fn receive_save_result(&mut self, done: Done, world: &mut World) {
+        match done {
+            Done::Decorated(x, z, region) => self.receive_decorated(x, z, *region),
+            Done::Generated(chunk) => self.receive_generated(chunk, world),
+            Done::Saved(protos) => self.receive_saved(protos),
+            other => self.deferred.push_back(other),
+        }
+    }
+    fn drain_save_results(
+        &mut self,
+        world: &mut World,
+        started: Option<std::time::Instant>,
+    ) -> bool {
+        // Already inspected metadata stays in FIFO order, while successive
+        // closing frames continue from the first uninspected completion.
+        let mut pending = self.deferred.split_off(self.save_scanned);
+        while let Some(done) = pending.pop_front() {
+            self.receive_save_result(done, world);
+            self.save_scanned = self.deferred.len();
+            if started.is_some_and(|s| s.elapsed() >= std::time::Duration::from_millis(2)) {
+                self.deferred.extend(pending);
+                return false;
+            }
+        }
+        true
+    }
     /// Save what generation holds outside the world: the proto chunks
     /// decoration wrote to. With `wait`, the decorations, columns and saves
     /// in flight are waited for first (their proto chunks are out in the
@@ -1433,6 +1498,7 @@ impl Streaming {
             self.save_checked_out(written);
             return;
         }
+        self.drain_save_results(world, None);
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
         while self.decorating > 0 || !self.finishing.is_empty() || self.saving > 0 {
             let left = deadline.saturating_duration_since(std::time::Instant::now());
@@ -1440,7 +1506,7 @@ impl Streaming {
                 Ok(Done::Decorated(x, z, region)) => self.receive_decorated(x, z, *region),
                 Ok(Done::Generated(chunk)) => self.receive_generated(chunk, world),
                 Ok(Done::Saved(protos)) => self.receive_saved(protos),
-                Ok(other) => self.deferred.push(other),
+                Ok(other) => self.deferred.push_back(other),
                 Err(_) => {
                     log::warn!("Horizon: chunk generation did not finish before saving");
                     break;
@@ -1463,12 +1529,15 @@ impl Streaming {
     /// in `save(true)`, so older generation cannot overwrite the final chunks.
     pub fn poll_save(&mut self, world: &mut World) -> bool {
         let started = std::time::Instant::now();
+        if !self.drain_save_results(world, Some(started)) {
+            return false;
+        }
         while let Ok(done) = self.results.try_recv() {
             match done {
                 Done::Decorated(x, z, region) => self.receive_decorated(x, z, *region),
                 Done::Generated(chunk) => self.receive_generated(chunk, world),
                 Done::Saved(protos) => self.receive_saved(protos),
-                other => self.deferred.push(other),
+                other => self.deferred.push_back(other),
             }
             if started.elapsed() >= std::time::Duration::from_millis(2) {
                 return false;
@@ -1549,7 +1618,7 @@ impl Streaming {
     /// takes it. A server pumps generation with this between its ticks.
     pub fn wait(&mut self, timeout: std::time::Duration) {
         if let Ok(done) = self.results.recv_timeout(timeout) {
-            self.deferred.push(done);
+            self.deferred.push_back(done);
         }
     }
 }
@@ -1836,6 +1905,11 @@ impl Ranges<'_> {
 }
 impl Drop for Streaming {
     fn drop(&mut self) {
+        for done in self.deferred.drain(..) {
+            if let Done::Saved(_) = done {
+                self.saving -= 1;
+            }
+        }
         // Saves in flight hold proto chunks nothing else would save.
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
         while self.saving > 0 {
@@ -1979,7 +2053,6 @@ mod tests {
                 center: (0, 0),
                 radius,
                 extra: Vec::new(),
-            ahead: Vec::new(),
                 forced: HashSet::new(),
                 generating: Default::default(),
                 protos: Default::default(),

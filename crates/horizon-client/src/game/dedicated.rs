@@ -702,6 +702,7 @@ impl Game<'_> {
         };
         let pause_after = props.pause_when_empty_seconds * 20;
         let idle_timeout = props.player_idle_timeout;
+        horizon_threads::tick_affinity();
         let mut next = Instant::now();
         while !state.stop {
             let tick_start = Instant::now();
