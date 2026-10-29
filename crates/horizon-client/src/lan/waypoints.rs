@@ -608,6 +608,37 @@ impl Waypoints {
 mod tests {
     use super::*;
 
+    /// Run explicitly in release mode to measure the moving 100-player locator workload.
+    #[test]
+    #[ignore]
+    fn moving_players_benchmark() {
+        use std::{hint::black_box, time::Instant};
+        for spacing in [8.0, 512.0] {
+            let initial: Vec<_> = (0..100)
+                .map(|i| player(i + 1, i as u32, [i as f64 * spacing, 64.0, 0.0]))
+                .collect();
+            let mut samples = Vec::new();
+            for _ in 0..7 {
+                let mut players = initial.clone();
+                let mut manager = Waypoints::default();
+                black_box(manager.tick(&players, &[], true));
+                let start = Instant::now();
+                let mut packets = 0;
+                for tick in 0..200 {
+                    for p in &mut players {
+                        p.position[0] += 0.2;
+                        p.position[2] = (tick as f64 * 0.03 + p.uuid as f64).sin() * 8.0;
+                    }
+                    packets += black_box(manager.tick(black_box(&players), &[], true)).len();
+                }
+                samples.push(start.elapsed().as_secs_f64() * 1e6 / 200.0);
+                black_box(packets);
+            }
+            samples.sort_by(f64::total_cmp);
+            println!("moving_players spacing={spacing} median_us_per_tick={:.3} samples={samples:?}", samples[3]);
+        }
+    }
+
     #[test]
     fn connection_index_preserves_order_after_remove_and_replace() {
         let mut row = Connections::default();
