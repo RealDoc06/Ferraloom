@@ -39,7 +39,9 @@ fn fixture() -> Option<&'static Fixture> {
         .as_ref()
 }
 
+#[derive(Clone)]
 pub(crate) struct TestLevel {
+    revision: u64,
     blocks: HashMap<BlockPos, BlockStateId>,
     air: BlockStateId,
     random: LegacyRandom,
@@ -53,6 +55,7 @@ pub(crate) struct TestLevel {
 impl TestLevel {
     fn new(b: &Behaviours) -> Self {
         Self {
+            revision: 0,
             blocks: HashMap::new(),
             air: b.air(),
             random: LegacyRandom::new(42),
@@ -72,6 +75,7 @@ impl LevelAccess for TestLevel {
         self.blocks.get(&pos).copied().unwrap_or(self.air)
     }
     fn set_raw(&mut self, pos: BlockPos, state: BlockStateId) -> Option<BlockStateId> {
+        self.revision += 1;
         Some(self.blocks.insert(pos, state).unwrap_or(self.air))
     }
     fn is_loaded(&self, _pos: BlockPos) -> bool {
@@ -1423,4 +1427,186 @@ fn big_dripleaf_tilts_under_an_entity_standing_on_it() {
     w.put(BlockPos::new(1, 1, 0), power);
     stand(&mut w, true, 1.9375);
     assert_eq!(w.prop(pos, "tilt"), "none");
+}
+
+#[test]
+fn hot_flags_and_contact_sections_follow_state_changes() {
+    use horizon_core::paletted::{PalettedContainer, Strategy};
+    let Some(f) = fixture() else { return };
+    let b = &f.behaviours;
+    // Compare the compact facts against the hook's original dispatch predicate
+    // for every exported state, including inherited plate/button classes.
+    for id in 0..b.table.state_count() {
+        let state = BlockStateId(id as u32);
+        let data = b.data(state);
+        assert_eq!(
+            b.has_entity_inside(state),
+            data.is(classes::Class::BasePressurePlate)
+                || data.is(classes::Class::DetectorRail)
+                || data.is(classes::Class::TripWire)
+                || (data.is(classes::Class::Button)
+                    && data.set_type.as_ref().is_some_and(|s| s.arrows))
+        );
+        assert_eq!(b.hot_flags[id] & 2 != 0, b.is_randomly_ticking(state));
+        assert_eq!(
+            b.hot_flags[id] & 4 != 0,
+            matches!(
+                b.fluid(state).kind(),
+                FluidKind::Lava | FluidKind::FlowingLava
+            )
+        );
+    }
+    let w = World::new(f);
+    let mut section = PalettedContainer::new(Strategy::blocks(16), b.air().0);
+    let mut cache = ContactSections::default();
+    let key = (-1, -4, 0);
+    for (revision, name, contact, random) in [
+        (0, "stone", false, false),
+        (1, "oak_pressure_plate", true, false),
+        (2, "oak_button", true, false),
+        (3, "stone_button", false, false),
+        (4, "tripwire", true, false),
+        (5, "detector_rail", true, false),
+        (6, "grass_block", false, true),
+        (7, "lava", false, true),
+        (8, "air", false, false),
+    ] {
+        section.set(4095, w.id(name, &[]).0);
+        assert_eq!(
+            cache.get(key, revision, || section
+                .has(|id| b.has_entity_inside(BlockStateId(id)))),
+            contact,
+            "{name}"
+        );
+        assert_eq!(
+            section.has(|id| b.hot_flags[id as usize] & 6 != 0),
+            random,
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn random_tick_reader_matches_current_states_after_each_write() {
+    let Some(f) = fixture() else { return };
+    let b = &f.behaviours;
+    let w = World::new(f);
+    let mut original = TestLevel::new(b);
+    // Farmland and crops change state, grass spreads, leaves decay, lava calls
+    // both block and fluid hooks. Seeded results include the final RNG state.
+    for x in 0..16 {
+        for z in 0..16 {
+            original.set_raw(BlockPos::new(x, 0, z), w.id("farmland", &[]));
+            let name = ["wheat", "grass_block", "oak_leaves", "stone"][((x + z) % 4) as usize];
+            original.set_raw(BlockPos::new(x, 1, z), w.id(name, &[]));
+        }
+    }
+    let mut cached = original.clone();
+    let (mut a, mut c) = (Ticks::new(12345), Ticks::new(12345));
+    for ticks in [&mut a, &mut c] {
+        ticks.add_empty_chunk(ChunkPos::new(0, 0)).unwrap();
+    }
+    let mut snapshot = None;
+    for step in 0..1024 {
+        // Add/remove random ticking states between calls as well as in callbacks.
+        if step % 4 == 0 {
+            for level in [&mut original, &mut cached] {
+                level.set_raw(
+                    BlockPos::new(0, 1, 0),
+                    w.id(if step % 8 == 0 { "wheat" } else { "stone" }, &[]),
+                );
+            }
+        }
+        b.tick_chunk_random(&mut original, &mut a, ChunkPos::new(0, 0), |_, from| {
+            (from <= 0).then_some(0)
+        });
+        b.tick_chunk_random_with_reader(
+            &mut cached,
+            &mut c,
+            ChunkPos::new(0, 0),
+            |_, from| (from <= 0).then_some(0),
+            |level, pos| {
+                if snapshot
+                    .as_ref()
+                    .is_none_or(|(revision, _)| *revision != level.revision)
+                {
+                    snapshot = Some((level.revision, level.blocks.clone()));
+                }
+                snapshot
+                    .as_ref()
+                    .unwrap()
+                    .1
+                    .get(&pos)
+                    .copied()
+                    .unwrap_or(level.air)
+            },
+        );
+        assert_eq!(original.blocks, cached.blocks, "tick {step}");
+        assert_eq!(original.events, cached.events, "tick {step}");
+        assert_eq!(a.random_tick_value, c.random_tick_value);
+        assert_eq!(original.random.next_long(), cached.random.next_long());
+    }
+}
+
+/// Lookup-only release measurement: same 4096-block section, same positions,
+/// inert states so no gameplay/RNG work hides the lookup and dispatch cost.
+#[test]
+#[ignore = "focused release microbenchmark"]
+fn hot_path_lookup_benchmark() {
+    use horizon_core::paletted::{PalettedContainer, Strategy};
+    use std::{hint::black_box, time::Instant};
+    let f = fixture().expect("prepared resources required for benchmark");
+    let b = &f.behaviours;
+    let w = World::new(f);
+    let stone = w.id("stone", &[]);
+    let mut section = PalettedContainer::new(Strategy::blocks(16), stone.0);
+    section.set(1, w.id("dirt", &[]).0);
+    let sections = HashMap::from([((0, 0, 0), section)]);
+    let section = &sections[&(0, 0, 0)];
+    let mut level = TestLevel::new(b);
+    let mut ticks = Ticks::new(42);
+    let iterations = 2_000_000usize;
+    let start = Instant::now();
+    for i in 0..iterations {
+        let state =
+            BlockStateId(black_box(&sections)[&black_box((0, 0, 0))].get(black_box(i & 4095)));
+        b.sim(&mut level, &mut ticks)
+            .entity_inside_state(BlockPos::new(0, 0, 0), state);
+    }
+    let before = start.elapsed();
+    let mut cache = ContactSections::default();
+    let start = Instant::now();
+    for i in 0..iterations {
+        if cache.get(black_box((0, 0, 0)), black_box(0), || {
+            section.has(|id| b.has_entity_inside(BlockStateId(id)))
+        }) {
+            b.entity_inside(&mut level, &mut ticks, BlockPos::new(0, (i & 15) as i32, 0));
+        }
+    }
+    eprintln!(
+        "contact lookup: before={before:?} after={:?} samples={iterations}",
+        start.elapsed()
+    );
+    let start = Instant::now();
+    for i in 0..iterations {
+        let state =
+            BlockStateId(black_box(&sections)[&black_box((0, 0, 0))].get(black_box(i & 4095)));
+        black_box((
+            b.is_randomly_ticking(state),
+            matches!(
+                b.fluid(state).kind(),
+                FluidKind::Lava | FluidKind::FlowingLava
+            ),
+        ));
+    }
+    let before = start.elapsed();
+    let start = Instant::now();
+    for i in 0..iterations {
+        let state = BlockStateId(black_box(section).get(black_box(i & 4095)));
+        black_box(b.hot_flags[state.0 as usize] & 6);
+    }
+    eprintln!(
+        "random lookup: before={before:?} after={:?} samples={iterations}",
+        start.elapsed()
+    );
 }

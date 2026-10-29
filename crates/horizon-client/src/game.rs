@@ -3170,7 +3170,11 @@ impl Game<'_> {
                             let index = key.1 - (MIN_Y >> 4);
                             chunk.sections.get(index as usize).map_or_else(
                                 || b.has_entity_inside(BlockStateId(0)),
-                                |section| section.blocks.has(|id| b.has_entity_inside(BlockStateId(id))),
+                                |section| {
+                                    section
+                                        .blocks
+                                        .has(|id| b.has_entity_inside(BlockStateId(id)))
+                                },
                             )
                         },
                     )
@@ -3191,25 +3195,43 @@ impl Game<'_> {
                 let mut sections = Default::default();
                 let pos = horizon_core::position::ChunkPos::new(x, z);
                 let mut current_chunk = None;
-                b.tick_chunk_random_with_reader(level, ticks, pos, |level, from| {
-                    if read != Some(level.world.revision) {
-                        read = Some(level.world.revision);
-                        sections = level
-                            .world
-                            .chunks
-                            .get(&(x, z))
-                            .map_or_else(Default::default, |chunk| {
-                                level.random_tick_sections.get((x, z), chunk, level.facts)
-                            });
-                    }
-                    sections.from(from)
-                }, |level, at| {
-                    if current_chunk.as_ref().is_none_or(|(revision, _)| *revision != level.world.revision) {
-                        current_chunk = Some((level.world.revision, level.world.chunks.get(&(x, z)).cloned()));
-                    }
-                    current_chunk.as_ref().unwrap().1.as_ref()
-                        .map_or(level.world.air, |chunk| chunk.block(at.x & 15, at.y, at.z & 15))
-                });
+                b.tick_chunk_random_with_reader(
+                    level,
+                    ticks,
+                    pos,
+                    |level, from| {
+                        if read != Some(level.world.revision) {
+                            read = Some(level.world.revision);
+                            sections = level
+                                .world
+                                .chunks
+                                .get(&(x, z))
+                                .map_or_else(Default::default, |chunk| {
+                                    level.random_tick_sections.get((x, z), chunk, level.facts)
+                                });
+                        }
+                        sections.from(from)
+                    },
+                    |level, at| {
+                        if current_chunk
+                            .as_ref()
+                            .is_none_or(|(revision, _)| *revision != level.world.revision)
+                        {
+                            current_chunk = Some((
+                                level.world.revision,
+                                level.world.chunks.get(&(x, z)).cloned(),
+                            ));
+                        }
+                        current_chunk
+                            .as_ref()
+                            .unwrap()
+                            .1
+                            .as_ref()
+                            .map_or(level.world.air, |chunk| {
+                                chunk.block(at.x & 15, at.y, at.z & 15)
+                            })
+                    },
+                );
             }
             b.run_block_events(level, ticks);
             b.tick_block_entities(level, ticks);
