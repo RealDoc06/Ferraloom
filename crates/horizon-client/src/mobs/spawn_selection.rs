@@ -813,6 +813,8 @@ pub struct SpawnState {
     players_near: FxHashMap<(i32, i32), Vec<usize>>,
     player_counts: FxHashMap<usize, [i32; 8]>,
     last_checked: Option<([i32; 3], String, f64)>,
+    /// Reused across the tick's positions; reset before each pack search.
+    nearest: Nearest,
 }
 impl SpawnState {
     /// `NaturalSpawner.createState`: every non-persistent entity of a
@@ -833,6 +835,7 @@ impl SpawnState {
             players_near: FxHashMap::default(),
             player_counts: FxHashMap::default(),
             last_checked: None,
+            nearest: Nearest::new([0; 3]),
         };
         for e in entities {
             if e.is_mob && e.persistent || e.category == Category::Misc {
@@ -1073,7 +1076,7 @@ pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
     }
     let mut spawned: Vec<Aabb> = Vec::new();
     let mut cluster = 0u32;
-    let mut nearest = Nearest::new(start);
+    state.nearest.reset(start);
     for _ in 0..3 {
         let (mut x, mut z) = (x0, z0);
         // The group's entry, its type and where it was picked.
@@ -1087,7 +1090,11 @@ pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
             z += random.next_int_bound(6).unwrap_or(0) - random.next_int_bound(6).unwrap_or(0);
             let (xx, zz) = (f64::from(x) + 0.5, f64::from(z) + 0.5);
             trace(Event::Try(x, z));
-            let Some(distance) = nearest.distance_sqr(l, xx, f64::from(y), zz) else {
+            let Some(distance) =
+                state
+                    .nearest
+                    .distance_sqr(l.nearest_player_positions(), xx, f64::from(y), zz)
+            else {
                 continue;
             };
             if !right_distance(l, chunk, [x, y, z], distance) {
@@ -1179,9 +1186,11 @@ pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
 /// the nearest reads as infinitely far, which every check answers as it
 /// answers the real distance. An attempt that wanders farther than
 /// `MARGIN` from the start measures every player.
+#[derive(Clone, Debug)]
 struct Nearest {
     /// The players that can be within 128 blocks, once an attempt asked.
-    nearby: Option<Vec<[f64; 3]>>,
+    nearby: Vec<[f64; 3]>,
+    ready: bool,
     start: (f64, f64),
 }
 impl Nearest {
@@ -1189,12 +1198,17 @@ impl Nearest {
     const MARGIN: f64 = 64.0;
     fn new(start: [i32; 3]) -> Self {
         Self {
-            nearby: None,
+            nearby: Vec::new(),
+            ready: false,
             start: (f64::from(start[0]) + 0.5, f64::from(start[2]) + 0.5),
         }
     }
-    fn distance_sqr<L: NaturalLevel>(&mut self, l: &L, x: f64, y: f64, z: f64) -> Option<f64> {
-        let all = l.nearest_player_positions();
+    fn reset(&mut self, start: [i32; 3]) {
+        self.nearby.clear();
+        self.ready = false;
+        self.start = (f64::from(start[0]) + 0.5, f64::from(start[2]) + 0.5);
+    }
+    fn distance_sqr(&mut self, all: &[[f64; 3]], x: f64, y: f64, z: f64) -> Option<f64> {
         if all.is_empty() {
             return None;
         }
@@ -1205,17 +1219,24 @@ impl Nearest {
         }
         // The others are farther than REACH, across, from every point within
         // MARGIN of the start.
-        let nearby = self.nearby.get_or_insert_with(|| {
-            all.iter()
-                .filter(|p| {
-                    let dx = ((p[0] - sx).abs() - Self::MARGIN).max(0.0);
-                    let dz = ((p[2] - sz).abs() - Self::MARGIN).max(0.0);
-                    dx * dx + dz * dz <= Self::REACH * Self::REACH
-                })
-                .copied()
-                .collect()
-        });
-        Some(nearby.iter().map(distance).fold(f64::INFINITY, f64::min))
+        if !self.ready {
+            self.nearby.extend(
+                all.iter()
+                    .filter(|p| {
+                        let dx = ((p[0] - sx).abs() - Self::MARGIN).max(0.0);
+                        let dz = ((p[2] - sz).abs() - Self::MARGIN).max(0.0);
+                        dx * dx + dz * dz <= Self::REACH * Self::REACH
+                    })
+                    .copied(),
+            );
+            self.ready = true;
+        }
+        Some(
+            self.nearby
+                .iter()
+                .map(distance)
+                .fold(f64::INFINITY, f64::min),
+        )
     }
 }
 /// `isRightDistanceToPlayerAndSpawnPoint`.
@@ -1425,6 +1446,80 @@ fn top_non_colliding<L: NaturalLevel>(l: &L, entity: &str, x: i32, z: i32) -> [i
 #[cfg(test)]
 mod tests {
     use super::Event;
+
+    #[test]
+    fn nearest_buffer_reset_preserves_distance_checks_and_far_fallback() {
+        use super::Nearest;
+        let players = [[24.5, 64.0, 0.5], [128.5, 64.0, 0.5], [1000.5, 64.0, 0.5]];
+        let mut nearest = Nearest::new([0, 64, 0]);
+        for start in [[0, 64, 0], [1000, 64, 0], [-1000, 64, 0], [0, 64, 0]] {
+            nearest.reset(start);
+            for offset in [0.0, 24.0, 64.0, 64.5, 128.0, 1000.0] {
+                let x = f64::from(start[0]) + 0.5 + offset;
+                let actual = nearest.distance_sqr(&players, x, 64.0, 0.5).unwrap();
+                let exact = players
+                    .iter()
+                    .map(|p| (p[0] - x).powi(2))
+                    .fold(f64::INFINITY, f64::min);
+                for cutoff in [576.0, 4096.0, 16384.0] {
+                    assert_eq!(
+                        actual <= cutoff,
+                        exact <= cutoff,
+                        "{start:?} {offset} {cutoff}"
+                    );
+                }
+                if offset > Nearest::MARGIN {
+                    assert_eq!(actual, exact);
+                }
+            }
+        }
+        nearest.reset([0; 3]);
+        assert_eq!(nearest.distance_sqr(&[], 0.0, 0.0, 0.0), None);
+    }
+
+    #[test]
+    #[ignore = "release micro-benchmark; run with --release --ignored --nocapture"]
+    fn bench_nearest_buffer() {
+        use super::Nearest;
+        use std::{hint::black_box, time::Instant};
+        for spacing in [16, 256] {
+            let players: Vec<_> = (0..100)
+                .map(|i| {
+                    [
+                        f64::from(i % 10 * spacing),
+                        64.0,
+                        f64::from(i / 10 * spacing),
+                    ]
+                })
+                .collect();
+            for _ in 0..3 {
+                for reuse in [false, true] {
+                    let mut nearest = Nearest::new([0; 3]);
+                    let started = Instant::now();
+                    for i in 0..50_000 {
+                        let start = [i % 10 * spacing, 64, i / 10 % 10 * spacing];
+                        if reuse {
+                            nearest.reset(start);
+                        } else {
+                            nearest = Nearest::new(start);
+                        }
+                        for offset in 0..12 {
+                            black_box(nearest.distance_sqr(
+                                black_box(&players),
+                                f64::from(start[0] + offset) + 0.5,
+                                64.0,
+                                f64::from(start[2]) + 0.5,
+                            ));
+                        }
+                    }
+                    eprintln!(
+                        "nearest buffer spacing={spacing} reuse={reuse}: {:?}",
+                        started.elapsed()
+                    );
+                }
+            }
+        }
+    }
 
     #[test]
     #[ignore = "focused release trace micro-benchmark; run with --release --ignored --nocapture"]
