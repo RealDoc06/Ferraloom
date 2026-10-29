@@ -776,6 +776,19 @@ mod tests {
                 }
             }
         }
+        for bits in 1..=8 {
+            let n = 4096;
+            let ids: Vec<u32> = (0..n).map(|i| (i % (1 << bits)) as u32).collect();
+            let c = PalettedContainer {
+                strategy: BLOCKS,
+                bits,
+                palette: Palette::List((0..1u32 << bits).map(|i| i * 37).collect()),
+                words: pack_words(bits, n, ids.iter().copied()),
+            };
+            for i in 0..n {
+                assert_eq!(c.get(i), old_get(&c, i));
+            }
+        }
         for (name, values) in palette_cases() {
             let strategy = if values.len() == 64 { BIOMES } else { BLOCKS };
             let c = PalettedContainer::from_values(strategy, &values);

@@ -171,6 +171,46 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore = "release read microbenchmark"]
+    fn benchmark_storage_reads() {
+        use std::{hint::black_box, time::Instant};
+        for bits in [4, 5, 6, 7, 8, 16] {
+            let s = PackedStorage::from_words(
+                bits,
+                4096,
+                vec![0x123456789abcdef0; 4096usize.div_ceil(64 / usize::from(bits))],
+            )
+            .unwrap();
+            let mut times = [Vec::new(), Vec::new()];
+            for round in 0..11 {
+                for new in [round % 2 == 0, round % 2 != 0] {
+                    let start = Instant::now();
+                    for j in 0..500_000usize {
+                        let s = black_box(&s);
+                        let i = black_box(j.wrapping_mul(31337) & 4095);
+                        black_box(if new {
+                            s.read(i)
+                        } else {
+                            ((s.words[i / s.per_word] >> ((i % s.per_word) * usize::from(s.bits)))
+                                & s.mask) as u32
+                        });
+                    }
+                    if round > 0 {
+                        times[usize::from(new)]
+                            .push(start.elapsed().as_secs_f64() * 1e9 / 500_000.0);
+                    }
+                }
+            }
+            for t in &mut times {
+                t.sort_by(f64::total_cmp);
+            }
+            println!(
+                "storage bits={bits}: old {:.3} new {:.3} ns/op",
+                times[0][5], times[1][5]
+            );
+        }
+    }
+    #[test]
     fn reads_match_division_at_every_width() {
         for bits in 1..=32 {
             for len in [1usize, 63, 64, 65, 4096, 8193] {
