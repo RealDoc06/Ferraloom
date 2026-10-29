@@ -25,6 +25,7 @@ use horizon_world::registry::BlockStateId;
 use std::collections::HashMap;
 
 /// A player in the level in place, as spawning and despawning see it.
+#[derive(Clone, Copy)]
 pub(super) struct LevelPlayer {
     pub(super) position: Vec3,
     pub(super) bounds: Aabb,
@@ -72,10 +73,11 @@ pub(super) fn nearest_player(
 pub(super) struct GameLevel<'g, 'a> {
     pub(super) game: &'g Game<'a>,
     pub(super) w: MobWorld<'g>,
-    /// Every player in the level ([`Game::level_players`]).
-    pub(super) players: Vec<LevelPlayer>,
-    /// Where the non-spectators among them are (`getNearestPlayer`).
-    pub(super) nearest: Vec<[f64; 3]>,
+    /// Natural spawning snapshots players once for its pass. Other spawning
+    /// checks read the immutably borrowed level without collecting a list.
+    players: Option<Vec<LevelPlayer>>,
+    /// Built only when a natural spawn attempt asks for nearest positions.
+    nearest: std::cell::OnceCell<Vec<[f64; 3]>>,
     /// Boxes of the mobs this pass created, not yet in the game's list.
     pub(super) pending: std::cell::RefCell<Vec<Aabb>>,
     /// The types and boxes of what a spawner created this tick.
@@ -126,6 +128,14 @@ impl MobBoxes {
     }
 }
 impl GameLevel<'_, '_> {
+    pub(super) fn players(&self) -> impl Iterator<Item = LevelPlayer> + '_ {
+        let snapshot = self.players.iter().flatten().copied();
+        let live = self
+            .players
+            .is_none()
+            .then(|| self.game.iter_level_players());
+        snapshot.chain(live.into_iter().flatten())
+    }
     /// The mobs not removed whose boxes may meet `area` (callers test them).
     fn mobs_near(&self, area: Aabb) -> Box<dyn Iterator<Item = MobBox> + '_> {
         let asked = self.box_queries.get() + 1;
@@ -199,7 +209,7 @@ impl SpawnLevel for GameLevel<'_, '_> {
     }
     /// `getNearestPlayer(x, y, z, distance, true)`, over every player.
     fn player_near(&self, x: f64, y: f64, z: f64, distance: f64) -> bool {
-        self.players.iter().any(|p| {
+        self.players().any(|p| {
             p.alive && !p.creative && !p.spectator && p.distance_sqr(x, y, z) < distance * distance
         })
     }
@@ -260,7 +270,12 @@ impl NaturalLevel for GameLevel<'_, '_> {
         StructureSpawns::shared(&self.game.options.resources)
     }
     fn nearest_player_positions(&self) -> &[[f64; 3]] {
-        &self.nearest
+        self.nearest.get_or_init(|| {
+            self.players()
+                .filter(|p| !p.spectator)
+                .map(|p| [p.position.x, p.position.y, p.position.z])
+                .collect()
+        })
     }
     fn respawn(&self) -> Option<[i32; 3]> {
         // The world spawn point lives in the overworld.
@@ -298,8 +313,7 @@ impl NaturalLevel for GameLevel<'_, '_> {
     }
     fn unobstructed(&self, bounds: Aabb) -> bool {
         let player = self
-            .players
-            .iter()
+            .players()
             .any(|p| p.alive && !p.spectator && p.bounds.intersects(bounds));
         !player
             && !self.pending.borrow().iter().any(|b| b.intersects(bounds))
@@ -335,7 +349,7 @@ impl NaturalLevel for GameLevel<'_, '_> {
 impl horizon_client::mobs::spawner::SpawnerLevel for GameLevel<'_, '_> {
     /// `Level.hasNearbyAlivePlayer`, over every player.
     fn alive_player_near(&self, x: f64, y: f64, z: f64, range: f64) -> bool {
-        self.players.iter().any(|p| {
+        self.players().any(|p| {
             p.alive && !p.spectator && (range < 0.0 || p.distance_sqr(x, y, z) < range * range)
         })
     }
@@ -361,19 +375,14 @@ impl horizon_client::mobs::spawner::SpawnerLevel for GameLevel<'_, '_> {
 }
 impl<'a> Game<'a> {
     pub(super) fn natural_level(&self) -> GameLevel<'_, 'a> {
-        self.natural_level_with_players(self.level_players())
+        self.natural_level_with_players(None)
     }
-    fn natural_level_with_players(&self, players: Vec<LevelPlayer>) -> GameLevel<'_, 'a> {
-        let nearest = players
-            .iter()
-            .filter(|p| !p.spectator)
-            .map(|p| [p.position.x, p.position.y, p.position.z])
-            .collect();
+    fn natural_level_with_players(&self, players: Option<Vec<LevelPlayer>>) -> GameLevel<'_, 'a> {
         GameLevel {
             game: self,
             w: self.mob_world_base(&[]),
             players,
-            nearest,
+            nearest: Default::default(),
             pending: Default::default(),
             pending_ids: Default::default(),
             boxes: Default::default(),
@@ -499,7 +508,7 @@ impl<'a> Game<'a> {
         let mut random = std::mem::replace(&mut self.world.random, LegacyRandom::new(0));
         let mut pending = Vec::new();
         {
-            let level = self.natural_level_with_players(players);
+            let level = self.natural_level_with_players(Some(players));
             let counted: Vec<Counted> = self
                 .mobs
                 .iter()
@@ -517,8 +526,7 @@ impl<'a> Game<'a> {
                 })
                 .collect();
             let players = level
-                .players
-                .iter()
+                .players()
                 .map(|p| SpawnPlayer {
                     position: [p.position.x, p.position.y, p.position.z],
                     spectator: p.spectator,
