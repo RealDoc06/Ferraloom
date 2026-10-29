@@ -708,13 +708,11 @@ impl Entities {
         self.is_moved.clear();
         self.is_moved.resize(entities.len(), false);
         for (index, e) in entities.iter().enumerate() {
-            // Avoid constructing the large entry insertion value on the hot path.
-            let added = !self.states.contains_key(&e.id);
-            if added {
-                self.states
-                    .insert(e.id, ServerEntity::new(e, kind(&e.kind), riding));
-            }
-            let s = self.states.get_mut(&e.id).unwrap();
+            let mut added = false;
+            let s = self.states.entry(e.id).or_insert_with(|| {
+                added = true;
+                ServerEntity::new(e, kind(&e.kind), riding)
+            });
             s.seen = now;
             s.index = index;
             // ChunkMap.addEntity, and ChunkMap.tick's section change:
