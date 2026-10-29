@@ -182,6 +182,17 @@ class PublicationTests(unittest.TestCase):
         for path in ["tools/Minecraft.java", "tests/java/Client.java", ".local/tools/JfrSummary.java"]:
             self.assertTrue(check_public_tree.prohibited(path), path)
 
+    def test_legacy_oracles_are_sources_but_game_artifacts_stay_private(self):
+        for path in ["crates/ferraloom-chunk/tests/java/ChunkVectors.java",
+                     "crates/ferraloom-game/tests/java/ai/goal/GoalSelectorVectors.java",
+                     "tools/extractor/ExtractData.java", *check_public_tree.LEGACY_ORACLES]:
+            self.assertFalse(check_public_tree.prohibited(path), path)
+        for path in ["crates/ferraloom-game/tests/java/net/minecraft/Client.java",
+                     "crates/ferraloom-game/tests/java/oracle.class",
+                     "crates/ferraloom-game/tests/java/server.jar",
+                     "tools/extractor/Client.java", ".local/tools/extractor/ExtractData.java"]:
+            self.assertTrue(check_public_tree.prohibited(path), path)
+
     def test_force_added_ignored_file_is_detected_in_index_and_history(self):
         with tempfile.TemporaryDirectory() as temp:
             directory = Path(temp)

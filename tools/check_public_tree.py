@@ -9,6 +9,12 @@ import sys
 PRIVATE_ROOTS = {".local", "decompiled", "minecraft", "assets", "run", "logs"}
 PRIVATE_EXTENSIONS = {".jar", ".class", ".jfr", ".hprof", ".java"}
 ORIGINAL_JDK_TOOLS = {"tools/JfrSummary.java", "tests/java/JfrFixture.java"}
+LEGACY_ORACLES = {
+    "crates/ferraloom-game/src/level/generation/PyramidVectors.java",
+    "crates/ferraloom-parity/tests/block_entity_sweeps/native/StorageSoundPitch.java",
+    "crates/ferraloom-storage/tests/CompressionVectors.java",
+    "crates/ferraloom-storage/tests/DirectoryLockProbe.java",
+}
 
 
 def prohibited(path):
@@ -16,6 +22,16 @@ def prohibited(path):
     # Original JDK-only tools are an exact allowlist; recovered game Java stays private.
     if path in ORIGINAL_JDK_TOOLS:
         return False
+    # Authored oracles from the old port remain in the base merge's history.
+    if parsed.suffix == ".java":
+        if path in LEGACY_ORACLES:
+            return False
+        parts = parsed.parts
+        if len(parts) >= 5 and parts[0] == "crates" and parts[1].startswith("ferraloom-") \
+                and parts[2:4] == ("tests", "java") and "minecraft" not in parts[4:]:
+            return False
+        if parsed.parent == PurePosixPath("tools/extractor") and parsed.name.startswith("Extract"):
+            return False
     # Original Horizon mod sources may also be tracked.
     if parsed.suffix == ".java" and path.startswith(("mods/horizon/src/", "mods/horizon-lab/src/")):
         return not ("/dev/horizonlab/" in path)
