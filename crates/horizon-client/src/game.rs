@@ -3196,7 +3196,10 @@ impl Game<'_> {
                 let pos = horizon_core::position::ChunkPos::new(x, z);
                 // Weak references avoid retaining a chunk across a callback:
                 // a random-tick write must not copy its sections just for us.
-                let mut current_chunk = None;
+                let mut current_chunk: Option<(
+                    u64,
+                    Option<std::sync::Weak<horizon_client::chunk::Chunk>>,
+                )> = None;
                 b.tick_chunk_random_with_reader(
                     level,
                     ticks,
@@ -3215,28 +3218,25 @@ impl Game<'_> {
                         sections.from(from)
                     },
                     |level, at| {
-                        if current_chunk
+                        let cached = current_chunk
                             .as_ref()
-                            .is_none_or(|(revision, _)| *revision != level.world.revision)
-                        {
+                            .filter(|(revision, _)| *revision == level.world.revision)
+                            .and_then(|(_, chunk)| {
+                                chunk.as_ref().and_then(std::sync::Weak::upgrade)
+                            });
+                        // Even a no-op Arc::make_mut can detach weak pointers
+                        // without advancing the world's block revision.
+                        let current = cached.or_else(|| {
+                            let chunk = level.world.chunks.get(&(x, z)).cloned();
                             current_chunk = Some((
                                 level.world.revision,
-                                level
-                                    .world
-                                    .chunks
-                                    .get(&(x, z))
-                                    .map(std::sync::Arc::downgrade),
+                                chunk.as_ref().map(std::sync::Arc::downgrade),
                             ));
-                        }
-                        current_chunk
-                            .as_ref()
-                            .unwrap()
-                            .1
-                            .as_ref()
-                            .and_then(std::sync::Weak::upgrade)
-                            .map_or(level.world.air, |chunk| {
-                                chunk.block(at.x & 15, at.y, at.z & 15)
-                            })
+                            chunk
+                        });
+                        current.map_or(level.world.air, |chunk| {
+                            chunk.block(at.x & 15, at.y, at.z & 15)
+                        })
                     },
                 );
             }
