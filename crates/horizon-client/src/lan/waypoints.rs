@@ -377,35 +377,36 @@ impl Waypoints {
             }
         }
     }
-    /// The receiver's connection to the source updated in its place
-    /// (`updateConnection`), or made if it has none (`createConnection`).
-    fn update_or_create(&mut self, t: &mut Tick, receiver: u128, source: u128) {
+    /// Update an ordered connection without looking up the receiver's row again.
+    fn update_connection(
+        row: &mut Connections,
+        t: &mut Tick,
+        receiver: u128,
+        source: u128,
+        pair: Option<(&Player, &Player)>,
+    ) {
         if receiver == source || !t.enabled {
             return;
         }
-        let Some(row) = self.connections.get_mut(&receiver) else {
-            return self.create_connection(t, receiver, source);
-        };
-        let Some(i) = row.index.get(&source).copied() else {
-            return self.create_connection(t, receiver, source);
-        };
-        let c = &mut row.ordered[i].1;
-        // A connection to a player who isn't in the level is broken.
-        let pair = t.pair(source, receiver);
-        if let Some(pair) = pair
-            && !t.broken(c, pair)
-        {
-            t.update(c, pair);
-            return;
+        if let Some(i) = row.index.get(&source).copied() {
+            let c = &mut row.ordered[i].1;
+            // A connection to a player who isn't in the level is broken.
+            if let Some(pair) = pair
+                && !t.broken(c, pair)
+            {
+                t.update(c, pair);
+                return;
+            }
         }
         match pair.and_then(|pair| t.make(pair)) {
             Some(new) => {
                 t.connect(receiver, source, &new);
-                *c = new;
+                row.put(source, new);
             }
             None => {
-                t.disconnect(receiver, source);
-                row.remove(source);
+                if row.remove(source).is_some() {
+                    t.disconnect(receiver, source);
+                }
             }
         }
     }
@@ -420,12 +421,17 @@ impl Waypoints {
     }
     /// `updateWaypoint`.
     fn update_waypoint(&mut self, t: &mut Tick, source: u128) {
-        if !self.waypoints.contains(&source) {
+        if !t.enabled || !self.waypoints.contains(&source) {
             return;
         }
-        // Connections change; the players don't.
+        // The source is invariant across its receivers. References point into
+        // the tick's input slice, so packet output can still be mutated.
+        let source_player = t.players.get(&source).copied();
         for k in 0..self.players.len() {
-            self.update_or_create(t, self.players[k], source);
+            let receiver = self.players[k];
+            let pair = source_player.zip(t.players.get(&receiver).copied());
+            let row = self.connections.entry(receiver).or_default();
+            Self::update_connection(row, t, receiver, source, pair);
         }
     }
     /// `untrackWaypoint`.
@@ -451,9 +457,15 @@ impl Waypoints {
     }
     /// `updatePlayer`.
     fn update_player(&mut self, t: &mut Tick, player: u128) {
-        // Connections change; the waypoints don't.
-        for k in 0..self.waypoints.len() {
-            self.update_or_create(t, player, self.waypoints[k]);
+        if !t.enabled {
+            return;
+        }
+        // Keep the receiver row and player lookup outside the source loop.
+        let receiver = t.players.get(&player).copied();
+        let row = self.connections.entry(player).or_default();
+        for &source in &self.waypoints {
+            let pair = t.players.get(&source).copied().zip(receiver);
+            Self::update_connection(row, t, player, source, pair);
         }
     }
     /// `removePlayer`.
@@ -635,7 +647,10 @@ mod tests {
                 black_box(packets);
             }
             samples.sort_by(f64::total_cmp);
-            println!("moving_players spacing={spacing} median_us_per_tick={:.3} samples={samples:?}", samples[3]);
+            println!(
+                "moving_players spacing={spacing} median_us_per_tick={:.3} samples={samples:?}",
+                samples[3]
+            );
         }
     }
 
