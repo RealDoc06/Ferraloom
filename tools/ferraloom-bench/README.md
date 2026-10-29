@@ -20,3 +20,13 @@ Example, the profile of one build at 25 explorers flying 11 blocks a second:
 
 Baseline on the VM (4 vCPU Xeon E5-2660 v3), explorers at 11 blocks a second, v0.2.93 built on the builder:
 MSPT 116 / 149 / 191 at 25 / 50 / 100 bots; with the light-region fix and look-ahead generation 88 / 132 / 187.
+
+Pinned matrix: `ferraloom-bench` (CT 121, 10.10.10.243), `/root/bench`, port
+25570. `/root/bench/run_matrix.sh` launches within CPU sets `6,7`, `6-9`, and
+`6-9,16-19`; bots run on devbox. CPU 16 is CPU 6's SMT sibling. Keep the builder
+idle during acceptance measurements and check the rig is idle before launching.
+Use a separate result directory via `R`; leave existing results intact.
+
+Deploy there with
+`FERRALOOM_BENCH_HOST=root@10.10.10.243 FERRALOOM_BENCH_ROOT=/root/bench tools/ferraloom-bench/deploy.sh <sha>`.
+The original VM remains the default deployment target.
