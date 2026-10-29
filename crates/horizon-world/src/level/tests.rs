@@ -3,6 +3,7 @@
 //! repository root) and are skipped when those are absent.
 use super::*;
 use crate::chunk::BlockState;
+use horizon_core::random::RandomSource;
 use std::{
     collections::{BTreeMap, HashMap},
     path::PathBuf,
@@ -1492,13 +1493,13 @@ fn random_tick_reader_matches_current_states_after_each_write() {
     let b = &f.behaviours;
     let w = World::new(f);
     let mut original = TestLevel::new(b);
-    // Farmland and crops change state, grass spreads, leaves decay, lava calls
-    // both block and fluid hooks. Seeded results include the final RNG state.
+    // Farmland and crops change state, grass spreads, and leaves decay.
+    // Seeded results include the final RNG state.
     for x in 0..16 {
         for z in 0..16 {
-            original.set_raw(BlockPos::new(x, 0, z), w.id("farmland", &[]));
+            let _ = original.set_raw(BlockPos::new(x, 0, z), w.id("farmland", &[]));
             let name = ["wheat", "grass_block", "oak_leaves", "stone"][((x + z) % 4) as usize];
-            original.set_raw(BlockPos::new(x, 1, z), w.id(name, &[]));
+            let _ = original.set_raw(BlockPos::new(x, 1, z), w.id(name, &[]));
         }
     }
     let mut cached = original.clone();
@@ -1511,7 +1512,7 @@ fn random_tick_reader_matches_current_states_after_each_write() {
         // Add/remove random ticking states between calls as well as in callbacks.
         if step % 4 == 0 {
             for level in [&mut original, &mut cached] {
-                level.set_raw(
+                let _ = level.set_raw(
                     BlockPos::new(0, 1, 0),
                     w.id(if step % 8 == 0 { "wheat" } else { "stone" }, &[]),
                 );
@@ -1601,7 +1602,7 @@ fn hot_path_lookup_benchmark() {
     }
     let before = start.elapsed();
     let mut current = RandomTickChunk::default();
-    current.get(0, || Some(section));
+    let _ = current.get(0, || Some(section));
     let start = Instant::now();
     for i in 0..iterations {
         let chunk = current
