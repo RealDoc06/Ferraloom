@@ -413,7 +413,24 @@ impl<'a> Game<'a> {
     /// Every player in the level in place: the local player, and the LAN
     /// guests or server players in it.
     pub(super) fn level_players(&self) -> Vec<LevelPlayer> {
-        let mut players: Vec<LevelPlayer> = self.lan.as_ref().map_or_else(Vec::new, |h| {
+        let mut players =
+            Vec::with_capacity(self.lan.as_ref().map_or(0, |h| h.hub.guests.len()) + 1);
+        players.extend(self.iter_level_players());
+        players
+    }
+    /// The first player in `ServerLevel.players`, without collecting the level.
+    pub(super) fn first_level_player(&self) -> Option<LevelPlayer> {
+        self.iter_level_players().next()
+    }
+    fn iter_level_players(&self) -> impl Iterator<Item = LevelPlayer> + '_ {
+        let local = self.player_view().map(|p| LevelPlayer {
+            position: p.position,
+            bounds: p.bounds,
+            alive: p.alive,
+            creative: p.creative,
+            spectator: p.spectator,
+        });
+        let guests = self.lan.iter().flat_map(|h| {
             h.hub
                 .guests
                 .iter()
@@ -425,21 +442,8 @@ impl<'a> Game<'a> {
                     creative: g.creative(),
                     spectator: g.spectator(),
                 })
-                .collect()
         });
-        if let Some(p) = self.player_view() {
-            players.insert(
-                0,
-                LevelPlayer {
-                    position: p.position,
-                    bounds: p.bounds,
-                    alive: p.alive,
-                    creative: p.creative,
-                    spectator: p.spectator,
-                },
-            );
-        }
-        players
+        local.into_iter().chain(guests)
     }
     /// `ChunkMap.collectSpawningChunks`: the natural spawn chunk tracker's
     /// chunks (within 8 chunks of a player, `getSpawnCandidateChunks`) that

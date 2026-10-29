@@ -464,8 +464,7 @@ impl Game<'_> {
             lid_openers: &self.lid_openers,
             // The first player in the level: a server has no player of its own.
             difficulty: self.local_difficulty(
-                self.level_players()
-                    .first()
+                self.first_level_player()
                     .map_or([0.0; 3], |p| [p.position.x, p.position.y, p.position.z]),
             ),
         }
