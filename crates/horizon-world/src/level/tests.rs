@@ -1561,7 +1561,7 @@ fn hot_path_lookup_benchmark() {
     let stone = w.id("stone", &[]);
     let mut section = PalettedContainer::new(Strategy::blocks(16), stone.0);
     section.set(1, w.id("dirt", &[]).0);
-    let sections = HashMap::from([((0, 0, 0), section)]);
+    let sections = HashMap::from([((0, 0, 0), Arc::new(section))]);
     let section = &sections[&(0, 0, 0)];
     let mut level = TestLevel::new(b);
     let mut ticks = Ticks::new(42);
@@ -1600,9 +1600,11 @@ fn hot_path_lookup_benchmark() {
         ));
     }
     let before = start.elapsed();
+    let weak = Arc::downgrade(section);
     let start = Instant::now();
     for i in 0..iterations {
-        let state = BlockStateId(black_box(section).get(black_box(i & 4095)));
+        let current = black_box(&weak).upgrade().unwrap();
+        let state = BlockStateId(current.get(black_box(i & 4095)));
         black_box(b.hot_flags[state.0 as usize] & 6);
     }
     eprintln!(

@@ -3194,6 +3194,8 @@ impl Game<'_> {
                 let mut read = None;
                 let mut sections = Default::default();
                 let pos = horizon_core::position::ChunkPos::new(x, z);
+                // Weak references avoid retaining a chunk across a callback:
+                // a random-tick write must not copy its sections just for us.
                 let mut current_chunk = None;
                 b.tick_chunk_random_with_reader(
                     level,
@@ -3219,7 +3221,11 @@ impl Game<'_> {
                         {
                             current_chunk = Some((
                                 level.world.revision,
-                                level.world.chunks.get(&(x, z)).cloned(),
+                                level
+                                    .world
+                                    .chunks
+                                    .get(&(x, z))
+                                    .map(std::sync::Arc::downgrade),
                             ));
                         }
                         current_chunk
@@ -3227,6 +3233,7 @@ impl Game<'_> {
                             .unwrap()
                             .1
                             .as_ref()
+                            .and_then(std::sync::Weak::upgrade)
                             .map_or(level.world.air, |chunk| {
                                 chunk.block(at.x & 15, at.y, at.z & 15)
                             })
