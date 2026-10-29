@@ -6,12 +6,7 @@ use horizon_world::{
     compression::Compression,
     nbt::{self, Limits, NamedTag, Tag},
 };
-use std::{
-    collections::{BTreeMap, HashMap},
-    fs,
-    path::Path,
-    sync::LazyLock,
-};
+use std::{collections::BTreeMap, fs, path::Path};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Value {
@@ -130,34 +125,41 @@ pub const RULES: &[Rule] = &[
     b("universal_anger", "mobs", false),
     b("water_source_conversion", "updates", true),
 ];
+/// A resolved registration index for repeated lookups. Never persisted.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct RuleId(usize);
+
 pub fn rule(name: &str) -> Option<&'static Rule> {
-    rule_id(name).map(|id| &RULES[id])
+    rule_id(name).map(|id| &RULES[id.0])
 }
 
-/// Resolve external names once per lookup, rather than scanning every rule.
-/// Stored values use the registration index, so defaults and overrides share
-/// the same numeric identity. The index is internal, never persisted.
-fn rule_id(name: &str) -> Option<usize> {
-    static IDS: LazyLock<HashMap<&'static str, usize>> = LazyLock::new(|| {
-        RULES
-            .iter()
-            .enumerate()
-            .map(|(id, rule)| (rule.name, id))
-            .collect()
-    });
-    IDS.get(name.strip_prefix("minecraft:").unwrap_or(name))
-        .copied()
+/// Resolve a name at setup; retain the handle for ticking code.
+pub fn rule_id(name: &str) -> Option<RuleId> {
+    let name = name.strip_prefix("minecraft:").unwrap_or(name);
+    RULES.iter().position(|rule| rule.name == name).map(RuleId)
 }
 
 /// Current values (defaults unless set).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct GameRules {
-    values: BTreeMap<usize, Value>,
+    values: BTreeMap<RuleId, Value>,
 }
 impl GameRules {
     pub fn get(&self, name: &str) -> Option<Value> {
-        let id = rule_id(name)?;
-        Some(self.values.get(&id).copied().unwrap_or(RULES[id].default))
+        rule_id(name).map(|id| self.get_by_id(id))
+    }
+    /// Read current values through a handle without comparing names.
+    pub fn get_by_id(&self, id: RuleId) -> Value {
+        self.values.get(&id).copied().unwrap_or(RULES[id.0].default)
+    }
+    pub fn bool_by_id(&self, id: RuleId) -> bool {
+        matches!(self.get_by_id(id), Value::Bool(true))
+    }
+    pub fn int_by_id(&self, id: RuleId) -> i32 {
+        match self.get_by_id(id) {
+            Value::Int(value) => value,
+            _ => 0,
+        }
     }
     pub fn bool(&self, name: &str) -> bool {
         matches!(self.get(name), Some(Value::Bool(true)))
@@ -182,7 +184,7 @@ impl GameRules {
         let Some(id) = rule_id(name) else {
             return false;
         };
-        let r = &RULES[id];
+        let r = &RULES[id.0];
         let ok = match (r.default, value) {
             (Value::Bool(_), Value::Bool(_)) => true,
             (Value::Int(_), Value::Int(v)) => (r.min..=r.max).contains(&v),
@@ -202,7 +204,7 @@ impl GameRules {
             .iter()
             .enumerate()
             .map(|(id, r)| {
-                let v = match self.values.get(&id).copied().unwrap_or(r.default) {
+                let v = match self.get_by_id(RuleId(id)) {
                     Value::Bool(b) => i32::from(b),
                     Value::Int(i) => i,
                 };
@@ -216,7 +218,7 @@ impl GameRules {
             .iter()
             .enumerate()
             .map(|(id, r)| {
-                let v = self.values.get(&id).copied().unwrap_or(r.default);
+                let v = self.get_by_id(RuleId(id));
                 let tag = match v {
                     Value::Bool(b) => Tag::Byte(i8::from(b)),
                     Value::Int(i) => Tag::Int(i),
@@ -288,7 +290,7 @@ mod tests {
     fn numeric_rules_keep_registration_identity_and_overrides() {
         let mut rules = GameRules::default();
         for (id, r) in RULES.iter().enumerate() {
-            assert_eq!(rule_id(r.name), Some(id));
+            assert_eq!(rule_id(r.name), Some(RuleId(id)));
             assert_eq!(rule(r.name).unwrap().name, r.name);
             let namespaced = format!("minecraft:{}", r.name);
             assert_eq!(rules.get(&namespaced), Some(r.default));
@@ -298,6 +300,7 @@ mod tests {
             };
             assert!(rules.set(&namespaced, changed));
             assert_eq!(rules.get(r.name), Some(changed));
+            assert_eq!(rules.get_by_id(RuleId(id)), changed);
         }
         assert_eq!(GameRules::from_nbt(&rules.to_nbt().tag), rules);
         for r in RULES {
@@ -323,6 +326,7 @@ mod tests {
             "spawn_monsters",
             "fire_spread_radius_around_player",
         ];
+        let ids = names.map(|name| rule_id(name).unwrap());
         for overrides in [false, true] {
             let mut rules = GameRules::default();
             let mut old = BTreeMap::new();
@@ -337,12 +341,11 @@ mod tests {
                     }
                 }
             }
-            for name in names {
+            for (name, id) in names.into_iter().zip(ids) {
                 let r = RULES.iter().find(|r| r.name == name).unwrap();
-                assert_eq!(
-                    rules.get(name),
-                    Some(old.get(r.name).copied().unwrap_or(r.default))
-                );
+                let expected = old.get(r.name).copied().unwrap_or(r.default);
+                assert_eq!(rules.get(name), Some(expected));
+                assert_eq!(rules.get_by_id(id), expected);
             }
             for round in 0..3 {
                 let start = Instant::now();
@@ -356,8 +359,8 @@ mod tests {
                 let before = start.elapsed();
                 let start = Instant::now();
                 for _ in 0..200_000 {
-                    for name in black_box(names) {
-                        black_box(rules.get(black_box(name)));
+                    for id in black_box(ids) {
+                        black_box(rules.get_by_id(black_box(id)));
                     }
                 }
                 println!(
