@@ -91,10 +91,28 @@ impl PackedStorage {
     /// Reads `index` without a bounds check. Callers use this once they hold a
     /// slice length or a section index they have already validated.
     /// `index` must be less than `len`.
+    #[inline]
     pub fn read(&self, index: usize) -> u32 {
         debug_assert!(index < self.len);
-        let word = index / self.per_word;
-        let shift = (index % self.per_word) * usize::from(self.bits);
+        // Each possible divisor is constant in its arm, avoiding hardware div.
+        let word = match self.per_word {
+            2 => index / 2,
+            3 => index / 3,
+            4 => index / 4,
+            5 => index / 5,
+            6 => index / 6,
+            7 => index / 7,
+            8 => index / 8,
+            9 => index / 9,
+            10 => index / 10,
+            12 => index / 12,
+            16 => index / 16,
+            21 => index / 21,
+            32 => index / 32,
+            64 => index / 64,
+            _ => unreachable!("validated bits"),
+        };
+        let shift = (index - word * self.per_word) * usize::from(self.bits);
         ((self.words[word] >> shift) & self.mask) as u32
     }
 
@@ -152,6 +170,24 @@ impl PackedStorage {
 mod tests {
     use super::*;
 
+    #[test]
+    fn reads_match_division_at_every_width() {
+        for bits in 1..=32 {
+            for len in [1usize, 63, 64, 65, 4096, 8193] {
+                let per = 64 / usize::from(bits);
+                let words = (0..len.div_ceil(per))
+                    .map(|i| (i as u64).wrapping_mul(0x9e3779b97f4a7c15))
+                    .collect();
+                let s = PackedStorage::from_words(bits, len, words).unwrap();
+                for i in 0..len {
+                    let old =
+                        ((s.words[i / per] >> ((i % per) * usize::from(bits))) & s.mask) as u32;
+                    assert_eq!(s.read(i), old);
+                    assert_eq!(s.get(i), Ok(old));
+                }
+            }
+        }
+    }
     #[test]
     fn padded_words_never_split_entries() {
         let mut storage = PackedStorage::new(5, 13).unwrap();

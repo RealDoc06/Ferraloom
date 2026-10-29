@@ -288,12 +288,29 @@ impl PalettedContainer {
     pub fn is_global(&self) -> bool {
         matches!(self.palette, Palette::Global)
     }
-    #[inline]
+    #[inline(always)]
     fn raw(&self, i: usize) -> usize {
-        let (word, shift) = locate(self.bits, i);
-        ((self.words[word] >> shift) & mask(self.bits)) as usize
+        // Constant widths let LLVM fold the divisor, mask and slot stride.
+        // Keep the general reader for unusual registry widths.
+        #[inline(always)]
+        fn at<const B: usize>(words: &[u64], i: usize) -> usize {
+            let per = 64 / B;
+            ((words[i / per] >> ((i % per) * B)) & ((1u64 << B) - 1)) as usize
+        }
+        match self.bits {
+            4 => at::<4>(&self.words, i),
+            5 => at::<5>(&self.words, i),
+            6 => at::<6>(&self.words, i),
+            7 => at::<7>(&self.words, i),
+            8 => at::<8>(&self.words, i),
+            16 => at::<16>(&self.words, i),
+            _ => {
+                let (word, shift) = locate(self.bits, i);
+                ((self.words[word] >> shift) & mask(self.bits)) as usize
+            }
+        }
     }
-    #[inline]
+    #[inline(always)]
     pub fn get(&self, i: usize) -> u32 {
         match &self.palette {
             Palette::Single(value) => *value,
@@ -723,6 +740,96 @@ mod tests {
     const BLOCKS: Strategy = Strategy::blocks(16);
     const BIOMES: Strategy = Strategy::biomes(7);
 
+    fn old_raw(c: &PalettedContainer, i: usize) -> usize {
+        let (word, shift) = locate(c.bits, i);
+        ((c.words[word] >> shift) & mask(c.bits)) as usize
+    }
+    fn old_get(c: &PalettedContainer, i: usize) -> u32 {
+        match &c.palette {
+            Palette::Single(v) => *v,
+            Palette::List(p) => p[old_raw(c, i)],
+            Palette::Global => old_raw(c, i) as u32,
+        }
+    }
+    #[test]
+    fn reads_match_previous_at_every_width() {
+        let mut seed = 91234567;
+        for bits in 1..=32 {
+            for kind in [Kind::Blocks, Kind::Biomes] {
+                let strategy = Strategy {
+                    kind,
+                    global_bits: bits,
+                };
+                let n = strategy.entries();
+                let ids: Vec<u32> = (0..n)
+                    .map(|_| (rng(&mut seed) & mask(bits)) as u32)
+                    .collect();
+                let c = PalettedContainer {
+                    strategy,
+                    bits,
+                    palette: Palette::Global,
+                    words: pack_words(bits, n, ids.iter().copied()),
+                };
+                for (i, &id) in ids.iter().enumerate() {
+                    assert_eq!(c.raw(i), old_raw(&c, i));
+                    assert_eq!(c.get(i), id);
+                }
+            }
+        }
+        for (name, values) in palette_cases() {
+            let strategy = if values.len() == 64 { BIOMES } else { BLOCKS };
+            let c = PalettedContainer::from_values(strategy, &values);
+            for i in 0..values.len() {
+                assert_eq!(c.get(i), old_get(&c, i), "{name} {i}");
+            }
+        }
+    }
+    #[test]
+    #[ignore = "release read microbenchmark"]
+    fn benchmark_reads() {
+        use std::{hint::black_box, time::Instant};
+        for (name, values) in palette_cases() {
+            let strategy = if values.len() == 64 { BIOMES } else { BLOCKS };
+            let c = PalettedContainer::from_values(strategy, &values);
+            for raw in [false, true] {
+                if raw && c.bits == 0 {
+                    continue;
+                }
+                let mut times = [Vec::new(), Vec::new()];
+                for round in 0..11 {
+                    for new in [round % 2 == 0, round % 2 != 0] {
+                        let start = Instant::now();
+                        for j in 0..500_000usize {
+                            let c = black_box(&c);
+                            let i = black_box(j.wrapping_mul(31337) & (values.len() - 1));
+                            black_box(if raw {
+                                if new {
+                                    c.raw(i) as u32
+                                } else {
+                                    old_raw(c, i) as u32
+                                }
+                            } else if new {
+                                c.get(i)
+                            } else {
+                                old_get(c, i)
+                            });
+                        }
+                        if round > 0 {
+                            times[usize::from(new)]
+                                .push(start.elapsed().as_secs_f64() * 1e9 / 500_000.0);
+                        }
+                    }
+                }
+                for t in &mut times {
+                    t.sort_by(f64::total_cmp);
+                }
+                println!(
+                    "{name} raw={raw}: old {:.3} new {:.3} ns/op",
+                    times[0][5], times[1][5]
+                );
+            }
+        }
+    }
     #[test]
     fn locate_matches_division_for_every_width() {
         for bits in 1..=32u8 {
