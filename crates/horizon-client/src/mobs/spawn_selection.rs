@@ -1215,26 +1215,9 @@ impl Nearest {
                 .copied()
                 .collect()
         });
-        Some(nearest_spawn_distance(nearby.iter().map(distance)))
+        Some(nearby.iter().map(distance).fold(f64::INFINITY, f64::min))
     }
 }
-/// Only the 24-block exclusion and despawn thresholds consume this distance.
-/// A player inside the exclusion radius already rejects the attempt, so no
-/// remaining player can change its result. Squared distances are nonnegative;
-/// the comparison also ignores NaNs just as `f64::min` does with infinity.
-fn nearest_spawn_distance(distances: impl Iterator<Item = f64>) -> f64 {
-    let mut nearest = f64::INFINITY;
-    for distance in distances {
-        if distance <= 576.0 {
-            return distance;
-        }
-        if distance < nearest {
-            nearest = distance;
-        }
-    }
-    nearest
-}
-
 /// `isRightDistanceToPlayerAndSpawnPoint`.
 fn right_distance<L: NaturalLevel>(l: &L, chunk: (i32, i32), pos: [i32; 3], distance: f64) -> bool {
     if distance <= 576.0 {
@@ -1441,62 +1424,35 @@ fn top_non_colliding<L: NaturalLevel>(l: &L, entity: &str, x: i32, z: i32) -> [i
 
 #[cfg(test)]
 mod tests {
-    use super::nearest_spawn_distance;
+    use super::Event;
 
     #[test]
-    fn nearest_distance_preserves_spawn_thresholds() {
-        // Include the exact exclusion/despawn boundaries and unordered values.
-        let values = [
-            f64::NAN,
-            f64::INFINITY,
-            0.0,
-            575.0,
-            576.0,
-            577.0,
-            4096.0,
-            4097.0,
-            16384.0,
-            16385.0,
-        ];
-        for a in values {
-            for b in values {
-                for c in values {
-                    let distances = [a, b, c];
-                    let expected = distances.into_iter().fold(f64::INFINITY, f64::min);
-                    let actual = nearest_spawn_distance(distances.into_iter());
-                    for threshold in [576.0, 4096.0, 16384.0] {
-                        assert_eq!(actual > threshold, expected > threshold);
+    #[ignore = "focused release trace micro-benchmark; run with --release --ignored --nocapture"]
+    fn bench_spawn_trace() {
+        use std::{hint::black_box, time::Instant};
+        // Model the event construction at a successful type check. The old
+        // callback's vtable hides the game's no-op sink from this function.
+        #[inline(never)]
+        fn dynamic(trace: &mut dyn FnMut(Event), entity: &str) {
+            trace(Event::Test(entity.to_owned(), [0, 64, 0], true));
+        }
+        fn specialized(trace: &mut impl FnMut(Event), entity: &str) {
+            trace(Event::Test(entity.to_owned(), [0, 64, 0], true));
+        }
+        for _ in 0..3 {
+            for optimized in [false, true] {
+                let started = Instant::now();
+                let mut trace = |_| {};
+                for _ in 0..2_000_000 {
+                    let entity = black_box("minecraft:zombie");
+                    if optimized {
+                        specialized(&mut trace, entity);
+                    } else {
+                        dynamic(black_box(&mut trace as &mut dyn FnMut(Event)), entity);
                     }
                 }
+                eprintln!("optimized={optimized}: {:?}", started.elapsed());
             }
-        }
-    }
-
-    #[test]
-    #[ignore = "focused release micro-benchmark; run with --release --ignored --nocapture"]
-    fn bench_nearest_spawn_distance() {
-        use std::{hint::black_box, time::Instant};
-        // 25 nearby exploring players, with both excluded and eligible attempts.
-        let players: Vec<_> = (0..25).map(|i| [i as f64 * 2.0, 64.0, i as f64]).collect();
-        let distance =
-            |p: &[f64; 3], x: f64| (p[0] - x).powi(2) + (p[1] - 40.0).powi(2) + (p[2] - x).powi(2);
-        for optimized in [false, true] {
-            let started = Instant::now();
-            let mut result = 0.0;
-            for i in 0..2_000_000 {
-                let x = black_box((i % 128) as f64);
-                let distances = black_box(players.as_slice()).iter().map(|p| distance(p, x));
-                result += if optimized {
-                    nearest_spawn_distance(distances)
-                } else {
-                    distances.fold(f64::INFINITY, f64::min)
-                };
-            }
-            eprintln!(
-                "optimized={optimized}: {:?}, checksum={}",
-                started.elapsed(),
-                black_box(result)
-            );
         }
     }
 }
