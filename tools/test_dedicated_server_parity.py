@@ -434,7 +434,8 @@ def main():
     if args.engine:
         binary = args.engine.resolve(strict=True)
     else:
-        oh.run_logged(['cargo', 'build', '--profile', 'fast', '-p', 'horizon-client', '--bin', 'horizon-client'], build,
+        oh.run_logged(['cargo', 'build', '--locked', '--profile', 'fast', '-p', 'horizon-client',
+                       '--no-default-features', '--bin', 'horizon-client'], build,
                       'compile-rust')
         metadata = json.loads(subprocess.check_output(['cargo', 'metadata', '--no-deps', '--format-version', '1'],
                                                       cwd=lab.ROOT, text=True))
