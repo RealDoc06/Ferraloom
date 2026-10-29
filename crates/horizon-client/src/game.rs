@@ -3194,12 +3194,7 @@ impl Game<'_> {
                 let mut read = None;
                 let mut sections = Default::default();
                 let pos = horizon_core::position::ChunkPos::new(x, z);
-                // Weak references avoid retaining a chunk across a callback:
-                // a random-tick write must not copy its sections just for us.
-                let mut current_chunk: Option<(
-                    u64,
-                    Option<std::sync::Weak<horizon_client::chunk::Chunk>>,
-                )> = None;
+                let mut current_chunk = horizon_world::level::RandomTickChunk::default();
                 b.tick_chunk_random_with_reader(
                     level,
                     ticks,
@@ -3218,22 +3213,8 @@ impl Game<'_> {
                         sections.from(from)
                     },
                     |level, at| {
-                        let cached = current_chunk
-                            .as_ref()
-                            .filter(|(revision, _)| *revision == level.world.revision)
-                            .and_then(|(_, chunk)| {
-                                chunk.as_ref().and_then(std::sync::Weak::upgrade)
-                            });
-                        // Even a no-op Arc::make_mut can detach weak pointers
-                        // without advancing the world's block revision.
-                        let current = cached.or_else(|| {
-                            let chunk = level.world.chunks.get(&(x, z)).cloned();
-                            current_chunk = Some((
-                                level.world.revision,
-                                chunk.as_ref().map(std::sync::Arc::downgrade),
-                            ));
-                            chunk
-                        });
+                        let current = current_chunk
+                            .get(level.world.revision, || level.world.chunks.get(&(x, z)));
                         current.map_or(level.world.air, |chunk| {
                             chunk.block(at.x & 15, at.y, at.z & 15)
                         })

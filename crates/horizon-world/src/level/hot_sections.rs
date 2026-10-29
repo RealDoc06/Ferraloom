@@ -51,3 +51,67 @@ mod tests {
         assert!(cache.get(section, 3, || true));
     }
 }
+
+/// Current chunk for a random-tick read. A strong reference lives only for the
+/// read, so callbacks can mutate without cloning storage retained by this cache.
+pub struct RandomTickChunk<T> {
+    revision: Option<u64>,
+    chunk: std::sync::Weak<T>,
+}
+impl<T> Default for RandomTickChunk<T> {
+    fn default() -> Self {
+        Self {
+            revision: None,
+            chunk: std::sync::Weak::new(),
+        }
+    }
+}
+impl<T> RandomTickChunk<T> {
+    pub fn get<'a>(
+        &mut self,
+        revision: u64,
+        load: impl FnOnce() -> Option<&'a std::sync::Arc<T>>,
+    ) -> Option<std::sync::Arc<T>>
+    where
+        T: 'a,
+    {
+        if self.revision == Some(revision) {
+            if let Some(chunk) = self.chunk.upgrade() {
+                return Some(chunk);
+            }
+        }
+        // Arc::make_mut can detach weak pointers on a no-op write, without
+        // advancing the world's block revision. An expired pointer reloads too.
+        let chunk = load()?;
+        self.revision = Some(revision);
+        self.chunk = std::sync::Arc::downgrade(chunk);
+        Some(chunk.clone())
+    }
+}
+
+#[cfg(test)]
+mod random_chunk_tests {
+    use super::*;
+    use std::sync::Arc;
+
+    #[test]
+    fn reader_observes_writes_replacements_and_no_op_detachment() {
+        let mut chunk = Arc::new(vec![0]);
+        let mut cache = RandomTickChunk::default();
+        assert_eq!(cache.get(0, || Some(&chunk)).unwrap()[0], 0);
+        assert_eq!(
+            cache.get(0, || panic!("unchanged chunk reloaded")).unwrap()[0],
+            0
+        );
+        // No retained strong reference: make_mut must move, rather than clone.
+        Arc::make_mut(&mut chunk)[0] = 0;
+        assert_eq!(cache.get(0, || Some(&chunk)).unwrap()[0], 0);
+        Arc::make_mut(&mut chunk)[0] = 1;
+        assert_eq!(cache.get(1, || Some(&chunk)).unwrap()[0], 1);
+        chunk = Arc::new(vec![2]);
+        assert_eq!(cache.get(2, || Some(&chunk)).unwrap()[0], 2);
+        assert!(cache.get(3, || None).is_none());
+        chunk = Arc::new(vec![3]);
+        assert_eq!(cache.get(4, || Some(&chunk)).unwrap()[0], 3);
+    }
+}

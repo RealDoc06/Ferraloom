@@ -108,7 +108,7 @@ mod feature_world;
 mod fluids;
 mod growth;
 mod hot_sections;
-pub use hot_sections::ContactSections;
+pub use hot_sections::{ContactSections, RandomTickChunk};
 mod hooks;
 mod interact;
 pub mod pistons;

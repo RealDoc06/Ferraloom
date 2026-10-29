@@ -1600,11 +1600,14 @@ fn hot_path_lookup_benchmark() {
         ));
     }
     let before = start.elapsed();
-    let weak = Arc::downgrade(section);
+    let mut current = RandomTickChunk::default();
+    current.get(0, || Some(section));
     let start = Instant::now();
     for i in 0..iterations {
-        let current = black_box(&weak).upgrade().unwrap();
-        let state = BlockStateId(current.get(black_box(i & 4095)));
+        let chunk = current
+            .get(black_box(0), || sections.get(&black_box((0, 0, 0))))
+            .unwrap();
+        let state = BlockStateId(chunk.get(black_box(i & 4095)));
         black_box(b.hot_flags[state.0 as usize] & 6);
     }
     eprintln!(
