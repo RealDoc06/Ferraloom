@@ -1,1 +1,0 @@
-{"translate":"chat.type.text","fallback":"%s: %s","with":["Doc",{"text":"hi","underlined":true}],"shadow_color":-16777216,"click_event":{"command":"/help","action":"run_command"},"font":"minecraft:default"}

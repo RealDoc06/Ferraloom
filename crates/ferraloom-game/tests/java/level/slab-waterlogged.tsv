@@ -1,9 +1,0 @@
-slab-waterlogged:top:minecraft:water	true:true:true:minecraft:water_bucket
-slab-waterlogged:top:minecraft:flowing_water	false:false:false:minecraft:air
-slab-waterlogged:top:minecraft:lava	false:false:false:minecraft:air
-slab-waterlogged:bottom:minecraft:water	true:true:true:minecraft:water_bucket
-slab-waterlogged:bottom:minecraft:flowing_water	false:false:false:minecraft:air
-slab-waterlogged:bottom:minecraft:lava	false:false:false:minecraft:air
-slab-waterlogged:double:minecraft:water	false:false:false:minecraft:air
-slab-waterlogged:double:minecraft:flowing_water	false:false:false:minecraft:air
-slab-waterlogged:double:minecraft:lava	false:false:false:minecraft:air
