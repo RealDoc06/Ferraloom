@@ -82,6 +82,23 @@ Extraction commits preserve the existing serial trace. Confirmed discrepancies
 with vanilla's phase order are corrected in separate commits, each with a
 vanilla-backed case, before enabling the corresponding parallel phase.
 
+### Deferred read-phase candidate
+
+`SpawnState::new` could prepare loaded-chunk, biome spawn-cost and nearby-player
+inputs concurrently over immutable sections/player positions, then apply them
+in original entity order at `NaturalSpawner.createState`'s vanilla position.
+Charge insertion and floating-point evaluation order, RNG and spawn mutations
+must stay unchanged. This is a candidate, not an implemented phase.
+
+The CT 121 profiles do not justify it now: construction accounts for **1.04%**
+of captured tick CPU samples at 500 players (208 / 19,932,
+`profiles-500p/profile-1793340296`) and **0.94%** at 100 explorers (256 / 27,293,
+`profiles-100p/profile-1793267506`). It is absent from the `.txt` top-40 lists;
+these inclusive counts come from their matching `.svg` constructor frames,
+normalized by the text reports' tick-thread sample totals, not all threads.
+Keep regions as the priority and reconsider this candidate only if its share
+reaches about 5% of the tick.
+
 ## Live ownership
 
 `Server` owns global clocks, functions, scoreboard, game rules and dimensions
@@ -186,6 +203,16 @@ runs both modes, pumps twice per tick, moves/unloads/reloads areas and restarts,
 checking that each chunk finishes once with every neighbor decoration intact.
 Core tests cover carried allowance, atomic overruns, count limits and disabled
 reference behavior.
+
+Admission is explicit at each streaming pump: `Streaming::update` is unbounded
+for synchronous/client work, while `update_budgeted` consumes the allowance
+retained by `begin_server_tick`. `tick_server` and between-tick pregeneration
+select the latter and assert that selection in debug builds. Synchronous pumps
+neither spend nor replenish the allowance for later bounded pumps. The command
+harness freezes its clock while settling terrain; inheriting a spent allowance
+there previously prevented progress forever. Real single-player play was not
+affected: its loop renews the allowance every server tick, startup precedes the
+first budget, and saving already drains independently.
 
 On Linux, `horizon-threads` captures the launcher's allowed CPU mask before
 workers start. The tick chooses its lowest logical CPU; streaming, save, encode
