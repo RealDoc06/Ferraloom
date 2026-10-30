@@ -224,6 +224,7 @@ pub enum Delivery {
     Encoded(Vec<u8>),
 }
 
+#[cfg(test)]
 fn encode_delivery(conn: u32, packet: C, local: Option<u32>) -> (u32, Delivery) {
     let delivery = if local == Some(conn) {
         let C::TrackedWaypoint(waypoint) = packet else {
@@ -234,6 +235,53 @@ fn encode_delivery(conn: u32, packet: C, local: Option<u32>) -> (u32, Delivery) 
         Delivery::Encoded(packet.encode())
     };
     (conn, delivery)
+}
+
+/// Borrow the icon until bytes are written, avoiding a cloned style and the
+/// large Clientbound staging vector. Wire layout: TrackedWaypoint::write.
+fn encode_waypoint(source: u128, operation: i32, icon: &Icon, target: WaypointTarget) -> Vec<u8> {
+    use horizon_protocol::{buf::Writer, ids::play::clientbound::WAYPOINT};
+    let mut w = Writer {
+        data: Vec::with_capacity(48 + icon.style.len()),
+    };
+    w.varint(WAYPOINT);
+    w.varint(operation);
+    w.bool(true);
+    w.uuid(source);
+    w.string(&icon.style);
+    w.bool(icon.color.is_some());
+    if let Some(color) = icon.color {
+        for shift in [16, 8, 0] {
+            w.u8((color >> shift) as u8);
+        }
+    }
+    match target {
+        WaypointTarget::Empty => w.varint(0),
+        WaypointTarget::Block([x, y, z]) => {
+            w.varint(1);
+            w.varint(x);
+            w.varint(y);
+            w.varint(z);
+        }
+        WaypointTarget::Chunk([x, z]) => {
+            w.varint(2);
+            w.varint(x);
+            w.varint(z);
+        }
+        WaypointTarget::Azimuth(angle) => {
+            w.varint(3);
+            w.f32(angle);
+        }
+    }
+    w.data
+}
+
+enum Output<'a> {
+    Typed(&'a mut Vec<(u32, C)>),
+    Encoded {
+        ready: &'a mut Vec<(u32, Delivery)>,
+        local: Option<u32>,
+    },
 }
 
 #[cfg(any(test, feature = "profiler"))]
@@ -258,7 +306,10 @@ struct PassTime {
 #[derive(Default)]
 struct ReceiverShard {
     manager: Waypoints,
+    #[cfg(test)]
     out: Vec<(u32, C)>,
+    #[cfg(test)]
+    staged: bool,
     ready: Vec<(u32, Delivery)>,
     #[cfg(any(test, feature = "profiler"))]
     time: ShardTime,
@@ -376,42 +427,68 @@ impl ReceiverShard {
     fn tick(&mut self, frame: Frame<'_>, encode: bool) {
         #[cfg(any(test, feature = "profiler"))]
         let start = std::time::Instant::now();
-        self.manager.tick_level_into(
+        #[cfg(test)]
+        let fused = encode && !self.staged;
+        #[cfg(not(test))]
+        let _ = encode;
+        #[cfg(test)]
+        let out = if fused {
+            Output::Encoded {
+                ready: &mut self.ready,
+                local: frame.local,
+            }
+        } else {
+            Output::Typed(&mut self.out)
+        };
+        #[cfg(not(test))]
+        let out = Output::Encoded {
+            ready: &mut self.ready,
+            local: frame.local,
+        };
+        self.manager.tick_level_output(
             frame.players,
             frame.away,
             frame.respawned,
             frame.enabled,
-            &mut self.out,
+            out,
         );
-        #[cfg(any(test, feature = "profiler"))]
-        {
-            self.time = ShardTime {
-                started: start.duration_since(frame.started),
-                update: start.elapsed(),
-                packets: self.out.len(),
-                ..ShardTime::default()
-            };
-        }
-        if encode {
-            #[cfg(any(test, feature = "profiler"))]
-            let start = std::time::Instant::now();
+        #[cfg(test)]
+        if encode && !fused {
             self.ready.extend(
                 self.out
                     .drain(..)
                     .map(|(conn, packet)| encode_delivery(conn, packet, frame.local)),
             );
-            #[cfg(any(test, feature = "profiler"))]
-            {
-                self.time.encode = start.elapsed();
-                self.time.encoded_bytes = self
+        }
+        #[cfg(any(test, feature = "profiler"))]
+        {
+            self.time = ShardTime {
+                started: start.duration_since(frame.started),
+                update: start.elapsed(),
+                packets: {
+                    #[cfg(test)]
+                    {
+                        if encode {
+                            self.ready.len()
+                        } else {
+                            self.out.len()
+                        }
+                    }
+                    #[cfg(not(test))]
+                    {
+                        self.ready.len()
+                    }
+                },
+                encoded_bytes: self
                     .ready
                     .iter()
                     .map(|(_, d)| match d {
                         Delivery::Encoded(b) => b.len(),
                         Delivery::Local(_) => 0,
                     })
-                    .sum();
-            }
+                    .sum(),
+                ..ShardTime::default()
+            };
         }
         #[cfg(any(test, feature = "profiler"))]
         {
@@ -470,6 +547,8 @@ pub struct ParallelWaypoints {
     #[cfg(test)]
     encode_after_join: bool,
     #[cfg(test)]
+    staged: bool,
+    #[cfg(test)]
     spawn_on_helpers: bool,
     #[cfg(test)]
     yield_to_helpers: bool,
@@ -492,6 +571,8 @@ impl Default for ParallelWaypoints {
             threads: None,
             #[cfg(test)]
             encode_after_join: false,
+            #[cfg(test)]
+            staged: false,
             #[cfg(test)]
             spawn_on_helpers: false,
             #[cfg(test)]
@@ -616,6 +697,10 @@ impl ParallelWaypoints {
         }
         #[cfg(test)]
         let encode_after_join = self.encode_after_join;
+        #[cfg(test)]
+        for shard in &mut self.shards {
+            shard.staged = self.staged;
+        }
         #[cfg(not(test))]
         let encode_after_join = false;
         #[cfg(any(test, feature = "profiler"))]
@@ -708,8 +793,11 @@ impl ParallelWaypoints {
         }
         let (mut rows, mut row_capacity) = (0, 0);
         for shard in &self.shards {
-            bytes += shard.out.capacity() * std::mem::size_of::<(u32, C)>()
-                + shard.ready.capacity() * std::mem::size_of::<(u32, Delivery)>()
+            #[cfg(test)]
+            {
+                bytes += shard.out.capacity() * std::mem::size_of::<(u32, C)>();
+            }
+            bytes += shard.ready.capacity() * std::mem::size_of::<(u32, Delivery)>()
                 + shard.manager.orders.capacity() * std::mem::size_of::<Order>();
             for row in shard.manager.connections.values() {
                 rows += row.ordered.len();
@@ -764,7 +852,7 @@ struct Tick<'a> {
     /// Players a respawn replaced this tick: a new ServerPlayer, on its first tick.
     fresh: &'a [u128],
     enabled: bool,
-    out: &'a mut Vec<(u32, C)>,
+    out: Output<'a>,
     orders: &'a mut Vec<Order>,
     order: Order,
     sharded: bool,
@@ -818,8 +906,20 @@ impl<'a> Tick<'a> {
         if self.sharded {
             self.orders.push(self.order);
         }
-        self.out
-            .push((conn, waypoint(source, operation, icon, target)));
+        match &mut self.out {
+            Output::Typed(out) => out.push((conn, waypoint(source, operation, icon, target))),
+            Output::Encoded { ready, local } => {
+                let delivery = if *local == Some(conn) {
+                    let C::TrackedWaypoint(w) = waypoint(source, operation, icon, target) else {
+                        unreachable!()
+                    };
+                    Delivery::Local(w)
+                } else {
+                    Delivery::Encoded(encode_waypoint(source, operation, icon, target))
+                };
+                ready.push((conn, delivery));
+            }
+        }
     }
     fn connect(&mut self, receiver: u128, source: u128, c: &Connection) {
         let target = match c.kind {
@@ -1175,6 +1275,17 @@ impl Waypoints {
         respawned: &[u128],
         locator_bar: bool,
         out: &mut Vec<(u32, C)>,
+    ) {
+        self.tick_level_output(players, away, respawned, locator_bar, Output::Typed(out));
+    }
+
+    fn tick_level_output(
+        &mut self,
+        players: &[Player],
+        away: &[(u128, u32)],
+        respawned: &[u128],
+        locator_bar: bool,
+        out: Output<'_>,
     ) {
         self.tick = self.tick.wrapping_add(1);
         self.input_index.clear();
@@ -1643,8 +1754,14 @@ mod tests {
                 "worker-encode",
                 "helper-spawn",
                 "yield-start",
+                "persistent-staged",
                 "persistent",
             ] {
+                if std::env::var_os("WAYPOINT_PERSISTENT_ONLY").is_some()
+                    && !matches!(mode, "serial" | "persistent-staged" | "persistent")
+                {
+                    continue;
+                }
                 let mut samples = Vec::new();
                 for _ in 0..5 {
                     let normal = if population == 500 { 300 } else { 100 };
@@ -1667,7 +1784,8 @@ mod tests {
                         .collect();
                     let mut manager = ParallelWaypoints {
                         threads: (mode == "serial").then_some(1),
-                        transient_helpers: mode != "persistent",
+                        transient_helpers: !matches!(mode, "persistent" | "persistent-staged"),
+                        staged: mode == "persistent-staged",
                         encode_after_join: matches!(mode, "serial" | "after-join"),
                         spawn_on_helpers: mode == "helper-spawn",
                         yield_to_helpers: mode == "yield-start",
@@ -1737,6 +1855,15 @@ mod tests {
                             .collect::<Vec<_>>(),
                     );
                     assert_eq!(*expected.get_or_insert(fingerprint.clone()), fingerprint);
+                    if samples.is_empty()
+                        && mode == "persistent"
+                        && std::env::var_os("WAYPOINT_RECEIVER_FINGERPRINTS").is_some()
+                    {
+                        println!(
+                            "waypoint_receivers population={population} hashes={:?}",
+                            fingerprint.2
+                        );
+                    }
                     let ms = elapsed.as_secs_f64() * 1e3 / 40.0;
                     samples.push(ms);
                     let per_tick = |d: Duration| d.as_secs_f64() * 1000.0 / 40.0;
@@ -1751,8 +1878,10 @@ mod tests {
                         .iter()
                         .map(|s| s.manager.connections.len())
                         .collect();
+                    let last_encoded_bytes: usize =
+                        manager.shards.iter().map(|s| s.time.encoded_bytes).sum();
                     println!(
-                        "waypoint_stages population={population} mode={mode} scope_ms={:.3} wait_ms={:.3} merge_encode_ms={:.3} started={started:?} update={update:?} encode={encode:?} finished={finished:?} packets={packet_counts:?} receivers={receivers:?} retained={:?}",
+                        "waypoint_stages population={population} mode={mode} scope_ms={:.3} wait_ms={:.3} merge_encode_ms={:.3} started={started:?} update={update:?} encode={encode:?} finished={finished:?} packets={packet_counts:?} receivers={receivers:?} last_encoded_bytes={last_encoded_bytes} retained={:?}",
                         per_tick(scope_time),
                         per_tick(wait_time),
                         per_tick(merge_time),
@@ -1769,6 +1898,41 @@ mod tests {
                     "waypoint_parallel population={population} mode={mode} median_ms={:.3} samples={samples:?}",
                     samples[2]
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn borrowed_encoder_matches_protocol_codec() {
+        for source in [0, u128::MAX] {
+            for operation in [
+                waypoint_operation::TRACK,
+                waypoint_operation::UNTRACK,
+                waypoint_operation::UPDATE,
+            ] {
+                for color in [None, Some(0), Some(-13_619_152), Some(0xabcdef)] {
+                    for style in [
+                        String::new(),
+                        "example:custom_style".into(),
+                        "x".repeat(127),
+                        "x".repeat(128),
+                    ] {
+                        let icon = Icon { style, color };
+                        for target in [
+                            WaypointTarget::Empty,
+                            WaypointTarget::Block([i32::MIN, -1, i32::MAX]),
+                            WaypointTarget::Chunk([-129, 128]),
+                            WaypointTarget::Azimuth(-1.25),
+                            WaypointTarget::Azimuth(f32::from_bits(0x80000000)),
+                            WaypointTarget::Azimuth(f32::from_bits(0x7fc00001)),
+                        ] {
+                            assert_eq!(
+                                encode_waypoint(source, operation, &icon, target),
+                                waypoint(source, operation, &icon, target).encode()
+                            );
+                        }
+                    }
+                }
             }
         }
     }
