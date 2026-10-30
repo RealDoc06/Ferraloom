@@ -31,7 +31,7 @@ pub(super) struct WaypointTick {
     respawned: Vec<u128>,
     deliveries: std::collections::HashMap<u32, Vec<Vec<u8>>>,
     live_connections: std::collections::HashSet<u32>,
-    out: Vec<(u32, horizon_protocol::packets::play::Clientbound)>,
+    out: Vec<(u32, waypoints::Delivery)>,
 }
 
 #[derive(Default)]
@@ -149,6 +149,7 @@ impl Game<'_> {
                 &scratch.connections,
                 &scratch.respawned,
                 locator_bar,
+                Some(HOST_CONN),
                 &mut scratch.out,
             );
             if list.players.is_empty() {
@@ -156,18 +157,12 @@ impl Game<'_> {
             }
         }
         scratch.levels.retain(|_, list| list.used != 0);
-        for (conn, packet) in scratch.out.drain(..) {
-            if conn == HOST_CONN {
-                // The host's own connection: its locator bar.
-                if let horizon_protocol::packets::play::Clientbound::TrackedWaypoint(w) = &packet {
-                    self.handle_waypoint(w);
+        for (conn, delivery) in scratch.out.drain(..) {
+            match delivery {
+                waypoints::Delivery::Local(waypoint) => self.handle_waypoint(&waypoint),
+                waypoints::Delivery::Encoded(body) => {
+                    scratch.deliveries.entry(conn).or_default().push(body)
                 }
-            } else {
-                scratch
-                    .deliveries
-                    .entry(conn)
-                    .or_default()
-                    .push(packet.encode());
             }
         }
         scratch.live_connections.clear();

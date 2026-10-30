@@ -218,10 +218,131 @@ impl Shard {
     }
 }
 
+/// A local locator update or an already encoded network packet body.
+pub enum Delivery {
+    Local(TrackedWaypoint),
+    Encoded(Vec<u8>),
+}
+
+fn encode_delivery(conn: u32, packet: C, local: Option<u32>) -> (u32, Delivery) {
+    let delivery = if local == Some(conn) {
+        let C::TrackedWaypoint(waypoint) = packet else {
+            unreachable!("the waypoint manager emits only locator updates")
+        };
+        Delivery::Local(waypoint)
+    } else {
+        Delivery::Encoded(packet.encode())
+    };
+    (conn, delivery)
+}
+
+#[cfg(any(test, feature = "profiler"))]
+#[derive(Clone, Copy, Debug, Default)]
+struct ShardTime {
+    update: std::time::Duration,
+    encode: std::time::Duration,
+    packets: usize,
+    encoded_bytes: usize,
+}
+
+#[cfg(any(test, feature = "profiler"))]
+#[derive(Clone, Copy, Debug, Default)]
+struct PassTime {
+    scope: std::time::Duration,
+    wait: std::time::Duration,
+    merge: std::time::Duration,
+}
+
 #[derive(Default)]
 struct ReceiverShard {
     manager: Waypoints,
     out: Vec<(u32, C)>,
+    ready: Vec<(u32, Delivery)>,
+    #[cfg(any(test, feature = "profiler"))]
+    time: ShardTime,
+}
+
+impl ReceiverShard {
+    fn tick(
+        &mut self,
+        players: &[Player],
+        away: &[(u128, u32)],
+        respawned: &[u128],
+        enabled: bool,
+        local: Option<u32>,
+        encode: bool,
+    ) {
+        #[cfg(any(test, feature = "profiler"))]
+        let start = std::time::Instant::now();
+        self.manager
+            .tick_level_into(players, away, respawned, enabled, &mut self.out);
+        #[cfg(any(test, feature = "profiler"))]
+        {
+            self.time = ShardTime {
+                update: start.elapsed(),
+                packets: self.out.len(),
+                ..ShardTime::default()
+            };
+        }
+        if encode {
+            #[cfg(any(test, feature = "profiler"))]
+            let start = std::time::Instant::now();
+            self.ready.extend(
+                self.out
+                    .drain(..)
+                    .map(|(conn, packet)| encode_delivery(conn, packet, local)),
+            );
+            #[cfg(any(test, feature = "profiler"))]
+            {
+                self.time.encode = start.elapsed();
+                self.time.encoded_bytes = self
+                    .ready
+                    .iter()
+                    .map(|(_, d)| match d {
+                        Delivery::Encoded(b) => b.len(),
+                        Delivery::Local(_) => 0,
+                    })
+                    .sum();
+            }
+        }
+    }
+}
+
+/// Every stream follows the serial traversal. Merge its order tags without
+/// sorting or cloning bodies; encoded frames are much smaller than Clientbound.
+fn merge_ordered<T>(mut streams: Vec<impl Iterator<Item = (Order, T)>>, out: &mut Vec<T>) {
+    let mut heap = std::collections::BinaryHeap::new();
+    let mut heads: Vec<_> = streams.iter_mut().map(Iterator::next).collect();
+    for (index, head) in heads.iter().enumerate() {
+        if let Some((order, _)) = head {
+            heap.push(std::cmp::Reverse((*order, index)));
+        }
+    }
+    while let Some(std::cmp::Reverse((_, index))) = heap.pop() {
+        out.push(heads[index].take().unwrap().1);
+        heads[index] = streams[index].next();
+        if let Some((order, _)) = &heads[index] {
+            heap.push(std::cmp::Reverse((*order, index)));
+        }
+    }
+}
+
+#[cfg(feature = "profiler")]
+#[derive(Default)]
+struct WaypointProfile {
+    ticks: u64,
+    peak_headers: usize,
+    peak_rows: usize,
+}
+
+#[cfg(feature = "profiler")]
+impl Drop for WaypointProfile {
+    fn drop(&mut self) {
+        eprintln!(
+            "waypoint_memory ticks={} peak_vector_bytes={} peak_connection_rows={}",
+            self.ticks, self.peak_headers, self.peak_rows
+        );
+    }
 }
 
 /// Receiver rows of ServerWaypointManager evaluated on the server's helper lane.
@@ -231,6 +352,14 @@ pub struct ParallelWaypoints {
     shards: Vec<ReceiverShard>,
     #[cfg(test)]
     threads: Option<usize>,
+    #[cfg(test)]
+    encode_after_join: bool,
+    #[cfg(test)]
+    legacy_out: Vec<(u32, C)>,
+    #[cfg(any(test, feature = "profiler"))]
+    time: PassTime,
+    #[cfg(feature = "profiler")]
+    profile: WaypointProfile,
 }
 
 impl Default for ParallelWaypoints {
@@ -239,6 +368,14 @@ impl Default for ParallelWaypoints {
             shards: vec![ReceiverShard::default()],
             #[cfg(test)]
             threads: None,
+            #[cfg(test)]
+            encode_after_join: false,
+            #[cfg(test)]
+            legacy_out: Vec::new(),
+            #[cfg(any(test, feature = "profiler"))]
+            time: PassTime::default(),
+            #[cfg(feature = "profiler")]
+            profile: WaypointProfile::default(),
         }
     }
 }
@@ -260,7 +397,7 @@ impl ParallelWaypoints {
                 };
                 ReceiverShard {
                     manager: replica,
-                    out: Vec::new(),
+                    ..ReceiverShard::default()
                 }
             })
             .collect::<Vec<_>>();
@@ -274,14 +411,16 @@ impl ParallelWaypoints {
         }
     }
 
-    /// Join before returning, then append packets in the original global order.
+    /// Join encoded output in the original global order. The local receiver's
+    /// typed updates are applied by the caller only after the complete pass.
     pub fn tick_level_into(
         &mut self,
         players: &[Player],
         away: &[(u128, u32)],
         respawned: &[u128],
         locator_bar: bool,
-        out: &mut Vec<(u32, C)>,
+        local: Option<u32>,
+        out: &mut Vec<(u32, Delivery)>,
     ) {
         let threads = horizon_threads::worker_threads()
             .map_or_else(
@@ -294,57 +433,157 @@ impl ParallelWaypoints {
         if self.shards.len() == 1 && threads > 1 {
             self.split(threads);
         }
+        #[cfg(test)]
+        let encode_after_join = self.encode_after_join;
+        #[cfg(not(test))]
+        let encode_after_join = false;
+        #[cfg(any(test, feature = "profiler"))]
+        let start = std::time::Instant::now();
+        #[cfg(any(test, feature = "profiler"))]
+        let main_done;
         if self.shards.len() == 1 {
-            self.shards[0]
-                .manager
-                .tick_level_into(players, away, respawned, locator_bar, out);
-            return;
-        }
-        let (tick_shard, helpers) = self.shards.split_first_mut().unwrap();
-        std::thread::scope(|scope| {
-            for shard in helpers {
-                std::thread::Builder::new()
-                    .name("waypoint-worker".into())
-                    .spawn_scoped(scope, move || {
-                        horizon_threads::worker_affinity();
-                        shard.manager.tick_level_into(
-                            players,
-                            away,
-                            respawned,
-                            locator_bar,
-                            &mut shard.out,
-                        );
-                    })
-                    .expect("start waypoint worker");
-            }
-            tick_shard.manager.tick_level_into(
+            self.shards[0].tick(
                 players,
                 away,
                 respawned,
                 locator_bar,
-                &mut tick_shard.out,
+                local,
+                !encode_after_join,
             );
-        });
-        // Every shard is already ordered. Moving packets through a k-way merge
-        // avoids sorting or cloning the packet bodies and preserves global order.
-        let mut streams: Vec<_> = self
-            .shards
-            .iter_mut()
-            .map(|shard| shard.manager.orders.drain(..).zip(shard.out.drain(..)))
-            .collect();
-        let mut heap = std::collections::BinaryHeap::new();
-        let mut heads: Vec<_> = streams.iter_mut().map(Iterator::next).collect();
-        for (index, head) in heads.iter().enumerate() {
-            if let Some((order, _)) = head {
-                heap.push(std::cmp::Reverse((*order, index)));
+            #[cfg(any(test, feature = "profiler"))]
+            {
+                main_done = start.elapsed();
+            }
+        } else {
+            let (tick_shard, helpers) = self.shards.split_first_mut().unwrap();
+            #[cfg(any(test, feature = "profiler"))]
+            let mut done = std::time::Duration::ZERO;
+            std::thread::scope(|scope| {
+                for shard in helpers {
+                    std::thread::Builder::new()
+                        .name("waypoint-worker".into())
+                        .spawn_scoped(scope, move || {
+                            horizon_threads::worker_affinity();
+                            shard.tick(
+                                players,
+                                away,
+                                respawned,
+                                locator_bar,
+                                local,
+                                !encode_after_join,
+                            );
+                        })
+                        .expect("start waypoint worker");
+                }
+                tick_shard.tick(
+                    players,
+                    away,
+                    respawned,
+                    locator_bar,
+                    local,
+                    !encode_after_join,
+                );
+                #[cfg(any(test, feature = "profiler"))]
+                {
+                    done = start.elapsed();
+                }
+            });
+            #[cfg(any(test, feature = "profiler"))]
+            {
+                main_done = done;
             }
         }
-        while let Some(std::cmp::Reverse((_, index))) = heap.pop() {
-            out.push(heads[index].take().unwrap().1);
-            heads[index] = streams[index].next();
-            if let Some((order, _)) = &heads[index] {
-                heap.push(std::cmp::Reverse((*order, index)));
+        #[cfg(any(test, feature = "profiler"))]
+        let merge_start = std::time::Instant::now();
+        #[cfg(test)]
+        if encode_after_join {
+            if self.shards.len() == 1 {
+                self.legacy_out.append(&mut self.shards[0].out);
+            } else {
+                let streams = self
+                    .shards
+                    .iter_mut()
+                    .map(|s| s.manager.orders.drain(..).zip(s.out.drain(..)))
+                    .collect();
+                merge_ordered(streams, &mut self.legacy_out);
             }
+            out.extend(
+                self.legacy_out
+                    .drain(..)
+                    .map(|(c, p)| encode_delivery(c, p, local)),
+            );
+        }
+        if !encode_after_join {
+            if self.shards.len() == 1 {
+                out.append(&mut self.shards[0].ready);
+            } else {
+                let streams = self
+                    .shards
+                    .iter_mut()
+                    .map(|s| s.manager.orders.drain(..).zip(s.ready.drain(..)))
+                    .collect();
+                merge_ordered(streams, out);
+            }
+        }
+        #[cfg(any(test, feature = "profiler"))]
+        {
+            self.time = PassTime {
+                scope: merge_start.duration_since(start),
+                wait: merge_start.duration_since(start).saturating_sub(main_done),
+                merge: merge_start.elapsed(),
+            };
+        }
+        #[cfg(feature = "profiler")]
+        self.record_profile(players.len(), out.capacity());
+    }
+
+    #[cfg(any(test, feature = "profiler"))]
+    fn retained_vectors(&self, output_capacity: usize) -> (usize, usize, usize) {
+        let mut bytes = output_capacity * std::mem::size_of::<(u32, Delivery)>();
+        #[cfg(test)]
+        {
+            bytes += self.legacy_out.capacity() * std::mem::size_of::<(u32, C)>();
+        }
+        let (mut rows, mut row_capacity) = (0, 0);
+        for shard in &self.shards {
+            bytes += shard.out.capacity() * std::mem::size_of::<(u32, C)>()
+                + shard.ready.capacity() * std::mem::size_of::<(u32, Delivery)>()
+                + shard.manager.orders.capacity() * std::mem::size_of::<Order>();
+            for row in shard.manager.connections.values() {
+                rows += row.ordered.len();
+                row_capacity += row.ordered.capacity();
+                bytes += row.ordered.capacity() * std::mem::size_of::<(u128, Connection)>();
+            }
+        }
+        (bytes, rows, row_capacity)
+    }
+
+    #[cfg(feature = "profiler")]
+    fn record_profile(&mut self, players: usize, output_capacity: usize) {
+        let (bytes, rows, row_capacity) = self.retained_vectors(output_capacity);
+        self.profile.ticks += 1;
+        self.profile.peak_headers = self.profile.peak_headers.max(bytes);
+        self.profile.peak_rows = self.profile.peak_rows.max(rows);
+        if players >= 128 && self.profile.ticks.is_multiple_of(64) {
+            let work: Vec<_> = self
+                .shards
+                .iter()
+                .map(|s| {
+                    [
+                        s.time.update.as_secs_f64() * 1000.0,
+                        s.time.encode.as_secs_f64() * 1000.0,
+                        s.time.packets as f64,
+                    ]
+                })
+                .collect();
+            let encoded_bytes: usize = self.shards.iter().map(|s| s.time.encoded_bytes).sum();
+            eprintln!(
+                "waypoint_pass players={players} tick={} scope_ms={:.3} join_wait_ms={:.3} merge_ms={:.3} shard_update_encode_packets={work:?} vector_bytes={bytes} rows={rows} row_capacity={row_capacity} encoded_bytes={encoded_bytes}",
+                self.profile.ticks,
+                self.time.scope.as_secs_f64() * 1000.0,
+                self.time.wait.as_secs_f64() * 1000.0,
+                self.time.merge.as_secs_f64() * 1000.0
+            );
         }
     }
 }
@@ -1176,15 +1415,25 @@ mod tests {
                 let enabled = frame != 5 && frame != 11;
                 let expected = reference.tick_level(&players, &away, respawned, enabled);
                 let mut actual = Vec::new();
-                parallel.tick_level_into(&players, &away, respawned, enabled, &mut actual);
-                let encode = |out: Vec<(u32, C)>| {
-                    out.into_iter()
-                        .map(|(c, p)| (c, p.encode()))
-                        .collect::<Vec<_>>()
-                };
+                parallel.tick_level_into(&players, &away, respawned, enabled, Some(3), &mut actual);
+                let encode_actual = actual
+                    .into_iter()
+                    .map(|(c, d)| {
+                        (
+                            c,
+                            match d {
+                                Delivery::Encoded(b) => b,
+                                Delivery::Local(w) => C::TrackedWaypoint(w).encode(),
+                            },
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                let encode_expected = expected
+                    .into_iter()
+                    .map(|(c, p)| (c, p.encode()))
+                    .collect::<Vec<_>>();
                 assert_eq!(
-                    encode(actual),
-                    encode(expected),
+                    encode_actual, encode_expected,
                     "threads={threads} frame={frame}"
                 );
             }
@@ -1207,7 +1456,7 @@ mod tests {
         println!("waypoint_layout allocated_cpus={cpus} helpers={helpers} tick_shards=1");
         for population in [150, 500] {
             let mut expected = None;
-            for mode in ["serial", "production"] {
+            for mode in ["serial", "after-join", "worker-encode"] {
                 let mut samples = Vec::new();
                 for _ in 0..5 {
                     let normal = if population == 500 { 300 } else { 100 };
@@ -1230,13 +1479,19 @@ mod tests {
                         .collect();
                     let mut manager = ParallelWaypoints {
                         threads: (mode == "serial").then_some(1),
+                        encode_after_join: mode != "worker-encode",
                         ..ParallelWaypoints::default()
                     };
                     let mut out = Vec::new();
-                    manager.tick_level_into(&players, &[], &[], true, &mut out);
+                    manager.tick_level_into(&players, &[], &[], true, None, &mut out);
                     out.clear();
                     let mut elapsed = Duration::ZERO;
                     let mut packets = 0;
+                    let mut scope_time = Duration::ZERO;
+                    let mut wait_time = Duration::ZERO;
+                    let mut merge_time = Duration::ZERO;
+                    let mut shard_work = vec![Duration::ZERO; manager.shards.len()];
+                    let mut shard_encode = vec![Duration::ZERO; manager.shards.len()];
                     let mut global = std::collections::hash_map::DefaultHasher::new();
                     let mut receivers: Vec<_> = (0..population)
                         .map(|_| std::collections::hash_map::DefaultHasher::new())
@@ -1252,12 +1507,23 @@ mod tests {
                             &[],
                             &[],
                             true,
+                            None,
                             &mut out,
                         );
                         elapsed += start.elapsed();
+                        scope_time += manager.time.scope;
+                        wait_time += manager.time.wait;
+                        merge_time += manager.time.merge;
+                        for (i, shard) in manager.shards.iter().enumerate() {
+                            shard_work[i] += shard.time.update;
+                            shard_encode[i] += shard.time.encode;
+                        }
                         packets += out.len();
                         for (conn, packet) in out.drain(..) {
-                            let bytes = packet.encode();
+                            let bytes = match packet {
+                                Delivery::Encoded(b) => b,
+                                Delivery::Local(w) => C::TrackedWaypoint(w).encode(),
+                            };
                             conn.hash(&mut global);
                             bytes.hash(&mut global);
                             bytes.hash(&mut receivers[conn as usize]);
@@ -1274,6 +1540,16 @@ mod tests {
                     assert_eq!(*expected.get_or_insert(fingerprint.clone()), fingerprint);
                     let ms = elapsed.as_secs_f64() * 1e3 / 40.0;
                     samples.push(ms);
+                    let per_tick = |d: Duration| d.as_secs_f64() * 1000.0 / 40.0;
+                    let update: Vec<_> = shard_work.into_iter().map(per_tick).collect();
+                    let encode: Vec<_> = shard_encode.into_iter().map(per_tick).collect();
+                    println!(
+                        "waypoint_stages population={population} mode={mode} scope_ms={:.3} wait_ms={:.3} merge_encode_ms={:.3} update={update:?} encode={encode:?} retained={:?}",
+                        per_tick(scope_time),
+                        per_tick(wait_time),
+                        per_tick(merge_time),
+                        manager.retained_vectors(out.capacity())
+                    );
                     println!(
                         "waypoint_parallel population={population} mode={mode} shards={} ms={ms:.3} packets={packets} global_hash={}",
                         manager.shards.len(),
