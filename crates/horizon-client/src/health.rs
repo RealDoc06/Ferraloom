@@ -920,6 +920,9 @@ mod tests {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../.local/horizon-client")
             .join(horizon_core::VANILLA_VERSION);
+        if !root.join("movement-properties.nbt").exists() {
+            return;
+        }
         let assets = crate::assets::Assets::load(&root).expect("prepared vanilla resources");
         let resources = crate::motion::MotionResources::load(&root, &assets).unwrap();
         let mut player =
