@@ -181,7 +181,7 @@ impl BlockReader<'_> {
                 self.world
                     .chunks
                     .get(&key)
-                    .map(|chunk| crate::chunk::ChunkBlocks::new(chunk)),
+                    .map(|chunk| crate::chunk::ChunkBlocks::new(&chunk.sections)),
             ));
             self.section_y = i32::MIN;
         }
@@ -477,7 +477,7 @@ mod tests {
                 assert_eq!(reader.block(x + dx, y, z), world.block(x + dx, y, z));
             }
             if let Some(chunk) = world.chunks.get(&(x >> 4, z >> 4)) {
-                let blocks = crate::chunk::ChunkBlocks::new(chunk).select_section(y >> 4);
+                let blocks = crate::chunk::ChunkBlocks::new(&chunk.sections).select_section(y >> 4);
                 assert_eq!(blocks.block(x, y, z), chunk.block(x, y, z));
                 // The handle also supports callers that have not selected this section.
                 assert_eq!(blocks.block(x, y + 16, z), chunk.block(x, y + 16, z));
