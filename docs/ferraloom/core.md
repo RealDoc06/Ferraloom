@@ -155,6 +155,16 @@ checking that each chunk finishes once with every neighbor decoration intact.
 Core tests cover carried allowance, atomic overruns, count limits and disabled
 reference behavior.
 
+Admission is explicit at each streaming pump: `Streaming::update` is unbounded
+for synchronous/client work, while `update_budgeted` consumes the allowance
+retained by `begin_server_tick`. `tick_server` and between-tick pregeneration
+select the latter and assert that selection in debug builds. Synchronous pumps
+neither spend nor replenish the allowance for later bounded pumps. The command
+harness freezes its clock while settling terrain; inheriting a spent allowance
+there previously prevented progress forever. Real single-player play was not
+affected: its loop renews the allowance every server tick, startup precedes the
+first budget, and saving already drains independently.
+
 On Linux, `horizon-threads` captures the launcher's allowed CPU mask before
 workers start. The tick chooses its lowest logical CPU; streaming, save, encode
 and network helper lanes exclude that CPU and its SMT siblings. All masks stay

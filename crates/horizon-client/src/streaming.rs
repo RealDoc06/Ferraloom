@@ -255,6 +255,8 @@ pub struct Streaming {
     deferred: std::collections::VecDeque<Done>,
     save_scanned: usize,
     integration: ferraloom_core::IntegrationBudget,
+    #[cfg(debug_assertions)]
+    last_update_budgeted: bool,
     sequence: u64,
     pub center: (i32, i32),
     pub radius: i32,
@@ -586,6 +588,8 @@ impl Streaming {
             deferred: Default::default(),
             save_scanned: 0,
             integration: Default::default(),
+            #[cfg(debug_assertions)]
+            last_update_budgeted: false,
             sequence: 0,
             center: (0, 0),
             radius: 8,
@@ -929,11 +933,48 @@ impl Streaming {
         self.integration = ferraloom_core::IntegrationBudget::new(limits);
     }
 
-    /// Advance streaming: collect finished work, then schedule more.
+    /// Synchronous/client pump: required terrain must make progress even when
+    /// no server tick advances. This never spends or replenishes its budget.
     /// Returns meshes ready for upload and columns that were unloaded.
     pub fn update(
         &mut self,
         world: &mut World,
+    ) -> (Vec<((i32, i32, i32), SectionMesh)>, Vec<Arc<Chunk>>) {
+        #[cfg(debug_assertions)]
+        {
+            self.last_update_budgeted = false;
+        }
+        self.update_inner(world, &mut ferraloom_core::IntegrationBudget::default())
+    }
+
+    /// Tick and between-tick pumps share the allowance from begin_server_tick.
+    pub fn update_budgeted(
+        &mut self,
+        world: &mut World,
+    ) -> (Vec<((i32, i32, i32), SectionMesh)>, Vec<Arc<Chunk>>) {
+        #[cfg(debug_assertions)]
+        {
+            self.last_update_budgeted = true;
+        }
+        let mut budget = std::mem::take(&mut self.integration);
+        let result = self.update_inner(world, &mut budget);
+        self.integration = budget;
+        result
+    }
+
+    /// Guard server drivers against accidentally selecting the unbounded pump.
+    pub fn debug_assert_budgeted_update(&self) {
+        #[cfg(debug_assertions)]
+        debug_assert!(
+            self.last_update_budgeted,
+            "server pump bypassed admission limits"
+        );
+    }
+
+    fn update_inner(
+        &mut self,
+        world: &mut World,
+        budget: &mut ferraloom_core::IntegrationBudget,
     ) -> (Vec<((i32, i32, i32), SectionMesh)>, Vec<Arc<Chunk>>) {
         let mut uploads = Vec::new();
         if self.paused {
@@ -954,11 +995,11 @@ impl Streaming {
         let mut pending = std::mem::take(&mut self.deferred);
         while let Some(done) = pending.pop_front() {
             let column = matches!(&done, Done::Generated(_));
-            if !self.integration.can_start(started.elapsed(), column) {
+            if !budget.can_start(started.elapsed(), column) {
                 pending.push_front(done);
                 break;
             }
-            self.integration.complete(column);
+            budget.complete(column);
             match done {
                 Done::Proto(x, z, proto, decorated) => {
                     self.generation_scan.exhausted = false;
@@ -1029,7 +1070,7 @@ impl Streaming {
             }
         }
         self.deferred.extend(pending);
-        self.integration.charge(started.elapsed());
+        budget.charge(started.elapsed());
         drop(span);
         let span = crate::spans::scope("st_unload");
         // Unload far columns.

@@ -338,7 +338,10 @@ impl Game<'_> {
             if self.options.dedicated.is_some() {
                 self.streaming.begin_server_tick();
             }
-            self.update_world();
+            self.update_world_with_budget(self.options.dedicated.is_some());
+            if self.options.dedicated.is_some() {
+                self.streaming.debug_assert_budgeted_update();
+            }
             // What server mods set in this level since its last tick.
             self.apply_mod_block_writes();
             result = if paused {
