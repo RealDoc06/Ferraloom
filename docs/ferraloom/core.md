@@ -63,6 +63,14 @@ Horizon reexports those old paths too; ticket propagation, map representation
 and iteration are unchanged. The crate depends only on `horizon-core` and
 `horizon-world`.
 
+Scheduled-tick registration membership and its waiting-for-eligibility state
+also live in `ferraloom-game`. A borrowed `LoadedTickChunks` view supplies the
+resident key token, membership lookup and original key traversal without owning
+chunk payloads. The client adapter retains integration tests against real
+resident chunks and saved block/fluid queues. The actual queues and behavior
+machinery already live in `horizon-core::ticks` and `horizon-world::level::Ticks`;
+this extraction preserves their admission, callback boundaries and unpack time.
+
 `Chunk` and `World` remain in Horizon for now: their block-entity types have
 inherent implementations across containers, sculk, spawners and other gameplay
 modules. Move those types with their methods in later units, rather than adding

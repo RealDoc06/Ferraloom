@@ -4,5 +4,6 @@
 pub mod chunk;
 pub mod collisions;
 pub mod fast_hash;
+pub mod tick_chunk_membership;
 pub mod ticket_levels;
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
