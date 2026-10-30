@@ -10,6 +10,7 @@ description = "Horizon native development client"
 [dependencies]
 pprof = { version = "0.15", optional = true, features = ["flamegraph"] }
 ferraloom-core = { path = "../ferraloom-core" }
+ferraloom-game = { path = "../ferraloom-game" }
 horizon-assets = { path = "../horizon-assets" }
 horizon-client-core = { path = "../horizon-client-core" }
 horizon-client-input = { path = "../horizon-client-input" }

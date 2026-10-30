@@ -50,6 +50,27 @@ renderers, baked models, audio, input, HUD and shaders stay client-only. The
 current `--no-default-features` build disables audio/controllers but still links
 client libraries; that is an interim build requirement, not the final boundary.
 
+## Extraction progress
+
+The first step-2 unit is `ferraloom-game::{chunk, collisions}`. It owns the
+existing copy-on-write `Section`/`Light` storage, palette configuration and
+borrowed block handle, plus the real `SceneCollisions` adapter used by gameplay.
+`ResidentWorld` supplies live borrowed sections, block reads and current piston
+state through static dispatch. Horizon's existing names re-export the shared
+implementation; its `SceneCollisions` alias selects the current `World`.
+The new crate depends only on `horizon-core` and `horizon-world`.
+
+`Chunk` and `World` remain in Horizon for now: their block-entity types have
+inherent implementations across containers, sculk, spawners and other gameplay
+modules. Move those types with their methods in later units, rather than adding
+duplicate state or client dependencies to the server crate. `GameLevel` and
+`with_level` likewise move subsystem by subsystem. This unit changes no tick
+order and does not enable region workers.
+
+Extraction commits preserve the existing serial trace. Confirmed discrepancies
+with vanilla's phase order are corrected in separate commits, each with a
+vanilla-backed case, before enabling the corresponding parallel phase.
+
 ## Live ownership
 
 `Server` owns global clocks, functions, scoreboard, game rules and dimensions
