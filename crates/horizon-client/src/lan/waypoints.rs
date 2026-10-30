@@ -189,8 +189,8 @@ struct Tick<'a> {
     serial: u64,
     players: &'a [Player],
     index: HashMap<u128, usize>,
-    /// The connections of the players in other levels: one who just left this level is
-    /// still told of the waypoints it loses (`removePlayer` disconnects them).
+    /// Fallback connections for receivers absent from `players`: a player who
+    /// left this level still loses its waypoints (`removePlayer` disconnects them).
     away: &'a [(u128, u32)],
     view: HashMap<u128, ([i32; 2], i32)>,
     /// Players a respawn replaced this tick: a new ServerPlayer, on its first tick.
@@ -529,8 +529,8 @@ impl Waypoints {
         self.tick_level(players, &[], respawned, locator_bar)
     }
 
-    /// [`Self::tick`] for one level of several: `away` are the connections of the players
-    /// in the other levels, for the untracks owed to one who has just left this one.
+    /// [`Self::tick`] for one level of several: `away` supplies connections for
+    /// receivers who left this level. Entries for current players are not queried.
     pub fn tick_level(
         &mut self,
         players: &[Player],
@@ -943,8 +943,8 @@ mod tests {
                 let a = player(1, 10, [0.0, 64.0, 0.0]);
                 let mut b = player(2, 20, [distance, 64.0, 0.0]);
                 b.transmit_range = range;
-                let expected =
-                    range > 0.0 && !(f64::from(b.distance_to(&a)) >= range.min(a.receive_range));
+                let ignored = f64::from(b.distance_to(&a)) >= range.min(a.receive_range);
+                let expected = range > 0.0 && !ignored;
                 let out = Waypoints::default().tick(&[a, b], &[], true);
                 assert_eq!(
                     !to(&out, 10).is_empty(),

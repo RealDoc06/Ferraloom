@@ -570,8 +570,8 @@ impl ServerEntity {
 #[derive(Default)]
 pub struct Tracker {
     seen: crate::fast_hash::FxHashSet<i32>,
-    /// Fast membership for low network ids; the set still defines iteration
-    /// and removal order. Bounded at 8 KiB per receiver, regardless of uptime.
+    /// Fast membership for ids below 65,536, capped at 1,024 cached words.
+    /// The set still defines iteration and removal order.
     low_ids: Vec<u64>,
     #[cfg(test)]
     use_hash: bool,
