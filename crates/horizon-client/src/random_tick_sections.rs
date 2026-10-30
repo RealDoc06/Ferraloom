@@ -78,7 +78,14 @@ mod tests {
         cache.clear(); // resource reload, with changed facts for the same state IDs
         assert_eq!(cache.get_with((0, 0), &chunk, |id| id == 0).len(), SECTIONS);
         cache.remove(&(0, 0));
-        assert!(cache.chunks.is_empty());
+        // Eviction must rescan even if the caller presents the same Arc again.
+        let mut scanned = 0;
+        let sections = cache.get_with((0, 0), &chunk, |_| {
+            scanned += 1;
+            false
+        });
+        assert_eq!(sections.len(), 0);
+        assert!(scanned > 0);
     }
 
     #[test]
