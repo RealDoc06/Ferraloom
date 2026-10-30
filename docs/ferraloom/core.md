@@ -71,6 +71,14 @@ resident chunks and saved block/fluid queues. The actual queues and behavior
 machinery already live in `horizon-core::ticks` and `horizon-world::level::Ticks`;
 this extraction preserves their admission, callback boundaries and unpack time.
 
+The first canonical `ServerLevel` unit owns those block/fluid queues, scheduled
+membership and tickets together. `Game` holds the active value; `Parked` holds
+each inactive value. Dimension changes transfer that owner intact instead of
+swapping its individual fields. Gameplay borrows its existing queues directly;
+there is no second scheduler, copied state or changed callback boundary. The
+resident world, random-section cache and entities join this owner in subsequent
+units. Player access is a separate extraction; guest swaps are still present.
+
 `Chunk` and `World` remain in Horizon for now: their block-entity types have
 inherent implementations across containers, sculk, spawners and other gameplay
 modules. Move those types with their methods in later units, rather than adding

@@ -1700,9 +1700,8 @@ struct Game<'a> {
     /// The open WinScreen (game/win.rs).
     win: Option<win::Win>,
     end: end::EndState,
-    block_ticks: Ticks,
-    tick_chunks: horizon_client::tick_chunk_membership::TickChunkMembership,
-    tickets: horizon_client::ticket_levels::ChunkTickets,
+    /// Canonical per-level simulation state, moved intact between dimensions.
+    server_level: ferraloom_game::server_level::ServerLevel,
     random_tick_sections: horizon_client::random_tick_sections::RandomTickSections,
     level_events: Vec<LevelEvent>,
     falling: Vec<FallingBlock>,
@@ -2950,12 +2949,16 @@ impl Game<'_> {
             rand_sequences: &mut self.rand_sequences,
             pending: &mut self.pending,
             spill: &mut self.spill,
-            tickets: self.tickets.levels(),
+            tickets: self.server_level.tickets.levels(),
             random_tick_sections: &mut self.random_tick_sections,
             lid_openers: &self.lid_openers,
             client_side: self.remote.is_some(),
         };
-        let result = f(self.res.behaviours(), &mut level, &mut self.block_ticks);
+        let result = f(
+            self.res.behaviours(),
+            &mut level,
+            &mut self.server_level.block_ticks,
+        );
         self.flush_spill();
         result
     }
@@ -2984,21 +2987,26 @@ impl Game<'_> {
     }
     /// Track which chunks are ticking (Ticks needs chunk load/unload).
     fn sync_tick_chunks(&mut self) {
-        if !self.tick_chunks.synchronize(&self.world.chunks) {
+        if !self
+            .server_level
+            .tick_chunks
+            .synchronize(&self.world.chunks)
+        {
             return;
         }
         // Move only the added keys out so registration can borrow all of Game.
-        let added = self.tick_chunks.take_added();
+        let added = self.server_level.tick_chunks.take_added();
         for &key in &added {
             self.register_chunk_ticks(key);
         }
-        for &key in self.tick_chunks.removed() {
+        for &key in self.server_level.tick_chunks.removed() {
             self.random_tick_sections.remove(&key);
             self.portals.sections.remove(&key);
-            self.block_ticks
+            self.server_level
+                .block_ticks
                 .remove_chunk(horizon_core::position::ChunkPos::new(key.0, key.1));
         }
-        self.tick_chunks.recycle_added(added);
+        self.server_level.tick_chunks.recycle_added(added);
     }
     /// `DistanceManager`'s tickets of the level in place, from every player in
     /// it (the local player, LAN guests, a server's players) and its forced
@@ -3028,23 +3036,24 @@ impl Game<'_> {
                     simulation_distance: self.settings.simulation_distance.max(2),
                 }
             });
-        self.tickets.update(sources);
+        self.server_level.tickets.update(sources);
     }
     /// `ServerLevel.startTickingChunk`: a loaded chunk's saved ticks are
     /// scheduled from the game time at which it becomes a ticking chunk
     /// (block ticking, with its neighbours loaded). Chunks become ticking
     /// between ticks in vanilla: before this tick's clock advanced.
     fn start_ticking_chunks(&mut self) {
-        let levels = self.tickets.levels();
+        let levels = self.server_level.tickets.levels();
         let world = &self.world;
         let started = self
+            .server_level
             .tick_chunks
             .start_ticking(|(x, z)| levels.loaded_ticking(x, z) && ticking_chunk(world, x, z));
         let time = self.world.game_time - 1;
         for (x, z) in started {
             let pos = horizon_core::position::ChunkPos::new(x, z);
-            self.block_ticks.blocks.unpack_chunk(pos, time);
-            self.block_ticks.fluids.unpack_chunk(pos, time);
+            self.server_level.block_ticks.blocks.unpack_chunk(pos, time);
+            self.server_level.block_ticks.fluids.unpack_chunk(pos, time);
         }
     }
     /// ServerLevel.tick block phases: scheduled ticks, random ticks in the
@@ -3052,7 +3061,7 @@ impl Game<'_> {
     fn tick_blocks(&mut self) -> Result<()> {
         self.sync_tick_chunks();
         self.start_ticking_chunks();
-        let levels = self.tickets.levels();
+        let levels = self.server_level.tickets.levels();
         // Keep the world map's chunk order, including empty chunks
         // (tick_chunk_random still draws for precipitation in those).
         let ticking: Vec<_> = self
@@ -3226,7 +3235,7 @@ impl Game<'_> {
         });
         // `PistonMovingBlockEntity.tick` pushes what its block just ran into,
         // with the progress it is about to take.
-        let pushes = std::mem::take(&mut self.block_ticks.piston_pushes);
+        let pushes = std::mem::take(&mut self.server_level.block_ticks.piston_pushes);
         self.push_piston_entities(pushes);
         self.process_level_events()?;
         self.sync_moving_pistons();
@@ -3237,6 +3246,7 @@ impl Game<'_> {
     fn sync_moving_pistons(&mut self) {
         let previous = std::mem::take(&mut self.world.moving_pistons);
         let current: Vec<_> = self
+            .server_level
             .block_ticks
             .moving_pistons
             .iter()
@@ -9105,8 +9115,8 @@ impl Game<'_> {
         self.dim = dim;
         self.world_root = save_root.clone();
         self.world_flat = horizon_client::save::WorldGen::read(&save_root).is_some_and(|w| w.flat);
-        self.block_ticks = Ticks::new(self.level.seed as i32);
-        self.tick_chunks.clear();
+        self.server_level.block_ticks = Ticks::new(self.level.seed as i32);
+        self.server_level.tick_chunks.clear();
         self.clear_entities();
         self.travelling = None;
         self.player = None;
@@ -9229,8 +9239,8 @@ impl Game<'_> {
         self.save = save;
         self.dim = target;
         self.level.dimension = target.id().to_owned();
-        self.block_ticks = Ticks::new(self.level.seed as i32);
-        self.tick_chunks.clear();
+        self.server_level.block_ticks = Ticks::new(self.level.seed as i32);
+        self.server_level.tick_chunks.clear();
         self.falling.clear();
         self.tnts.clear();
         self.mobs.clear();
@@ -13899,9 +13909,7 @@ impl<'a> Game<'a> {
             end_portal_travel: false,
             win: None,
             end: Default::default(),
-            block_ticks: Ticks::new(0),
-            tick_chunks: Default::default(),
-            tickets: Default::default(),
+            server_level: ferraloom_game::server_level::ServerLevel::new(0),
             random_tick_sections: Default::default(),
             level_events: Vec::new(),
             falling: Vec::new(),

@@ -415,7 +415,7 @@ impl Game<'_> {
     /// Sets `be_anims.conduit_servers` to the conduits in the
     /// chunks that tick blocks, keeping the state of those already known.
     fn find_conduits(&mut self) {
-        let levels = self.tickets.levels();
+        let levels = self.server_level.tickets.levels();
         let kinds = &self.be_anims.kinds;
         let is_conduit = |id: u32| matches!(kinds.get(id as usize), Some(Some(Ticker::Conduit)));
         let mut found = Vec::new();
@@ -455,7 +455,11 @@ impl Game<'_> {
             self.be_anims.conduit_servers.remove(&pos);
             return;
         }
-        if !self.tickets.levels().block_ticking_at(pos[0], pos[2])
+        if !self
+            .server_level
+            .tickets
+            .levels()
+            .block_ticking_at(pos[0], pos[2])
             || !self.border.contains(f64::from(pos[0]), f64::from(pos[2]))
         {
             return;
@@ -645,7 +649,7 @@ impl Game<'_> {
     /// (`Level.tickBlockEntities`): the cooldown an entry started runs out,
     /// and every 2400 ticks `triggerCooldown` sends its block event.
     fn tick_gateway_servers(&mut self) {
-        let levels = self.tickets.levels();
+        let levels = self.server_level.tickets.levels();
         let mut positions: Vec<[i32; 3]> = self
             .be_anims
             .gateway_servers

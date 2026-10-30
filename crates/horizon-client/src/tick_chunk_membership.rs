@@ -90,10 +90,9 @@ mod tests {
         }
         let mut map = ChunkMap::default();
         let chunk = Arc::new(Chunk::empty(0, 0));
-        let mut cache = TickChunkMembership::default();
+        let mut level = ferraloom_game::server_level::ServerLevel::new(0);
         let mut old_keys = HashSet::new();
         let mut old_ticks = Ticks::default();
-        let mut new_ticks = Ticks::default();
         let keys = [(-3, -1), (2, 4), (-2, -1)];
         for step in 0..7 {
             match step {
@@ -110,9 +109,9 @@ mod tests {
                 }
                 4 => {
                     // Reset only the scheduler: resident token is unchanged.
-                    new_ticks = Ticks::default();
+                    level.block_ticks = Ticks::default();
                     old_ticks = Ticks::default();
-                    cache.clear();
+                    level.tick_chunks.clear();
                     old_keys.clear();
                 }
                 5 => {
@@ -121,9 +120,9 @@ mod tests {
                 6 => {
                     map = ChunkMap::default();
                     map.insert(keys[0], chunk.clone());
-                    new_ticks = Ticks::default();
+                    level.block_ticks = Ticks::default();
                     old_ticks = Ticks::default();
-                    cache.clear();
+                    level.tick_chunks.clear();
                     old_keys.clear();
                 }
                 _ => {}
@@ -136,21 +135,21 @@ mod tests {
                 old_ticks.remove_chunk(ChunkPos::new(key.0, key.1));
             }
             old_keys = loaded;
-            if cache.synchronize(&map) {
-                let added = cache.take_added();
+            if level.tick_chunks.synchronize(&map) {
+                let added = level.tick_chunks.take_added();
                 for &key in &added {
-                    register(&mut new_ticks, key);
+                    register(&mut level.block_ticks, key);
                 }
-                for &key in cache.removed() {
-                    new_ticks.remove_chunk(ChunkPos::new(key.0, key.1));
+                for &key in level.tick_chunks.removed() {
+                    level.block_ticks.remove_chunk(ChunkPos::new(key.0, key.1));
                 }
-                cache.recycle_added(added);
+                level.tick_chunks.recycle_added(added);
             }
             for key in keys {
                 let pos = ChunkPos::new(key.0, key.1);
                 for (old, new) in [
-                    (&old_ticks.blocks, &new_ticks.blocks),
-                    (&old_ticks.fluids, &new_ticks.fluids),
+                    (&old_ticks.blocks, &level.block_ticks.blocks),
+                    (&old_ticks.fluids, &level.block_ticks.fluids),
                 ] {
                     assert_eq!(
                         old.chunk(pos).map(|c| c.queued()),
