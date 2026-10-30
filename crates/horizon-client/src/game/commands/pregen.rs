@@ -255,7 +255,8 @@ impl Game<'_> {
             }
             self.streaming
                 .wait((until - now).min(Duration::from_millis(5)));
-            self.update_world();
+            self.update_world_with_budget(true);
+            self.streaming.debug_assert_budgeted_update();
         }
     }
 
