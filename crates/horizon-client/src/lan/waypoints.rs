@@ -1544,8 +1544,12 @@ mod tests {
                     p
                 })
                 .collect();
-            let away =
-                std::sync::Arc::new(players.iter().map(|p| (p.uuid, p.conn.unwrap())).collect());
+            let away = std::sync::Arc::new(
+                players
+                    .iter()
+                    .map(|p| (p.uuid, p.conn.unwrap()))
+                    .collect::<Vec<_>>(),
+            );
             for frame in 0..18 {
                 // Split an already populated manager, moving its rows intact.
                 if frame == 2 {
