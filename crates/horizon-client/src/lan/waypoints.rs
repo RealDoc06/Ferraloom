@@ -182,6 +182,10 @@ pub struct Waypoints {
     tick: u64,
     input_index: HashMap<u128, usize>,
     view: HashMap<u128, ([i32; 2], i32)>,
+    #[cfg(test)]
+    count_only: bool,
+    #[cfg(test)]
+    emitted: usize,
 }
 
 /// One tick's players, and the packets for their connections.
@@ -197,6 +201,10 @@ struct Tick<'a> {
     fresh: &'a [u128],
     enabled: bool,
     out: &'a mut Vec<(u32, C)>,
+    #[cfg(test)]
+    count_only: bool,
+    #[cfg(test)]
+    emitted: usize,
 }
 
 impl<'a> Tick<'a> {
@@ -219,6 +227,23 @@ impl<'a> Tick<'a> {
         }) else {
             return;
         };
+        self.emit(conn, source, operation, icon, target);
+    }
+    fn emit(
+        &mut self,
+        conn: u32,
+        source: u128,
+        operation: i32,
+        icon: &Icon,
+        target: WaypointTarget,
+    ) {
+        #[cfg(test)]
+        {
+            self.emitted += 1;
+            if self.count_only {
+                return;
+            }
+        }
         self.out
             .push((conn, waypoint(source, operation, icon, target)));
     }
@@ -351,10 +376,7 @@ impl<'a> Tick<'a> {
             }
         };
         if let Some(conn) = r.conn {
-            self.out.push((
-                conn,
-                waypoint(s.uuid, waypoint_operation::UPDATE, &c.icon, target),
-            ));
+            self.emit(conn, s.uuid, waypoint_operation::UPDATE, &c.icon, target);
         }
     }
 }
@@ -566,6 +588,10 @@ impl Waypoints {
             fresh: respawned,
             enabled: locator_bar,
             out,
+            #[cfg(test)]
+            count_only: self.count_only,
+            #[cfg(test)]
+            emitted: 0,
         };
         // Vanilla reads the rule when it connects; changing it breaks or remakes
         // every connection (MinecraftServer.onGameRuleChanged).
@@ -657,6 +683,10 @@ impl Waypoints {
                     self.create_connection(&mut t, receiver, p.uuid);
                 }
             }
+        }
+        #[cfg(test)]
+        {
+            self.emitted = t.emitted;
         }
         self.input_index = t.index;
         self.view = t.view;
@@ -757,6 +787,134 @@ mod tests {
         }
         samples.sort_by(f64::total_cmp);
         println!("500p median_ms_per_tick={:.3}", samples[2]);
+    }
+
+    /// Separate the pooled production pass from packet encoding and queueing.
+    #[test]
+    #[ignore]
+    fn waypoint_pipeline_breakdown_benchmark() {
+        use crate::lan::{Holding, PlayerSender};
+        use std::{
+            hash::{Hash, Hasher},
+            hint::black_box,
+            sync::{Arc, atomic::Ordering, mpsc},
+            time::{Duration, Instant},
+        };
+        println!(
+            "waypoint_layout clientbound_bytes={} tracked_waypoint_bytes={}",
+            std::mem::size_of::<C>(),
+            std::mem::size_of::<TrackedWaypoint>()
+        );
+        let mut expected: Option<(usize, u64)> = None;
+        for mode in ["allocating", "pooled", "count-only"] {
+            let mut samples = Vec::new();
+            for _ in 0..5 {
+                let mut players: Vec<_> = (0..500)
+                    .map(|i| {
+                        player(
+                            i + 1,
+                            i as u32,
+                            [
+                                if i < 300 {
+                                    (i % 40) as f64
+                                } else {
+                                    i as f64 * 32.0
+                                },
+                                64.0,
+                                0.0,
+                            ],
+                        )
+                    })
+                    .collect();
+                let mut manager = Waypoints {
+                    count_only: mode == "count-only",
+                    ..Waypoints::default()
+                };
+                black_box(manager.tick(&players, &[], true));
+                let mut out = if mode == "pooled" {
+                    Vec::with_capacity(players.len() * players.len())
+                } else {
+                    Vec::new()
+                };
+                let mut deliveries: std::collections::HashMap<u32, Vec<Vec<u8>>> =
+                    Default::default();
+                let (tx, rx) = mpsc::channel();
+                let senders: Vec<_> = (0..500)
+                    .map(|_| PlayerSender::new(tx.clone(), Arc::default()))
+                    .collect();
+                let _holding = Holding::start();
+                let (mut pass, mut encode, mut send) =
+                    (Duration::ZERO, Duration::ZERO, Duration::ZERO);
+                let mut packets = 0;
+                let mut hash = std::collections::hash_map::DefaultHasher::new();
+                for tick in 0..40 {
+                    for p in &mut players {
+                        p.position[0] += 0.2;
+                        p.position[2] = (tick as f64 * 0.03 + p.uuid as f64).sin() * 8.0;
+                    }
+                    if mode == "allocating" {
+                        out = Vec::new();
+                    }
+                    let start = Instant::now();
+                    if mode == "allocating" {
+                        out = black_box(manager.tick(black_box(&players), &[], true));
+                    } else {
+                        manager.tick_level_into(black_box(&players), &[], &[], true, &mut out);
+                    }
+                    pass += start.elapsed();
+                    packets += manager.emitted;
+                    if mode == "count-only" {
+                        continue;
+                    }
+                    assert_eq!(out.len(), manager.emitted);
+                    let start = Instant::now();
+                    for (conn, packet) in out.drain(..) {
+                        deliveries.entry(conn).or_default().push(packet.encode());
+                    }
+                    encode += start.elapsed();
+                    // Fingerprinting stays outside every measured phase.
+                    for conn in 0..500u32 {
+                        conn.hash(&mut hash);
+                        if let Some(bodies) = deliveries.get(&conn) {
+                            for body in bodies {
+                                body.hash(&mut hash);
+                            }
+                        }
+                    }
+                    let start = Instant::now();
+                    for (conn, sender) in senders.iter().enumerate() {
+                        if let Some(bodies) = deliveries.get_mut(&(conn as u32)) {
+                            sender.send_many(bodies.drain(..));
+                        }
+                    }
+                    send += start.elapsed();
+                    // Model writer-side disposal outside the tick's measured work.
+                    for sender in &senders {
+                        sender.flush();
+                        sender.pending.store(0, Ordering::Relaxed);
+                    }
+                    rx.try_iter().for_each(drop);
+                }
+                let result = (packets, hash.finish());
+                if mode == "count-only" {
+                    assert_eq!(expected.unwrap().0, packets);
+                } else {
+                    assert_eq!(*expected.get_or_insert(result), result);
+                }
+                let ms = |d: Duration| d.as_secs_f64() * 1e3 / 40.0;
+                let sample = [ms(pass), ms(encode), ms(send)];
+                println!(
+                    "waypoint_pipeline mode={mode} pass_ms={:.3} encode_ms={:.3} send_ms={:.3} packets={packets} hash={}",
+                    sample[0], sample[1], sample[2], result.1
+                );
+                samples.push(sample);
+            }
+            samples.sort_by(|a, b| a[0].total_cmp(&b[0]));
+            println!(
+                "waypoint_pipeline mode={mode} median_pass_ms={:.3} encode_ms={:.3} send_ms={:.3}",
+                samples[2][0], samples[2][1], samples[2][2]
+            );
+        }
     }
 
     #[test]
