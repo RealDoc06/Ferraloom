@@ -27,8 +27,8 @@ fn transmit_range(crouching: bool, invisible: bool, head: Option<&ItemStack>) ->
 #[derive(Default)]
 pub(super) struct WaypointTick {
     levels: std::collections::BTreeMap<String, LevelPlayers>,
-    connections: Vec<(u128, u32)>,
-    respawned: Vec<u128>,
+    connections: std::sync::Arc<Vec<(u128, u32)>>,
+    respawned: std::sync::Arc<Vec<u128>>,
     deliveries: std::collections::HashMap<u32, Vec<Vec<u8>>>,
     live_connections: std::collections::HashSet<u32>,
     out: Vec<(u32, waypoints::Delivery)>,
@@ -45,7 +45,9 @@ struct LevelPlayers {
 impl WaypointTick {
     fn push(&mut self, level: &str, player: waypoints::Player) {
         if let Some(conn) = player.conn {
-            self.connections.push((player.uuid, conn));
+            std::sync::Arc::get_mut(&mut self.connections)
+                .expect("waypoint snapshot released")
+                .push((player.uuid, conn));
         }
         if !self.levels.contains_key(level) {
             self.levels
@@ -75,8 +77,12 @@ impl Game<'_> {
     /// and joins the new one's (`addDuringTeleport`).
     pub(super) fn lan_update_waypoints(&mut self, host: &mut LanHost, state: Option<&HostState>) {
         let mut scratch = std::mem::take(&mut host.waypoint_tick);
-        scratch.connections.clear();
-        scratch.respawned.clear();
+        std::sync::Arc::get_mut(&mut scratch.connections)
+            .expect("waypoint snapshot released")
+            .clear();
+        std::sync::Arc::get_mut(&mut scratch.respawned)
+            .expect("waypoint snapshot released")
+            .clear();
         for list in scratch.levels.values_mut() {
             list.used = 0;
         }
@@ -116,7 +122,9 @@ impl Game<'_> {
             if g.dead {
                 host.waypoint_dead.insert(g.uuid);
             } else if host.waypoint_dead.remove(&g.uuid) {
-                scratch.respawned.push(g.uuid);
+                std::sync::Arc::get_mut(&mut scratch.respawned)
+                    .expect("waypoint snapshot released")
+                    .push(g.uuid);
             }
             // Player.updatePlayerPose: the shift key crouches unless flying.
             let crouching = g.sneaking && !g.flying && !g.fall_flying && !g.sleeping;
@@ -147,7 +155,7 @@ impl Game<'_> {
             list.players.truncate(list.used);
             let manager = host.waypoints.entry(level.clone()).or_default();
             manager.tick_level_into(
-                &list.players,
+                &mut list.players,
                 &scratch.connections,
                 &scratch.respawned,
                 locator_bar,

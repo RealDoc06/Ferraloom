@@ -264,6 +264,103 @@ struct ReceiverShard {
     time: ShardTime,
 }
 
+/// Owned only while a pass runs; the original player buffer returns to the caller.
+struct Snapshot {
+    players: Vec<Player>,
+    away: std::sync::Arc<Vec<(u128, u32)>>,
+    respawned: std::sync::Arc<Vec<u128>>,
+    enabled: bool,
+    local: Option<u32>,
+    #[cfg(any(test, feature = "profiler"))]
+    started: std::time::Instant,
+}
+
+impl Snapshot {
+    fn frame(&self) -> Frame<'_> {
+        Frame {
+            players: &self.players,
+            away: &self.away,
+            respawned: &self.respawned,
+            enabled: self.enabled,
+            local: self.local,
+            #[cfg(any(test, feature = "profiler"))]
+            started: self.started,
+        }
+    }
+}
+
+struct Work {
+    shard: ReceiverShard,
+    snapshot: std::sync::Arc<Snapshot>,
+    encode: bool,
+}
+
+/// A persistent helper parked on a mailbox between passes. Only its owned
+/// receiver state and an immutable snapshot cross the thread boundary.
+struct Helper {
+    tx: Option<std::sync::mpsc::Sender<Work>>,
+    rx: std::sync::mpsc::Receiver<ReceiverShard>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Helper {
+    fn new() -> Self {
+        let (tx, work) = std::sync::mpsc::channel::<Work>();
+        let (done, rx) = std::sync::mpsc::channel();
+        let thread = std::thread::Builder::new()
+            .name("waypoint-worker".into())
+            .spawn(move || {
+                horizon_threads::worker_affinity();
+                while let Ok(Work {
+                    mut shard,
+                    snapshot,
+                    encode,
+                }) = work.recv()
+                {
+                    shard.tick(snapshot.frame(), encode);
+                    // Release the input before publishing completion, so the caller
+                    // can recover its original vector without cloning any players.
+                    drop(snapshot);
+                    if done.send(shard).is_err() {
+                        break;
+                    }
+                }
+            })
+            .expect("start waypoint helper");
+        Self {
+            tx: Some(tx),
+            rx,
+            thread: Some(thread),
+        }
+    }
+
+    fn send(&self, work: Work) {
+        self.tx
+            .as_ref()
+            .unwrap()
+            .send(work)
+            .unwrap_or_else(|_| panic!("waypoint helper stopped"));
+    }
+
+    fn receive(&self) -> ReceiverShard {
+        self.rx.recv().expect("waypoint helper stopped")
+    }
+}
+
+impl Drop for Helper {
+    fn drop(&mut self) {
+        self.tx.take();
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
+
+struct RunTime {
+    #[cfg(any(test, feature = "profiler"))]
+    main_done: std::time::Duration,
+}
+
 #[derive(Clone, Copy)]
 struct Frame<'a> {
     players: &'a [Player],
@@ -365,6 +462,9 @@ impl Drop for WaypointProfile {
 /// only its connection rows mutate. The merge restores the serial packet order.
 pub struct ParallelWaypoints {
     shards: Vec<ReceiverShard>,
+    helpers: Vec<Helper>,
+    #[cfg(test)]
+    transient_helpers: bool,
     #[cfg(test)]
     threads: Option<usize>,
     #[cfg(test)]
@@ -385,6 +485,9 @@ impl Default for ParallelWaypoints {
     fn default() -> Self {
         Self {
             shards: vec![ReceiverShard::default()],
+            helpers: Vec::new(),
+            #[cfg(test)]
+            transient_helpers: false,
             #[cfg(test)]
             threads: None,
             #[cfg(test)]
@@ -434,13 +537,68 @@ impl ParallelWaypoints {
         }
     }
 
+    fn run_persistent(&mut self, snapshot: &std::sync::Arc<Snapshot>, encode: bool) -> RunTime {
+        while self.helpers.len() < self.shards.len() - 1 {
+            self.helpers.push(Helper::new());
+        }
+        for (helper, shard) in self.helpers.iter().zip(&mut self.shards[1..]) {
+            helper.send(Work {
+                shard: std::mem::take(shard),
+                snapshot: snapshot.clone(),
+                encode,
+            });
+        }
+        self.shards[0].tick(snapshot.frame(), encode);
+        #[cfg(any(test, feature = "profiler"))]
+        let main_done = snapshot.started.elapsed();
+        for (helper, shard) in self.helpers.iter().zip(&mut self.shards[1..]) {
+            *shard = helper.receive();
+        }
+        RunTime {
+            #[cfg(any(test, feature = "profiler"))]
+            main_done,
+        }
+    }
+
+    #[cfg(test)]
+    fn run_scoped(&mut self, snapshot: &Snapshot, encode: bool) -> RunTime {
+        let frame = snapshot.frame();
+        let spawn_on_helpers = self.spawn_on_helpers;
+        let yield_to_helpers = self.yield_to_helpers;
+        let (tick_shard, helpers) = self.shards.split_first_mut().unwrap();
+        let mut main_done = std::time::Duration::ZERO;
+        if spawn_on_helpers {
+            horizon_threads::worker_affinity();
+        }
+        std::thread::scope(|scope| {
+            for shard in helpers {
+                std::thread::Builder::new()
+                    .name("waypoint-worker".into())
+                    .spawn_scoped(scope, move || {
+                        horizon_threads::worker_affinity();
+                        shard.tick(frame, encode);
+                    })
+                    .expect("start waypoint worker");
+            }
+            if spawn_on_helpers {
+                horizon_threads::tick_affinity();
+            }
+            if yield_to_helpers {
+                std::thread::yield_now();
+            }
+            tick_shard.tick(frame, encode);
+            main_done = snapshot.started.elapsed();
+        });
+        RunTime { main_done }
+    }
+
     /// Join encoded output in the original global order. The local receiver's
     /// typed updates are applied by the caller only after the complete pass.
     pub fn tick_level_into(
         &mut self,
-        players: &[Player],
-        away: &[(u128, u32)],
-        respawned: &[u128],
+        players: &mut Vec<Player>,
+        away: &std::sync::Arc<Vec<(u128, u32)>>,
+        respawned: &std::sync::Arc<Vec<u128>>,
         locator_bar: bool,
         local: Option<u32>,
         out: &mut Vec<(u32, Delivery)>,
@@ -462,64 +620,35 @@ impl ParallelWaypoints {
         let encode_after_join = false;
         #[cfg(any(test, feature = "profiler"))]
         let start = std::time::Instant::now();
-        #[cfg(any(test, feature = "profiler"))]
-        let main_done;
-        let frame = Frame {
-            players,
-            away,
-            respawned,
+        let snapshot = std::sync::Arc::new(Snapshot {
+            players: std::mem::take(players),
+            away: away.clone(),
+            respawned: respawned.clone(),
             enabled: locator_bar,
             local,
             #[cfg(any(test, feature = "profiler"))]
             started: start,
-        };
-        if self.shards.len() == 1 {
-            self.shards[0].tick(frame, !encode_after_join);
-            #[cfg(any(test, feature = "profiler"))]
-            {
-                main_done = start.elapsed();
+        });
+        let _run = if self.shards.len() == 1 {
+            self.shards[0].tick(snapshot.frame(), !encode_after_join);
+            RunTime {
+                #[cfg(any(test, feature = "profiler"))]
+                main_done: start.elapsed(),
             }
         } else {
             #[cfg(test)]
-            let spawn_on_helpers = self.spawn_on_helpers;
-            #[cfg(test)]
-            let yield_to_helpers = self.yield_to_helpers;
-            let (tick_shard, helpers) = self.shards.split_first_mut().unwrap();
-            #[cfg(any(test, feature = "profiler"))]
-            let mut done = std::time::Duration::ZERO;
-            #[cfg(test)]
-            if spawn_on_helpers {
-                horizon_threads::worker_affinity();
-            }
-            std::thread::scope(|scope| {
-                for shard in helpers {
-                    std::thread::Builder::new()
-                        .name("waypoint-worker".into())
-                        .spawn_scoped(scope, move || {
-                            horizon_threads::worker_affinity();
-                            shard.tick(frame, !encode_after_join);
-                        })
-                        .expect("start waypoint worker");
-                }
-                #[cfg(test)]
-                if spawn_on_helpers {
-                    horizon_threads::tick_affinity();
-                }
-                #[cfg(test)]
-                if yield_to_helpers {
-                    std::thread::yield_now();
-                }
-                tick_shard.tick(frame, !encode_after_join);
-                #[cfg(any(test, feature = "profiler"))]
-                {
-                    done = start.elapsed();
-                }
-            });
-            #[cfg(any(test, feature = "profiler"))]
             {
-                main_done = done;
+                if self.transient_helpers {
+                    self.run_scoped(&snapshot, !encode_after_join)
+                } else {
+                    self.run_persistent(&snapshot, !encode_after_join)
+                }
             }
-        }
+            #[cfg(not(test))]
+            {
+                self.run_persistent(&snapshot, !encode_after_join)
+            }
+        };
         #[cfg(any(test, feature = "profiler"))]
         let merge_start = std::time::Instant::now();
         #[cfg(test)]
@@ -556,12 +685,18 @@ impl ParallelWaypoints {
         {
             self.time = PassTime {
                 scope: merge_start.duration_since(start),
-                wait: merge_start.duration_since(start).saturating_sub(main_done),
+                wait: merge_start
+                    .duration_since(start)
+                    .saturating_sub(_run.main_done),
                 merge: merge_start.elapsed(),
             };
         }
         #[cfg(feature = "profiler")]
-        self.record_profile(players.len(), out.capacity());
+        self.record_profile(snapshot.players.len(), out.capacity());
+        *players = std::sync::Arc::try_unwrap(snapshot)
+            .ok()
+            .expect("waypoint helpers released their snapshot")
+            .players;
     }
 
     #[cfg(any(test, feature = "profiler"))]
@@ -1409,7 +1544,8 @@ mod tests {
                     p
                 })
                 .collect();
-            let away: Vec<_> = players.iter().map(|p| (p.uuid, p.conn.unwrap())).collect();
+            let away =
+                std::sync::Arc::new(players.iter().map(|p| (p.uuid, p.conn.unwrap())).collect());
             for frame in 0..18 {
                 // Split an already populated manager, moving its rows intact.
                 if frame == 2 {
@@ -1444,7 +1580,19 @@ mod tests {
                 let enabled = frame != 5 && frame != 11;
                 let expected = reference.tick_level(&players, &away, respawned, enabled);
                 let mut actual = Vec::new();
-                parallel.tick_level_into(&players, &away, respawned, enabled, Some(3), &mut actual);
+                let respawned = std::sync::Arc::new(respawned.to_vec());
+                let buffer = players.as_ptr();
+                parallel.tick_level_into(
+                    &mut players,
+                    &away,
+                    &respawned,
+                    enabled,
+                    Some(3),
+                    &mut actual,
+                );
+                assert_eq!(players.as_ptr(), buffer);
+                assert_eq!(std::sync::Arc::strong_count(&away), 1);
+                assert_eq!(std::sync::Arc::strong_count(&respawned), 1);
                 let encode_actual = actual
                     .into_iter()
                     .map(|(c, d)| {
@@ -1491,6 +1639,7 @@ mod tests {
                 "worker-encode",
                 "helper-spawn",
                 "yield-start",
+                "persistent",
             ] {
                 let mut samples = Vec::new();
                 for _ in 0..5 {
@@ -1514,13 +1663,16 @@ mod tests {
                         .collect();
                     let mut manager = ParallelWaypoints {
                         threads: (mode == "serial").then_some(1),
+                        transient_helpers: mode != "persistent",
                         encode_after_join: matches!(mode, "serial" | "after-join"),
                         spawn_on_helpers: mode == "helper-spawn",
                         yield_to_helpers: mode == "yield-start",
                         ..ParallelWaypoints::default()
                     };
                     let mut out = Vec::new();
-                    manager.tick_level_into(&players, &[], &[], true, None, &mut out);
+                    let away = std::sync::Arc::new(Vec::new());
+                    let respawned = std::sync::Arc::new(Vec::new());
+                    manager.tick_level_into(&mut players, &away, &respawned, true, None, &mut out);
                     out.clear();
                     let mut elapsed = Duration::ZERO;
                     let mut packets = 0;
@@ -1543,9 +1695,9 @@ mod tests {
                         }
                         let start = Instant::now();
                         manager.tick_level_into(
-                            std::hint::black_box(&players),
-                            &[],
-                            &[],
+                            std::hint::black_box(&mut players),
+                            &away,
+                            &respawned,
                             true,
                             None,
                             &mut out,
