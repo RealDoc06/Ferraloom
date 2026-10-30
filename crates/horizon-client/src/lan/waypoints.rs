@@ -239,6 +239,8 @@ fn encode_delivery(conn: u32, packet: C, local: Option<u32>) -> (u32, Delivery) 
 #[cfg(any(test, feature = "profiler"))]
 #[derive(Clone, Copy, Debug, Default)]
 struct ShardTime {
+    started: std::time::Duration,
+    finished: std::time::Duration,
     update: std::time::Duration,
     encode: std::time::Duration,
     packets: usize,
@@ -262,23 +264,32 @@ struct ReceiverShard {
     time: ShardTime,
 }
 
+#[derive(Clone, Copy)]
+struct Frame<'a> {
+    players: &'a [Player],
+    away: &'a [(u128, u32)],
+    respawned: &'a [u128],
+    enabled: bool,
+    local: Option<u32>,
+    #[cfg(any(test, feature = "profiler"))]
+    started: std::time::Instant,
+}
+
 impl ReceiverShard {
-    fn tick(
-        &mut self,
-        players: &[Player],
-        away: &[(u128, u32)],
-        respawned: &[u128],
-        enabled: bool,
-        local: Option<u32>,
-        encode: bool,
-    ) {
+    fn tick(&mut self, frame: Frame<'_>, encode: bool) {
         #[cfg(any(test, feature = "profiler"))]
         let start = std::time::Instant::now();
-        self.manager
-            .tick_level_into(players, away, respawned, enabled, &mut self.out);
+        self.manager.tick_level_into(
+            frame.players,
+            frame.away,
+            frame.respawned,
+            frame.enabled,
+            &mut self.out,
+        );
         #[cfg(any(test, feature = "profiler"))]
         {
             self.time = ShardTime {
+                started: start.duration_since(frame.started),
                 update: start.elapsed(),
                 packets: self.out.len(),
                 ..ShardTime::default()
@@ -290,7 +301,7 @@ impl ReceiverShard {
             self.ready.extend(
                 self.out
                     .drain(..)
-                    .map(|(conn, packet)| encode_delivery(conn, packet, local)),
+                    .map(|(conn, packet)| encode_delivery(conn, packet, frame.local)),
             );
             #[cfg(any(test, feature = "profiler"))]
             {
@@ -304,6 +315,10 @@ impl ReceiverShard {
                     })
                     .sum();
             }
+        }
+        #[cfg(any(test, feature = "profiler"))]
+        {
+            self.time.finished = frame.started.elapsed();
         }
     }
 }
@@ -355,6 +370,8 @@ pub struct ParallelWaypoints {
     #[cfg(test)]
     encode_after_join: bool,
     #[cfg(test)]
+    spawn_on_helpers: bool,
+    #[cfg(test)]
     legacy_out: Vec<(u32, C)>,
     #[cfg(any(test, feature = "profiler"))]
     time: PassTime,
@@ -370,6 +387,8 @@ impl Default for ParallelWaypoints {
             threads: None,
             #[cfg(test)]
             encode_after_join: false,
+            #[cfg(test)]
+            spawn_on_helpers: false,
             #[cfg(test)]
             legacy_out: Vec::new(),
             #[cfg(any(test, feature = "profiler"))]
@@ -441,48 +460,46 @@ impl ParallelWaypoints {
         let start = std::time::Instant::now();
         #[cfg(any(test, feature = "profiler"))]
         let main_done;
+        let frame = Frame {
+            players,
+            away,
+            respawned,
+            enabled: locator_bar,
+            local,
+            #[cfg(any(test, feature = "profiler"))]
+            started: start,
+        };
         if self.shards.len() == 1 {
-            self.shards[0].tick(
-                players,
-                away,
-                respawned,
-                locator_bar,
-                local,
-                !encode_after_join,
-            );
+            self.shards[0].tick(frame, !encode_after_join);
             #[cfg(any(test, feature = "profiler"))]
             {
                 main_done = start.elapsed();
             }
         } else {
+            #[cfg(test)]
+            let spawn_on_helpers = self.spawn_on_helpers;
             let (tick_shard, helpers) = self.shards.split_first_mut().unwrap();
             #[cfg(any(test, feature = "profiler"))]
             let mut done = std::time::Duration::ZERO;
+            #[cfg(test)]
+            if spawn_on_helpers {
+                horizon_threads::worker_affinity();
+            }
             std::thread::scope(|scope| {
                 for shard in helpers {
                     std::thread::Builder::new()
                         .name("waypoint-worker".into())
                         .spawn_scoped(scope, move || {
                             horizon_threads::worker_affinity();
-                            shard.tick(
-                                players,
-                                away,
-                                respawned,
-                                locator_bar,
-                                local,
-                                !encode_after_join,
-                            );
+                            shard.tick(frame, !encode_after_join);
                         })
                         .expect("start waypoint worker");
                 }
-                tick_shard.tick(
-                    players,
-                    away,
-                    respawned,
-                    locator_bar,
-                    local,
-                    !encode_after_join,
-                );
+                #[cfg(test)]
+                if spawn_on_helpers {
+                    horizon_threads::tick_affinity();
+                }
+                tick_shard.tick(frame, !encode_after_join);
                 #[cfg(any(test, feature = "profiler"))]
                 {
                     done = start.elapsed();
@@ -570,15 +587,17 @@ impl ParallelWaypoints {
                 .iter()
                 .map(|s| {
                     [
+                        s.time.started.as_secs_f64() * 1000.0,
                         s.time.update.as_secs_f64() * 1000.0,
                         s.time.encode.as_secs_f64() * 1000.0,
+                        s.time.finished.as_secs_f64() * 1000.0,
                         s.time.packets as f64,
                     ]
                 })
                 .collect();
             let encoded_bytes: usize = self.shards.iter().map(|s| s.time.encoded_bytes).sum();
             eprintln!(
-                "waypoint_pass players={players} tick={} scope_ms={:.3} join_wait_ms={:.3} merge_ms={:.3} shard_update_encode_packets={work:?} vector_bytes={bytes} rows={rows} row_capacity={row_capacity} encoded_bytes={encoded_bytes}",
+                "waypoint_pass players={players} tick={} scope_ms={:.3} join_wait_ms={:.3} merge_ms={:.3} shard_start_update_encode_finish_packets={work:?} vector_bytes={bytes} rows={rows} row_capacity={row_capacity} encoded_bytes={encoded_bytes}",
                 self.profile.ticks,
                 self.time.scope.as_secs_f64() * 1000.0,
                 self.time.wait.as_secs_f64() * 1000.0,
@@ -1456,7 +1475,7 @@ mod tests {
         println!("waypoint_layout allocated_cpus={cpus} helpers={helpers} tick_shards=1");
         for population in [150, 500] {
             let mut expected = None;
-            for mode in ["serial", "after-join", "worker-encode"] {
+            for mode in ["serial", "after-join", "worker-encode", "helper-spawn"] {
                 let mut samples = Vec::new();
                 for _ in 0..5 {
                     let normal = if population == 500 { 300 } else { 100 };
@@ -1479,7 +1498,8 @@ mod tests {
                         .collect();
                     let mut manager = ParallelWaypoints {
                         threads: (mode == "serial").then_some(1),
-                        encode_after_join: mode != "worker-encode",
+                        encode_after_join: matches!(mode, "serial" | "after-join"),
+                        spawn_on_helpers: mode == "helper-spawn",
                         ..ParallelWaypoints::default()
                     };
                     let mut out = Vec::new();
@@ -1490,6 +1510,8 @@ mod tests {
                     let mut scope_time = Duration::ZERO;
                     let mut wait_time = Duration::ZERO;
                     let mut merge_time = Duration::ZERO;
+                    let mut shard_start = vec![Duration::ZERO; manager.shards.len()];
+                    let mut shard_finish = vec![Duration::ZERO; manager.shards.len()];
                     let mut shard_work = vec![Duration::ZERO; manager.shards.len()];
                     let mut shard_encode = vec![Duration::ZERO; manager.shards.len()];
                     let mut shard_packets = vec![0usize; manager.shards.len()];
@@ -1516,6 +1538,8 @@ mod tests {
                         wait_time += manager.time.wait;
                         merge_time += manager.time.merge;
                         for (i, shard) in manager.shards.iter().enumerate() {
+                            shard_start[i] += shard.time.started;
+                            shard_finish[i] += shard.time.finished;
                             shard_work[i] += shard.time.update;
                             shard_encode[i] += shard.time.encode;
                             shard_packets[i] += shard.time.packets;
@@ -1543,6 +1567,8 @@ mod tests {
                     let ms = elapsed.as_secs_f64() * 1e3 / 40.0;
                     samples.push(ms);
                     let per_tick = |d: Duration| d.as_secs_f64() * 1000.0 / 40.0;
+                    let started: Vec<_> = shard_start.into_iter().map(per_tick).collect();
+                    let finished: Vec<_> = shard_finish.into_iter().map(per_tick).collect();
                     let update: Vec<_> = shard_work.into_iter().map(per_tick).collect();
                     let encode: Vec<_> = shard_encode.into_iter().map(per_tick).collect();
                     let packet_counts: Vec<_> =
@@ -1553,7 +1579,7 @@ mod tests {
                         .map(|s| s.manager.connections.len())
                         .collect();
                     println!(
-                        "waypoint_stages population={population} mode={mode} scope_ms={:.3} wait_ms={:.3} merge_encode_ms={:.3} update={update:?} encode={encode:?} packets={packet_counts:?} receivers={receivers:?} retained={:?}",
+                        "waypoint_stages population={population} mode={mode} scope_ms={:.3} wait_ms={:.3} merge_encode_ms={:.3} started={started:?} update={update:?} encode={encode:?} finished={finished:?} packets={packet_counts:?} receivers={receivers:?} retained={:?}",
                         per_tick(scope_time),
                         per_tick(wait_time),
                         per_tick(merge_time),
