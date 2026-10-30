@@ -95,6 +95,15 @@ The player body's `Send` bound is checked in its unit tests. This does not yet
 remove guest swaps or move network-owned state; that access migration follows
 the LAN branches' merge and retains immediate reentrant visibility.
 
+That bound also exposed `ObjectOpenMap`'s `Rc<RefCell<Table>>`. Its current table
+is now owned directly. Active `for_each` frames follow its live key array until
+rehash, then pin that generation's retired keys with an immutable `Arc`; values
+still come from the current array. Nested frames share a generation, and a
+borrowed guard releases pins on return, error or unwind. Ordinary lookups use
+the owned table directly, without a lock or generation lookup. The collection
+ownership change has a separate reentrant-rehash/parity gate and a before/after
+attribute-lookup benchmark; a slowdown above about 2% blocks it.
+
 `Chunk` and `World` remain in Horizon for now: their block-entity types have
 inherent implementations across containers, sculk, spawners and other gameplay
 modules. Move those types with their methods in later units, rather than adding

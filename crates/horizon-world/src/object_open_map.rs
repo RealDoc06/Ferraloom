@@ -1,9 +1,6 @@
 //! Default fastutil object map with live indexed entries and native traversal.
 use crate::object_open_set::{CursorError, ObjectKey};
-use std::{
-    cell::{Cell, RefCell},
-    rc::Rc,
-};
+use std::{cell::Cell, rc::Rc, sync::Arc};
 struct Table<K, V> {
     keys: Vec<Option<K>>,
     values: Vec<Option<V>>,
@@ -39,14 +36,28 @@ pub enum TraversalError<E> {
     Callback(E),
 }
 pub struct ObjectOpenMap<K, V> {
-    table: Rc<RefCell<Table<K, V>>>,
+    table: Table<K, V>,
+    // None follows the current array until rehash retires it. Nested captures
+    // of that generation share its old keys; values always use the live table.
+    captured_keys: Vec<Option<Arc<Vec<Option<K>>>>>,
     size: i32,
     null: bool,
+}
+/// Release pinned generations on normal return, callback error and unwind.
+struct CapturedKeys<'a, K, V> {
+    map: &'a mut ObjectOpenMap<K, V>,
+    index: usize,
+}
+impl<K, V> Drop for CapturedKeys<'_, K, V> {
+    fn drop(&mut self) {
+        self.map.captured_keys.truncate(self.index);
+    }
 }
 impl<K, V> Default for ObjectOpenMap<K, V> {
     fn default() -> Self {
         Self {
-            table: Rc::new(RefCell::new(Table::new(32))),
+            table: Table::new(32),
+            captured_keys: Vec::new(),
             size: 0,
             null: false,
         }
@@ -64,13 +75,13 @@ impl<K: ObjectKey + Clone, V: Clone> ObjectOpenMap<K, V> {
         self.size == 0
     }
     fn n(&self) -> usize {
-        self.table.borrow().keys.len() - 1
+        self.table.keys.len() - 1
     }
     fn max_fill(&self) -> i32 {
         (self.n() * 3 / 4) as i32
     }
     fn find(&self, key: &K) -> usize {
-        let table = self.table.borrow();
+        let table = &self.table;
         let mask = table.keys.len() - 2;
         let mut p = mixed(key.object_hash()) & mask;
         while table.keys[p].as_ref().is_some_and(|k| k != key) {
@@ -79,13 +90,11 @@ impl<K: ObjectKey + Clone, V: Clone> ObjectOpenMap<K, V> {
         p
     }
     pub fn contains_key(&self, key: Option<&K>) -> bool {
-        key.map_or(self.null, |k| {
-            self.table.borrow().keys[self.find(k)].is_some()
-        })
+        key.map_or(self.null, |k| self.table.keys[self.find(k)].is_some())
     }
     pub fn get(&self, key: Option<&K>) -> Option<V> {
         let p = key.map_or(self.n(), |k| self.find(k));
-        let table = self.table.borrow();
+        let table = &self.table;
         if key.map_or(self.null, |_| table.keys[p].is_some()) {
             table.values[p].clone()
         } else {
@@ -93,7 +102,7 @@ impl<K: ObjectKey + Clone, V: Clone> ObjectOpenMap<K, V> {
         }
     }
     pub fn entries(&self) -> Vec<(Option<K>, Option<V>)> {
-        let table = self.table.borrow();
+        let table = &self.table;
         let n = table.keys.len() - 1;
         let mut entries = Vec::new();
         if self.null {
@@ -109,18 +118,18 @@ impl<K: ObjectKey + Clone, V: Clone> ObjectOpenMap<K, V> {
     pub fn put(&mut self, key: Option<K>, value: Option<V>) -> Option<V> {
         let p = key.as_ref().map_or(self.n(), |k| self.find(k));
         let existing = if key.is_some() {
-            self.table.borrow().keys[p].is_some()
+            self.table.keys[p].is_some()
         } else {
             self.null
         };
-        let previous = std::mem::replace(&mut self.table.borrow_mut().values[p], value);
+        let previous = std::mem::replace(&mut self.table.values[p], value);
         if existing {
             return previous;
         }
         if key.is_none() {
             self.null = true;
         }
-        self.table.borrow_mut().keys[p] = key;
+        self.table.keys[p] = key;
         let old = self.size;
         self.size = self.size.wrapping_add(1);
         if old >= self.max_fill() {
@@ -133,7 +142,7 @@ impl<K: ObjectKey + Clone, V: Clone> ObjectOpenMap<K, V> {
         None
     }
     fn rehash(&mut self, n: usize) {
-        let old = self.table.borrow();
+        let old = &self.table;
         let old_n = old.keys.len() - 1;
         let mut table = Table::new(n);
         for p in (0..old_n).rev() {
@@ -147,15 +156,22 @@ impl<K: ObjectKey + Clone, V: Clone> ObjectOpenMap<K, V> {
             }
         }
         table.values[n] = old.values[old_n].clone();
-        drop(old);
-        self.table = Rc::new(RefCell::new(table));
+        let old = std::mem::replace(&mut self.table, table);
+        if self.captured_keys.iter().any(Option::is_none) {
+            let keys = Arc::new(old.keys);
+            for captured in &mut self.captured_keys {
+                if captured.is_none() {
+                    *captured = Some(Arc::clone(&keys));
+                }
+            }
+        }
     }
     fn shift(
         &mut self,
         mut hole: usize,
         mut cursor: Option<&mut Cursor<K>>,
     ) -> Result<(), CursorError> {
-        let mut table = self.table.borrow_mut();
+        let table = &mut self.table;
         let mask = table.keys.len() - 2;
         loop {
             let mut p = (hole + 1) & mask;
@@ -200,11 +216,11 @@ impl<K: ObjectKey + Clone, V: Clone> ObjectOpenMap<K, V> {
             return None;
         }
         let p = key.map_or(self.n(), |k| self.find(k));
-        let old = self.table.borrow().values[p].clone();
+        let old = self.table.values[p].clone();
         self.size = self.size.wrapping_sub(1);
         if key.is_none() {
             self.null = false;
-            let mut table = self.table.borrow_mut();
+            let table = &mut self.table;
             table.keys[p] = None;
             table.values[p] = None;
         } else {
@@ -221,7 +237,7 @@ impl<K: ObjectKey + Clone, V: Clone> ObjectOpenMap<K, V> {
         }
         self.size = 0;
         self.null = false;
-        let mut table = self.table.borrow_mut();
+        let table = &mut self.table;
         table.keys.fill(None);
         table.values.fill(None);
     }
@@ -260,14 +276,13 @@ impl<K: ObjectKey + Clone, V: Clone> ObjectOpenMap<K, V> {
                     let p = self.find(key);
                     // Deleting a wrapped member externally can make native iteration
                     // nonterminating. Such invalidated wrapped iterators are excluded.
-                    if self.table.borrow().keys[p].is_none() {
+                    if self.table.keys[p].is_none() {
                         return Err(CursorError::MissingWrapped);
                     }
                     break p as i32;
                 }
                 if self
                     .table
-                    .borrow()
                     .keys
                     .get(c.position as usize)
                     .ok_or(CursorError::IndexOutOfBounds)?
@@ -284,7 +299,6 @@ impl<K: ObjectKey + Clone, V: Clone> ObjectOpenMap<K, V> {
     }
     pub fn entry_key(&self, e: &Entry) -> Result<Option<K>, CursorError> {
         self.table
-            .borrow()
             .keys
             .get(e.0.get() as usize)
             .cloned()
@@ -292,7 +306,6 @@ impl<K: ObjectKey + Clone, V: Clone> ObjectOpenMap<K, V> {
     }
     pub fn entry_value(&self, e: &Entry) -> Result<Option<V>, CursorError> {
         self.table
-            .borrow()
             .values
             .get(e.0.get() as usize)
             .cloned()
@@ -305,7 +318,6 @@ impl<K: ObjectKey + Clone, V: Clone> ObjectOpenMap<K, V> {
     ) -> Result<Option<V>, CursorError> {
         Ok(std::mem::replace(
             self.table
-                .borrow_mut()
                 .values
                 .get_mut(e.0.get() as usize)
                 .ok_or(CursorError::IndexOutOfBounds)?,
@@ -318,7 +330,7 @@ impl<K: ObjectKey + Clone, V: Clone> ObjectOpenMap<K, V> {
         }
         if c.last == self.n() as i32 {
             self.null = false;
-            let mut t = self.table.borrow_mut();
+            let t = &mut self.table;
             let n = t.keys.len() - 1;
             t.keys[n] = None;
             t.values[n] = None;
@@ -351,26 +363,103 @@ impl<K: ObjectKey + Clone, V: Clone> ObjectOpenMap<K, V> {
         mut action: impl FnMut(&mut Self, Option<K>, Option<V>) -> Result<(), E>,
     ) -> Result<(), TraversalError<E>> {
         if self.null {
-            let value = self.table.borrow().values[self.n()].clone();
+            let value = self.table.values[self.n()].clone();
             action(self, None, value).map_err(TraversalError::Callback)?;
         }
         // Keys are captured after the null callback. Values remain live even if
         // a callback rehashes the map and replaces both native arrays.
-        let keys = self.table.clone();
         let n = self.n();
+        let index = self.captured_keys.len();
+        self.captured_keys.push(None);
+        let capture = CapturedKeys { map: self, index };
         for p in (0..n).rev() {
-            let key = keys.borrow().keys[p].clone();
+            let keys = capture.map.captured_keys[index]
+                .as_deref()
+                .unwrap_or(&capture.map.table.keys);
+            let key = keys[p].clone();
             if key.is_some() {
-                let value = self
+                let value = capture
+                    .map
                     .table
-                    .borrow()
                     .values
                     .get(p)
                     .cloned()
                     .ok_or(TraversalError::Cursor(CursorError::IndexOutOfBounds))?;
-                action(self, key, value).map_err(TraversalError::Callback)?;
+                action(&mut *capture.map, key, value).map_err(TraversalError::Callback)?;
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    struct Key {
+        id: i32,
+        slot: u32,
+    }
+    impl ObjectKey for Key {
+        fn object_hash(&self) -> i32 {
+            // Inverse of fastutil's mix for these slots, all below 2^16.
+            self.slot.wrapping_mul(0x144cbc89) as i32
+        }
+    }
+
+    /// Object2ObjectOpenHashMap#forEach captures keys after the null callback,
+    /// but reads values from the current array even after a callback rehashes.
+    #[test]
+    fn nested_for_each_keeps_captured_keys_and_current_values_after_rehash() {
+        let (a, b, c, d) = (
+            Key { id: 1000, slot: 63 },
+            Key { id: 1001, slot: 62 },
+            Key { id: 1002, slot: 30 },
+            Key { id: 1003, slot: 29 },
+        );
+        let mut map = ObjectOpenMap::default();
+        map.put(Some(a.clone()), Some(10));
+        map.put(Some(b.clone()), Some(20));
+        let (mut outer, mut inner) = (Vec::new(), Vec::new());
+        map.for_each::<()>(|map, key, value| {
+            let key = key.unwrap();
+            outer.push((key.id, value));
+            if key == a {
+                map.for_each::<()>(|map, key, value| {
+                    let key = key.unwrap();
+                    inner.push((key.id, value));
+                    if key == a {
+                        map.put(Some(c.clone()), Some(777));
+                        // The 25th entry rehashes 32 slots to 64. These keys
+                        // entered the original array, so both traversals see them.
+                        for id in 0..22 {
+                            map.put(
+                                Some(Key {
+                                    id,
+                                    slot: id as u32,
+                                }),
+                                Some(100 + id),
+                            );
+                        }
+                        // This key entered only the new array: neither captured
+                        // traversal sees it, although ordinary lookups do.
+                        map.put(Some(d.clone()), Some(888));
+                    }
+                    Ok(())
+                })
+                .unwrap();
+            }
+            Ok(())
+        })
+        .unwrap();
+
+        let mut expected = vec![(1000, Some(10)), (1001, Some(777)), (21, None)];
+        expected.extend((0..21).rev().map(|id| (id, Some(101 + id))));
+        expected.push((1002, Some(100)));
+        assert_eq!(outer, expected);
+        assert_eq!(inner, expected);
+        assert_eq!(map.get(Some(&b)), Some(20));
+        assert_eq!(map.get(Some(&d)), Some(888));
     }
 }
