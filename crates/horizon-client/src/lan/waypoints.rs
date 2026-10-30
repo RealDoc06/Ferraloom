@@ -654,6 +654,64 @@ mod tests {
         }
     }
 
+    /// The profiled population, with 300 walkers and 200 distant explorers.
+    #[test]
+    #[ignore]
+    fn five_hundred_players_benchmark() {
+        use std::{
+            hash::{Hash, Hasher},
+            hint::black_box,
+            time::Instant,
+        };
+        let mut samples = Vec::new();
+        for _ in 0..5 {
+            let mut players: Vec<_> = (0..500)
+                .map(|i| {
+                    player(
+                        i + 1,
+                        i as u32,
+                        [
+                            if i < 300 {
+                                (i % 40) as f64
+                            } else {
+                                i as f64 * 32.0
+                            },
+                            64.0,
+                            0.0,
+                        ],
+                    )
+                })
+                .collect();
+            let mut manager = Waypoints::default();
+            black_box(manager.tick(&players, &[], true));
+            let mut elapsed = std::time::Duration::ZERO;
+            let mut packets = 0;
+            let mut hash = std::collections::hash_map::DefaultHasher::new();
+            for tick in 0..40 {
+                for p in &mut players {
+                    p.position[0] += 0.2;
+                    p.position[2] = (tick as f64 * 0.03 + p.uuid as f64).sin() * 8.0;
+                }
+                let start = Instant::now();
+                let out = black_box(manager.tick(black_box(&players), &[], true));
+                elapsed += start.elapsed();
+                packets += out.len();
+                for (conn, packet) in out {
+                    conn.hash(&mut hash);
+                    packet.encode().hash(&mut hash);
+                }
+            }
+            samples.push(elapsed.as_secs_f64() * 1e3 / 40.0);
+            println!(
+                "500p packets={packets} hash={} ms_per_tick={:.3}",
+                hash.finish(),
+                samples.last().unwrap()
+            );
+        }
+        samples.sort_by(f64::total_cmp);
+        println!("500p median_ms_per_tick={:.3}", samples[2]);
+    }
+
     #[test]
     fn connection_index_preserves_order_after_remove_and_replace() {
         let mut row = Connections::default();
