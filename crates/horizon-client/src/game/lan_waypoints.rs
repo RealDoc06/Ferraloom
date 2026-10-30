@@ -29,6 +29,8 @@ pub(super) struct WaypointTick {
     levels: std::collections::BTreeMap<String, LevelPlayers>,
     connections: Vec<(u128, u32)>,
     respawned: Vec<u128>,
+    deliveries: std::collections::HashMap<u32, Vec<Vec<u8>>>,
+    live_connections: std::collections::HashSet<u32>,
     out: Vec<(u32, horizon_protocol::packets::play::Clientbound)>,
 }
 
@@ -154,19 +156,30 @@ impl Game<'_> {
             }
         }
         scratch.levels.retain(|_, list| list.used != 0);
-        // A packet lookup must not scan all guests for every waypoint.
-        let guests: std::collections::HashMap<_, _> =
-            host.hub.guests.iter().map(|g| (g.conn, g)).collect();
         for (conn, packet) in scratch.out.drain(..) {
             if conn == HOST_CONN {
                 // The host's own connection: its locator bar.
                 if let horizon_protocol::packets::play::Clientbound::TrackedWaypoint(w) = &packet {
                     self.handle_waypoint(w);
                 }
-            } else if let Some(g) = guests.get(&conn) {
-                g.send(&packet);
+            } else {
+                scratch
+                    .deliveries
+                    .entry(conn)
+                    .or_default()
+                    .push(packet.encode());
             }
         }
+        scratch.live_connections.clear();
+        for g in &host.hub.guests {
+            scratch.live_connections.insert(g.conn);
+            if let Some(bodies) = scratch.deliveries.get_mut(&g.conn) {
+                g.sender.send_many(bodies.drain(..));
+            }
+        }
+        scratch
+            .deliveries
+            .retain(|conn, _| scratch.live_connections.contains(conn));
         host.waypoint_tick = scratch;
     }
 }

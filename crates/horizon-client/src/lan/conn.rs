@@ -1195,6 +1195,48 @@ fn write_loop(
 mod tests {
     use super::*;
 
+    /// The 500-player waypoint send path: individual sends versus one lock per recipient.
+    #[test]
+    #[ignore]
+    fn waypoint_send_benchmark() {
+        use std::hint::black_box;
+        let (tx, _rx) = channel();
+        let senders: Vec<_> = (0..500)
+            .map(|_| PlayerSender::new(tx.clone(), Arc::default()))
+            .collect();
+        let _holding = Holding::start();
+        for batched in [false, true] {
+            let mut samples = Vec::new();
+            for _ in 0..7 {
+                let mut elapsed = Duration::ZERO;
+                for _ in 0..20 {
+                    let start = Instant::now();
+                    for sender in &senders {
+                        let bodies = (0..200).map(|i| black_box(vec![i; 40]));
+                        if batched {
+                            sender.send_many(bodies);
+                        } else {
+                            for body in bodies {
+                                sender.send(body);
+                            }
+                        }
+                    }
+                    elapsed += start.elapsed();
+                    for sender in &senders {
+                        sender.held().clear();
+                        sender.pending.store(0, Ordering::Relaxed);
+                    }
+                }
+                samples.push(elapsed.as_secs_f64() * 1e3 / 20.0);
+            }
+            samples.sort_by(f64::total_cmp);
+            println!(
+                "waypoint_send batched={batched} median_ms_per_tick={:.3}",
+                samples[3]
+            );
+        }
+    }
+
     #[test]
     fn prompts_become_the_components_vanilla_sends() {
         let tag = |json: &str| {
