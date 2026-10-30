@@ -1492,6 +1492,7 @@ mod tests {
                     let mut merge_time = Duration::ZERO;
                     let mut shard_work = vec![Duration::ZERO; manager.shards.len()];
                     let mut shard_encode = vec![Duration::ZERO; manager.shards.len()];
+                    let mut shard_packets = vec![0usize; manager.shards.len()];
                     let mut global = std::collections::hash_map::DefaultHasher::new();
                     let mut receivers: Vec<_> = (0..population)
                         .map(|_| std::collections::hash_map::DefaultHasher::new())
@@ -1517,6 +1518,7 @@ mod tests {
                         for (i, shard) in manager.shards.iter().enumerate() {
                             shard_work[i] += shard.time.update;
                             shard_encode[i] += shard.time.encode;
+                            shard_packets[i] += shard.time.packets;
                         }
                         packets += out.len();
                         for (conn, packet) in out.drain(..) {
@@ -1543,8 +1545,15 @@ mod tests {
                     let per_tick = |d: Duration| d.as_secs_f64() * 1000.0 / 40.0;
                     let update: Vec<_> = shard_work.into_iter().map(per_tick).collect();
                     let encode: Vec<_> = shard_encode.into_iter().map(per_tick).collect();
+                    let packet_counts: Vec<_> =
+                        shard_packets.into_iter().map(|n| n as f64 / 40.0).collect();
+                    let receivers: Vec<_> = manager
+                        .shards
+                        .iter()
+                        .map(|s| s.manager.connections.len())
+                        .collect();
                     println!(
-                        "waypoint_stages population={population} mode={mode} scope_ms={:.3} wait_ms={:.3} merge_encode_ms={:.3} update={update:?} encode={encode:?} retained={:?}",
+                        "waypoint_stages population={population} mode={mode} scope_ms={:.3} wait_ms={:.3} merge_encode_ms={:.3} update={update:?} encode={encode:?} packets={packet_counts:?} receivers={receivers:?} retained={:?}",
                         per_tick(scope_time),
                         per_tick(wait_time),
                         per_tick(merge_time),
