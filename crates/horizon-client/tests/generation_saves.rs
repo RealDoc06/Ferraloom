@@ -136,14 +136,18 @@ impl Session {
         if self.budgeted {
             self.streaming.begin_server_tick();
         }
-        let (_, unloaded) = self.streaming.update(&mut self.world);
+        let (_, unloaded) = if self.budgeted {
+            self.streaming.update_budgeted(&mut self.world)
+        } else {
+            self.streaming.update(&mut self.world)
+        };
         for chunk in unloaded {
             if self.world.modified.remove(&(chunk.x, chunk.z)) {
                 self.generator.save_chunk(&chunk);
             }
         }
         if self.budgeted {
-            let (_, extra) = self.streaming.update(&mut self.world);
+            let (_, extra) = self.streaming.update_budgeted(&mut self.world);
             for chunk in extra {
                 if self.world.modified.remove(&(chunk.x, chunk.z)) {
                     self.generator.save_chunk(&chunk);
@@ -185,22 +189,74 @@ impl Session {
     }
 }
 
-#[test]
-fn chunks_left_behind_keep_their_decoration() {
-    let Some(root) = resources() else {
-        return;
-    };
+fn context() -> Option<Arc<WorkerContext>> {
+    let root = resources()?;
     let assets = Arc::new(Assets::load(&root).unwrap());
     let render = Arc::new(assets.reload(&root).unwrap());
     let facts = BlockFacts::load(&root, assets.registry).unwrap();
     let visibility = models::load_visibility(&root, assets.registry).unwrap();
-    let context = Arc::new(WorkerContext {
+    Some(Arc::new(WorkerContext {
         tables: Arc::new(MeshTables::new(&assets, &render, &facts, visibility).unwrap()),
         light: Arc::new(LightTables::load(&root, assets.registry, &facts).unwrap()),
         biomes: Arc::new(Biomes::load(&root).unwrap()),
         assets,
         render: render.clone(),
-    });
+    }))
+}
+
+#[test]
+fn synchronous_pumps_progress_without_renewing_the_tick_allowance() {
+    let Some(context) = context() else { return };
+    let generator = Arc::new(Recorder::default());
+    // Ready-to-load columns make the two-column cap observable independently
+    // of decoration/lighting worker timing.
+    for z in -8..=8 {
+        for x in -8..=8 {
+            generator.save_chunk(&Chunk::empty(x, z));
+        }
+    }
+    let mut session = Session::new(generator, context, false);
+    session.streaming.begin_server_tick();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while session.streaming.generated_total == 0 {
+        assert!(Instant::now() < deadline, "no load completion arrived");
+        session.streaming.update_budgeted(&mut session.world);
+        thread::sleep(Duration::from_millis(1));
+    }
+    for _ in 0..40 {
+        session.streaming.update_budgeted(&mut session.world);
+        thread::sleep(Duration::from_millis(1));
+    }
+    assert!(session.streaming.generated_total <= 2);
+    assert!(session.streaming.busy());
+    // No new tick: the command harness and startup waits must still drain.
+    session.settle_at((0, 0));
+    assert!(session.world.chunks.contains_key(&(0, 0)));
+    assert!(session.streaming.generated_total > 2);
+    // Synchronous work must not donate a fresh allowance to between-tick work.
+    session.streaming.center = (100, 100);
+    let before = session.streaming.generated_total;
+    for _ in 0..40 {
+        session.streaming.update_budgeted(&mut session.world);
+        thread::sleep(Duration::from_millis(1));
+    }
+    assert_eq!(session.streaming.generated_total, before);
+    session.budgeted = true;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while session.streaming.generated_total == before {
+        assert!(
+            Instant::now() < deadline,
+            "renewed allowance made no progress"
+        );
+        session.update();
+        thread::sleep(Duration::from_millis(1));
+    }
+    assert!(session.streaming.generated_total - before <= 2);
+}
+
+#[test]
+fn chunks_left_behind_keep_their_decoration() {
+    let Some(context) = context() else { return };
     for budgeted in [false, true] {
         let generator = Arc::new(Recorder::default());
         let mut session = Session::new(generator.clone(), context.clone(), budgeted);
