@@ -105,12 +105,14 @@ impl Player {
         let [x, _, z] = self.block();
         [x >> 4, z >> 4]
     }
+    fn distance_squared(&self, other: &Player) -> f64 {
+        (0..3)
+            .map(|k| (self.position[k] - other.position[k]).powi(2))
+            .sum()
+    }
     /// `Entity.distanceTo`.
     fn distance_to(&self, other: &Player) -> f32 {
-        let d2: f64 = (0..3)
-            .map(|k| (self.position[k] - other.position[k]).powi(2))
-            .sum();
-        d2.sqrt() as f32
+        self.distance_squared(other).sqrt() as f32
     }
 }
 
@@ -125,6 +127,8 @@ enum Kind {
 struct Connection {
     kind: Kind,
     icon: Icon,
+    /// Last tick and receiver view for which this connection was evaluated.
+    checked: Option<(u64, [i32; 2])>,
 }
 
 /// What the manager remembers of a player between ticks.
@@ -175,11 +179,16 @@ pub struct Waypoints {
     memo: HashMap<u128, Memo>,
     /// The `locator_bar` game rule as last seen.
     enabled: Option<bool>,
+    tick: u64,
+    input_index: HashMap<u128, usize>,
+    view: HashMap<u128, ([i32; 2], i32)>,
 }
 
 /// One tick's players, and the packets for their connections.
 struct Tick<'a> {
-    players: HashMap<u128, &'a Player>,
+    serial: u64,
+    players: &'a [Player],
+    index: HashMap<u128, usize>,
     /// The connections of the players in other levels: one who just left this level is
     /// still told of the waypoints it loses (`removePlayer` disconnects them).
     away: &'a [(u128, u32)],
@@ -187,10 +196,13 @@ struct Tick<'a> {
     /// Players a respawn replaced this tick: a new ServerPlayer, on its first tick.
     fresh: &'a [u128],
     enabled: bool,
-    out: Vec<(u32, C)>,
+    out: &'a mut Vec<(u32, C)>,
 }
 
 impl<'a> Tick<'a> {
+    fn player(&self, uuid: &u128) -> Option<&'a Player> {
+        self.index.get(uuid).map(|&i| &self.players[i])
+    }
     fn send(
         &mut self,
         receiver: u128,
@@ -199,17 +211,12 @@ impl<'a> Tick<'a> {
         icon: &Icon,
         target: WaypointTarget,
     ) {
-        let Some(conn) = self
-            .players
-            .get(&receiver)
-            .and_then(|p| p.conn)
-            .or_else(|| {
-                self.away
-                    .iter()
-                    .find(|(uuid, _)| *uuid == receiver)
-                    .map(|&(_, conn)| conn)
-            })
-        else {
+        let Some(conn) = self.player(&receiver).and_then(|p| p.conn).or_else(|| {
+            self.away
+                .iter()
+                .find(|(uuid, _)| *uuid == receiver)
+                .map(|&(_, conn)| conn)
+        }) else {
             return;
         };
         self.out
@@ -251,7 +258,13 @@ impl<'a> Tick<'a> {
             return true;
         }
         let range = source.transmit_range.min(receiver.receive_range);
-        f64::from(source.distance_to(receiver)) >= range
+        // Well inside the range, float rounding in Entity.distanceTo cannot
+        // reach the boundary. Keep vanilla's sqrt and f32 rounding near it.
+        let squared = source.distance_squared(receiver);
+        if range > 0.0 && squared < (range * 0.5).powi(2) {
+            return false;
+        }
+        f64::from(squared.sqrt() as f32) >= range
     }
     fn really_far(source: &Player, receiver: &Player) -> bool {
         source.distance_to(receiver) > REALLY_FAR
@@ -264,7 +277,7 @@ impl<'a> Tick<'a> {
     }
     /// The source and the receiver, if both are in the level this tick.
     fn pair(&self, source: u128, receiver: u128) -> Option<(&'a Player, &'a Player)> {
-        Some((*self.players.get(&source)?, *self.players.get(&receiver)?))
+        Some((self.player(&source)?, self.player(&receiver)?))
     }
     /// `LivingEntity.makeWaypointConnectionWith`.
     fn make(&self, (s, r): (&Player, &Player)) -> Option<Connection> {
@@ -283,7 +296,11 @@ impl<'a> Tick<'a> {
         } else {
             Kind::Block(s.block())
         };
-        Some(Connection { kind, icon })
+        Some(Connection {
+            kind,
+            icon,
+            checked: None,
+        })
     }
     /// `Connection.isBroken` for each kind.
     fn broken(&self, c: &Connection, (s, r): (&Player, &Player)) -> bool {
@@ -390,6 +407,14 @@ impl Waypoints {
         }
         if let Some(i) = row.index.get(&source).copied() {
             let c = &mut row.ordered[i].1;
+            let stamp = (t.serial, t.view.get(&receiver).map_or([0; 2], |v| v.0));
+            // Entity.setPosRaw and ServerChunkCache.move can visit this pair
+            // repeatedly with identical inputs. The first call already emitted
+            // its packets; a changed receiver view must still be checked.
+            if c.checked == Some(stamp) {
+                return;
+            }
+            c.checked = Some(stamp);
             // A connection to a player who isn't in the level is broken.
             if let Some(pair) = pair
                 && !t.broken(c, pair)
@@ -426,10 +451,10 @@ impl Waypoints {
         }
         // The source is invariant across its receivers. References point into
         // the tick's input slice, so packet output can still be mutated.
-        let source_player = t.players.get(&source).copied();
+        let source_player = t.player(&source);
         for k in 0..self.players.len() {
             let receiver = self.players[k];
-            let pair = source_player.zip(t.players.get(&receiver).copied());
+            let pair = source_player.zip(t.player(&receiver));
             let row = self.connections.entry(receiver).or_default();
             Self::update_connection(row, t, receiver, source, pair);
         }
@@ -461,10 +486,10 @@ impl Waypoints {
             return;
         }
         // Keep the receiver row and player lookup outside the source loop.
-        let receiver = t.players.get(&player).copied();
+        let receiver = t.player(&player);
         let row = self.connections.entry(player).or_default();
         for &source in &self.waypoints {
-            let pair = t.players.get(&source).copied().zip(receiver);
+            let pair = t.player(&source).zip(receiver);
             Self::update_connection(row, t, player, source, pair);
         }
     }
@@ -513,19 +538,40 @@ impl Waypoints {
         respawned: &[u128],
         locator_bar: bool,
     ) -> Vec<(u32, C)> {
+        let mut out = Vec::new();
+        self.tick_level_into(players, away, respawned, locator_bar, &mut out);
+        out
+    }
+
+    /// Append in vanilla order, retaining the caller's output allocation.
+    pub fn tick_level_into(
+        &mut self,
+        players: &[Player],
+        away: &[(u128, u32)],
+        respawned: &[u128],
+        locator_bar: bool,
+        out: &mut Vec<(u32, C)>,
+    ) {
+        self.tick = self.tick.wrapping_add(1);
+        self.input_index.clear();
+        self.input_index
+            .extend(players.iter().enumerate().map(|(i, p)| (p.uuid, i)));
+        self.view.clear();
         let mut t = Tick {
-            players: players.iter().map(|p| (p.uuid, p)).collect(),
+            serial: self.tick,
+            players,
+            index: std::mem::take(&mut self.input_index),
             away,
-            view: HashMap::default(),
+            view: std::mem::take(&mut self.view),
             fresh: respawned,
             enabled: locator_bar,
-            out: Vec::new(),
+            out,
         };
         // Vanilla reads the rule when it connects; changing it breaks or remakes
         // every connection (MinecraftServer.onGameRuleChanged).
         let was = self.enabled.replace(locator_bar);
         for (uuid, memo) in &self.memo {
-            if let Some(p) = t.players.get(uuid) {
+            if let Some(p) = t.player(uuid) {
                 t.view.insert(*uuid, (memo.view_center, p.view_distance));
             }
         }
@@ -534,7 +580,7 @@ impl Waypoints {
             .players
             .iter()
             .copied()
-            .filter(|uuid| !t.players.contains_key(uuid) || respawned.contains(uuid))
+            .filter(|uuid| !t.index.contains_key(uuid) || respawned.contains(uuid))
             .collect();
         for uuid in gone {
             self.remove_player(&mut t, uuid);
@@ -612,7 +658,8 @@ impl Waypoints {
                 }
             }
         }
-        t.out
+        self.input_index = t.index;
+        self.view = t.view;
     }
 }
 
@@ -718,6 +765,7 @@ mod tests {
         let connection = |x| Connection {
             kind: Kind::Block([x, 0, 0]),
             icon: Icon::default(),
+            checked: None,
         };
         for id in 0..4 {
             row.put(id, connection(id as i32));
@@ -837,6 +885,74 @@ mod tests {
             to(&out, 20),
             vec![(waypoint_operation::UNTRACK, WaypointTarget::Empty)]
         );
+    }
+
+    #[test]
+    fn receiver_view_change_rechecks_a_pair_in_the_same_tick() {
+        let mut w = Waypoints::default();
+        let mut a = player(1, 10, [0.5, 64.0, 0.5]);
+        let b = player(2, 20, [80.5, 64.0, 0.5]);
+        w.tick(&[a.clone(), b.clone()], &[], true);
+        a.position[0] += 16.0;
+        let out = w.tick(&[a.clone(), b.clone()], &[], true);
+        assert_eq!(to(&out, 10), [(0, WaypointTarget::Block([80, 64, 0]))]);
+        assert!(w.tick(&[a, b], &[], true).is_empty());
+    }
+
+    #[test]
+    fn visible_far_connections_are_remade_on_every_trigger() {
+        let mut w = Waypoints::default();
+        let mut a = player(1, 10, [0.5, 64.0, 0.5]);
+        a.view_distance = 64;
+        let b = player(2, 20, [1000.5, 64.0, 0.5]);
+        w.tick(&[a.clone(), b.clone()], &[], true);
+        a.position[0] += 0.1;
+        let out = w.tick(&[a, b], &[], true);
+        // Both Entity.setPosRaw and ServerChunkCache.move remake this
+        // azimuth: make chooses distance first, isBroken checks visibility.
+        let packets = to(&out, 10);
+        assert_eq!(packets.len(), 2);
+        assert!(
+            packets
+                .iter()
+                .all(|(op, target)| *op == 0 && matches!(target, WaypointTarget::Azimuth(_)))
+        );
+    }
+
+    #[test]
+    fn range_fast_path_keeps_distance_to_float_rounding() {
+        for range in [
+            0.0,
+            1e-30,
+            32.0,
+            32.0000001,
+            PLAYER_RANGE,
+            f64::INFINITY,
+            f64::NAN,
+        ] {
+            for distance in [
+                0.0,
+                range * 0.25,
+                range * 0.99999999,
+                range,
+                range * 1.00000001,
+            ] {
+                if !distance.is_finite() {
+                    continue;
+                }
+                let a = player(1, 10, [0.0, 64.0, 0.0]);
+                let mut b = player(2, 20, [distance, 64.0, 0.0]);
+                b.transmit_range = range;
+                let expected =
+                    range > 0.0 && !(f64::from(b.distance_to(&a)) >= range.min(a.receive_range));
+                let out = Waypoints::default().tick(&[a, b], &[], true);
+                assert_eq!(
+                    !to(&out, 10).is_empty(),
+                    expected,
+                    "range={range} distance={distance}"
+                );
+            }
+        }
     }
 
     #[test]

@@ -23,6 +23,40 @@ fn transmit_range(crouching: bool, invisible: bool, head: Option<&ItemStack>) ->
     }
 }
 
+/// Reused level snapshots and packet storage; no per-level player clones.
+#[derive(Default)]
+pub(super) struct WaypointTick {
+    levels: std::collections::BTreeMap<String, LevelPlayers>,
+    connections: Vec<(u128, u32)>,
+    respawned: Vec<u128>,
+    out: Vec<(u32, horizon_protocol::packets::play::Clientbound)>,
+}
+
+#[derive(Default)]
+struct LevelPlayers {
+    players: Vec<waypoints::Player>,
+    used: usize,
+}
+
+impl WaypointTick {
+    fn push(&mut self, level: &str, player: waypoints::Player) {
+        if let Some(conn) = player.conn {
+            self.connections.push((player.uuid, conn));
+        }
+        if !self.levels.contains_key(level) {
+            self.levels
+                .insert(level.to_owned(), LevelPlayers::default());
+        }
+        let list = self.levels.get_mut(level).unwrap();
+        if list.used == list.players.len() {
+            list.players.push(player);
+        } else {
+            list.players[list.used] = player;
+        }
+        list.used += 1;
+    }
+}
+
 impl Game<'_> {
     /// The player's team and its colour, as the locator bar shows it.
     fn waypoint_team(&self, name: &str) -> Option<(String, Option<i32>)> {
@@ -36,7 +70,12 @@ impl Game<'_> {
     /// (`ServerLevel.removePlayerImmediately`: untracked for everyone there)
     /// and joins the new one's (`addDuringTeleport`).
     pub(super) fn lan_update_waypoints(&mut self, host: &mut LanHost, state: Option<&HostState>) {
-        let mut players: Vec<(&str, waypoints::Player)> = Vec::new();
+        let mut scratch = std::mem::take(&mut host.waypoint_tick);
+        scratch.connections.clear();
+        scratch.respawned.clear();
+        for list in scratch.levels.values_mut() {
+            list.used = 0;
+        }
         if let Some(h) = state {
             let icon = self
                 .cmds
@@ -47,7 +86,7 @@ impl Game<'_> {
                     color: i.color,
                 })
                 .unwrap_or_default();
-            players.push((
+            scratch.push(
                 self.dim.id(),
                 waypoints::Player {
                     uuid: h.uuid,
@@ -65,19 +104,19 @@ impl Game<'_> {
                     team: self.waypoint_team(&h.name),
                     icon,
                 },
-            ));
+            );
         }
-        let mut respawned = Vec::new();
+
         for g in host.hub.guests.iter().filter(|g| g.placed) {
             // PlayerList.respawn makes a new ServerPlayer.
             if g.dead {
                 host.waypoint_dead.insert(g.uuid);
             } else if host.waypoint_dead.remove(&g.uuid) {
-                respawned.push(g.uuid);
+                scratch.respawned.push(g.uuid);
             }
             // Player.updatePlayerPose: the shift key crouches unless flying.
             let crouching = g.sneaking && !g.flying && !g.fall_flying && !g.sleeping;
-            players.push((
+            scratch.push(
                 &g.dimension,
                 waypoints::Player {
                     uuid: g.uuid,
@@ -95,46 +134,39 @@ impl Game<'_> {
                     team: self.waypoint_team(&g.name),
                     icon: Icon::default(),
                 },
-            ));
+            );
         }
         host.waypoint_dead
-            .retain(|uuid| players.iter().any(|(_, p)| p.uuid == *uuid));
+            .retain(|uuid| scratch.connections.iter().any(|(id, _)| id == uuid));
         let locator_bar = self.ui.rules.bool("locator_bar");
-        let mut levels: Vec<String> = host.waypoints.keys().cloned().collect();
-        for (level, _) in &players {
-            if !levels.iter().any(|l| l == level) {
-                levels.push((*level).to_owned());
-            }
-        }
-        levels.sort();
-        let mut out = Vec::new();
-        for level in levels {
-            let here: Vec<waypoints::Player> = players
-                .iter()
-                .filter(|(l, _)| *l == level)
-                .map(|(_, p)| p.clone())
-                .collect();
-            let away: Vec<(u128, u32)> = players
-                .iter()
-                .filter(|(l, _)| *l != level)
-                .filter_map(|(_, p)| Some((p.uuid, p.conn?)))
-                .collect();
+        for (level, list) in &mut scratch.levels {
+            list.players.truncate(list.used);
             let manager = host.waypoints.entry(level.clone()).or_default();
-            out.extend(manager.tick_level(&here, &away, &respawned, locator_bar));
-            // Nobody left in the level: nothing to remember there.
-            if here.is_empty() {
-                host.waypoints.remove(&level);
+            manager.tick_level_into(
+                &list.players,
+                &scratch.connections,
+                &scratch.respawned,
+                locator_bar,
+                &mut scratch.out,
+            );
+            if list.players.is_empty() {
+                host.waypoints.remove(level);
             }
         }
-        for (conn, packet) in out {
+        scratch.levels.retain(|_, list| list.used != 0);
+        // A packet lookup must not scan all guests for every waypoint.
+        let guests: std::collections::HashMap<_, _> =
+            host.hub.guests.iter().map(|g| (g.conn, g)).collect();
+        for (conn, packet) in scratch.out.drain(..) {
             if conn == HOST_CONN {
                 // The host's own connection: its locator bar.
                 if let horizon_protocol::packets::play::Clientbound::TrackedWaypoint(w) = &packet {
                     self.handle_waypoint(w);
                 }
-            } else if let Some(g) = host.hub.guest(conn) {
+            } else if let Some(g) = guests.get(&conn) {
                 g.send(&packet);
             }
         }
+        host.waypoint_tick = scratch;
     }
 }
