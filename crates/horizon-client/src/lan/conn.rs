@@ -226,12 +226,29 @@ impl Drop for Holding {
     }
 }
 
+/// A private packet buffer or immutable bytes shared by several recipients.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PacketBody {
+    Owned(Vec<u8>),
+    Shared(Arc<[u8]>),
+}
+
+impl std::ops::Deref for PacketBody {
+    type Target = [u8];
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Owned(body) => body,
+            Self::Shared(body) => body,
+        }
+    }
+}
+
 /// The sending half given to the game thread.
 #[derive(Clone)]
 pub struct PlayerSender {
     pub tx: Sender<Out>,
     pub pending: Arc<AtomicUsize>,
-    held: Arc<Mutex<Vec<Vec<u8>>>>,
+    held: Arc<Mutex<Vec<PacketBody>>>,
     /// What [`flush_all`] gave the post thread and it hasn't passed on yet.
     posted: Arc<AtomicUsize>,
 }
@@ -244,23 +261,33 @@ impl PlayerSender {
             posted: Arc::default(),
         }
     }
-    fn held(&self) -> std::sync::MutexGuard<'_, Vec<Vec<u8>>> {
+    fn held(&self) -> std::sync::MutexGuard<'_, Vec<PacketBody>> {
         self.held.lock().unwrap_or_else(PoisonError::into_inner)
     }
     pub fn send(&self, body: Vec<u8>) {
+        self.send_body(PacketBody::Owned(body));
+    }
+    fn send_body(&self, body: PacketBody) {
         self.pending.fetch_add(body.len(), Ordering::Relaxed);
         if HOLDING.get() {
             self.held().push(body);
         } else {
             self.flush();
-            self.deliver(Out::Packet(body));
+            self.deliver(match body {
+                PacketBody::Owned(body) => Out::Packet(body),
+                shared => Out::Packets(vec![shared]),
+            });
         }
     }
     /// Several packets in order, as [`Self::send`] each: under one lock
     /// while the tick holds them.
     pub fn send_many(&self, bodies: impl IntoIterator<Item = Vec<u8>>) {
+        self.send_bodies(bodies.into_iter().map(PacketBody::Owned));
+    }
+    /// Queue shared and private packet bodies together, retaining their order.
+    pub fn send_bodies(&self, bodies: impl IntoIterator<Item = PacketBody>) {
         if !HOLDING.get() {
-            bodies.into_iter().for_each(|body| self.send(body));
+            bodies.into_iter().for_each(|body| self.send_body(body));
             return;
         }
         let mut held = self.held();
@@ -1135,13 +1162,13 @@ fn write_loop(
     let mut sent_at: Option<(i64, Instant)> = None;
     let mut next = Instant::now() + KEEP_ALIVE_EVERY;
     loop {
-        let mut write = |body: Vec<u8>| {
+        let mut write = |body: PacketBody| {
             pending.fetch_sub(body.len(), Ordering::Relaxed);
             send_body(&mut writer, &body).is_ok() && pending.load(Ordering::Relaxed) <= MAX_PENDING
         };
         match rx.recv_timeout(Duration::from_millis(200)) {
             Ok(Out::Packet(body)) => {
-                if !write(body) {
+                if !write(PacketBody::Owned(body)) {
                     break;
                 }
             }
@@ -1238,6 +1265,31 @@ mod tests {
     }
 
     #[test]
+    fn shared_and_owned_bodies_keep_order_and_pending_bytes() {
+        let (tx, rx) = channel();
+        let sender = PlayerSender::new(tx, Arc::default());
+        let shared: Arc<[u8]> = vec![2, 3].into();
+        let holding = Holding::start();
+        sender.send(vec![1]);
+        sender.send_bodies([PacketBody::Shared(shared.clone())]);
+        sender.send(vec![4]);
+        drop(holding);
+        sender.flush();
+        let Out::Packets(bodies) = rx.recv().unwrap() else {
+            panic!("expected one held batch")
+        };
+        assert_eq!(
+            bodies.iter().map(|b| &b[..]).collect::<Vec<_>>(),
+            [vec![1], vec![2, 3], vec![4]]
+        );
+        let PacketBody::Shared(body) = &bodies[1] else {
+            panic!("shared buffer was copied")
+        };
+        assert!(Arc::ptr_eq(body, &shared));
+        assert_eq!(sender.pending.load(Ordering::Relaxed), 4);
+    }
+
+    #[test]
     fn prompts_become_the_components_vanilla_sends() {
         let tag = |json: &str| {
             let tag = component_tag(&crate::server::json::parse(json, true).unwrap());
@@ -1258,7 +1310,7 @@ mod tests {
     fn unpack(out: Out) -> Vec<Vec<u8>> {
         match out {
             Out::Packet(body) => vec![body],
-            Out::Packets(bodies) => bodies,
+            Out::Packets(bodies) => bodies.into_iter().map(|body| body.to_vec()).collect(),
             Out::Disconnect(_) => vec![b"disconnect".to_vec()],
             Out::Close => vec![b"close".to_vec()],
         }

@@ -5,7 +5,7 @@
 //! movement, motion, metadata and equipment packets that bring them up to
 //! date at the entity type's update interval (`tracking`); each client's
 //! `Tracker` is the set of entities it has been paired with.
-use super::tracking;
+use super::{conn::PacketBody, tracking};
 use horizon_protocol::{
     buf::pack_degrees,
     entity_data::{Value, serializer},
@@ -573,10 +573,16 @@ pub struct Tracker {
     /// Fast membership for low network ids; the set still defines iteration
     /// and removal order. Bounded at 8 KiB per receiver, regardless of uptime.
     low_ids: Vec<u64>,
+    #[cfg(test)]
+    use_hash: bool,
 }
 
 impl Tracker {
     pub fn is_tracking(&self, id: i32) -> bool {
+        #[cfg(test)]
+        if self.use_hash {
+            return self.seen.contains(&id);
+        }
         if let Ok(id) = usize::try_from(id)
             && id < 65_536
         {
@@ -588,6 +594,10 @@ impl Tracker {
         self.seen.contains(&id)
     }
     fn cache(&mut self, id: i32, tracked: bool) {
+        #[cfg(test)]
+        if self.use_hash {
+            return;
+        }
         if let Ok(id) = usize::try_from(id)
             && id < 65_536
         {
@@ -638,7 +648,7 @@ pub struct Viewer<'a> {
     pub chunks: &'a crate::fast_hash::FxHashSet<(i32, i32)>,
     pub tracker: &'a mut Tracker,
     /// What the tick sends it, in order.
-    pub out: &'a mut Vec<Vec<u8>>,
+    pub out: &'a mut Vec<PacketBody>,
 }
 
 /// One entity as this tick's range checks read it: where it is
@@ -697,16 +707,25 @@ pub struct Entities {
     is_moved: Vec<bool>,
     /// One entity's packets and their bodies, kept between entities.
     packets: Vec<play::Clientbound>,
-    bodies: Vec<Vec<u8>>,
+    bodies: Vec<PacketBody>,
+    #[cfg(test)]
+    owned_packets: bool,
 }
 
 /// The client sees the entity this tick, and already tracked it.
 const SEES: u8 = 1;
 const TRACKS: u8 = 2;
 
-fn encode_all(packets: &[play::Clientbound], bodies: &mut Vec<Vec<u8>>) {
+fn encode_all(packets: &[play::Clientbound], bodies: &mut Vec<PacketBody>, shared: bool) {
     bodies.clear();
-    bodies.extend(packets.iter().map(play::Clientbound::encode));
+    bodies.extend(packets.iter().map(|packet| {
+        let body = packet.encode();
+        if shared {
+            PacketBody::Shared(body.into())
+        } else {
+            PacketBody::Owned(body)
+        }
+    }));
 }
 
 impl Entities {
@@ -880,10 +899,10 @@ impl Entities {
                 for &id in &removed {
                     v.tracker.cache(id, false);
                 }
-                v.out.push(
+                v.out.push(PacketBody::Owned(
                     play::Clientbound::RemoveEntities(play::RemoveEntities { ids: removed })
                         .encode(),
-                );
+                ));
             }
         }
         for (index, e) in entities.iter().enumerate() {
@@ -900,7 +919,11 @@ impl Entities {
                 continue;
             }
             let mut encoded = false;
-            let mut pairing: Option<Vec<Vec<u8>>> = None;
+            let mut pairing: Option<Vec<PacketBody>> = None;
+            #[cfg(test)]
+            let shared = !self.owned_packets;
+            #[cfg(not(test))]
+            let shared = true;
             for (v, flags) in viewers.iter_mut().zip(&self.flags) {
                 let f = flags[index];
                 if f & TRACKS != 0 {
@@ -908,7 +931,7 @@ impl Entities {
                         continue;
                     }
                     if !encoded {
-                        encode_all(&self.packets, &mut self.bodies);
+                        encode_all(&self.packets, &mut self.bodies, shared);
                         encoded = true;
                     }
                     v.out.extend(self.bodies.iter().cloned());
@@ -918,7 +941,9 @@ impl Entities {
                     let bodies = pairing.get_or_insert_with(|| {
                         let mut packets = Vec::new();
                         s.pairing(e, kind, riding, &mut packets);
-                        packets.iter().map(play::Clientbound::encode).collect()
+                        let mut bodies = Vec::new();
+                        encode_all(&packets, &mut bodies, shared);
+                        bodies
                     });
                     v.out.extend(bodies.iter().cloned());
                     v.tracker.track(e.id);
@@ -996,6 +1021,119 @@ mod tests {
                 "tracking_membership cached={cached} median_ms_per_tick={:.3}",
                 samples[3]
             );
+        }
+    }
+
+    /// Full 300-normal + 200-explorer tracking pass, including packet fanout.
+    #[test]
+    #[ignore]
+    fn five_hundred_viewers_benchmark() {
+        use std::{
+            hash::{Hash, Hasher},
+            hint::black_box,
+            time::Instant,
+        };
+        let mut expected = None;
+        for cached in [false, true] {
+            for shared in [false, true] {
+                let mut samples = Vec::new();
+                for _ in 0..5 {
+                    let mut states: Vec<_> = (0..500)
+                        .map(|id| EntityState {
+                            id,
+                            uuid: id as u128 + 1,
+                            kind: "minecraft:player".into(),
+                            position: [
+                                if id < 300 {
+                                    (id % 30) as f64 * 1.5
+                                } else {
+                                    id as f64 * 32.0
+                                },
+                                64.0,
+                                (id % 10) as f64 * 2.0,
+                            ],
+                            ..state(0.0)
+                        })
+                        .collect();
+                    let chunks: crate::fast_hash::FxHashSet<_> = states
+                        .iter()
+                        .flat_map(|e| {
+                            let x = e.position[0].floor() as i32 >> 4;
+                            let z = e.position[2].floor() as i32 >> 4;
+                            (-2..=2).flat_map(move |dx| (-2..=2).map(move |dz| (x + dx, z + dz)))
+                        })
+                        .collect();
+                    let mut trackers: Vec<_> = (0..500)
+                        .map(|_| Tracker {
+                            use_hash: !cached,
+                            ..Tracker::default()
+                        })
+                        .collect();
+                    let mut outs: Vec<Vec<PacketBody>> = (0..500).map(|_| Vec::new()).collect();
+                    let mut level = Entities {
+                        owned_packets: !shared,
+                        ..Entities::default()
+                    };
+                    let riding = Riding::default();
+                    let mut elapsed = std::time::Duration::ZERO;
+                    let mut hash = std::collections::hash_map::DefaultHasher::new();
+                    let mut packets = 0;
+                    for tick in 0..31 {
+                        for e in &mut states {
+                            e.position[0] += 0.2;
+                            e.yaw += 1.0;
+                        }
+                        for out in &mut outs {
+                            out.clear();
+                        }
+                        let refs: Vec<_> = states.iter().collect();
+                        let mut viewers: Vec<_> = trackers
+                            .iter_mut()
+                            .zip(&mut outs)
+                            .zip(&states)
+                            .map(|((tracker, out), e)| Viewer {
+                                entity_id: e.id,
+                                moved: true,
+                                position: e.position,
+                                view_distance: 8,
+                                chunks: &chunks,
+                                tracker,
+                                out,
+                            })
+                            .collect();
+                        let start = Instant::now();
+                        level.tick(black_box(&refs), &riding, black_box(&mut viewers), |_| {
+                            Some(1)
+                        });
+                        if tick != 0 {
+                            elapsed += start.elapsed();
+                        }
+                        drop(viewers);
+                        if tick != 0 {
+                            for (conn, out) in outs.iter().enumerate() {
+                                conn.hash(&mut hash);
+                                for body in out {
+                                    body[..].hash(&mut hash);
+                                    packets += 1;
+                                }
+                            }
+                        }
+                    }
+                    let result = (packets, hash.finish());
+                    assert_eq!(*expected.get_or_insert(result), result);
+                    samples.push(elapsed.as_secs_f64() * 1e3 / 30.0);
+                    println!(
+                        "tracking500 cached={cached} shared={shared} packets={packets} hash={} ms_per_tick={:.3}",
+                        result.1,
+                        samples.last().unwrap()
+                    );
+                }
+                samples.sort_by(f64::total_cmp);
+                println!(
+                    "tracking500 cached={cached} shared={shared} median_ms_per_tick={:.3}",
+                    samples[2]
+                );
+            }
         }
     }
 
@@ -1386,7 +1524,7 @@ mod tests {
     struct Clients {
         chunks: crate::fast_hash::FxHashSet<(i32, i32)>,
         trackers: [Tracker; 2],
-        out: [Vec<Vec<u8>>; 2],
+        out: [Vec<PacketBody>; 2],
         positions: [[f64; 3]; 2],
         moved: [bool; 2],
     }
@@ -1431,8 +1569,8 @@ mod tests {
         }
     }
 
-    fn body(p: play::Clientbound) -> Vec<u8> {
-        p.encode()
+    fn body(p: play::Clientbound) -> PacketBody {
+        PacketBody::Owned(p.encode())
     }
 
     /// ChunkMap checks a pair again only when one side moves: a zombie
@@ -1494,6 +1632,10 @@ mod tests {
         c.tick(&mut level, &[&e]);
         assert!(!c.out[0].is_empty());
         assert_eq!(c.out[0], c.out[1]);
+        let (PacketBody::Shared(a), PacketBody::Shared(b)) = (&c.out[0][0], &c.out[1][0]) else {
+            panic!("entity updates must share their encoded bytes")
+        };
+        assert!(std::sync::Arc::ptr_eq(a, b));
     }
 
     #[test]

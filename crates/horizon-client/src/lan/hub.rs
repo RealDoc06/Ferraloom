@@ -212,7 +212,7 @@ pub struct Hub {
     /// Each level's tracked entities, by dimension.
     entities: std::collections::HashMap<String, Entities>,
     /// What one tick of entity tracking sends each guest, kept between ticks.
-    entity_out: Vec<Vec<Vec<u8>>>,
+    entity_out: Vec<Vec<super::conn::PacketBody>>,
     /// Player snapshots reused after each tracking tick.
     entity_players: Vec<EntityState>,
     /// Server mods' commands, a root in the commands report's format, sent
@@ -1856,7 +1856,7 @@ impl Hub {
         });
         drop(viewers);
         for (g, out) in self.guests.iter().filter(|g| here(g)).zip(outs.iter_mut()) {
-            g.sender.send_many(out.drain(..));
+            g.sender.send_bodies(out.drain(..));
         }
         self.entity_out = outs;
         all.clear();
