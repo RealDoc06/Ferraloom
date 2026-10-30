@@ -79,6 +79,13 @@ there is no second scheduler, copied state or changed callback boundary. The
 resident world, random-section cache and entities join this owner in subsequent
 units. Player access is a separate extraction; guest swaps are still present.
 
+Random-section eligibility and its weak-reference invalidation cache now live
+in `ferraloom-game` too. The resident section owner and the random-tick block
+predicate are borrowed inputs; the client wrapper only supplies its existing
+`Chunk` and `BlockFacts`. The scan, weak-reference identity checks, section
+order and live rechecks between lower and higher sections are unchanged. The
+real-chunk COW/reload and evolving random-tick trace tests stay at the adapter.
+
 `Chunk` and `World` remain in Horizon for now: their block-entity types have
 inherent implementations across containers, sculk, spawners and other gameplay
 modules. Move those types with their methods in later units, rather than adding
