@@ -132,6 +132,7 @@ struct Connection {
 }
 
 /// What the manager remembers of a player between ticks.
+#[derive(Clone)]
 struct Memo {
     position: [f64; 3],
     /// The centre of the player's ChunkTrackingView (`ChunkMap.move`).
@@ -180,12 +181,160 @@ pub struct Waypoints {
     /// The `locator_bar` game rule as last seen.
     enabled: Option<bool>,
     tick: u64,
+    shard: Shard,
+    orders: Vec<Order>,
     input_index: HashMap<u128, usize>,
     view: HashMap<u128, ([i32; 2], i32)>,
     #[cfg(test)]
     count_only: bool,
     #[cfg(test)]
     emitted: usize,
+}
+
+/// A packet's position in the serial manager's traversal, independent of shard.
+type Order = (u64, usize, usize);
+
+#[derive(Clone, Copy)]
+struct Shard {
+    index: usize,
+    count: usize,
+}
+
+impl Default for Shard {
+    fn default() -> Self {
+        Self { index: 0, count: 1 }
+    }
+}
+
+impl Shard {
+    fn owner(receiver: u128, count: usize) -> usize {
+        use std::hash::BuildHasher;
+        let hash = crate::fast_hash::FxBuild::default().hash_one(receiver);
+        ((u128::from(hash) * count as u128) >> 64) as usize
+    }
+
+    fn owns(self, receiver: u128) -> bool {
+        self.count == 1 || Self::owner(receiver, self.count) == self.index
+    }
+}
+
+#[derive(Default)]
+struct ReceiverShard {
+    manager: Waypoints,
+    out: Vec<(u32, C)>,
+}
+
+/// Receiver rows of ServerWaypointManager evaluated on the server's helper lane.
+/// Each shard replays the same lifecycle and view phases over immutable inputs;
+/// only its connection rows mutate. The merge restores the serial packet order.
+pub struct ParallelWaypoints {
+    shards: Vec<ReceiverShard>,
+    #[cfg(test)]
+    threads: Option<usize>,
+}
+
+impl Default for ParallelWaypoints {
+    fn default() -> Self {
+        Self {
+            shards: vec![ReceiverShard::default()],
+            #[cfg(test)]
+            threads: None,
+        }
+    }
+}
+
+impl ParallelWaypoints {
+    fn split(&mut self, count: usize) {
+        let original = &mut self.shards[0].manager;
+        let connections = std::mem::take(&mut original.connections);
+        let replicas = (1..count)
+            .map(|index| {
+                let replica = Waypoints {
+                    waypoints: original.waypoints.clone(),
+                    players: original.players.clone(),
+                    memo: original.memo.clone(),
+                    enabled: original.enabled,
+                    tick: original.tick,
+                    shard: Shard { index, count },
+                    ..Waypoints::default()
+                };
+                ReceiverShard {
+                    manager: replica,
+                    out: Vec::new(),
+                }
+            })
+            .collect::<Vec<_>>();
+        self.shards.extend(replicas);
+        self.shards[0].manager.shard.count = count;
+        for (receiver, row) in connections {
+            self.shards[Shard::owner(receiver, count)]
+                .manager
+                .connections
+                .insert(receiver, row);
+        }
+    }
+
+    /// Join before returning, then append packets in the original global order.
+    pub fn tick_level_into(
+        &mut self,
+        players: &[Player],
+        away: &[(u128, u32)],
+        respawned: &[u128],
+        locator_bar: bool,
+        out: &mut Vec<(u32, C)>,
+    ) {
+        let threads = if players.len() >= 128 {
+            horizon_threads::worker_threads().unwrap_or(1).clamp(1, 8)
+        } else {
+            1
+        };
+        #[cfg(test)]
+        let threads = self.threads.unwrap_or(threads);
+        if self.shards.len() == 1 && threads > 1 {
+            self.split(threads);
+        }
+        if self.shards.len() == 1 {
+            self.shards[0]
+                .manager
+                .tick_level_into(players, away, respawned, locator_bar, out);
+            return;
+        }
+        std::thread::scope(|scope| {
+            for shard in &mut self.shards {
+                scope.spawn(move || {
+                    horizon_threads::worker_affinity();
+                    shard.manager.tick_level_into(
+                        players,
+                        away,
+                        respawned,
+                        locator_bar,
+                        &mut shard.out,
+                    );
+                });
+            }
+        });
+        // Every shard is already ordered. Moving packets through a k-way merge
+        // avoids sorting or cloning the packet bodies and preserves global order.
+        let mut streams: Vec<_> = self
+            .shards
+            .iter_mut()
+            .map(|shard| shard.manager.orders.drain(..).zip(shard.out.drain(..)))
+            .collect();
+        let mut heap = std::collections::BinaryHeap::new();
+        let mut heads: Vec<_> = streams.iter_mut().map(Iterator::next).collect();
+        for (index, head) in heads.iter().enumerate() {
+            if let Some((order, _)) = head {
+                heap.push(std::cmp::Reverse((*order, index)));
+            }
+        }
+        while let Some(std::cmp::Reverse((_, index))) = heap.pop() {
+            out.push(heads[index].take().unwrap().1);
+            heads[index] = streams[index].next();
+            if let Some((order, _)) = &heads[index] {
+                heap.push(std::cmp::Reverse((*order, index)));
+            }
+        }
+    }
 }
 
 /// One tick's players, and the packets for their connections.
@@ -201,6 +350,9 @@ struct Tick<'a> {
     fresh: &'a [u128],
     enabled: bool,
     out: &'a mut Vec<(u32, C)>,
+    orders: &'a mut Vec<Order>,
+    order: Order,
+    sharded: bool,
     #[cfg(test)]
     count_only: bool,
     #[cfg(test)]
@@ -208,6 +360,10 @@ struct Tick<'a> {
 }
 
 impl<'a> Tick<'a> {
+    fn phase(&mut self) {
+        self.order = (self.order.0 + 1, 0, 0);
+    }
+
     fn player(&self, uuid: &u128) -> Option<&'a Player> {
         self.index.get(uuid).map(|&i| &self.players[i])
     }
@@ -243,6 +399,9 @@ impl<'a> Tick<'a> {
             if self.count_only {
                 return;
             }
+        }
+        if self.sharded {
+            self.orders.push(self.order);
         }
         self.out
             .push((conn, waypoint(source, operation, icon, target)));
@@ -401,7 +560,7 @@ impl Waypoints {
 
     /// `createConnection`.
     fn create_connection(&mut self, t: &mut Tick, receiver: u128, source: u128) {
-        if receiver == source || !t.enabled {
+        if !self.shard.owns(receiver) || receiver == source || !t.enabled {
             return;
         }
         match t.pair(source, receiver).and_then(|pair| t.make(pair)) {
@@ -459,15 +618,18 @@ impl Waypoints {
     }
     /// `trackWaypoint`.
     fn track(&mut self, t: &mut Tick, source: u128) {
+        t.phase();
         if !self.waypoints.contains(&source) {
             self.waypoints.push(source);
         }
-        for receiver in self.players.clone() {
-            self.create_connection(t, receiver, source);
+        for k in 0..self.players.len() {
+            t.order.1 = k;
+            self.create_connection(t, self.players[k], source);
         }
     }
     /// `updateWaypoint`.
     fn update_waypoint(&mut self, t: &mut Tick, source: u128) {
+        t.phase();
         if !t.enabled || !self.waypoints.contains(&source) {
             return;
         }
@@ -476,6 +638,10 @@ impl Waypoints {
         let source_player = t.player(&source);
         for k in 0..self.players.len() {
             let receiver = self.players[k];
+            if !self.shard.owns(receiver) {
+                continue;
+            }
+            t.order.1 = k;
             let pair = source_player.zip(t.player(&receiver));
             let row = self.connections.entry(receiver).or_default();
             Self::update_connection(row, t, receiver, source, pair);
@@ -483,7 +649,10 @@ impl Waypoints {
     }
     /// `untrackWaypoint`.
     fn untrack(&mut self, t: &mut Tick, source: u128) {
-        for receiver in self.players.clone() {
+        t.phase();
+        for k in 0..self.players.len() {
+            t.order.1 = k;
+            let receiver = self.players[k];
             if self.take(receiver, source).is_some() {
                 t.disconnect(receiver, source);
             }
@@ -492,11 +661,13 @@ impl Waypoints {
     }
     /// `addPlayer`.
     fn add_player(&mut self, t: &mut Tick, player: u128, transmitting: bool) {
+        t.phase();
         if !self.players.contains(&player) {
             self.players.push(player);
         }
-        for source in self.waypoints.clone() {
-            self.create_connection(t, player, source);
+        for k in 0..self.waypoints.len() {
+            t.order.1 = k;
+            self.create_connection(t, player, self.waypoints[k]);
         }
         if transmitting {
             self.track(t, player);
@@ -504,20 +675,31 @@ impl Waypoints {
     }
     /// `updatePlayer`.
     fn update_player(&mut self, t: &mut Tick, player: u128) {
-        if !t.enabled {
+        t.phase();
+        if !self.shard.owns(player) || !t.enabled {
             return;
         }
         // Keep the receiver row and player lookup outside the source loop.
         let receiver = t.player(&player);
         let row = self.connections.entry(player).or_default();
-        for &source in &self.waypoints {
+        for (k, &source) in self.waypoints.iter().enumerate() {
+            t.order.1 = k;
             let pair = t.player(&source).zip(receiver);
             Self::update_connection(row, t, player, source, pair);
         }
     }
     /// `removePlayer`.
     fn remove_player(&mut self, t: &mut Tick, player: u128) {
-        for (source, _) in self.connections.remove(&player).unwrap_or_default().ordered {
+        t.phase();
+        for (k, (source, _)) in self
+            .connections
+            .remove(&player)
+            .unwrap_or_default()
+            .ordered
+            .into_iter()
+            .enumerate()
+        {
+            t.order.1 = k;
             t.disconnect(player, source);
         }
         self.untrack(t, player);
@@ -525,13 +707,18 @@ impl Waypoints {
     }
     /// `breakAllConnections`.
     fn break_all(&mut self, t: &mut Tick) {
-        for receiver in self.players.clone() {
-            for (source, _) in self
+        t.phase();
+        for (k, &receiver) in self.players.iter().enumerate() {
+            t.order.1 = k;
+            for (j, (source, _)) in self
                 .connections
                 .remove(&receiver)
                 .unwrap_or_default()
                 .ordered
+                .into_iter()
+                .enumerate()
             {
+                t.order.2 = j;
                 t.disconnect(receiver, source);
             }
         }
@@ -579,6 +766,8 @@ impl Waypoints {
         self.input_index
             .extend(players.iter().enumerate().map(|(i, p)| (p.uuid, i)));
         self.view.clear();
+        self.orders.clear();
+        let mut orders = std::mem::take(&mut self.orders);
         let mut t = Tick {
             serial: self.tick,
             players,
@@ -588,6 +777,9 @@ impl Waypoints {
             fresh: respawned,
             enabled: locator_bar,
             out,
+            orders: &mut orders,
+            order: (0, 0, 0),
+            sharded: self.shard.count > 1,
             #[cfg(test)]
             count_only: self.count_only,
             #[cfg(test)]
@@ -679,8 +871,10 @@ impl Waypoints {
             // ServerScoreboard: a team joined, left or recoloured remakes the connections.
             if p.team != self.memo[&p.uuid].team {
                 self.memo.get_mut(&p.uuid).unwrap().team = p.team.clone();
-                for receiver in self.players.clone() {
-                    self.create_connection(&mut t, receiver, p.uuid);
+                t.phase();
+                for k in 0..self.players.len() {
+                    t.order.1 = k;
+                    self.create_connection(&mut t, self.players[k], p.uuid);
                 }
             }
         }
@@ -690,6 +884,7 @@ impl Waypoints {
         }
         self.input_index = t.index;
         self.view = t.view;
+        self.orders = orders;
     }
 }
 
@@ -913,6 +1108,158 @@ mod tests {
             println!(
                 "waypoint_pipeline mode={mode} median_pass_ms={:.3} encode_ms={:.3} send_ms={:.3}",
                 samples[2][0], samples[2][1], samples[2][2]
+            );
+        }
+    }
+
+    #[test]
+    fn receiver_shards_preserve_global_order_through_lifecycle_and_view_changes() {
+        for threads in [2, 4, 8] {
+            let mut reference = Waypoints::default();
+            let mut parallel = ParallelWaypoints::default();
+            let mut players: Vec<_> = (1..=19)
+                .map(|id| {
+                    let mut p = player(id, id as u32, [id as f64 * 64.0, 64.0, 0.5]);
+                    p.view_distance = if id % 3 == 0 { 64 } else { 4 };
+                    p.first_tick = id % 5 == 0;
+                    p.receive_range = if id % 7 == 0 { 0.0 } else { PLAYER_RANGE };
+                    p
+                })
+                .collect();
+            let away: Vec<_> = players.iter().map(|p| (p.uuid, p.conn.unwrap())).collect();
+            for frame in 0..18 {
+                // Split an already populated manager, moving its rows intact.
+                if frame == 2 {
+                    parallel.threads = Some(threads);
+                }
+                for p in &mut players {
+                    p.position[0] += if frame % 3 == 0 { 17.0 } else { 0.2 };
+                    p.position[2] += if p.uuid % 2 == 0 { 1.0 } else { -1.0 };
+                    p.first_tick = frame == 4 && p.uuid == 2;
+                    p.transmit_range = if (p.uuid + frame) % 5 == 0 {
+                        0.0
+                    } else {
+                        PLAYER_RANGE
+                    };
+                    p.spectator = (p.uuid + frame) % 7 == 0;
+                    p.team = if (p.uuid + frame) % 3 == 0 {
+                        Some(("red".into(), Some(0xff5555)))
+                    } else {
+                        None
+                    };
+                }
+                if frame == 6 {
+                    players.retain(|p| p.uuid != 3 && p.uuid != 7);
+                }
+                if frame == 10 {
+                    players.push(player(3, 3, [0.0, 64.0, 0.0]));
+                }
+                if frame == 17 {
+                    players.clear();
+                }
+                let respawned: &[u128] = if frame == 8 { &[2, 5] } else { &[] };
+                let enabled = frame != 5 && frame != 11;
+                let expected = reference.tick_level(&players, &away, respawned, enabled);
+                let mut actual = Vec::new();
+                parallel.tick_level_into(&players, &away, respawned, enabled, &mut actual);
+                let encode = |out: Vec<(u32, C)>| {
+                    out.into_iter()
+                        .map(|(c, p)| (c, p.encode()))
+                        .collect::<Vec<_>>()
+                };
+                assert_eq!(
+                    encode(actual),
+                    encode(expected),
+                    "threads={threads} frame={frame}"
+                );
+            }
+        }
+    }
+
+    /// Includes scoped dispatch, row updates and the globally ordered join.
+    #[test]
+    #[ignore]
+    fn parallel_waypoints_benchmark() {
+        use std::{
+            hash::{Hash, Hasher},
+            time::{Duration, Instant},
+        };
+        let mut expected = None;
+        for threads in [1, 2, 4, 8] {
+            let mut samples = Vec::new();
+            for _ in 0..5 {
+                let mut players: Vec<_> = (0..500)
+                    .map(|i| {
+                        player(
+                            i + 1,
+                            i as u32,
+                            [
+                                if i < 300 {
+                                    (i % 40) as f64
+                                } else {
+                                    i as f64 * 32.0
+                                },
+                                64.0,
+                                0.0,
+                            ],
+                        )
+                    })
+                    .collect();
+                let mut manager = ParallelWaypoints {
+                    threads: Some(threads),
+                    ..ParallelWaypoints::default()
+                };
+                let mut out = Vec::new();
+                manager.tick_level_into(&players, &[], &[], true, &mut out);
+                out.clear();
+                let mut elapsed = Duration::ZERO;
+                let mut packets = 0;
+                let mut global = std::collections::hash_map::DefaultHasher::new();
+                let mut receivers: Vec<_> = (0..500)
+                    .map(|_| std::collections::hash_map::DefaultHasher::new())
+                    .collect();
+                for tick in 0..40 {
+                    for p in &mut players {
+                        p.position[0] += 0.2;
+                        p.position[2] = (tick as f64 * 0.03 + p.uuid as f64).sin() * 8.0;
+                    }
+                    let start = Instant::now();
+                    manager.tick_level_into(
+                        std::hint::black_box(&players),
+                        &[],
+                        &[],
+                        true,
+                        &mut out,
+                    );
+                    elapsed += start.elapsed();
+                    packets += out.len();
+                    for (conn, packet) in out.drain(..) {
+                        let bytes = packet.encode();
+                        conn.hash(&mut global);
+                        bytes.hash(&mut global);
+                        bytes.hash(&mut receivers[conn as usize]);
+                    }
+                }
+                let fingerprint = (
+                    packets,
+                    global.finish(),
+                    receivers
+                        .into_iter()
+                        .map(|h| h.finish())
+                        .collect::<Vec<_>>(),
+                );
+                assert_eq!(*expected.get_or_insert(fingerprint.clone()), fingerprint);
+                let ms = elapsed.as_secs_f64() * 1e3 / 40.0;
+                samples.push(ms);
+                println!(
+                    "waypoint_parallel threads={threads} ms={ms:.3} packets={packets} global_hash={}",
+                    fingerprint.1
+                );
+            }
+            samples.sort_by(f64::total_cmp);
+            println!(
+                "waypoint_parallel threads={threads} median_ms={:.3} samples={samples:?}",
+                samples[2]
             );
         }
     }
