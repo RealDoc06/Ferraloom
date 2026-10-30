@@ -283,11 +283,12 @@ impl ParallelWaypoints {
         locator_bar: bool,
         out: &mut Vec<(u32, C)>,
     ) {
-        let threads = if players.len() >= 128 {
-            horizon_threads::worker_threads().unwrap_or(1).clamp(1, 8)
-        } else {
-            1
-        };
+        let threads = horizon_threads::worker_threads()
+            .map_or_else(
+                || std::thread::available_parallelism().map_or(1, |n| n.get()),
+                |helpers| helpers + 1,
+            )
+            .min(8);
         #[cfg(test)]
         let threads = self.threads.unwrap_or(threads);
         if self.shards.len() == 1 && threads > 1 {
@@ -299,19 +300,30 @@ impl ParallelWaypoints {
                 .tick_level_into(players, away, respawned, locator_bar, out);
             return;
         }
+        let (tick_shard, helpers) = self.shards.split_first_mut().unwrap();
         std::thread::scope(|scope| {
-            for shard in &mut self.shards {
-                scope.spawn(move || {
-                    horizon_threads::worker_affinity();
-                    shard.manager.tick_level_into(
-                        players,
-                        away,
-                        respawned,
-                        locator_bar,
-                        &mut shard.out,
-                    );
-                });
+            for shard in helpers {
+                std::thread::Builder::new()
+                    .name("waypoint-worker".into())
+                    .spawn_scoped(scope, move || {
+                        horizon_threads::worker_affinity();
+                        shard.manager.tick_level_into(
+                            players,
+                            away,
+                            respawned,
+                            locator_bar,
+                            &mut shard.out,
+                        );
+                    })
+                    .expect("start waypoint worker");
             }
+            tick_shard.manager.tick_level_into(
+                players,
+                away,
+                respawned,
+                locator_bar,
+                &mut tick_shard.out,
+            );
         });
         // Every shard is already ordered. Moving packets through a k-way merge
         // avoids sorting or cloning the packet bodies and preserves global order.
@@ -1116,7 +1128,10 @@ mod tests {
     fn receiver_shards_preserve_global_order_through_lifecycle_and_view_changes() {
         for threads in [2, 4, 8] {
             let mut reference = Waypoints::default();
-            let mut parallel = ParallelWaypoints::default();
+            let mut parallel = ParallelWaypoints {
+                threads: Some(1),
+                ..ParallelWaypoints::default()
+            };
             let mut players: Vec<_> = (1..=19)
                 .map(|id| {
                     let mut p = player(id, id as u32, [id as f64 * 64.0, 64.0, 0.5]);
@@ -1176,7 +1191,8 @@ mod tests {
         }
     }
 
-    /// Includes scoped dispatch, row updates and the globally ordered join.
+    /// Run under a CPU taskset: this uses the production tick/helper affinity
+    /// plan, including dispatch and the globally ordered join.
     #[test]
     #[ignore]
     fn parallel_waypoints_benchmark() {
@@ -1184,83 +1200,92 @@ mod tests {
             hash::{Hash, Hasher},
             time::{Duration, Instant},
         };
-        let mut expected = None;
-        for threads in [1, 2, 4, 8] {
-            let mut samples = Vec::new();
-            for _ in 0..5 {
-                let mut players: Vec<_> = (0..500)
-                    .map(|i| {
-                        player(
-                            i + 1,
-                            i as u32,
-                            [
-                                if i < 300 {
-                                    (i % 40) as f64
-                                } else {
-                                    i as f64 * 32.0
-                                },
-                                64.0,
-                                0.0,
-                            ],
-                        )
-                    })
-                    .collect();
-                let mut manager = ParallelWaypoints {
-                    threads: Some(threads),
-                    ..ParallelWaypoints::default()
-                };
-                let mut out = Vec::new();
-                manager.tick_level_into(&players, &[], &[], true, &mut out);
-                out.clear();
-                let mut elapsed = Duration::ZERO;
-                let mut packets = 0;
-                let mut global = std::collections::hash_map::DefaultHasher::new();
-                let mut receivers: Vec<_> = (0..500)
-                    .map(|_| std::collections::hash_map::DefaultHasher::new())
-                    .collect();
-                for tick in 0..40 {
-                    for p in &mut players {
-                        p.position[0] += 0.2;
-                        p.position[2] = (tick as f64 * 0.03 + p.uuid as f64).sin() * 8.0;
+        let cpus = std::thread::available_parallelism().map_or(1, |n| n.get());
+        horizon_threads::configure_server_affinity();
+        let helpers = horizon_threads::worker_threads().unwrap_or(0);
+        horizon_threads::tick_affinity();
+        println!("waypoint_layout allocated_cpus={cpus} helpers={helpers} tick_shards=1");
+        for population in [150, 500] {
+            let mut expected = None;
+            for mode in ["serial", "production"] {
+                let mut samples = Vec::new();
+                for _ in 0..5 {
+                    let normal = if population == 500 { 300 } else { 100 };
+                    let mut players: Vec<_> = (0..population)
+                        .map(|i| {
+                            player(
+                                i + 1,
+                                i as u32,
+                                [
+                                    if i < normal {
+                                        (i % 40) as f64
+                                    } else {
+                                        i as f64 * 32.0
+                                    },
+                                    64.0,
+                                    0.0,
+                                ],
+                            )
+                        })
+                        .collect();
+                    let mut manager = ParallelWaypoints {
+                        threads: (mode == "serial").then_some(1),
+                        ..ParallelWaypoints::default()
+                    };
+                    let mut out = Vec::new();
+                    manager.tick_level_into(&players, &[], &[], true, &mut out);
+                    out.clear();
+                    let mut elapsed = Duration::ZERO;
+                    let mut packets = 0;
+                    let mut global = std::collections::hash_map::DefaultHasher::new();
+                    let mut receivers: Vec<_> = (0..population)
+                        .map(|_| std::collections::hash_map::DefaultHasher::new())
+                        .collect();
+                    for tick in 0..40 {
+                        for p in &mut players {
+                            p.position[0] += 0.2;
+                            p.position[2] = (tick as f64 * 0.03 + p.uuid as f64).sin() * 8.0;
+                        }
+                        let start = Instant::now();
+                        manager.tick_level_into(
+                            std::hint::black_box(&players),
+                            &[],
+                            &[],
+                            true,
+                            &mut out,
+                        );
+                        elapsed += start.elapsed();
+                        packets += out.len();
+                        for (conn, packet) in out.drain(..) {
+                            let bytes = packet.encode();
+                            conn.hash(&mut global);
+                            bytes.hash(&mut global);
+                            bytes.hash(&mut receivers[conn as usize]);
+                        }
                     }
-                    let start = Instant::now();
-                    manager.tick_level_into(
-                        std::hint::black_box(&players),
-                        &[],
-                        &[],
-                        true,
-                        &mut out,
+                    let fingerprint = (
+                        packets,
+                        global.finish(),
+                        receivers
+                            .into_iter()
+                            .map(|h| h.finish())
+                            .collect::<Vec<_>>(),
                     );
-                    elapsed += start.elapsed();
-                    packets += out.len();
-                    for (conn, packet) in out.drain(..) {
-                        let bytes = packet.encode();
-                        conn.hash(&mut global);
-                        bytes.hash(&mut global);
-                        bytes.hash(&mut receivers[conn as usize]);
-                    }
+                    assert_eq!(*expected.get_or_insert(fingerprint.clone()), fingerprint);
+                    let ms = elapsed.as_secs_f64() * 1e3 / 40.0;
+                    samples.push(ms);
+                    println!(
+                        "waypoint_parallel population={population} mode={mode} shards={} ms={ms:.3} packets={packets} global_hash={}",
+                        manager.shards.len(),
+                        fingerprint.1
+                    );
                 }
-                let fingerprint = (
-                    packets,
-                    global.finish(),
-                    receivers
-                        .into_iter()
-                        .map(|h| h.finish())
-                        .collect::<Vec<_>>(),
-                );
-                assert_eq!(*expected.get_or_insert(fingerprint.clone()), fingerprint);
-                let ms = elapsed.as_secs_f64() * 1e3 / 40.0;
-                samples.push(ms);
+                samples.sort_by(f64::total_cmp);
                 println!(
-                    "waypoint_parallel threads={threads} ms={ms:.3} packets={packets} global_hash={}",
-                    fingerprint.1
+                    "waypoint_parallel population={population} mode={mode} median_ms={:.3} samples={samples:?}",
+                    samples[2]
                 );
             }
-            samples.sort_by(f64::total_cmp);
-            println!(
-                "waypoint_parallel threads={threads} median_ms={:.3} samples={samples:?}",
-                samples[2]
-            );
         }
     }
 
