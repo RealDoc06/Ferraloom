@@ -12371,6 +12371,9 @@ impl Game<'_> {
         }
     }
     fn update_world(&mut self) {
+        self.update_world_with_budget(false);
+    }
+    fn update_world_with_budget(&mut self, budgeted: bool) {
         if let Err(e) = self.poll_remote() {
             log::warn!("Horizon: {e}");
         }
@@ -12395,8 +12398,13 @@ impl Game<'_> {
         self.streaming
             .extra
             .extend(waiting.into_iter().map(|chunk| (chunk, 0)));
-        let (uploads, unloaded) =
-            horizon_client::spans::time("streaming", || self.streaming.update(&mut self.world));
+        let (uploads, unloaded) = horizon_client::spans::time("streaming", || {
+            if budgeted {
+                self.streaming.update_budgeted(&mut self.world)
+            } else {
+                self.streaming.update(&mut self.world)
+            }
+        });
         self.streaming.extra.truncate(areas);
         if let Some(lod) = &mut self.lod {
             self.lod_observe
