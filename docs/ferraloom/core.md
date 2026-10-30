@@ -58,7 +58,10 @@ borrowed block handle, plus the real `SceneCollisions` adapter used by gameplay.
 `ResidentWorld` supplies live borrowed sections, block reads and current piston
 state through static dispatch. Horizon's existing names re-export the shared
 implementation; its `SceneCollisions` alias selects the current `World`.
-The new crate depends only on `horizon-core` and `horizon-world`.
+The same crate now owns `ChunkTickets`/`Levels` and the unchanged fast hasher.
+Horizon reexports those old paths too; ticket propagation, map representation
+and iteration are unchanged. The crate depends only on `horizon-core` and
+`horizon-world`.
 
 `Chunk` and `World` remain in Horizon for now: their block-entity types have
 inherent implementations across containers, sculk, spawners and other gameplay
