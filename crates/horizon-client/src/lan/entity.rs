@@ -570,22 +570,53 @@ impl ServerEntity {
 #[derive(Default)]
 pub struct Tracker {
     seen: crate::fast_hash::FxHashSet<i32>,
+    /// Fast membership for low network ids; the set still defines iteration
+    /// and removal order. Bounded at 8 KiB per receiver, regardless of uptime.
+    low_ids: Vec<u64>,
 }
 
 impl Tracker {
     pub fn is_tracking(&self, id: i32) -> bool {
+        if let Ok(id) = usize::try_from(id)
+            && id < 65_536
+        {
+            return self
+                .low_ids
+                .get(id / 64)
+                .is_some_and(|word| word & (1 << (id % 64)) != 0);
+        }
         self.seen.contains(&id)
+    }
+    fn cache(&mut self, id: i32, tracked: bool) {
+        if let Ok(id) = usize::try_from(id)
+            && id < 65_536
+        {
+            let word = id / 64;
+            if tracked {
+                self.low_ids.resize(self.low_ids.len().max(word + 1), 0);
+                self.low_ids[word] |= 1 << (id % 64);
+            } else if let Some(word) = self.low_ids.get_mut(word) {
+                *word &= !(1 << (id % 64));
+            }
+        }
+    }
+    fn track(&mut self, id: i32) {
+        self.seen.insert(id);
+        self.cache(id, true);
     }
     pub fn ids(&self) -> Vec<i32> {
         self.seen.iter().copied().collect()
     }
     pub fn clear(&mut self) {
         self.seen.clear();
+        self.low_ids.fill(0);
     }
     /// Stop tracking `id` without a packet: the caller removes it from the
     /// client, and the next tick pairs it again if it is still in range.
     pub fn forget(&mut self, id: i32) -> bool {
-        self.seen.remove(&id)
+        let removed = self.seen.remove(&id);
+        self.cache(id, false);
+        removed
     }
     pub fn len(&self) -> usize {
         self.seen.len()
@@ -781,7 +812,7 @@ impl Entities {
                 flags.extend(self.probes.iter().zip(pairs.iter_mut()).map(|(p, pairs)| {
                     if p.id == v.entity_id || !sees(v, p, chunks, held) {
                         0
-                    } else if v.tracker.seen.contains(&p.id) {
+                    } else if v.tracker.is_tracking(p.id) {
                         kept += 1;
                         SEES | TRACKS
                     } else {
@@ -796,7 +827,7 @@ impl Entities {
                 let is_moved = &self.is_moved;
                 flags.extend(self.probes.iter().zip(pairs.iter_mut()).zip(is_moved).map(
                     |((p, pairs), &moved)| {
-                        let tracks = v.tracker.seen.contains(&p.id);
+                        let tracks = v.tracker.is_tracking(p.id);
                         if p.id == v.entity_id || (moved && !sees(v, p, chunks, held)) {
                             0
                         } else if tracks {
@@ -846,6 +877,9 @@ impl Entities {
                 });
             }
             if !removed.is_empty() {
+                for &id in &removed {
+                    v.tracker.cache(id, false);
+                }
                 v.out.push(
                     play::Clientbound::RemoveEntities(play::RemoveEntities { ids: removed })
                         .encode(),
@@ -887,7 +921,7 @@ impl Entities {
                         packets.iter().map(play::Clientbound::encode).collect()
                     });
                     v.out.extend(bodies.iter().cloned());
-                    v.tracker.seen.insert(e.id);
+                    v.tracker.track(e.id);
                 }
             }
         }
@@ -898,6 +932,72 @@ impl Entities {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tracking_cache_handles_forget_clear_and_high_ids() {
+        let mut tracker = Tracker::default();
+        let ids = [-1, 0, 63, 64, 65_535, 65_536, i32::MAX];
+        for id in ids {
+            tracker.track(id);
+        }
+        for id in ids {
+            assert!(tracker.is_tracking(id));
+            assert!(tracker.forget(id));
+            assert!(!tracker.is_tracking(id));
+            assert!(!tracker.forget(id));
+        }
+        for id in ids {
+            tracker.track(id);
+        }
+        tracker.clear();
+        for id in ids {
+            assert!(!tracker.is_tracking(id));
+        }
+        assert!(tracker.low_ids.len() <= 1024);
+    }
+
+    /// The membership checks in the moving 500-receiver range pass.
+    #[test]
+    #[ignore]
+    fn tracking_membership_benchmark() {
+        use std::{hint::black_box, time::Instant};
+        let trackers: Vec<_> = (0..500)
+            .map(|receiver| {
+                let mut tracker = Tracker::default();
+                for id in 0..500 {
+                    if (id + receiver) % 3 != 0 {
+                        tracker.track(id);
+                    }
+                }
+                tracker
+            })
+            .collect();
+        for cached in [false, true] {
+            let mut samples = Vec::new();
+            for _ in 0..7 {
+                let start = Instant::now();
+                let mut count = 0;
+                for _ in 0..100 {
+                    for tracker in black_box(&trackers) {
+                        for id in 0..500 {
+                            count += usize::from(if cached {
+                                tracker.is_tracking(black_box(id))
+                            } else {
+                                tracker.seen.contains(&black_box(id))
+                            });
+                        }
+                    }
+                }
+                black_box(count);
+                samples.push(start.elapsed().as_secs_f64() * 1e3 / 100.0);
+            }
+            samples.sort_by(f64::total_cmp);
+            println!(
+                "tracking_membership cached={cached} median_ms_per_tick={:.3}",
+                samples[3]
+            );
+        }
+    }
 
     fn state(x: f64) -> EntityState {
         EntityState {
