@@ -7,7 +7,7 @@ mod tests {
     use crate::chunk_map::ChunkMap;
     type Key = (i32, i32);
     use crate::chunk::Chunk;
-    use std::sync::Arc;
+    use std::{collections::HashSet, sync::Arc};
 
     fn compare(cache: &mut TickChunkMembership, old: &mut HashSet<Key>, map: &ChunkMap) {
         let loaded: HashSet<_> = map.keys().copied().collect();
