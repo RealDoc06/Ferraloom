@@ -7,7 +7,7 @@ use horizon_protocol::packets::play::{AttributeModifier, AttributeSnapshot};
 use horizon_world::attributes::{
     Instance, Modifier, Operation,
     entity::{AttributeId, EntityAttributes},
-    live::LiveAttributes,
+    live::{IdentitySource, LiveAttributes},
 };
 
 /// `AttributeModifier.Operation.id`.
@@ -46,7 +46,7 @@ pub fn snapshot(attribute: AttributeId, instance: &Instance) -> AttributeSnapsho
 }
 
 /// `AttributeMap.getSyncableAttributes` of a live map (a player's).
-pub fn syncable<G: FnMut() -> i32>(map: &LiveAttributes<G>) -> Vec<AttributeSnapshot> {
+pub fn syncable<G: IdentitySource>(map: &LiveAttributes<G>) -> Vec<AttributeSnapshot> {
     let catalog = map.catalog();
     map.instances()
         .filter(|(_, key, _)| catalog.attribute(key.attribute()).syncable)
@@ -55,7 +55,7 @@ pub fn syncable<G: FnMut() -> i32>(map: &LiveAttributes<G>) -> Vec<AttributeSnap
 }
 
 /// `getAttributesToSync`, cleared once read (`ServerEntity.sendDirtyEntityData`).
-pub fn take_dirty<G: FnMut() -> i32>(map: &mut LiveAttributes<G>) -> Vec<AttributeSnapshot> {
+pub fn take_dirty<G: IdentitySource>(map: &mut LiveAttributes<G>) -> Vec<AttributeSnapshot> {
     if map.sync().is_empty() {
         return Vec::new();
     }
@@ -74,7 +74,7 @@ pub fn take_dirty<G: FnMut() -> i32>(map: &mut LiveAttributes<G>) -> Vec<Attribu
 /// synced takes its base and exactly its modifiers (`removeModifiers`, then
 /// `addTransientModifier` for each). An attribute the map doesn't know is
 /// skipped, as vanilla warns and skips it.
-pub fn apply<G: FnMut() -> i32>(map: &mut LiveAttributes<G>, values: &[AttributeSnapshot]) {
+pub fn apply<G: IdentitySource>(map: &mut LiveAttributes<G>, values: &[AttributeSnapshot]) {
     for s in values {
         let Some(key) = map
             .keys()

@@ -10,7 +10,11 @@ use horizon_core::{
 };
 use horizon_world::{
     attribute_map::ValueKind,
-    attributes::{Modifier, Operation, entity::Catalog, live::LiveAttributes},
+    attributes::{
+        Modifier, Operation,
+        entity::Catalog,
+        live::{IdentityCounter, LiveAttributes},
+    },
     block_collision::BlockCollisionRegistry,
     block_landing::BlockLandingRegistry,
     climbing::{self, ClimbingRegistry, ClimbingWorld},
@@ -347,7 +351,7 @@ pub struct PlayerMotion {
     /// server takes it at the end of a guest's turn.
     pub teleported: bool,
     pub events: Vec<MotionEvent>,
-    pub attributes: LiveAttributes<Box<dyn FnMut() -> i32>>,
+    pub attributes: LiveAttributes<IdentityCounter>,
     pub impulse: ImpulseContext,
     /// `ServerPlayer.spawnExtraParticlesOnFall`: a mace smash on a grounded
     /// target makes the next landing throw up the block below.
@@ -458,11 +462,7 @@ impl PlayerMotion {
             .enumerate()
             .map(|(i, _)| i as i32)
             .collect();
-        let mut identity = 0i32;
-        let next: Box<dyn FnMut() -> i32> = Box::new(move || {
-            identity = identity.wrapping_add(1);
-            identity
-        });
+        let next = IdentityCounter::default();
         Self::with_attribute_identities(resources, position, &hashes, next)
     }
     /// Explicit identity allocation for deterministic reference replay.
@@ -470,7 +470,7 @@ impl PlayerMotion {
         resources: &MotionResources,
         position: Vec3,
         hashes: &[i32],
-        next: Box<dyn FnMut() -> i32>,
+        next: IdentityCounter,
     ) -> Result<Self> {
         let mut attributes = LiveAttributes::new(
             resources.attributes.clone(),
@@ -2563,6 +2563,12 @@ impl LivingMotionWorld for MotionWorld<'_, '_, '_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn canonical_player_motion_can_move_to_a_worker() {
+        fn require_send<T: Send>() {}
+        require_send::<PlayerMotion>();
+    }
 
     #[test]
     fn sword_sweep_requires_charge_ground_and_slow_horizontal_movement() {

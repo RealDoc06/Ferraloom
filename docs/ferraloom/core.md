@@ -86,6 +86,15 @@ predicate are borrowed inputs; the client wrapper only supplies its existing
 order and live rechecks between lower and higher sections are unchanged. The
 real-chunk COW/reload and evolving random-tick trace tests stay at the adapter.
 
+Player ownership preparation removes `PlayerMotion`'s boxed identity callback.
+Its concrete `IdentityCounter` keeps the same per-player wrapping `i32` sequence;
+native replay retains the exact recorded values and allocation-count check.
+The only shared replay state is an atomic count, not a gameplay lock. Existing
+closure-based world harnesses keep their binding through `IdentitySource`.
+The player body's `Send` bound is checked in its unit tests. This does not yet
+remove guest swaps or move network-owned state; that access migration follows
+the LAN branches' merge and retains immediate reentrant visibility.
+
 `Chunk` and `World` remain in Horizon for now: their block-entity types have
 inherent implementations across containers, sculk, spawners and other gameplay
 modules. Move those types with their methods in later units, rather than adding
