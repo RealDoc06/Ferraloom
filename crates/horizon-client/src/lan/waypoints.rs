@@ -372,6 +372,8 @@ pub struct ParallelWaypoints {
     #[cfg(test)]
     spawn_on_helpers: bool,
     #[cfg(test)]
+    yield_to_helpers: bool,
+    #[cfg(test)]
     legacy_out: Vec<(u32, C)>,
     #[cfg(any(test, feature = "profiler"))]
     time: PassTime,
@@ -389,6 +391,8 @@ impl Default for ParallelWaypoints {
             encode_after_join: false,
             #[cfg(test)]
             spawn_on_helpers: false,
+            #[cfg(test)]
+            yield_to_helpers: false,
             #[cfg(test)]
             legacy_out: Vec::new(),
             #[cfg(any(test, feature = "profiler"))]
@@ -478,6 +482,8 @@ impl ParallelWaypoints {
         } else {
             #[cfg(test)]
             let spawn_on_helpers = self.spawn_on_helpers;
+            #[cfg(test)]
+            let yield_to_helpers = self.yield_to_helpers;
             let (tick_shard, helpers) = self.shards.split_first_mut().unwrap();
             #[cfg(any(test, feature = "profiler"))]
             let mut done = std::time::Duration::ZERO;
@@ -498,6 +504,10 @@ impl ParallelWaypoints {
                 #[cfg(test)]
                 if spawn_on_helpers {
                     horizon_threads::tick_affinity();
+                }
+                #[cfg(test)]
+                if yield_to_helpers {
+                    std::thread::yield_now();
                 }
                 tick_shard.tick(frame, !encode_after_join);
                 #[cfg(any(test, feature = "profiler"))]
@@ -1475,7 +1485,13 @@ mod tests {
         println!("waypoint_layout allocated_cpus={cpus} helpers={helpers} tick_shards=1");
         for population in [150, 500] {
             let mut expected = None;
-            for mode in ["serial", "after-join", "worker-encode", "helper-spawn"] {
+            for mode in [
+                "serial",
+                "after-join",
+                "worker-encode",
+                "helper-spawn",
+                "yield-start",
+            ] {
                 let mut samples = Vec::new();
                 for _ in 0..5 {
                     let normal = if population == 500 { 300 } else { 100 };
@@ -1500,6 +1516,7 @@ mod tests {
                         threads: (mode == "serial").then_some(1),
                         encode_after_join: matches!(mode, "serial" | "after-join"),
                         spawn_on_helpers: mode == "helper-spawn",
+                        yield_to_helpers: mode == "yield-start",
                         ..ParallelWaypoints::default()
                     };
                     let mut out = Vec::new();
