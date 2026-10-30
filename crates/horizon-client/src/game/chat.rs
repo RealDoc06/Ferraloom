@@ -7,7 +7,7 @@ use horizon_client::{
         SYSTEM_INDICATOR,
     },
     command::Registries,
-    gamerules::GameRules,
+    gamerules::{GameRules, RuleId, rule_id},
     hud::HudBatch,
     screen_draw::Measure,
     text::{ClickEvent, Style, Text},
@@ -981,17 +981,44 @@ impl Game<'_> {
     }
     /// The engine-side rule values (block behaviour and health).
     pub(super) fn level_rules(&self) -> horizon_world::level::GameRules {
+        // Keep identities, not values: commands can change these rules between
+        // scheduled ticks. Resolve names only on the first adapter construction.
+        static IDS: std::sync::LazyLock<[RuleId; 9]> = std::sync::LazyLock::new(|| {
+            [
+                "water_source_conversion",
+                "lava_source_conversion",
+                "random_tick_speed",
+                "block_drops",
+                "mob_griefing",
+                "max_snow_accumulation_height",
+                "spawn_mobs",
+                "spawn_monsters",
+                "fire_spread_radius_around_player",
+            ]
+            .map(|name| rule_id(name).expect("registered level game rule"))
+        });
+        let [
+            water,
+            lava,
+            random_ticks,
+            drops,
+            griefing,
+            snow,
+            mobs,
+            monsters,
+            fire_radius,
+        ] = *IDS;
         let r = &self.ui.rules;
         horizon_world::level::GameRules {
-            water_source_conversion: r.bool("water_source_conversion"),
-            lava_source_conversion: r.bool("lava_source_conversion"),
-            random_tick_speed: r.int("random_tick_speed"),
-            block_drops: r.bool("block_drops"),
-            mob_griefing: r.bool("mob_griefing"),
-            max_snow_accumulation_height: r.int("max_snow_accumulation_height"),
-            spawn_mobs: r.bool("spawn_mobs"),
-            spawn_monsters: r.bool("spawn_monsters"),
-            fire_spread_radius_around_player: r.int("fire_spread_radius_around_player"),
+            water_source_conversion: r.bool_by_id(water),
+            lava_source_conversion: r.bool_by_id(lava),
+            random_tick_speed: r.int_by_id(random_ticks),
+            block_drops: r.bool_by_id(drops),
+            mob_griefing: r.bool_by_id(griefing),
+            max_snow_accumulation_height: r.int_by_id(snow),
+            spawn_mobs: r.bool_by_id(mobs),
+            spawn_monsters: r.bool_by_id(monsters),
+            fire_spread_radius_around_player: r.int_by_id(fire_radius),
         }
     }
     /// Apply rules mirrored in other state (natural regeneration, difficulty).

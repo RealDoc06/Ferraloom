@@ -164,6 +164,37 @@ impl Weather {
         (rain, thunder * rain)
     }
 }
+/// Read nearby positions while borrowing resident chunks and sections. The
+/// immutable world borrow prevents edits/unloads from invalidating the cache.
+pub struct BlockReader<'a> {
+    world: &'a World,
+    chunk: Option<((i32, i32), Option<crate::chunk::ChunkBlocks<'a>>)>,
+    section_y: i32,
+}
+impl BlockReader<'_> {
+    #[inline]
+    pub fn block(&mut self, x: i32, y: i32, z: i32) -> BlockStateId {
+        let key = (x >> 4, z >> 4);
+        if self.chunk.as_ref().is_none_or(|(at, _)| *at != key) {
+            self.chunk = Some((
+                key,
+                self.world
+                    .chunks
+                    .get(&key)
+                    .map(|chunk| crate::chunk::ChunkBlocks::new(chunk)),
+            ));
+            self.section_y = i32::MIN;
+        }
+        let Some((_, Some(chunk))) = &mut self.chunk else {
+            return self.world.air;
+        };
+        if self.section_y != y >> 4 {
+            *chunk = chunk.select_section(y >> 4);
+            self.section_y = y >> 4;
+        }
+        chunk.block(x, y, z)
+    }
+}
 impl World {
     pub fn new(air: BlockStateId, seed: i64) -> Self {
         Self {
@@ -315,6 +346,15 @@ impl World {
             chunk.motion_blocking(x & 15, z & 15, |v| blocks(BlockStateId(v)))
         })
     }
+    /// Borrow a reader for a sequence of nearby positions.
+    pub fn block_reader(&self) -> BlockReader<'_> {
+        BlockReader {
+            world: self,
+            chunk: None,
+            section_y: i32::MIN,
+        }
+    }
+    #[inline]
     pub fn block(&self, x: i32, y: i32, z: i32) -> BlockStateId {
         self.chunks
             .get(&(x >> 4, z >> 4))
@@ -409,6 +449,97 @@ mod tests {
     use crate::chunk::Chunk;
     use horizon_world::registry::BlockStateId;
     use std::sync::Arc;
+
+    fn access_world() -> World {
+        let mut world = World::new(BlockStateId(7), 0);
+        for (cx, cz) in [(-1, -1), (0, 0), (1, 0), (0, 1)] {
+            let mut chunk = Chunk::empty(cx, cz);
+            for (sy, section) in chunk.sections.iter_mut().enumerate() {
+                let values = std::array::from_fn(|i| ((i * 13 + sy * 7) % 23) as u32);
+                Arc::make_mut(section).blocks = crate::chunk::Section::from_blocks(&values);
+            }
+            world.chunks.insert((cx, cz), Arc::new(chunk));
+        }
+        world
+    }
+
+    #[test]
+    fn borrowed_block_access_matches_world_across_borders_and_missing_chunks() {
+        use horizon_core::random::{LegacyRandom, RandomSource};
+        let world = access_world();
+        let mut reader = world.block_reader();
+        let mut random = LegacyRandom::new(987);
+        for _ in 0..20_000 {
+            let x = random.next_int_bound(80).unwrap() - 32;
+            let y = random.next_int_bound(420).unwrap() - 80;
+            let z = random.next_int_bound(80).unwrap() - 32;
+            for dx in -1..=1 {
+                assert_eq!(reader.block(x + dx, y, z), world.block(x + dx, y, z));
+            }
+            if let Some(chunk) = world.chunks.get(&(x >> 4, z >> 4)) {
+                let blocks = crate::chunk::ChunkBlocks::new(chunk).select_section(y >> 4);
+                assert_eq!(blocks.block(x, y, z), chunk.block(x, y, z));
+                // The handle also supports callers that have not selected this section.
+                assert_eq!(blocks.block(x, y + 16, z), chunk.block(x, y + 16, z));
+            }
+        }
+        // Loaded out-of-height reads are state zero, missing columns use world.air.
+        assert_eq!(reader.block(0, -65, 0), BlockStateId(0));
+        assert_eq!(reader.block(48, -65, 0), world.air);
+        // Neither reader takes ownership of a chunk or section.
+        assert_eq!(Arc::strong_count(world.chunks.get(&(0, 0)).unwrap()), 1);
+        assert_eq!(
+            Arc::strong_count(&world.chunks.get(&(0, 0)).unwrap().sections[0]),
+            1
+        );
+    }
+
+    /// Same-binary release comparison of the original lookup and the borrowed
+    /// reader, using collision-sized neighbourhoods including section/chunk edges.
+    #[test]
+    #[ignore = "release microbenchmark"]
+    fn bench_borrowed_block_access() {
+        use std::{hint::black_box, time::Instant};
+        let world = access_world();
+        let positions: Vec<_> = (0..512)
+            .flat_map(|n| {
+                let x = n % 32;
+                let y = n % 96 - 64;
+                let z = (n / 32) % 32;
+                (-1..=1).flat_map(move |dz| {
+                    (-1..=2).flat_map(move |dy| (-1..=1).map(move |dx| (x + dx, y + dy, z + dz)))
+                })
+            })
+            .collect();
+        for round in 0..5 {
+            let start = Instant::now();
+            let mut sum = 0u64;
+            for _ in 0..500 {
+                for &(x, y, z) in black_box(&positions) {
+                    sum += u64::from(world.block(x, y, z).0);
+                }
+            }
+            let old = start.elapsed();
+            black_box(sum);
+            let start = Instant::now();
+            let mut reader = world.block_reader();
+            let mut cached_sum = 0u64;
+            for _ in 0..500 {
+                for &(x, y, z) in black_box(&positions) {
+                    cached_sum += u64::from(reader.block(x, y, z).0);
+                }
+            }
+            let cached = start.elapsed();
+            black_box(cached_sum);
+            assert_eq!(sum, cached_sum);
+            let reads = (positions.len() * 500) as f64;
+            println!(
+                "round {round}: original {:.2} ns/read, borrowed {:.2} ns/read",
+                old.as_nanos() as f64 / reads,
+                cached.as_nanos() as f64 / reads
+            );
+        }
+    }
 
     /// A box misses a state only where no section it reaches lists it, and
     /// unloaded columns or heights past the world count as their air.
