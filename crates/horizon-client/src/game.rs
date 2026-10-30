@@ -3158,8 +3158,29 @@ impl Game<'_> {
             }
             touched.sort_unstable_by_key(|p| (p.x, p.y, p.z));
             touched.dedup();
+            let mut contact = horizon_world::level::ContactSections::default();
             for pos in inside.into_iter().chain(touched) {
-                b.entity_inside(level, ticks, pos);
+                let key = (pos.x >> 4, pos.y >> 4, pos.z >> 4);
+                // Recheck after every write, including writes made by an earlier
+                // contact callback. Never prefilter the remaining positions.
+                if contact.get(key, level.world.revision, || {
+                    level.world.chunks.get(&(key.0, key.2)).map_or_else(
+                        || b.has_entity_inside(level.world.air),
+                        |chunk| {
+                            let index = key.1 - (MIN_Y >> 4);
+                            chunk.sections.get(index as usize).map_or_else(
+                                || b.has_entity_inside(BlockStateId(0)),
+                                |section| {
+                                    section
+                                        .blocks
+                                        .has(|id| b.has_entity_inside(BlockStateId(id)))
+                                },
+                            )
+                        },
+                    )
+                }) {
+                    b.entity_inside(level, ticks, pos);
+                }
             }
             for (pos, on_ground, feet_y) in standing {
                 b.entity_on_big_dripleaf(level, ticks, pos, on_ground, feet_y);
@@ -3173,19 +3194,32 @@ impl Game<'_> {
                 let mut read = None;
                 let mut sections = Default::default();
                 let pos = horizon_core::position::ChunkPos::new(x, z);
-                b.tick_chunk_random(level, ticks, pos, |level, from| {
-                    if read != Some(level.world.revision) {
-                        read = Some(level.world.revision);
-                        sections = level
-                            .world
-                            .chunks
-                            .get(&(x, z))
-                            .map_or_else(Default::default, |chunk| {
-                                level.random_tick_sections.get((x, z), chunk, level.facts)
-                            });
-                    }
-                    sections.from(from)
-                });
+                let mut current_chunk = horizon_world::level::RandomTickChunk::default();
+                b.tick_chunk_random_with_reader(
+                    level,
+                    ticks,
+                    pos,
+                    |level, from| {
+                        if read != Some(level.world.revision) {
+                            read = Some(level.world.revision);
+                            sections = level
+                                .world
+                                .chunks
+                                .get(&(x, z))
+                                .map_or_else(Default::default, |chunk| {
+                                    level.random_tick_sections.get((x, z), chunk, level.facts)
+                                });
+                        }
+                        sections.from(from)
+                    },
+                    |level, at| {
+                        let current = current_chunk
+                            .get(level.world.revision, || level.world.chunks.get(&(x, z)));
+                        current.map_or(level.world.air, |chunk| {
+                            chunk.block(at.x & 15, at.y, at.z & 15)
+                        })
+                    },
+                );
             }
             b.run_block_events(level, ticks);
             b.tick_block_entities(level, ticks);

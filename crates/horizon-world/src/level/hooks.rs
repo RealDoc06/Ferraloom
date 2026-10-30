@@ -457,9 +457,8 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         }
     }
     /// `entityInside` for entity-sensing blocks.
-    pub(crate) fn entity_inside(&mut self, pos: BlockPos) {
+    pub(crate) fn entity_inside_state(&mut self, pos: BlockPos, state: BlockStateId) {
         let b = self.b;
-        let state = self.state(pos);
         let data = b.data(state);
         if data.is(Class::BasePressurePlate) {
             let signal = self.plate_signal_for_state(state);
