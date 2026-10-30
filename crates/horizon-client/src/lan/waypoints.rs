@@ -261,7 +261,7 @@ impl<'a> Tick<'a> {
         // Well inside the range, float rounding in Entity.distanceTo cannot
         // reach the boundary. Keep vanilla's sqrt and f32 rounding near it.
         let squared = source.distance_squared(receiver);
-        if range > 0.0 && squared < (range * 0.5).powi(2) {
+        if range > 0.0 && range <= f64::from(f32::MAX) && squared < (range * 0.5).powi(2) {
             return false;
         }
         f64::from(squared.sqrt() as f32) >= range

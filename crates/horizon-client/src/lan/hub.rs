@@ -168,6 +168,8 @@ pub struct Hub {
     pub config: HubConfig,
     pub encoder: ChunkEncoder,
     pub guests: Vec<Guest>,
+    /// Rebuilt at the network polling boundary; guest storage can change between ticks.
+    inbox_index: crate::fast_hash::FxHashMap<u32, usize>,
     pub(super) sync: Arc<SyncData>,
     pub ticks: u64,
     /// The `player_movement_check` and `elytra_movement_check` game rules,
@@ -361,6 +363,7 @@ impl Hub {
             config,
             encoder,
             guests: Vec::new(),
+            inbox_index: Default::default(),
             sync,
             ticks: 0,
             immediate_respawn: false,
@@ -1137,22 +1140,25 @@ impl Hub {
     /// packets queued for its own level's pass.
     pub fn poll(&mut self, ctx: &mut TickCtx) -> Vec<HostEvent> {
         self.ticks += 1;
+        self.reindex_inboxes();
         let mut events = Vec::new();
         for event in self.lan.poll() {
             match event {
                 NetEvent::Joined(j) => {
                     let conn = self.admit(*j, ctx);
+                    self.reindex_inboxes();
                     events.push(HostEvent::Joined(conn));
                 }
                 NetEvent::Left(conn, reason) => {
                     if let Some(i) = self.guests.iter().position(|g| g.conn == conn) {
                         let g = self.remove_guest(i, &reason);
+                        self.reindex_inboxes();
                         events.push(HostEvent::Left(Box::new(g)));
                     }
                 }
                 NetEvent::Packet(conn, packet) => {
-                    if let Some(g) = self.guest_mut(conn) {
-                        g.inbox.push_back(*packet);
+                    if let Some(&i) = self.inbox_index.get(&conn) {
+                        self.guests[i].inbox.push_back(*packet);
                     }
                 }
                 NetEvent::Duplicate(uuid) => {
@@ -1172,6 +1178,12 @@ impl Hub {
             }
         }
         events
+    }
+
+    fn reindex_inboxes(&mut self) {
+        self.inbox_index.clear();
+        self.inbox_index
+            .extend(self.guests.iter().enumerate().map(|(i, g)| (g.conn, i)));
     }
 
     /// The level in place's part of the tick (`ServerLevel.tick`'s chunk
@@ -2798,6 +2810,46 @@ fn shared_flags(sneaking: bool, sprinting: bool, body: &BodyFlags) -> i8 {
 mod tests {
     use super::*;
     use crate::fast_hash::FxHashSet;
+
+    /// Isolate routing 500 players' inbound packets, including index rebuild.
+    #[test]
+    #[ignore]
+    fn inbox_routing_benchmark() {
+        use std::{hint::black_box, time::Instant};
+        for indexed in [false, true] {
+            let mut guests: Vec<_> = (0..500u32)
+                .map(|conn| (conn, std::collections::VecDeque::new()))
+                .collect();
+            let mut index = crate::fast_hash::FxHashMap::default();
+            let mut samples = Vec::new();
+            for _ in 0..7 {
+                let start = Instant::now();
+                for _ in 0..200 {
+                    if indexed {
+                        index.clear();
+                        index.extend(guests.iter().enumerate().map(|(i, g)| (g.0, i)));
+                    }
+                    for conn in (0..500).cycle().take(2000) {
+                        let guest = if indexed {
+                            &mut guests[index[&black_box(conn)]]
+                        } else {
+                            guests.iter_mut().find(|g| g.0 == black_box(conn)).unwrap()
+                        };
+                        guest.1.push_back(black_box(conn));
+                    }
+                    for g in &mut guests {
+                        g.1.clear();
+                    }
+                }
+                samples.push(start.elapsed().as_secs_f64() * 1e6 / 200.0);
+            }
+            samples.sort_by(f64::total_cmp);
+            println!(
+                "inbox indexed={indexed} median_us_per_tick={:.3}",
+                samples[3]
+            );
+        }
+    }
 
     /// `requeue` as it was, scanning the queue for each chunk of the view.
     fn requeue_scan(
