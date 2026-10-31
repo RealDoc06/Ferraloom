@@ -224,6 +224,16 @@ Coalescing and tie-breaking use only simulation state and stable region
 ordinals, never worker count, measured cost or completion timing. The carrier
 and phase contracts must also serve block entities, scheduled ticks and mobs.
 
+M3 keeps the original direct path as the default (`--regions off`). The opt-in
+`--regions serial` path exercises one owned region through the same random-block
+kernel, with the existing chunk capture, RNG, clocks and effect-flush boundary.
+No workers run in either mode yet. The concrete client adapter owns
+`Region<World>` and immutable shared resources; current entities and global loot
+services stay with the serial coordinator. It lends the actual world and tick
+queues back to checked shell slots for those immediate leaf operations, then
+retakes their current values before resuming. It never builds a per-region Game.
+Ordinary effects remain in the resident event buffer until the original flush.
+
 The concrete adapter may keep one private `RefCell<Option<Region>>`, owned by
 the active job on its worker and never shared between workers. Small helpers
 return owned answers/handles and end their state borrows before invoking a

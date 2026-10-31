@@ -130,6 +130,7 @@ mod net_harness;
 mod nether_portal;
 mod ominous_item_spawner;
 mod options;
+mod owned_region;
 mod packs;
 mod pad;
 mod pad_menu;
@@ -299,6 +300,7 @@ struct Options {
     time: Option<i64>,
     weather: Option<String>,
     dimension: Option<String>,
+    regions: owned_region::Mode,
     /// Options.pauseOnLostFocus off (F3+P), for scripted testing.
     no_pause: bool,
     /// Control socket path (`--control`), for `horizon-ctl`.
@@ -367,6 +369,8 @@ impl Options {
             time: None,
             weather: None,
             dimension: None,
+            regions: std::env::var("FERRALOOM_REGIONS")
+                .map_or(Ok(owned_region::Mode::Off), |v| v.parse())?,
             no_pause: false,
             control: None,
             offscreen: false,
@@ -390,7 +394,7 @@ impl Options {
             match arg.as_str() {
                 "--help" | "-h" => {
                     println!(
-                        "Horizon — Minecraft Java Edition {} in Rust\n\n  --resources PATH        Prepared resources (horizon-prepare)\n  --render-distance N     Chunks, 2..64 (default 12)\n  --world NAME            World folder under saves/ (default \"New World\")\n  --seed N                World seed for new worlds (default 0)\n  --width N, --height N   Window size (default 1280 x 720)\n  --creative              Creative mode (default survival)\n  --test-terrain          Simple test terrain instead of vanilla generation\n  --frames N              Exit after N frames (testing)\n  --world-frames N        Exit after N frames drawn in the world (testing)\n  --smoke-report PATH     Write a JSON report on exit\n  --benchmark SCENARIO    Run a benchmark (standard, village, forest, ocean, mountain), write its report to benchmarks/ and quit\n  --control               Accept horizon-ctl commands on a local socket\n  --control-socket PATH   Control socket path (default $XDG_RUNTIME_DIR/horizon-control.sock)\n  --server HOST[:PORT]    Join a multiplayer server (offline mode) at start\n  --quickPlaySingleplayer WORLD  Open this world of saves/ at start, only if it exists (vanilla's)\n  --quickPlayMultiplayer HOST[:PORT]  The same as --server (vanilla's name)\n  --name NAME             Player name for multiplayer (default: generated once, kept in horizon-player.txt)\n  --session-file PATH     Signed-in account from the launcher (read once, then deleted)\n  --dev-mod PATH          A Horizon mod (.hmod or folder) to develop: always on, reloaded when rebuilt\n  --in-frame              Run single player's world in the frame, not on its server thread\n  --pregen                Add Horizon's /pregen command (docs/pregeneration.md)\n\nControls: mouse look, WASD move, Space jump, Left Shift sneak, Left Ctrl sprint,\nleft click break, right click place/use, 1-9/scroll hotbar, E inventory,\nQ drop, F3 debug, Esc pause.",
+                        "Horizon — Minecraft Java Edition {} in Rust\n\n  --resources PATH        Prepared resources (horizon-prepare)\n  --render-distance N     Chunks, 2..64 (default 12)\n  --regions MODE          off (default) or serial; before --dedicated\n  --world NAME            World folder under saves/ (default \"New World\")\n  --seed N                World seed for new worlds (default 0)\n  --width N, --height N   Window size (default 1280 x 720)\n  --creative              Creative mode (default survival)\n  --test-terrain          Simple test terrain instead of vanilla generation\n  --frames N              Exit after N frames (testing)\n  --world-frames N        Exit after N frames drawn in the world (testing)\n  --smoke-report PATH     Write a JSON report on exit\n  --benchmark SCENARIO    Run a benchmark (standard, village, forest, ocean, mountain), write its report to benchmarks/ and quit\n  --control               Accept horizon-ctl commands on a local socket\n  --control-socket PATH   Control socket path (default $XDG_RUNTIME_DIR/horizon-control.sock)\n  --server HOST[:PORT]    Join a multiplayer server (offline mode) at start\n  --quickPlaySingleplayer WORLD  Open this world of saves/ at start, only if it exists (vanilla's)\n  --quickPlayMultiplayer HOST[:PORT]  The same as --server (vanilla's name)\n  --name NAME             Player name for multiplayer (default: generated once, kept in horizon-player.txt)\n  --session-file PATH     Signed-in account from the launcher (read once, then deleted)\n  --dev-mod PATH          A Horizon mod (.hmod or folder) to develop: always on, reloaded when rebuilt\n  --in-frame              Run single player's world in the frame, not on its server thread\n  --pregen                Add Horizon's /pregen command (docs/pregeneration.md)\n\nControls: mouse look, WASD move, Space jump, Left Shift sneak, Left Ctrl sprint,\nleft click break, right click place/use, 1-9/scroll hotbar, E inventory,\nQ drop, F3 debug, Esc pause.",
                         horizon_core::VANILLA_VERSION
                     );
                     return Ok(None);
@@ -415,6 +419,7 @@ impl Options {
                         .ok_or_else(|| format!("missing value after {arg}"))?;
                     match arg.as_str() {
                         "--resources" => o.resources = value.into(),
+                        "--regions" => o.regions = value.parse()?,
                         "--render-distance" | "--radius" => {
                             o.distance = value.parse()?;
                             o.distance_override = Some(o.distance);
@@ -3204,18 +3209,7 @@ impl Game<'_> {
         });
         self.process_level_events()?;
         self.tick_scheduled()?;
-        self.with_level(|b, level, ticks| {
-            ferraloom_game::block_phase::tick_random_chunks(
-                b,
-                level,
-                ticks,
-                ticking
-                    .into_iter()
-                    .map(|(x, z)| horizon_core::position::ChunkPos::new(x, z)),
-            );
-            b.run_block_events(level, ticks);
-            b.tick_block_entities(level, ticks);
-        });
+        self.tick_region_block_phase(ticking);
         // `PistonMovingBlockEntity.tick` pushes what its block just ran into,
         // with the progress it is about to take.
         let pushes = std::mem::take(&mut self.server_level.block_ticks.piston_pushes);
@@ -14338,6 +14332,7 @@ fn synchronous_startup(options: &Options) -> bool {
         || !options.execution_role.is_client()
         || std::env::var_os("HORIZON_DISPENSE_FIXTURE").is_some()
         || std::env::var_os("HORIZON_SCULK_FIXTURE").is_some()
+        || std::env::var_os("HORIZON_REGION_FIXTURE").is_some()
         || std::env::var_os("HORIZON_COMMAND_SCRIPT").is_some()
         || std::env::var_os("HORIZON_NET_REPORT").is_some()
 }
@@ -14907,6 +14902,10 @@ fn start_game<'a>(
                 game_dir: std::env::current_dir()?,
             },
         );
+    }
+    if let Ok(spec) = std::env::var("HORIZON_REGION_FIXTURE") {
+        game.run_component_harness(integrated::ComponentHarness::Region(spec))?;
+        return Ok(None);
     }
     if let Ok(spec) = std::env::var("HORIZON_DISPENSE_FIXTURE") {
         game.run_component_harness(integrated::ComponentHarness::Dispenser(spec))?;

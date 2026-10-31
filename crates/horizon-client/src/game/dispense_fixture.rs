@@ -117,7 +117,7 @@ impl Game<'_> {
         Ok(())
     }
 
-    fn fixture_reset(&mut self, seed: i64) {
+    pub(super) fn fixture_reset(&mut self, seed: i64) {
         self.world
             .replace_storage(World::new(self.res.facts().air, seed));
         // The oracle level is plains everywhere (bone meal's flowers, freezing).
