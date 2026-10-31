@@ -2824,6 +2824,16 @@ impl Game<'_> {
         &mut self,
         f: impl FnOnce(&Behaviours, &mut GameLevel<'_>, &mut Ticks) -> R,
     ) -> R {
+        let result = self.with_level_unflushed(f);
+        self.flush_spill();
+        result
+    }
+    /// A serial leaf in a larger live phase. Its caller retains the original
+    /// effect boundary, including when a regional callback takes this lane.
+    fn with_level_unflushed<R>(
+        &mut self,
+        f: impl FnOnce(&Behaviours, &mut GameLevel<'_>, &mut Ticks) -> R,
+    ) -> R {
         let darken = self.sky_darken();
         let (rain, thunder) = self.world.weather.levels(1.0);
         // Spectators ignore block triggers (Entity.isIgnoringBlockTriggers).
@@ -2953,13 +2963,11 @@ impl Game<'_> {
             lid_openers: &self.lid_openers,
             client_side: self.remote.is_some(),
         };
-        let result = f(
+        f(
             self.res.behaviours(),
             &mut level,
             &mut self.server_level.block_ticks,
-        );
-        self.flush_spill();
-        result
+        )
     }
     /// Level.setBlock(pos, state, UPDATE_ALL) with neighbour/shape updates.
     fn level_set(&mut self, pos: [i32; 3], state: BlockStateId) -> Result<()> {
