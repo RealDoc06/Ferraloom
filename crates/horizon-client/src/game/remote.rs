@@ -6137,7 +6137,7 @@ pub(super) fn input_ordinal(input: Input) -> i32 {
 /// The client's world for a guess at what a click does: reads go to the
 /// world, writes stay here and are dropped.
 struct DryLevel<'w, L: horizon_world::level::LevelAccess + ?Sized> {
-    base: &'w L,
+    base: &'w mut L,
     changed: HashMap<horizon_core::position::BlockPos, BlockStateId>,
     random: horizon_core::random::LegacyRandom,
     /// The sounds the use plays (a door's creak).
@@ -6169,7 +6169,7 @@ pub(super) fn hand_operated(name: &str) -> bool {
 }
 
 impl<'w, L: horizon_world::level::LevelAccess + ?Sized> DryLevel<'w, L> {
-    fn new(base: &'w L) -> Self {
+    fn new(base: &'w mut L) -> Self {
         Self {
             base,
             changed: HashMap::new(),
@@ -6487,7 +6487,7 @@ mod tests {
                 base.loaded = loaded;
                 base.ceiling = ceiling;
                 let valid = !obstructed && loaded && ceiling > 1;
-                let mut preview = DryLevel::new(&base);
+                let mut preview = DryLevel::new(&mut base);
                 let outcome = behaviours.place_block(&mut preview, &mut Ticks::default(), &ctx);
                 assert_eq!(
                     matches!(outcome, PlaceOutcome::Placed { .. }),
