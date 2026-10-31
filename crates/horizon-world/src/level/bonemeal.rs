@@ -183,11 +183,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn next_int(&mut self, bound: i32) -> i32 {
         self.random().next_int_bound(bound).unwrap_or(0)
     }
-    fn block_named(&self, name: &str) -> Option<BlockStateId> {
+    fn block_named(&mut self, name: &str) -> Option<BlockStateId> {
         let b = self.b;
         b.table.block_by_name(name).map(|id| b.default_of(id))
     }
-    fn in_tag(&self, state: BlockStateId, tag: &str) -> bool {
+    fn in_tag(&mut self, state: BlockStateId, tag: &str) -> bool {
         self.b.tag(tag).is_some_and(|set| self.b.in_set(state, set))
     }
 
@@ -606,7 +606,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         });
     }
     /// `CropBlock.getMaxAge`.
-    pub(crate) fn crop_max_age(&self, state: BlockStateId) -> i32 {
+    pub(crate) fn crop_max_age(&mut self, state: BlockStateId) -> i32 {
         let b = self.b;
         if b.instance_of(state, Class::TorchflowerCrop) {
             2
@@ -615,7 +615,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     /// `CropBlock.getStateForAge` (torchflower crops become torchflowers).
-    pub(crate) fn crop_state_for_age(&self, state: BlockStateId, age: i32) -> BlockStateId {
+    pub(crate) fn crop_state_for_age(&mut self, state: BlockStateId, age: i32) -> BlockStateId {
         let b = self.b;
         if b.instance_of(state, Class::TorchflowerCrop)
             && age == 2
@@ -639,7 +639,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `PitcherCropBlock.getLowerHalf`.
     fn pitcher_lower(
-        &self,
+        &mut self,
         pos: BlockPos,
         state: BlockStateId,
     ) -> Option<(BlockPos, BlockStateId)> {
@@ -655,7 +655,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         is_lower(below_state).then_some((below_pos, below_state))
     }
     /// `PitcherCropBlock.canGrow`.
-    fn pitcher_can_grow(&self, lower_pos: BlockPos, lower: BlockStateId, new_age: i32) -> bool {
+    fn pitcher_can_grow(&mut self, lower_pos: BlockPos, lower: BlockStateId, new_age: i32) -> bool {
         let b = self.b;
         let upper = self.state(above(lower_pos));
         b.table.int(lower, b.props.age) < 4
@@ -664,7 +664,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             && (new_age < 3 || b.is_air(upper) || b.is_block(upper, b.named.pitcher_crop))
     }
     /// `TallGrassBlock.getGrownBlock`.
-    fn tall_grass_grown(&self, state: BlockStateId) -> Option<BlockStateId> {
+    fn tall_grass_grown(&mut self, state: BlockStateId) -> Option<BlockStateId> {
         let name = if self.b.table.name(state) == "minecraft:fern" {
             "minecraft:large_fern"
         } else {
@@ -712,7 +712,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             .find(|&n| self.is_empty_block(n) && self.can_survive(to_place, n))
     }
     /// `NetherrackBlock`: (warped nylium nearby, crimson nylium nearby).
-    fn netherrack_nylium_near(&self, pos: BlockPos) -> (bool, bool) {
+    fn netherrack_nylium_near(&mut self, pos: BlockPos) -> (bool, bool) {
         let (mut warped, mut crimson) = (false, false);
         for x in -1..=1 {
             for y in -1..=1 {
@@ -735,7 +735,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         (warped, crimson)
     }
     /// `GrowingPlantHeadBlock.canGrowInto` of the head's block.
-    fn plant_can_grow_into(&self, head: BlockStateId, state: BlockStateId) -> bool {
+    fn plant_can_grow_into(&mut self, head: BlockStateId, state: BlockStateId) -> bool {
         let b = self.b;
         if b.instance_of(head, Class::Kelp) {
             b.is_block(state, b.named.water)
@@ -775,7 +775,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     /// `GrowingPlantBodyBlock.getHeadPos` (`BlockUtil.getTopConnectedBlock`).
-    fn plant_head_pos(&self, pos: BlockPos, state: BlockStateId) -> Option<BlockPos> {
+    fn plant_head_pos(&mut self, pos: BlockPos, state: BlockStateId) -> Option<BlockPos> {
         let b = self.b;
         let name = b.table.name(state);
         let head = b.table.block_by_name(name.strip_suffix("_plant")?)?;
@@ -783,7 +783,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `BlockUtil.getTopConnectedBlock`.
     fn top_connected(
-        &self,
+        &mut self,
         pos: BlockPos,
         body: super::states::BlockId,
         direction: Direction,
@@ -802,7 +802,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     /// `HangingMossBlock.getTip`.
-    fn hanging_moss_tip(&self, pos: BlockPos, state: BlockStateId) -> BlockPos {
+    fn hanging_moss_tip(&mut self, pos: BlockPos, state: BlockStateId) -> BlockPos {
         let block = self.b.block(state);
         let mut forward = pos;
         loop {
@@ -866,7 +866,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         self.set_block(pos, b.table.set_int(state, p.pickles, 4), 2);
     }
     /// `BigDripleafBlock.canGrowInto` / `canPlaceAt`.
-    fn dripleaf_can_grow_into(&self, pos: BlockPos) -> bool {
+    fn dripleaf_can_grow_into(&mut self, pos: BlockPos) -> bool {
         let b = self.b;
         let state = self.state(pos);
         self.is_inside_build_height(pos.y)
@@ -927,7 +927,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `DefaultSpreaderConfig.canSpreadInto`.
     fn lichen_can_spread_into(
-        &self,
+        &mut self,
         block: super::states::BlockId,
         at: BlockPos,
         face: Direction,
@@ -943,7 +943,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `MultifaceSpreader.getSpreadFromFaceTowardDirection`.
     fn lichen_spread_target(
-        &self,
+        &mut self,
         state: BlockStateId,
         pos: BlockPos,
         from: Direction,
@@ -961,7 +961,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             .find(|&(at, face)| self.lichen_can_spread_into(block, at, face))
     }
     fn lichen_can_spread_in_any_direction(
-        &self,
+        &mut self,
         state: BlockStateId,
         pos: BlockPos,
         from: Direction,

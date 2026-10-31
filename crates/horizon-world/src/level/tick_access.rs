@@ -23,11 +23,11 @@ impl TickScope {
 /// implementations keep their owner and borrow helpers private; operations
 /// passed here only read or mutate tick data, never call back into the world.
 pub trait TickAccess {
-    fn read_ticks<R>(&self, scope: TickScope, read: impl FnOnce(&Ticks) -> R) -> R;
+    fn read_ticks<R>(&mut self, scope: TickScope, read: impl FnOnce(&Ticks) -> R) -> R;
     fn write_ticks<R>(&mut self, scope: TickScope, write: impl FnOnce(&mut Ticks) -> R) -> R;
 }
 impl TickAccess for Ticks {
-    fn read_ticks<R>(&self, _scope: TickScope, read: impl FnOnce(&Ticks) -> R) -> R {
+    fn read_ticks<R>(&mut self, _scope: TickScope, read: impl FnOnce(&Ticks) -> R) -> R {
         read(self)
     }
     fn write_ticks<R>(&mut self, _scope: TickScope, write: impl FnOnce(&mut Ticks) -> R) -> R {
@@ -35,7 +35,7 @@ impl TickAccess for Ticks {
     }
 }
 impl<T: TickAccess + ?Sized> TickAccess for &mut T {
-    fn read_ticks<R>(&self, scope: TickScope, read: impl FnOnce(&Ticks) -> R) -> R {
+    fn read_ticks<R>(&mut self, scope: TickScope, read: impl FnOnce(&Ticks) -> R) -> R {
         (**self).read_ticks(scope, read)
     }
     fn write_ticks<R>(&mut self, scope: TickScope, write: impl FnOnce(&mut Ticks) -> R) -> R {
@@ -92,7 +92,7 @@ impl<L: LevelAccess + ?Sized> DerefMut for BorrowedLevelTicks<'_, L> {
     }
 }
 impl<L: LevelAccess + ?Sized> TickAccess for BorrowedLevelTicks<'_, L> {
-    fn read_ticks<R>(&self, scope: TickScope, read: impl FnOnce(&Ticks) -> R) -> R {
+    fn read_ticks<R>(&mut self, scope: TickScope, read: impl FnOnce(&Ticks) -> R) -> R {
         self.ticks.read_ticks(scope, read)
     }
     fn write_ticks<R>(&mut self, scope: TickScope, write: impl FnOnce(&mut Ticks) -> R) -> R {

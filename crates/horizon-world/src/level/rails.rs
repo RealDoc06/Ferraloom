@@ -72,13 +72,13 @@ struct Rail {
 }
 
 impl<C: super::tick_access::TickContext> Sim<'_, C> {
-    pub(crate) fn rail_shape(&self, state: BlockStateId) -> &str {
+    pub(crate) fn rail_shape(&mut self, state: BlockStateId) -> &str {
         self.b.table.text(state, self.b.props.shape)
     }
-    fn is_rail(&self, state: BlockStateId) -> bool {
+    fn is_rail(&mut self, state: BlockStateId) -> bool {
         self.b.in_set(state, &self.b.tags.rails) && self.b.instance_of(state, Class::BaseRail)
     }
-    fn is_rail_at(&self, pos: BlockPos) -> bool {
+    fn is_rail_at(&mut self, pos: BlockPos) -> bool {
         self.is_rail(self.state(pos))
     }
     fn rail_connections(pos: BlockPos, shape: RailShape) -> Vec<BlockPos> {
@@ -101,7 +101,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             RailShape::NorthEast => vec![e, n],
         }
     }
-    fn rail_new(&self, pos: BlockPos, state: BlockStateId) -> Rail {
+    fn rail_new(&mut self, pos: BlockPos, state: BlockStateId) -> Rail {
         let shape = RailShape::parse(self.rail_shape(state));
         Rail {
             pos,
@@ -110,7 +110,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             connections: Self::rail_connections(pos, shape),
         }
     }
-    fn rail_get(&self, pos: BlockPos) -> Option<Rail> {
+    fn rail_get(&mut self, pos: BlockPos) -> Option<Rail> {
         for test in [pos, above(pos), below(pos)] {
             let state = self.state(test);
             if self.is_rail(state) {
@@ -124,7 +124,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             .iter()
             .any(|c| c.x == pos.x && c.z == pos.z)
     }
-    fn rail_remove_soft_connections(&self, rail: &mut Rail) {
+    fn rail_remove_soft_connections(&mut self, rail: &mut Rail) {
         let mut i = 0;
         while i < rail.connections.len() {
             match self.rail_get(rail.connections[i]) {
@@ -141,7 +141,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn rail_can_connect_to(rail: &Rail, other: &Rail) -> bool {
         Self::rail_has_connection(rail, other.pos) || rail.connections.len() != 2
     }
-    fn rail_has_neighbor_rail(&self, rail: &Rail, pos: BlockPos) -> bool {
+    fn rail_has_neighbor_rail(&mut self, rail: &Rail, pos: BlockPos) -> bool {
         match self.rail_get(pos) {
             Some(mut neighbour) => {
                 self.rail_remove_soft_connections(&mut neighbour);
@@ -150,7 +150,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             None => false,
         }
     }
-    fn rail_count_potential_connections(&self, pos: BlockPos) -> i32 {
+    fn rail_count_potential_connections(&mut self, pos: BlockPos) -> i32 {
         super::update::HORIZONTAL
             .into_iter()
             .filter(|d| {
@@ -159,7 +159,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             })
             .count() as i32
     }
-    fn rail_slopes(&self, pos: BlockPos, shape: Option<RailShape>) -> Option<RailShape> {
+    fn rail_slopes(&mut self, pos: BlockPos, shape: Option<RailShape>) -> Option<RailShape> {
         let (n, s, w, e) = (
             rel(pos, Direction::North),
             rel(pos, Direction::South),
@@ -185,7 +185,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
         shape
     }
-    fn rail_set_shape(&self, state: BlockStateId, shape: RailShape) -> BlockStateId {
+    fn rail_set_shape(&mut self, state: BlockStateId, shape: RailShape) -> BlockStateId {
         self.b
             .table
             .set_text(state, self.b.props.shape, shape.name())
@@ -369,7 +369,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             }
         }
     }
-    fn is_signal_source_default(&self, state: BlockStateId) -> bool {
+    fn is_signal_source_default(&mut self, state: BlockStateId) -> bool {
         self.b
             .has_flag(state, super::data::state_flags::SIGNAL_SOURCE)
     }
@@ -389,7 +389,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     fn powered_rail_find(
-        &self,
+        &mut self,
         pos: BlockPos,
         state: BlockStateId,
         forward: bool,
@@ -458,7 +458,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
                 ))
     }
     fn powered_rail_same_with_power(
-        &self,
+        &mut self,
         pos: BlockPos,
         block: BlockId,
         forward: bool,

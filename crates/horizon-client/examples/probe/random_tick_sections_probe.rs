@@ -26,14 +26,14 @@ struct Air {
     speed: i32,
 }
 impl LevelAccess for Air {
-    fn block_state(&self, pos: BlockPos) -> BlockStateId {
+    fn block_state(&mut self, pos: BlockPos) -> BlockStateId {
         self.reads.borrow_mut().push(pos);
         BlockStateId(0)
     }
     fn set_raw(&mut self, _: BlockPos, _: BlockStateId) -> Option<BlockStateId> {
         None
     }
-    fn is_loaded(&self, _: BlockPos) -> bool {
+    fn is_loaded(&mut self, _: BlockPos) -> bool {
         true
     }
     #[inline]

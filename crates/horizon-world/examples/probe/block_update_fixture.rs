@@ -39,7 +39,7 @@ struct Cells {
     removals: std::rc::Rc<Vec<PreRemove>>,
 }
 impl LevelAccess for Cells {
-    fn block_state(&self, pos: BlockPos) -> BlockStateId {
+    fn block_state(&mut self, pos: BlockPos) -> BlockStateId {
         self.cells.get(&pos).copied().unwrap_or(self.air)
     }
     fn set_raw(&mut self, pos: BlockPos, state: BlockStateId) -> Option<BlockStateId> {
@@ -51,13 +51,13 @@ impl LevelAccess for Cells {
         }
         Some(old)
     }
-    fn is_loaded(&self, _pos: BlockPos) -> bool {
+    fn is_loaded(&mut self, _pos: BlockPos) -> bool {
         true
     }
     /// Fresh block entities hold nothing, but a lectern whose state has a book
     /// reads page progress 1 of an empty book: signal 14.
     fn block_entity_analog_signal(
-        &self,
+        &mut self,
         _pos: BlockPos,
         state: BlockStateId,
         _direction: Direction,
@@ -86,10 +86,10 @@ impl LevelAccess for Cells {
     fn game_time(&self) -> i64 {
         self.time
     }
-    fn block_light(&self, _pos: BlockPos) -> i32 {
+    fn block_light(&mut self, _pos: BlockPos) -> i32 {
         self.block
     }
-    fn sky_light(&self, _pos: BlockPos) -> i32 {
+    fn sky_light(&mut self, _pos: BlockPos) -> i32 {
         self.sky
     }
     fn is_raining(&self) -> bool {
@@ -98,7 +98,7 @@ impl LevelAccess for Cells {
     fn is_thundering(&self) -> bool {
         self.thundering
     }
-    fn is_raining_at(&self, _pos: BlockPos) -> bool {
+    fn is_raining_at(&mut self, _pos: BlockPos) -> bool {
         self.raining
     }
     fn dimension(&self) -> Dimension {
@@ -107,7 +107,7 @@ impl LevelAccess for Cells {
     fn game_rules(&self) -> GameRules {
         GameRules::default()
     }
-    fn count_entities(&self, _area: Aabb, _query: EntityQuery) -> usize {
+    fn count_entities(&mut self, _area: Aabb, _query: EntityQuery) -> usize {
         0
     }
     fn emit(&mut self, event: LevelEvent) {

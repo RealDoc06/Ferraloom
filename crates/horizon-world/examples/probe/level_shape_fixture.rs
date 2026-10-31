@@ -23,13 +23,13 @@ struct Cells {
     light: i32,
 }
 impl LevelAccess for Cells {
-    fn block_state(&self, pos: BlockPos) -> BlockStateId {
+    fn block_state(&mut self, pos: BlockPos) -> BlockStateId {
         self.cells.get(&pos).copied().unwrap_or(self.air)
     }
     fn set_raw(&mut self, _pos: BlockPos, _state: BlockStateId) -> Option<BlockStateId> {
         None
     }
-    fn is_loaded(&self, _pos: BlockPos) -> bool {
+    fn is_loaded(&mut self, _pos: BlockPos) -> bool {
         true
     }
     #[inline]
@@ -39,7 +39,7 @@ impl LevelAccess for Cells {
     fn game_time(&self) -> i64 {
         0
     }
-    fn sky_light(&self, _pos: BlockPos) -> i32 {
+    fn sky_light(&mut self, _pos: BlockPos) -> i32 {
         self.light
     }
 }

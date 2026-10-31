@@ -8,7 +8,7 @@ use crate::{
 };
 use horizon_core::{geometry::Direction, position::BlockPos};
 
-fn sea_level<L: LevelAccess + ?Sized>(level: &L) -> i32 {
+fn sea_level<L: LevelAccess + ?Sized>(level: &mut L) -> i32 {
     match level.dimension() {
         Dimension::Nether => 32,
         Dimension::End => 0,
@@ -19,7 +19,7 @@ fn sea_level<L: LevelAccess + ?Sized>(level: &L) -> i32 {
 impl Behaviours {
     fn biome_settings<L: LevelAccess + ?Sized>(
         &self,
-        level: &L,
+        level: &mut L,
         pos: BlockPos,
     ) -> Option<BiomeTemperatureSettings> {
         let features = self.live_features()?;
@@ -44,7 +44,7 @@ impl Behaviours {
     /// world surface (air neither blocks motion nor holds a fluid).
     pub fn motion_blocking_top<L: LevelAccess + ?Sized>(
         &self,
-        level: &L,
+        level: &mut L,
         pos: BlockPos,
     ) -> BlockPos {
         let blocks = self.tag("minecraft:blocks_motion_in_heightmap");
@@ -62,7 +62,7 @@ impl Behaviours {
     /// None without live features or a biome.
     pub fn precipitation_info<L: LevelAccess + ?Sized>(
         &self,
-        level: &L,
+        level: &mut L,
         pos: BlockPos,
     ) -> Option<Precipitation> {
         let top = self.motion_blocking_top(level, pos);
@@ -111,7 +111,7 @@ impl Behaviours {
         })
     }
     /// `SnowLayerBlock.canSurvive` for a default snow layer at `pos`.
-    fn snow_survives<L: LevelAccess + ?Sized>(&self, level: &L, pos: BlockPos) -> bool {
+    fn snow_survives<L: LevelAccess + ?Sized>(&self, level: &mut L, pos: BlockPos) -> bool {
         let below = level.block_state(BlockPos::new(pos.x, pos.y - 1, pos.z));
         let block = self.block(below);
         if self.tags.cannot_support_snow_layer.contains(block) {
@@ -124,7 +124,7 @@ impl Behaviours {
             || (block == self.named.snow && self.table.int(below, self.props.layers) == 8)
     }
     /// `Level.isRainingAt(pos)`.
-    pub fn is_raining_at<L: LevelAccess + ?Sized>(&self, level: &L, pos: BlockPos) -> bool {
+    pub fn is_raining_at<L: LevelAccess + ?Sized>(&self, level: &mut L, pos: BlockPos) -> bool {
         if !level.is_raining() || level.sky_light(pos) < 15 {
             return false;
         }

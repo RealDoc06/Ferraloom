@@ -170,7 +170,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     /// Shape queries over `getCollisionShape(level, pos)`, including the
     /// position-dependent shapes (bamboo, speleothems, shulker boxes).
     pub(crate) fn shape_info_at(
-        &self,
+        &mut self,
         state: BlockStateId,
         pos: BlockPos,
     ) -> super::data::ShapeInfo {
@@ -186,15 +186,15 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             None => super::data::ShapeInfo::default(),
         }
     }
-    pub fn sturdy(&self, pos: BlockPos, direction: Direction) -> bool {
+    pub fn sturdy(&mut self, pos: BlockPos, direction: Direction) -> bool {
         self.b.is_face_sturdy(self.state(pos), direction)
     }
     /// `Block.canSupportRigidBlock(level, below)`.
-    pub fn can_support_rigid_block(&self, pos: BlockPos) -> bool {
+    pub fn can_support_rigid_block(&mut self, pos: BlockPos) -> bool {
         self.b.is_face_sturdy_rigid(self.state(pos), Direction::Up)
     }
     /// `Block.canSupportCenter(level, pos, direction)`.
-    pub fn can_support_center(&self, pos: BlockPos, direction: Direction) -> bool {
+    pub fn can_support_center(&mut self, pos: BlockPos, direction: Direction) -> bool {
         let state = self.state(pos);
         if direction == Direction::Down && self.b.in_set(state, &self.b.tags.unstable_bottom_center)
         {
@@ -202,34 +202,34 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
         self.b.is_face_sturdy_center(state, direction)
     }
-    pub fn is_empty_block(&self, pos: BlockPos) -> bool {
+    pub fn is_empty_block(&mut self, pos: BlockPos) -> bool {
         self.b.is_air(self.state(pos))
     }
     /// `LevelReader.isWaterAt`: the fluid at `pos` is in the water tag.
-    pub fn is_water_at(&self, pos: BlockPos) -> bool {
+    pub fn is_water_at(&mut self, pos: BlockPos) -> bool {
         self.b.is_water_fluid(self.fluid_at(pos).kind())
     }
     /// `Level.getRawBrightness(pos, darken)`.
-    pub fn raw_brightness(&self, pos: BlockPos, darken: i32) -> i32 {
+    pub fn raw_brightness(&mut self, pos: BlockPos, darken: i32) -> i32 {
         super::raw_brightness(&*self.level, pos, darken)
     }
     /// `LevelReader.getMaxLocalRawBrightness(pos)`.
-    pub fn max_local_raw_brightness(&self, pos: BlockPos) -> i32 {
+    pub fn max_local_raw_brightness(&mut self, pos: BlockPos) -> i32 {
         self.raw_brightness(pos, self.level.sky_darken())
     }
-    pub fn is_redstone_conductor(&self, state: BlockStateId, _pos: BlockPos) -> bool {
+    pub fn is_redstone_conductor(&mut self, state: BlockStateId, _pos: BlockPos) -> bool {
         self.b.has_flag(state, state_flags::CONDUCTOR)
     }
-    pub(crate) fn above_state(&self, pos: BlockPos) -> BlockStateId {
+    pub(crate) fn above_state(&mut self, pos: BlockPos) -> BlockStateId {
         self.state(above(pos))
     }
-    pub(crate) fn below_state(&self, pos: BlockPos) -> BlockStateId {
+    pub(crate) fn below_state(&mut self, pos: BlockPos) -> BlockStateId {
         self.state(below(pos))
     }
-    pub(crate) fn rel_state(&self, pos: BlockPos, direction: Direction) -> BlockStateId {
+    pub(crate) fn rel_state(&mut self, pos: BlockPos, direction: Direction) -> BlockStateId {
         self.state(rel(pos, direction))
     }
-    pub(crate) fn is_inside_build_height(&self, y: i32) -> bool {
+    pub(crate) fn is_inside_build_height(&mut self, y: i32) -> bool {
         y >= self.level.min_y() && y < self.level.max_y()
     }
 }

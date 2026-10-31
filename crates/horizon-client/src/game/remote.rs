@@ -6193,7 +6193,7 @@ impl<L: horizon_world::level::LevelAccess + ?Sized> horizon_world::level::LevelA
             self.sounds.push((pos, sound, volume, pitch));
         }
     }
-    fn block_state(&self, pos: horizon_core::position::BlockPos) -> BlockStateId {
+    fn block_state(&mut self, pos: horizon_core::position::BlockPos) -> BlockStateId {
         self.changed
             .get(&pos)
             .copied()
@@ -6208,7 +6208,7 @@ impl<L: horizon_world::level::LevelAccess + ?Sized> horizon_world::level::LevelA
         self.changed.insert(pos, state);
         Some(previous)
     }
-    fn is_loaded(&self, pos: horizon_core::position::BlockPos) -> bool {
+    fn is_loaded(&mut self, pos: horizon_core::position::BlockPos) -> bool {
         self.base.is_loaded(pos)
     }
     fn min_y(&self) -> i32 {
@@ -6217,16 +6217,20 @@ impl<L: horizon_world::level::LevelAccess + ?Sized> horizon_world::level::LevelA
     fn max_y(&self) -> i32 {
         self.base.max_y()
     }
-    fn block_light(&self, pos: horizon_core::position::BlockPos) -> i32 {
+    fn block_light(&mut self, pos: horizon_core::position::BlockPos) -> i32 {
         self.base.block_light(pos)
     }
-    fn sky_light(&self, pos: horizon_core::position::BlockPos) -> i32 {
+    fn sky_light(&mut self, pos: horizon_core::position::BlockPos) -> i32 {
         self.base.sky_light(pos)
     }
     fn sky_darken(&self) -> i32 {
         self.base.sky_darken()
     }
-    fn is_unobstructed(&self, pos: horizon_core::position::BlockPos, state: BlockStateId) -> bool {
+    fn is_unobstructed(
+        &mut self,
+        pos: horizon_core::position::BlockPos,
+        state: BlockStateId,
+    ) -> bool {
         self.base.is_unobstructed(pos, state)
     }
     #[inline]
@@ -6411,7 +6415,7 @@ mod tests {
             ceiling: i32,
         }
         impl LevelAccess for Level {
-            fn block_state(&self, pos: BlockPos) -> BlockStateId {
+            fn block_state(&mut self, pos: BlockPos) -> BlockStateId {
                 if pos == BlockPos::new(0, 0, 0) {
                     self.stone
                 } else {
@@ -6421,13 +6425,13 @@ mod tests {
             fn set_raw(&mut self, _: BlockPos, _: BlockStateId) -> Option<BlockStateId> {
                 panic!("preview must not write to the live level");
             }
-            fn is_loaded(&self, _: BlockPos) -> bool {
+            fn is_loaded(&mut self, _: BlockPos) -> bool {
                 self.loaded
             }
             fn max_y(&self) -> i32 {
                 self.ceiling
             }
-            fn is_unobstructed(&self, pos: BlockPos, _: BlockStateId) -> bool {
+            fn is_unobstructed(&mut self, pos: BlockPos, _: BlockStateId) -> bool {
                 assert_eq!(pos, BlockPos::new(0, 1, 0));
                 !self.obstructed
             }

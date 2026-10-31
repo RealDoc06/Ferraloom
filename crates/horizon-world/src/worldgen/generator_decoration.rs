@@ -473,7 +473,7 @@ struct ShapeLevel<'w, 'a> {
     random: horizon_core::random::LegacyRandom,
 }
 impl crate::level::LevelAccess for ShapeLevel<'_, '_> {
-    fn block_state(&self, pos: BlockPos) -> BlockStateId {
+    fn block_state(&mut self, pos: BlockPos) -> BlockStateId {
         self.world
             .region
             .block([pos.x, pos.y, pos.z])
@@ -482,7 +482,7 @@ impl crate::level::LevelAccess for ShapeLevel<'_, '_> {
     fn set_raw(&mut self, _: BlockPos, _: BlockStateId) -> Option<BlockStateId> {
         None
     }
-    fn is_loaded(&self, pos: BlockPos) -> bool {
+    fn is_loaded(&mut self, pos: BlockPos) -> bool {
         self.world.region.block([pos.x, pos.y, pos.z]).is_ok()
     }
     fn min_y(&self) -> i32 {
@@ -503,7 +503,7 @@ impl crate::level::LevelAccess for ShapeLevel<'_, '_> {
     }
     /// Lighting has not run during FEATURES: the light engine has no data for
     /// these chunks, so sky light reads zero too (MushroomBlock.canSurvive).
-    fn sky_light(&self, _: BlockPos) -> i32 {
+    fn sky_light(&mut self, _: BlockPos) -> i32 {
         0
     }
 }

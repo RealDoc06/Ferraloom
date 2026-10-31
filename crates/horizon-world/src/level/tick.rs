@@ -425,7 +425,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         self.game_event(pos, "minecraft:block_change");
     }
     /// `FallingBlock.isFree`.
-    pub(crate) fn is_free(&self, state: BlockStateId) -> bool {
+    pub(crate) fn is_free(&mut self, state: BlockStateId) -> bool {
         let b = self.b;
         b.is_air(state)
             || b.tag("minecraft:fire")
@@ -433,7 +433,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             || b.liquid(state)
             || b.is_replaceable(state)
     }
-    fn leaves_update_distance(&self, state: BlockStateId, pos: BlockPos) -> BlockStateId {
+    fn leaves_update_distance(&mut self, state: BlockStateId, pos: BlockPos) -> BlockStateId {
         let mut distance = 7;
         for direction in Direction::ALL {
             distance = distance.min(self.leaf_distance_at(self.rel_state(pos, direction)) + 1);
@@ -525,7 +525,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     /// `ScaffoldingBlock.isBottom`.
-    pub(crate) fn scaffolding_is_bottom(&self, pos: BlockPos, distance: i32) -> bool {
+    pub(crate) fn scaffolding_is_bottom(&mut self, pos: BlockPos, distance: i32) -> bool {
         let b = self.b;
         distance > 0 && !b.is_block(self.below_state(pos), b.named.scaffolding)
     }
@@ -620,7 +620,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     /// `FireBlock.getIgniteOdds(level, pos)`: only for air with flammable neighbours.
-    fn fire_ignite_odds_at(&self, pos: BlockPos) -> i32 {
+    fn fire_ignite_odds_at(&mut self, pos: BlockPos) -> i32 {
         if !self.is_empty_block(pos) {
             return 0;
         }
@@ -630,7 +630,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             .max()
             .unwrap_or(0)
     }
-    fn fire_near_rain(&self, pos: BlockPos) -> bool {
+    fn fire_near_rain(&mut self, pos: BlockPos) -> bool {
         self.level.is_raining_at(pos)
             || self.level.is_raining_at(rel(pos, Direction::West))
             || self.level.is_raining_at(rel(pos, Direction::East))
@@ -716,7 +716,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     // ---- crops and plants ----
 
     /// `CropBlock.getGrowthSpeed`.
-    pub(crate) fn crop_growth_speed(&self, block: super::states::BlockId, pos: BlockPos) -> f32 {
+    pub(crate) fn crop_growth_speed(
+        &mut self,
+        block: super::states::BlockId,
+        pos: BlockPos,
+    ) -> f32 {
         let b = self.b;
         let mut speed = 1.0f32;
         let under = below(pos);
@@ -843,7 +847,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     pub(crate) fn growing_plant_can_grow_into(
-        &self,
+        &mut self,
         plant: BlockStateId,
         state: BlockStateId,
     ) -> bool {
@@ -966,7 +970,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         pos.offset(x, y, z)
     }
     /// `LightEngine.getLightDampeningInto(state, above, UP, above.dampening) < 15`.
-    fn top_face_lets_light(&self, state: BlockStateId, above_state: BlockStateId) -> bool {
+    fn top_face_lets_light(&mut self, state: BlockStateId, above_state: BlockStateId) -> bool {
         let b = self.b;
         let occluding = |s: BlockStateId| {
             b.has_flag(s, state_flags::CAN_OCCLUDE)
@@ -984,10 +988,10 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         };
         into < 15
     }
-    fn can_be_nylium(&self, state: BlockStateId, pos: BlockPos) -> bool {
+    fn can_be_nylium(&mut self, state: BlockStateId, pos: BlockPos) -> bool {
         self.top_face_lets_light(state, self.above_state(pos))
     }
-    fn snowy_can_stay_alive(&self, state: BlockStateId, pos: BlockPos) -> bool {
+    fn snowy_can_stay_alive(&mut self, state: BlockStateId, pos: BlockPos) -> bool {
         let b = self.b;
         let above_state = self.above_state(pos);
         if b.is_block(above_state, b.named.snow) && b.table.int(above_state, b.props.layers) == 1 {
@@ -1072,7 +1076,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         let state = b.table.set_text(bamboo, b.props.leaves, "small");
         self.set_block(above(pos), state, 3);
     }
-    pub(crate) fn bamboo_height_below(&self, pos: BlockPos) -> i32 {
+    pub(crate) fn bamboo_height_below(&mut self, pos: BlockPos) -> i32 {
         let mut height = 0;
         while height < 16
             && self.b.is_block(
@@ -1084,7 +1088,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
         height
     }
-    pub(crate) fn bamboo_height_above(&self, pos: BlockPos) -> i32 {
+    pub(crate) fn bamboo_height_above(&mut self, pos: BlockPos) -> i32 {
         let mut height = 0;
         while height < 16
             && self.b.is_block(
@@ -1278,7 +1282,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             }
         }
     }
-    fn vine_can_spread(&self, pos: BlockPos, block: super::states::BlockId) -> bool {
+    fn vine_can_spread(&mut self, pos: BlockPos, block: super::states::BlockId) -> bool {
         let mut max = 5;
         for x in -4..=4 {
             for y in -1..=1 {
@@ -1471,7 +1475,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     /// `WeatheringCopper.getNext` by registry naming.
-    pub(crate) fn copper_next(&self, state: BlockStateId) -> Option<BlockStateId> {
+    pub(crate) fn copper_next(&mut self, state: BlockStateId) -> Option<BlockStateId> {
         let b = self.b;
         let name = &*b.table.info(b.block(state)).name;
         let path = name.strip_prefix("minecraft:")?;
@@ -1506,7 +1510,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             })
         }
     }
-    fn copper_stepped(&self, state: BlockStateId, all_the_way: bool) -> Option<BlockStateId> {
+    fn copper_stepped(&mut self, state: BlockStateId, all_the_way: bool) -> Option<BlockStateId> {
         let b = self.b;
         let name = &*b.table.info(b.block(state)).name;
         let mut path = Self::copper_previous_name(name.strip_prefix("minecraft:")?)?;

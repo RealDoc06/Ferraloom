@@ -10,30 +10,30 @@ use crate::{fluid::FluidKind, registry::BlockStateId};
 use horizon_core::{geometry::Direction, position::BlockPos, random::RandomSource};
 
 impl<C: super::tick_access::TickContext> Sim<'_, C> {
-    fn speleothem_tag(&self, state: BlockStateId) -> bool {
+    fn speleothem_tag(&mut self, state: BlockStateId) -> bool {
         self.b
             .tag("minecraft:speleothems")
             .is_some_and(|tag| self.b.in_set(state, tag))
     }
-    fn speleothem_with(&self, state: BlockStateId, direction: Direction) -> bool {
+    fn speleothem_with(&mut self, state: BlockStateId, direction: Direction) -> bool {
         self.speleothem_tag(state)
             && self.b.table.dir(state, self.b.props.vertical_direction) == Some(direction)
     }
-    fn speleothem_is_tip(&self, state: BlockStateId, include_merged: bool) -> bool {
+    fn speleothem_is_tip(&mut self, state: BlockStateId, include_merged: bool) -> bool {
         if !self.speleothem_tag(state) {
             return false;
         }
         let thickness = self.b.table.text(state, self.b.props.thickness);
         thickness == "tip" || (include_merged && thickness == "tip_merge")
     }
-    fn is_free_hanging_stalactite(&self, state: BlockStateId) -> bool {
+    fn is_free_hanging_stalactite(&mut self, state: BlockStateId) -> bool {
         self.speleothem_with(state, Direction::Down)
             && self.b.table.text(state, self.b.props.thickness) == "tip"
             && !self.b.is_waterlogged(state)
     }
     /// `SpeleothemBlock.findBlockVertical`.
     fn find_block_vertical(
-        &self,
+        &mut self,
         pos: BlockPos,
         up: bool,
         path: impl Fn(&Self, BlockPos, BlockStateId) -> bool,
@@ -54,7 +54,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         None
     }
     fn speleothem_find_tip(
-        &self,
+        &mut self,
         state: BlockStateId,
         pos: BlockPos,
         max: i32,
@@ -122,7 +122,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     fn speleothem_unmerged_tip(
-        &self,
+        &mut self,
         block: BlockId,
         state: BlockStateId,
         direction: Direction,
@@ -132,7 +132,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             && self.b.is_block(state, block)
     }
     fn speleothem_can_tip_grow(
-        &self,
+        &mut self,
         block: BlockId,
         tip: BlockStateId,
         tip_pos: BlockPos,
@@ -211,7 +211,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     /// `PointedDripstoneBlock.canDripThrough`.
-    fn dripstone_can_drip_through(&self, state: BlockStateId) -> bool {
+    fn dripstone_can_drip_through(&mut self, state: BlockStateId) -> bool {
         let b = self.b;
         if b.is_air(state) {
             return true;
@@ -240,7 +240,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     /// `PointedDripstoneBlock.getFluidAboveStalactite`: (position above the
     /// root, fluid, state there).
     fn dripstone_fluid_above(
-        &self,
+        &mut self,
         state: BlockStateId,
         pos: BlockPos,
     ) -> Option<(BlockPos, FluidKind, BlockStateId)> {
@@ -306,7 +306,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             self.schedule_tick(cauldron, block, delay);
         }
     }
-    fn cauldron_can_receive(&self, state: BlockStateId, fluid: FluidKind) -> bool {
+    fn cauldron_can_receive(&mut self, state: BlockStateId, fluid: FluidKind) -> bool {
         let b = self.b;
         let data = b.data(state);
         if data.is(Class::Cauldron) {
@@ -317,7 +317,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             false
         }
     }
-    fn dripstone_find_cauldron(&self, tip: BlockPos, fluid: FluidKind) -> Option<BlockPos> {
+    fn dripstone_find_cauldron(&mut self, tip: BlockPos, fluid: FluidKind) -> Option<BlockPos> {
         self.find_block_vertical(
             tip,
             false,

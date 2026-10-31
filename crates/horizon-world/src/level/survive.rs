@@ -12,10 +12,10 @@ use horizon_core::{geometry::Direction, position::BlockPos};
 
 impl<C: super::tick_access::TickContext> Sim<'_, C> {
     /// `BlockState.canSurvive(level, pos)`.
-    pub fn can_survive(&self, state: BlockStateId, pos: BlockPos) -> bool {
+    pub fn can_survive(&mut self, state: BlockStateId, pos: BlockPos) -> bool {
         self.can_survive_at(0, state, pos)
     }
-    fn can_survive_at(&self, depth: usize, state: BlockStateId, pos: BlockPos) -> bool {
+    fn can_survive_at(&mut self, depth: usize, state: BlockStateId, pos: BlockPos) -> bool {
         let chain = &self.b.data(state).chain;
         for (index, class) in chain.iter().enumerate().skip(depth) {
             if let Some(result) = self.can_survive_class(*class, index, state, pos) {
@@ -25,7 +25,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         true
     }
     fn can_survive_class(
-        &self,
+        &mut self,
         class: Class,
         depth: usize,
         state: BlockStateId,
@@ -349,7 +349,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
 
     /// `VegetationBlock.mayPlaceOn` (virtual) for `state`'s block.
     pub fn may_place_on(
-        &self,
+        &mut self,
         state: BlockStateId,
         ground: BlockStateId,
         ground_pos: BlockPos,
@@ -407,7 +407,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         false
     }
 
-    fn frogspawn_may_place_on(&self, pos: BlockPos) -> bool {
+    fn frogspawn_may_place_on(&mut self, pos: BlockPos) -> bool {
         let b = self.b;
         let fluid = self.fluid_at(pos);
         let above = self.fluid_at(above(pos));
@@ -416,7 +416,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             && above.kind() == crate::fluid::FluidKind::Empty
     }
 
-    pub(crate) fn bell_connected_direction(&self, state: BlockStateId) -> Direction {
+    pub(crate) fn bell_connected_direction(&mut self, state: BlockStateId) -> Direction {
         match self.b.table.text(state, self.b.props.attachment) {
             "floor" => Direction::Up,
             "ceiling" => Direction::Down,
@@ -424,17 +424,17 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     /// `FaceAttachedHorizontalDirectionalBlock.getConnectedDirection`.
-    pub(crate) fn face_attached_connected(&self, state: BlockStateId) -> Direction {
+    pub(crate) fn face_attached_connected(&mut self, state: BlockStateId) -> Direction {
         match self.b.table.text(state, self.b.props.face) {
             "ceiling" => Direction::Down,
             "floor" => Direction::Up,
             _ => self.b.facing(state),
         }
     }
-    pub(crate) fn multiface_has_face(&self, state: BlockStateId, direction: Direction) -> bool {
+    pub(crate) fn multiface_has_face(&mut self, state: BlockStateId, direction: Direction) -> bool {
         self.b.table.bool(state, self.direction_prop(direction))
     }
-    pub(crate) fn direction_prop(&self, direction: Direction) -> super::states::PropKey {
+    pub(crate) fn direction_prop(&mut self, direction: Direction) -> super::states::PropKey {
         let p = &self.b.props;
         match direction {
             Direction::Down => p.down,
@@ -447,7 +447,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// Head and body blocks of a growing-plant family.
     pub(crate) fn growing_plant_pair(
-        &self,
+        &mut self,
         block: super::states::BlockId,
     ) -> (super::states::BlockId, super::states::BlockId) {
         let name = &*self.b.table.info(block).name;
@@ -461,7 +461,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         (head, body)
     }
     /// `GrowingPlantBlock.canAttachTo` (kelp refuses `cannot_support_kelp`).
-    fn growing_plant_can_attach_to(&self, state: BlockStateId, attached: BlockStateId) -> bool {
+    fn growing_plant_can_attach_to(&mut self, state: BlockStateId, attached: BlockStateId) -> bool {
         let b = self.b;
         if b.instance_of(state, Class::Kelp) || b.instance_of(state, Class::KelpPlant) {
             !b.in_set(attached, &b.tags.cannot_support_kelp)
@@ -470,23 +470,23 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     /// `FireBlock.isValidFireLocation`.
-    pub(crate) fn is_valid_fire_location(&self, pos: BlockPos) -> bool {
+    pub(crate) fn is_valid_fire_location(&mut self, pos: BlockPos) -> bool {
         Direction::ALL
             .into_iter()
             .any(|direction| self.can_burn(self.rel_state(pos, direction)))
     }
     /// `FireBlock.canBurn`: ignite odds above zero (waterlogged states never burn).
-    pub(crate) fn can_burn(&self, state: BlockStateId) -> bool {
+    pub(crate) fn can_burn(&mut self, state: BlockStateId) -> bool {
         self.ignite_odds(state) > 0
     }
-    pub(crate) fn ignite_odds(&self, state: BlockStateId) -> i32 {
+    pub(crate) fn ignite_odds(&mut self, state: BlockStateId) -> i32 {
         if self.b.is_waterlogged(state) {
             0
         } else {
             self.b.data(state).ignite_odds
         }
     }
-    pub(crate) fn burn_odds(&self, state: BlockStateId) -> i32 {
+    pub(crate) fn burn_odds(&mut self, state: BlockStateId) -> i32 {
         if self.b.is_waterlogged(state) {
             0
         } else {
@@ -494,7 +494,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     /// `ScaffoldingBlock.getDistance`.
-    pub(crate) fn scaffolding_distance(&self, pos: BlockPos) -> i32 {
+    pub(crate) fn scaffolding_distance(&mut self, pos: BlockPos) -> i32 {
         let b = self.b;
         let below_pos = below(pos);
         let below_state = self.state(below_pos);
@@ -517,7 +517,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `SpeleothemBlock.isValidSpeleothemPlacement`.
     pub(crate) fn is_valid_speleothem_placement(
-        &self,
+        &mut self,
         block: super::states::BlockId,
         pos: BlockPos,
         tip: Direction,
@@ -530,7 +530,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `VineBlock.getUpdatedState`.
     pub(crate) fn vine_updated_state(
-        &self,
+        &mut self,
         mut state: BlockStateId,
         pos: BlockPos,
     ) -> BlockStateId {
@@ -556,7 +556,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         state
     }
     fn vine_can_support_at_face(
-        &self,
+        &mut self,
         state: BlockStateId,
         pos: BlockPos,
         direction: Direction,
@@ -574,7 +574,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         let above = self.above_state(pos);
         b.is_block(above, b.block(state)) && b.table.bool(above, self.direction_prop(direction))
     }
-    pub(crate) fn vine_count_faces(&self, state: BlockStateId) -> usize {
+    pub(crate) fn vine_count_faces(&mut self, state: BlockStateId) -> usize {
         [
             Direction::Up,
             Direction::North,

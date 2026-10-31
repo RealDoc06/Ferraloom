@@ -63,7 +63,7 @@ impl LevelAccess for Level {
     fn day_time(&self) -> i64 {
         self.day
     }
-    fn block_state(&self, pos: BlockPos) -> BlockStateId {
+    fn block_state(&mut self, pos: BlockPos) -> BlockStateId {
         self.blocks.get(&pos).copied().unwrap_or(self.air)
     }
     fn set_raw(&mut self, pos: BlockPos, state: BlockStateId) -> Option<BlockStateId> {
@@ -72,7 +72,7 @@ impl LevelAccess for Level {
         }
         Some(self.blocks.insert(pos, state).unwrap_or(self.air))
     }
-    fn is_loaded(&self, _pos: BlockPos) -> bool {
+    fn is_loaded(&mut self, _pos: BlockPos) -> bool {
         true
     }
     #[inline]
@@ -85,7 +85,7 @@ impl LevelAccess for Level {
     fn emit(&mut self, event: LevelEvent) {
         self.events.push(event);
     }
-    fn biome_name(&self, _pos: BlockPos) -> Option<&str> {
+    fn biome_name(&mut self, _pos: BlockPos) -> Option<&str> {
         Some(self.biome)
     }
     fn load_block_entity(&mut self, pos: BlockPos, nbt: crate::nbt::Compound) {

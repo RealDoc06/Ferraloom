@@ -31,7 +31,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn nibble(word: u32, direction: Direction) -> i32 {
         ((word >> (4 * direction as u32)) & 15) as i32
     }
-    pub(crate) fn is_signal_source(&self, state: BlockStateId) -> bool {
+    pub(crate) fn is_signal_source(&mut self, state: BlockStateId) -> bool {
         if self.b.is_block(state, self.b.named.redstone_wire) {
             return !self.wire_signal_off.get();
         }
@@ -39,7 +39,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `BlockState.getSignal(level, pos, direction)`.
     pub(crate) fn state_signal(
-        &self,
+        &mut self,
         state: BlockStateId,
         pos: BlockPos,
         direction: Direction,
@@ -66,7 +66,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `BlockState.getDirectSignal(level, pos, direction)`.
     pub(crate) fn state_direct_signal(
-        &self,
+        &mut self,
         state: BlockStateId,
         pos: BlockPos,
         direction: Direction,
@@ -94,12 +94,12 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             _ => Self::nibble(b.facts(state).strong, direction),
         }
     }
-    pub(crate) fn comparator_output(&self, pos: BlockPos) -> i32 {
+    pub(crate) fn comparator_output(&mut self, pos: BlockPos) -> i32 {
         self.read_ticks(TickScope::at(pos), |ticks| {
             ticks.comparator_outputs.get(&pos).copied().unwrap_or(0)
         })
     }
-    fn wire_signal(&self, state: BlockStateId, pos: BlockPos, direction: Direction) -> i32 {
+    fn wire_signal(&mut self, state: BlockStateId, pos: BlockPos, direction: Direction) -> i32 {
         if self.wire_signal_off.get() || direction == Direction::Down {
             return 0;
         }
@@ -121,11 +121,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         power
     }
     /// `SignalGetter.getDirectSignal(pos, direction)`.
-    pub fn direct_signal(&self, pos: BlockPos, direction: Direction) -> i32 {
+    pub fn direct_signal(&mut self, pos: BlockPos, direction: Direction) -> i32 {
         self.state_direct_signal(self.state(pos), pos, direction)
     }
     /// `SignalGetter.getDirectSignalTo`.
-    pub fn direct_signal_to(&self, pos: BlockPos) -> i32 {
+    pub fn direct_signal_to(&mut self, pos: BlockPos) -> i32 {
         let mut result = 0;
         for direction in SIGNAL_ORDER {
             result = result.max(self.direct_signal(rel(pos, direction), direction));
@@ -136,7 +136,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         result
     }
     /// `SignalGetter.getSignal(pos, direction)`.
-    pub fn signal(&self, pos: BlockPos, direction: Direction) -> i32 {
+    pub fn signal(&mut self, pos: BlockPos, direction: Direction) -> i32 {
         let state = self.state(pos);
         let signal = self.state_signal(state, pos, direction);
         if self.is_redstone_conductor(state, pos) {
@@ -145,17 +145,17 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             signal
         }
     }
-    pub fn has_signal(&self, pos: BlockPos, direction: Direction) -> bool {
+    pub fn has_signal(&mut self, pos: BlockPos, direction: Direction) -> bool {
         self.signal(pos, direction) > 0
     }
     /// `SignalGetter.hasNeighborSignal`.
-    pub fn has_neighbor_signal(&self, pos: BlockPos) -> bool {
+    pub fn has_neighbor_signal(&mut self, pos: BlockPos) -> bool {
         SIGNAL_ORDER
             .into_iter()
             .any(|direction| self.signal(rel(pos, direction), direction) > 0)
     }
     /// `SignalGetter.getBestNeighborSignal`.
-    pub fn best_neighbor_signal(&self, pos: BlockPos) -> i32 {
+    pub fn best_neighbor_signal(&mut self, pos: BlockPos) -> i32 {
         let mut best = 0;
         for direction in SIGNAL_ORDER {
             let signal = self.signal(rel(pos, direction), direction);
@@ -167,7 +167,12 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         best
     }
     /// `SignalGetter.getControlInputSignal`.
-    fn control_input_signal(&self, pos: BlockPos, direction: Direction, only_diodes: bool) -> i32 {
+    fn control_input_signal(
+        &mut self,
+        pos: BlockPos,
+        direction: Direction,
+        only_diodes: bool,
+    ) -> i32 {
         let b = self.b;
         let state = self.state(pos);
         if only_diodes {
@@ -189,7 +194,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
 
     // ---- redstone wire ----
 
-    fn should_wire_connect_to(&self, state: BlockStateId, direction: Option<Direction>) -> bool {
+    fn should_wire_connect_to(
+        &mut self,
+        state: BlockStateId,
+        direction: Option<Direction>,
+    ) -> bool {
         let b = self.b;
         match b.data(state).class {
             Class::RedstoneWire => true,
@@ -201,11 +210,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             _ => self.is_signal_source(state) && direction.is_some(),
         }
     }
-    fn wire_can_survive_on(&self, state: BlockStateId) -> bool {
+    fn wire_can_survive_on(&mut self, state: BlockStateId) -> bool {
         self.b.is_face_sturdy(state, Direction::Up) || self.b.is_block(state, self.b.named.hopper)
     }
     fn wire_connecting_side(
-        &self,
+        &mut self,
         pos: BlockPos,
         direction: Direction,
         can_connect_up: bool,
@@ -234,23 +243,23 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             "side"
         }
     }
-    fn wire_can_connect_up(&self, pos: BlockPos) -> bool {
+    fn wire_can_connect_up(&mut self, pos: BlockPos) -> bool {
         !self.is_redstone_conductor(self.above_state(pos), pos)
     }
-    fn wire_connected(&self, state: BlockStateId, direction: Direction) -> bool {
+    fn wire_connected(&mut self, state: BlockStateId, direction: Direction) -> bool {
         self.b.table.text(state, self.direction_prop(direction)) != "none"
     }
-    fn wire_is_cross(&self, state: BlockStateId) -> bool {
+    fn wire_is_cross(&mut self, state: BlockStateId) -> bool {
         HORIZONTAL
             .into_iter()
             .all(|d| self.wire_connected(state, d))
     }
-    fn wire_is_dot(&self, state: BlockStateId) -> bool {
+    fn wire_is_dot(&mut self, state: BlockStateId) -> bool {
         !HORIZONTAL
             .into_iter()
             .any(|d| self.wire_connected(state, d))
     }
-    pub(crate) fn wire_cross_state(&self, power: i32) -> BlockStateId {
+    pub(crate) fn wire_cross_state(&mut self, power: i32) -> BlockStateId {
         let b = self.b;
         let mut state = b.default_of(b.named.redstone_wire);
         for direction in HORIZONTAL {
@@ -261,7 +270,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         b.table.set_int(state, b.props.power, power)
     }
     /// `RedstoneWireBlock.getConnectionState`.
-    pub(crate) fn wire_connection_state(&self, state: BlockStateId, pos: BlockPos) -> BlockStateId {
+    pub(crate) fn wire_connection_state(
+        &mut self,
+        state: BlockStateId,
+        pos: BlockPos,
+    ) -> BlockStateId {
         let b = self.b;
         let table = &b.table;
         let was_dot = self.wire_is_dot(state);
@@ -301,7 +314,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         result
     }
     pub(crate) fn redstone_wire_update_shape(
-        &self,
+        &mut self,
         state: BlockStateId,
         pos: BlockPos,
         direction: Direction,
@@ -376,20 +389,20 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             }
         }
     }
-    fn wire_block_signal(&self, pos: BlockPos) -> i32 {
+    fn wire_block_signal(&mut self, pos: BlockPos) -> i32 {
         self.wire_signal_off.set(true);
         let signal = self.best_neighbor_signal(pos);
         self.wire_signal_off.set(false);
         signal
     }
-    fn wire_power_of(&self, state: BlockStateId) -> i32 {
+    fn wire_power_of(&mut self, state: BlockStateId) -> i32 {
         if self.b.is_block(state, self.b.named.redstone_wire) {
             self.b.table.int(state, self.b.props.power)
         } else {
             0
         }
     }
-    fn wire_incoming_signal(&self, pos: BlockPos) -> i32 {
+    fn wire_incoming_signal(&mut self, pos: BlockPos) -> i32 {
         let mut signal = 0;
         for direction in HORIZONTAL {
             let neighbour_pos = rel(pos, direction);
@@ -456,17 +469,17 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
 
     // ---- diodes ----
 
-    pub(crate) fn diode_delay(&self, state: BlockStateId) -> i32 {
+    pub(crate) fn diode_delay(&mut self, state: BlockStateId) -> i32 {
         if self.b.instance_of(state, Class::Repeater) {
             self.b.table.int(state, self.b.props.delay) * 2
         } else {
             2
         }
     }
-    pub(crate) fn diode_is_locked(&self, pos: BlockPos, state: BlockStateId) -> bool {
+    pub(crate) fn diode_is_locked(&mut self, pos: BlockPos, state: BlockStateId) -> bool {
         self.b.instance_of(state, Class::Repeater) && self.diode_alternate_signal(pos, state) > 0
     }
-    fn diode_alternate_signal(&self, pos: BlockPos, state: BlockStateId) -> i32 {
+    fn diode_alternate_signal(&mut self, pos: BlockPos, state: BlockStateId) -> i32 {
         let facing = self.b.facing(state);
         let only_diodes = self.b.instance_of(state, Class::Repeater);
         let cw = clockwise(facing);
@@ -474,7 +487,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         self.control_input_signal(rel(pos, cw), cw, only_diodes)
             .max(self.control_input_signal(rel(pos, ccw), ccw, only_diodes))
     }
-    fn diode_input_signal(&self, pos: BlockPos, state: BlockStateId) -> i32 {
+    fn diode_input_signal(&mut self, pos: BlockPos, state: BlockStateId) -> i32 {
         let b = self.b;
         let facing = b.facing(state);
         let target = rel(pos, facing);
@@ -505,7 +518,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
         result
     }
-    pub(crate) fn diode_should_turn_on(&self, pos: BlockPos, state: BlockStateId) -> bool {
+    pub(crate) fn diode_should_turn_on(&mut self, pos: BlockPos, state: BlockStateId) -> bool {
         if self.b.instance_of(state, Class::Comparator) {
             let input = self.diode_input_signal(pos, state);
             if input == 0 {
@@ -518,7 +531,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             self.diode_input_signal(pos, state) > 0
         }
     }
-    fn diode_should_prioritize(&self, pos: BlockPos, state: BlockStateId) -> bool {
+    fn diode_should_prioritize(&mut self, pos: BlockPos, state: BlockStateId) -> bool {
         let direction = self.b.facing(state).opposite();
         let opposite = self.rel_state(pos, direction);
         self.b.instance_of(opposite, Class::Diode) && self.b.facing(opposite) != direction
@@ -530,7 +543,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         self.neighbor_changed_at(opposite_pos, block);
         self.update_neighbors_at_except(opposite_pos, block, direction);
     }
-    fn comparator_calculate_output(&self, pos: BlockPos, state: BlockStateId) -> i32 {
+    fn comparator_calculate_output(&mut self, pos: BlockPos, state: BlockStateId) -> i32 {
         let input = self.diode_input_signal(pos, state);
         if input == 0 {
             return 0;
@@ -640,7 +653,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
 
     /// `getAnalogOutputSignal` for state-only sources; others ask the caller.
     pub(crate) fn analog_output(
-        &self,
+        &mut self,
         state: BlockStateId,
         pos: BlockPos,
         direction: Direction,
@@ -684,7 +697,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
 
     // ---- torches ----
 
-    fn torch_has_neighbor_signal(&self, pos: BlockPos, state: BlockStateId) -> bool {
+    fn torch_has_neighbor_signal(&mut self, pos: BlockPos, state: BlockStateId) -> bool {
         if self.b.instance_of(state, Class::RedstoneWallTorch) {
             let opposite = self.b.facing(state).opposite();
             self.has_signal(rel(pos, opposite), opposite)
@@ -788,7 +801,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         self.update_neighbors_at(pos, block);
         self.update_neighbors_at(below(pos), block);
     }
-    pub(crate) fn plate_signal_for_state(&self, state: BlockStateId) -> i32 {
+    pub(crate) fn plate_signal_for_state(&mut self, state: BlockStateId) -> i32 {
         let b = self.b;
         if b.instance_of(state, Class::WeightedPressurePlate) {
             b.table.int(state, b.props.power)
@@ -798,7 +811,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             0
         }
     }
-    fn plate_signal_strength(&self, pos: BlockPos, state: BlockStateId) -> i32 {
+    fn plate_signal_strength(&mut self, pos: BlockPos, state: BlockStateId) -> i32 {
         use horizon_core::geometry::{Aabb, Vec3};
         let b = self.b;
         let area = Aabb::new(
@@ -938,7 +951,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `ButtonBlock.getShape(...).bounds().move(pos)`: a 6 by 4 plate on the
     /// face it is attached to, 2 pixels thick (1 when pressed).
-    fn button_bounds(&self, pos: BlockPos, state: BlockStateId) -> horizon_core::geometry::Aabb {
+    fn button_bounds(
+        &mut self,
+        pos: BlockPos,
+        state: BlockStateId,
+    ) -> horizon_core::geometry::Aabb {
         use horizon_core::geometry::{Aabb, Vec3};
         let b = self.b;
         let thickness = if b.table.bool(state, b.props.powered) {

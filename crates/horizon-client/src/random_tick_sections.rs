@@ -174,7 +174,7 @@ mod tick_parity {
         speed: i32,
     }
     impl LevelAccess for Level {
-        fn block_state(&self, pos: BlockPos) -> BlockStateId {
+        fn block_state(&mut self, pos: BlockPos) -> BlockStateId {
             self.reads.borrow_mut().push(pos);
             self.chunks
                 .get(&(pos.x >> 4, pos.z >> 4))
@@ -186,7 +186,7 @@ mod tick_parity {
                 Arc::make_mut(chunk).set(pos.x, pos.y, pos.z, state.0),
             ))
         }
-        fn is_loaded(&self, pos: BlockPos) -> bool {
+        fn is_loaded(&mut self, pos: BlockPos) -> bool {
             self.chunks.contains_key(&(pos.x >> 4, pos.z >> 4))
         }
         #[inline]

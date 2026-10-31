@@ -234,13 +234,16 @@ queues back to checked shell slots for those immediate leaf operations, then
 retakes their current values before resuming. It never builds a per-region Game.
 Ordinary effects remain in the resident event buffer until the original flush.
 
-The concrete adapter may keep one private `RefCell<Option<Region>>`, owned by
-the active job on its worker and never shared between workers. Small helpers
-return owned answers/handles and end their state borrows before invoking a
-callback or parking. No borrow guard or reference into canonical region state
-may escape a helper. A reentrant borrow panic is a bug, not a serial-fallback
-signal. Resident chunk reads return owned `Arc` handles through
-`RandomTickChunk::get_owned`, retaining the existing weak-cache fast path.
+The initial private `RefCell<Option<Region<World>>>` adapter failed the paired
+real block-read cost gate: 18.61 ns borrowed versus 20.21 ns owned (+8.57%,
+12 alternating pairs of five million reads on CPU 2), above the 2% limit.
+Reject that design. The adapter instead owns a plain `Option<Region<World>>`;
+world queries that can resolve ownership or park take a mutable facade, as do
+scoped tick reads. Shared resources and fixed metadata remain immutable. Small
+private helpers return owned answers/handles and end canonical borrows before
+callbacks or handoffs. Resident chunk reads still return owned `Arc` handles
+through `RandomTickChunk::get_owned`, retaining its existing weak-cache fast
+path. Repeat the paired cost gate before accepting the mutable adapter.
 
 Resolve the separate canonical `Ticks` borrow before enabling workers. A
 `TickAccess` facade performs short scoped borrows of the same live tick state;

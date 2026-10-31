@@ -32,7 +32,7 @@ struct Cells {
     nether: bool,
 }
 impl LevelAccess for Cells {
-    fn block_state(&self, pos: BlockPos) -> BlockStateId {
+    fn block_state(&mut self, pos: BlockPos) -> BlockStateId {
         self.cells.get(&pos).copied().unwrap_or(self.air)
     }
     fn set_raw(&mut self, pos: BlockPos, state: BlockStateId) -> Option<BlockStateId> {
@@ -44,7 +44,7 @@ impl LevelAccess for Cells {
         }
         Some(old)
     }
-    fn is_loaded(&self, _pos: BlockPos) -> bool {
+    fn is_loaded(&mut self, _pos: BlockPos) -> bool {
         true
     }
     fn min_y(&self) -> i32 {

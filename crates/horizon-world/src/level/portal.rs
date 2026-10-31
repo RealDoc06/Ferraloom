@@ -37,20 +37,20 @@ fn step(pos: BlockPos, dir: Direction, n: i32) -> BlockPos {
 }
 
 impl<C: super::tick_access::TickContext> Sim<'_, C> {
-    fn portal_frame(&self, state: BlockStateId) -> bool {
+    fn portal_frame(&mut self, state: BlockStateId) -> bool {
         let b = self.b;
         b.tag("minecraft:nether_portal_frame")
             .is_some_and(|tag| b.in_set(state, tag))
     }
     /// `PortalShape.isEmpty`: air, fire or a portal block.
-    fn portal_empty(&self, state: BlockStateId) -> bool {
+    fn portal_empty(&mut self, state: BlockStateId) -> bool {
         let b = self.b;
         b.is_air(state)
             || b.tag("minecraft:fire")
                 .is_some_and(|tag| b.in_set(state, tag))
             || b.is_block(state, b.named.nether_portal)
     }
-    fn portal_distance_until_edge_above_frame(&self, pos: BlockPos, dir: Direction) -> i32 {
+    fn portal_distance_until_edge_above_frame(&mut self, pos: BlockPos, dir: Direction) -> i32 {
         for width in 0..=MAX_WIDTH {
             let at = step(pos, dir, width);
             let state = self.state(at);
@@ -64,7 +64,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         0
     }
     /// `PortalShape.findAnyShape`.
-    pub fn find_portal_shape(&self, pos: BlockPos, x_axis: bool) -> PortalShape {
+    pub fn find_portal_shape(&mut self, pos: BlockPos, x_axis: bool) -> PortalShape {
         let right = if x_axis {
             Direction::West
         } else {
@@ -128,7 +128,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `PortalShape.findEmptyPortalShape`: a valid frame holding no portal
     /// block yet, on the preferred axis first.
-    pub fn find_empty_portal_shape(&self, pos: BlockPos, x_axis: bool) -> Option<PortalShape> {
+    pub fn find_empty_portal_shape(&mut self, pos: BlockPos, x_axis: bool) -> Option<PortalShape> {
         [x_axis, !x_axis]
             .into_iter()
             .map(|axis| self.find_portal_shape(pos, axis))

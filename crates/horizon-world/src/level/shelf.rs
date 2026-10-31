@@ -78,11 +78,11 @@ struct Neighbors {
 const MAX_CHAIN_LENGTH: usize = 3;
 
 impl<C: super::tick_access::TickContext> Sim<'_, C> {
-    fn shelf_part(&self, state: BlockStateId) -> Part {
+    fn shelf_part(&mut self, state: BlockStateId) -> Part {
         Part::parse(self.b.table.text(state, self.b.props.side_chain))
     }
     /// `ShelfBlock.isConnectable`.
-    fn shelf_connectable(&self, state: BlockStateId) -> bool {
+    fn shelf_connectable(&mut self, state: BlockStateId) -> bool {
         let b = self.b;
         b.tag("minecraft:wooden_shelves")
             .is_some_and(|tag| b.in_set(state, tag))

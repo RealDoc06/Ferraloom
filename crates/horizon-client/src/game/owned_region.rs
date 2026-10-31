@@ -78,7 +78,7 @@ trait Services {
 }
 
 struct OwnedLevel<S> {
-    region: RefCell<Option<Region<World>>>,
+    region: Option<Region<World>>,
     frame: Frame,
     services: S,
     handoffs: Cell<u64>,
@@ -87,7 +87,7 @@ struct OwnedLevel<S> {
 impl<S: Services> OwnedLevel<S> {
     fn new(region: Region<World>, frame: Frame, services: S) -> Self {
         Self {
-            region: RefCell::new(Some(region)),
+            region: Some(region),
             frame,
             services,
             handoffs: Cell::new(0),
@@ -96,67 +96,62 @@ impl<S: Services> OwnedLevel<S> {
     }
     #[inline]
     fn read<R>(&self, read: impl FnOnce(&Region<World>) -> R) -> R {
-        let owner = self.region.borrow();
         read(
-            owner
+            self.region
                 .as_ref()
                 .expect("region is lent to the exclusive lane"),
         )
     }
     #[inline]
-    fn write<R>(&self, write: impl FnOnce(&mut Region<World>) -> R) -> R {
-        let mut owner = self.region.borrow_mut();
+    fn write<R>(&mut self, write: impl FnOnce(&mut Region<World>, &Frame) -> R) -> R {
         write(
-            owner
+            self.region
                 .as_mut()
                 .expect("region is lent to the exclusive lane"),
+            &self.frame,
         )
     }
-    fn exclusive(&self, request: Request) -> Reply {
-        let region = self.region.borrow_mut().take().expect("nested region loan");
+    fn exclusive(&mut self, request: Request) -> Reply {
+        let region = self.region.take().expect("nested region loan");
         let Returned { region, result } = self.services.call(region, request);
-        {
-            let mut owner = self.region.borrow_mut();
-            assert!(
-                owner.is_none(),
-                "exclusive callback replaced an active owner"
-            );
-            *owner = Some(region);
-        }
+        assert!(
+            self.region.is_none(),
+            "exclusive callback replaced an active owner"
+        );
+        self.region = Some(region);
         self.handoffs.set(self.handoffs.get().wrapping_add(1));
         result.unwrap_or_else(|panic| std::panic::resume_unwind(panic))
     }
 }
 impl<S: Services> TickAccess for OwnedLevel<S> {
-    fn read_ticks<R>(&self, _scope: TickScope, read: impl FnOnce(&Ticks) -> R) -> R {
+    fn read_ticks<R>(&mut self, _scope: TickScope, read: impl FnOnce(&Ticks) -> R) -> R {
         // M3 owns the entire dimension, including its one admission budget.
         self.read(|region| read(&region.ticks))
     }
     fn write_ticks<R>(&mut self, _scope: TickScope, write: impl FnOnce(&mut Ticks) -> R) -> R {
-        self.write(|region| write(&mut region.ticks))
+        self.write(|region, _| write(&mut region.ticks))
     }
 }
 impl<S: Services> LevelAccess for OwnedLevel<S> {
     fn is_client_side(&self) -> bool {
         self.frame.client_side
     }
-    fn world_surface(&self, x: i32, z: i32) -> i32 {
+    fn world_surface(&mut self, x: i32, z: i32) -> i32 {
         self.read(|r| {
             r.world
                 .world_surface(x, z, |s| self.frame.resources.facts().is_air(s))
         })
     }
-    fn precipitation(&self, pos: BlockPos) -> Option<horizon_world::level::Precipitation> {
-        self.frame
-            .resources
-            .behaviours()
-            .precipitation_info(self, pos)
+    fn precipitation(&mut self, pos: BlockPos) -> Option<horizon_world::level::Precipitation> {
+        let resources = Arc::clone(&self.frame.resources);
+        resources.behaviours().precipitation_info(self, pos)
     }
-    fn is_raining_at(&self, pos: BlockPos) -> bool {
-        self.frame.resources.behaviours().is_raining_at(self, pos)
+    fn is_raining_at(&mut self, pos: BlockPos) -> bool {
+        let resources = Arc::clone(&self.frame.resources);
+        resources.behaviours().is_raining_at(self, pos)
     }
     fn block_entity_analog_signal(
-        &self,
+        &mut self,
         pos: BlockPos,
         state: BlockStateId,
         direction: Direction,
@@ -166,19 +161,24 @@ impl<S: Services> LevelAccess for OwnedLevel<S> {
             _ => unreachable!(),
         }
     }
-    fn item_frame_analog_output(&self, pos: BlockPos, direction: Direction) -> Option<i32> {
+    fn item_frame_analog_output(&mut self, pos: BlockPos, direction: Direction) -> Option<i32> {
         match self.exclusive(Request::ItemFrame(pos, direction)) {
             Reply::OptionalInt(v) => v,
             _ => unreachable!(),
         }
     }
-    fn block_entity_signal(&self, pos: BlockPos, state: BlockStateId, direction: Direction) -> i32 {
+    fn block_entity_signal(
+        &mut self,
+        pos: BlockPos,
+        state: BlockStateId,
+        direction: Direction,
+    ) -> i32 {
         match self.exclusive(Request::Signal(pos, state, direction)) {
             Reply::Int(v) => v,
             _ => unreachable!(),
         }
     }
-    fn biome_name(&self, pos: BlockPos) -> Option<&str> {
+    fn biome_name(&mut self, pos: BlockPos) -> Option<&str> {
         let id = self.read(|r| {
             r.world
                 .chunks
@@ -199,7 +199,7 @@ impl<S: Services> LevelAccess for OwnedLevel<S> {
     fn difficulty(&self) -> i32 {
         self.frame.difficulty
     }
-    fn can_spread_fire_around(&self, pos: BlockPos) -> bool {
+    fn can_spread_fire_around(&mut self, pos: BlockPos) -> bool {
         if self.frame.rules.fire_spread_radius_around_player == -1 {
             return true;
         }
@@ -208,7 +208,7 @@ impl<S: Services> LevelAccess for OwnedLevel<S> {
             _ => unreachable!(),
         }
     }
-    fn increased_fire_burnout(&self, pos: BlockPos) -> bool {
+    fn increased_fire_burnout(&mut self, pos: BlockPos) -> bool {
         self.read(|r| {
             r.world
                 .chunks
@@ -223,11 +223,11 @@ impl<S: Services> LevelAccess for OwnedLevel<S> {
         })
     }
     #[inline]
-    fn block_state(&self, pos: BlockPos) -> BlockStateId {
+    fn block_state(&mut self, pos: BlockPos) -> BlockStateId {
         self.read(|r| r.world.block(pos.x, pos.y, pos.z))
     }
     fn set_raw(&mut self, pos: BlockPos, state: BlockStateId) -> Option<BlockStateId> {
-        self.write(|r| {
+        self.write(|r, _| {
             if !r.world.loaded(pos.x, pos.z) || pos.y < MIN_Y || pos.y >= MIN_Y + HEIGHT {
                 return None;
             }
@@ -236,7 +236,7 @@ impl<S: Services> LevelAccess for OwnedLevel<S> {
             Some(previous)
         })
     }
-    fn is_loaded(&self, pos: BlockPos) -> bool {
+    fn is_loaded(&mut self, pos: BlockPos) -> bool {
         self.read(|r| r.world.loaded(pos.x, pos.z))
     }
     fn min_y(&self) -> i32 {
@@ -258,21 +258,21 @@ impl<S: Services> LevelAccess for OwnedLevel<S> {
         &mut self,
         draw: impl FnOnce(&mut horizon_core::random::LegacyRandom) -> R,
     ) -> R {
-        self.write(|r| draw(&mut r.world.random))
+        self.write(|r, _| draw(&mut r.world.random))
     }
     fn game_time(&self) -> i64 {
         self.read(|r| r.world.game_time)
     }
-    fn block_light(&self, pos: BlockPos) -> i32 {
+    fn block_light(&mut self, pos: BlockPos) -> i32 {
         self.read(|r| i32::from(r.world.light(pos.x, pos.y, pos.z) & 15))
     }
-    fn sky_light(&self, pos: BlockPos) -> i32 {
+    fn sky_light(&mut self, pos: BlockPos) -> i32 {
         self.read(|r| i32::from(r.world.light(pos.x, pos.y, pos.z) >> 4))
     }
     fn sky_darken(&self) -> i32 {
         self.frame.darken
     }
-    fn sun_angle(&self, _pos: BlockPos) -> f32 {
+    fn sun_angle(&mut self, _pos: BlockPos) -> f32 {
         let environment = match self.frame.dimension {
             LevelDimension::Overworld => self.frame.resources.environment(),
             LevelDimension::Nether => self.frame.resources.nether_environment(),
@@ -289,17 +289,17 @@ impl<S: Services> LevelAccess for OwnedLevel<S> {
     fn dimension(&self) -> LevelDimension {
         self.frame.dimension
     }
-    fn is_unobstructed(&self, pos: BlockPos, state: BlockStateId) -> bool {
+    fn is_unobstructed(&mut self, pos: BlockPos, state: BlockStateId) -> bool {
         match self.exclusive(Request::Unobstructed(pos, state)) {
             Reply::Bool(v) => v,
             _ => unreachable!(),
         }
     }
-    fn is_ticking_chunk(&self, chunk: horizon_core::position::ChunkPos) -> bool {
+    fn is_ticking_chunk(&mut self, chunk: horizon_core::position::ChunkPos) -> bool {
         self.frame.tickets.block_ticking(chunk.x, chunk.z)
             && self.read(|r| ticking_chunk(&r.world, chunk.x, chunk.z))
     }
-    fn count_entities(&self, area: Aabb, query: EntityQuery) -> usize {
+    fn count_entities(&mut self, area: Aabb, query: EntityQuery) -> usize {
         match self.exclusive(Request::Entities(area, query)) {
             Reply::Count(v) => v,
             _ => unreachable!(),
@@ -324,7 +324,7 @@ impl<S: Services> LevelAccess for OwnedLevel<S> {
                 _ => unreachable!(),
             }
         } else if !matches!(&event, LevelEvent::Sound { .. } if self.frame.client_side) {
-            self.write(|r| r.world.level_events.push(event));
+            self.write(|r, _| r.world.level_events.push(event));
         }
     }
     fn remove_block_entity(&mut self, pos: BlockPos, old: BlockStateId, side_effects: bool) -> u8 {
@@ -340,7 +340,7 @@ impl<S: Services> LevelAccess for OwnedLevel<S> {
         }
         if let Some((key, entity)) = horizon_client::save::decode_block_entity(&Tag::Compound(nbt))
         {
-            self.write(|r| r.world.block_entities.insert(key, entity));
+            self.write(|r, _| r.world.block_entities.insert(key, entity));
         }
     }
     fn set_command_block_powered(&mut self, pos: BlockPos, powered: bool) -> Option<(bool, bool)> {
@@ -371,7 +371,7 @@ impl<S: Services> BlockPhaseLevel for OwnedLevel<S> {
         self.read(|r| r.world.chunks.get(&(chunk.x, chunk.z)).cloned())
     }
     fn random_tick_sections(&mut self, chunk: horizon_core::position::ChunkPos) -> Sections {
-        self.write(|r| {
+        self.write(|r, frame| {
             r.world
                 .chunks
                 .get(&(chunk.x, chunk.z))
@@ -379,7 +379,7 @@ impl<S: Services> BlockPhaseLevel for OwnedLevel<S> {
                     r.world.random_tick_sections.get(
                         (chunk.x, chunk.z),
                         column,
-                        self.frame.resources.facts(),
+                        frame.resources.facts(),
                     )
                 })
         })
@@ -532,7 +532,7 @@ impl Game<'_> {
         services
             .game
             .into_inner()
-            .restore_block_region(region.into_inner().expect("active region did not return"));
+            .restore_block_region(region.expect("active region did not return"));
         if let Err(panic) = result {
             std::panic::resume_unwind(panic);
         }

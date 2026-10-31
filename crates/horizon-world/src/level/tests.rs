@@ -72,14 +72,14 @@ impl LevelAccess for TestLevel {
     fn is_client_side(&self) -> bool {
         self.client_side
     }
-    fn block_state(&self, pos: BlockPos) -> BlockStateId {
+    fn block_state(&mut self, pos: BlockPos) -> BlockStateId {
         self.blocks.get(&pos).copied().unwrap_or(self.air)
     }
     fn set_raw(&mut self, pos: BlockPos, state: BlockStateId) -> Option<BlockStateId> {
         self.revision += 1;
         Some(self.blocks.insert(pos, state).unwrap_or(self.air))
     }
-    fn is_loaded(&self, _pos: BlockPos) -> bool {
+    fn is_loaded(&mut self, _pos: BlockPos) -> bool {
         true
     }
     #[inline]
@@ -92,7 +92,7 @@ impl LevelAccess for TestLevel {
     fn day_time(&self) -> i64 {
         self.day_time
     }
-    fn block_light(&self, pos: BlockPos) -> i32 {
+    fn block_light(&mut self, pos: BlockPos) -> i32 {
         self.block_light.get(&pos).copied().unwrap_or(0)
     }
     fn emit(&mut self, event: LevelEvent) {

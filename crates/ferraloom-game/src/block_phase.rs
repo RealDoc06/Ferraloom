@@ -114,7 +114,7 @@ mod tests {
         events: Vec<LevelEvent>,
     }
     impl LevelAccess for Level<'_> {
-        fn block_state(&self, pos: BlockPos) -> BlockStateId {
+        fn block_state(&mut self, pos: BlockPos) -> BlockStateId {
             self.chunks
                 .get(&(pos.x >> 4, pos.z >> 4))
                 .map_or(BlockStateId(0), |c| {
@@ -137,7 +137,7 @@ mod tests {
             }
             Some(old)
         }
-        fn is_loaded(&self, pos: BlockPos) -> bool {
+        fn is_loaded(&mut self, pos: BlockPos) -> bool {
             self.chunks.contains_key(&(pos.x >> 4, pos.z >> 4))
         }
         #[inline]

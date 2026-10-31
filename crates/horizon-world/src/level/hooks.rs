@@ -569,7 +569,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
         count > 1
     }
-    fn frosted_ice_fewer_neighbours_than(&self, pos: BlockPos, limit: i32) -> bool {
+    fn frosted_ice_fewer_neighbours_than(&mut self, pos: BlockPos, limit: i32) -> bool {
         let mut count = 0;
         for direction in Direction::ALL {
             if self

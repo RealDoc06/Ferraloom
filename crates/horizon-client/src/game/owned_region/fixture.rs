@@ -6,11 +6,11 @@ use serde_json::{Value, json};
 use std::{hint::black_box, time::Instant};
 
 #[inline(never)]
-fn block_reads<L: LevelAccess>(level: &L, positions: &[BlockPos], iterations: u64) -> u64 {
+fn block_reads<L: LevelAccess>(level: &mut L, positions: &[BlockPos], iterations: u64) -> u64 {
     let mut checksum = 0u64;
     for i in 0..iterations {
         let pos = black_box(positions[i as usize & (positions.len() - 1)]);
-        checksum = checksum.wrapping_add(u64::from(black_box(level).block_state(pos).0));
+        checksum = checksum.wrapping_add(u64::from(black_box(&mut *level).block_state(pos).0));
     }
     black_box(checksum)
 }
@@ -63,7 +63,7 @@ impl Game<'_> {
         } else {
             let frame = self.block_region_frame();
             let region = self.take_block_region(ferraloom_game::region::RegionId::REFERENCE);
-            let level = OwnedLevel::new(
+            let mut level = OwnedLevel::new(
                 region,
                 frame,
                 SerialServices {
@@ -71,7 +71,7 @@ impl Game<'_> {
                 },
             );
             let started = Instant::now();
-            let checksum = block_reads(&level, positions, iterations);
+            let checksum = block_reads(&mut level, positions, iterations);
             let nanos = started.elapsed().as_nanos() as f64 / iterations as f64;
             let OwnedLevel {
                 region, services, ..
@@ -79,7 +79,7 @@ impl Game<'_> {
             services
                 .game
                 .into_inner()
-                .restore_block_region(region.into_inner().unwrap());
+                .restore_block_region(region.unwrap());
             (nanos, checksum)
         }
     }

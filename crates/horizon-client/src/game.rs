@@ -816,17 +816,17 @@ impl LevelAccess for GameLevel<'_> {
     fn is_client_side(&self) -> bool {
         self.client_side
     }
-    fn world_surface(&self, x: i32, z: i32) -> i32 {
+    fn world_surface(&mut self, x: i32, z: i32) -> i32 {
         self.world.world_surface(x, z, |s| self.facts.is_air(s))
     }
-    fn precipitation(&self, pos: BlockPos) -> Option<horizon_world::level::Precipitation> {
+    fn precipitation(&mut self, pos: BlockPos) -> Option<horizon_world::level::Precipitation> {
         self.behaviours.precipitation_info(self, pos)
     }
-    fn is_raining_at(&self, pos: BlockPos) -> bool {
+    fn is_raining_at(&mut self, pos: BlockPos) -> bool {
         self.behaviours.is_raining_at(self, pos)
     }
     fn block_entity_analog_signal(
-        &self,
+        &mut self,
         pos: BlockPos,
         state: BlockStateId,
         direction: Direction,
@@ -869,7 +869,7 @@ impl LevelAccess for GameLevel<'_> {
         }
         machines::container_signal(self.world, self.behaviours, self.items, self.registry, pos)
     }
-    fn item_frame_analog_output(&self, pos: BlockPos, facing: Direction) -> Option<i32> {
+    fn item_frame_analog_output(&mut self, pos: BlockPos, facing: Direction) -> Option<i32> {
         let mut frames = self
             .item_frames
             .iter()
@@ -884,7 +884,7 @@ impl LevelAccess for GameLevel<'_> {
         )
     }
     fn block_entity_signal(
-        &self,
+        &mut self,
         pos: BlockPos,
         _state: BlockStateId,
         _direction: Direction,
@@ -895,7 +895,7 @@ impl LevelAccess for GameLevel<'_> {
         }
         jukebox::jukebox_signals(self.world, self.items, pos).map_or(0, |(signal, _)| signal)
     }
-    fn biome_name(&self, pos: BlockPos) -> Option<&str> {
+    fn biome_name(&mut self, pos: BlockPos) -> Option<&str> {
         let chunk = self.world.chunks.get(&(pos.x >> 4, pos.z >> 4))?;
         Some(&self.biomes.get(chunk.biome(pos.x, pos.y, pos.z)).name)
     }
@@ -914,7 +914,7 @@ impl LevelAccess for GameLevel<'_> {
     /// `ServerLevel.canSpreadFireAround`: a player (not a spectator) closer
     /// than the `fire_spread_radius_around_player` rule to the block's corner
     /// (`ChunkMap.anyPlayerCloseEnoughTo`); -1 spreads everywhere.
-    fn can_spread_fire_around(&self, pos: BlockPos) -> bool {
+    fn can_spread_fire_around(&mut self, pos: BlockPos) -> bool {
         let radius = self.rules.fire_spread_radius_around_player;
         radius == -1
             || self.fire_players.iter().any(|p| {
@@ -926,7 +926,7 @@ impl LevelAccess for GameLevel<'_> {
                 d[0] * d[0] + d[1] * d[1] + d[2] * d[2] < f64::from(radius) * f64::from(radius)
             })
     }
-    fn increased_fire_burnout(&self, pos: BlockPos) -> bool {
+    fn increased_fire_burnout(&mut self, pos: BlockPos) -> bool {
         self.world
             .chunks
             .get(&(pos.x >> 4, pos.z >> 4))
@@ -936,7 +936,7 @@ impl LevelAccess for GameLevel<'_> {
                     .increased_fire_burnout
             })
     }
-    fn block_state(&self, pos: BlockPos) -> BlockStateId {
+    fn block_state(&mut self, pos: BlockPos) -> BlockStateId {
         self.world.block(pos.x, pos.y, pos.z)
     }
     fn set_raw(&mut self, pos: BlockPos, state: BlockStateId) -> Option<BlockStateId> {
@@ -947,7 +947,7 @@ impl LevelAccess for GameLevel<'_> {
         self.world.set(pos.x, pos.y, pos.z, state).ok()?;
         Some(previous)
     }
-    fn is_loaded(&self, pos: BlockPos) -> bool {
+    fn is_loaded(&mut self, pos: BlockPos) -> bool {
         self.world.loaded(pos.x, pos.z)
     }
     fn min_y(&self) -> i32 {
@@ -975,16 +975,16 @@ impl LevelAccess for GameLevel<'_> {
     fn game_time(&self) -> i64 {
         self.world.game_time
     }
-    fn block_light(&self, pos: BlockPos) -> i32 {
+    fn block_light(&mut self, pos: BlockPos) -> i32 {
         i32::from(self.world.light(pos.x, pos.y, pos.z) & 15)
     }
-    fn sky_light(&self, pos: BlockPos) -> i32 {
+    fn sky_light(&mut self, pos: BlockPos) -> i32 {
         i32::from(self.world.light(pos.x, pos.y, pos.z) >> 4)
     }
     fn sky_darken(&self) -> i32 {
         self.darken
     }
-    fn sun_angle(&self, _pos: BlockPos) -> f32 {
+    fn sun_angle(&mut self, _pos: BlockPos) -> f32 {
         self.environment
             .sample(self.world.day_time, None, None)
             .sun_angle
@@ -1001,7 +1001,7 @@ impl LevelAccess for GameLevel<'_> {
     /// `Level.isUnobstructed`: the placed state's collision shape against the player.
     /// `Level.isUnobstructed(state, pos, CollisionContext.of(player))`: no
     /// entity that blocks building is in the state's collision shape.
-    fn is_unobstructed(&self, pos: BlockPos, state: BlockStateId) -> bool {
+    fn is_unobstructed(&mut self, pos: BlockPos, state: BlockStateId) -> bool {
         let player = self.player_collision.as_ref();
         let context = player.map_or_else(
             || CollisionContext::empty(false),
@@ -1054,14 +1054,14 @@ impl LevelAccess for GameLevel<'_> {
     }
     /// `ServerLevel.isPositionTickingWithEntitiesLoaded`: block ticking, and
     /// a ticking chunk.
-    fn is_ticking_chunk(&self, chunk: horizon_core::position::ChunkPos) -> bool {
+    fn is_ticking_chunk(&mut self, chunk: horizon_core::position::ChunkPos) -> bool {
         self.tickets.block_ticking(chunk.x, chunk.z) && ticking_chunk(self.world, chunk.x, chunk.z)
     }
     /// Entities that trigger pressure plates, tripwires, detector rails and
     /// wooden buttons: the players (the host and the LAN guests), the mobs,
     /// the minecarts and the other entities that don't ignore block triggers,
     /// and for `EntityQuery::Arrows` the arrows.
-    fn count_entities(&self, area: Aabb, query: EntityQuery) -> usize {
+    fn count_entities(&mut self, area: Aabb, query: EntityQuery) -> usize {
         let hit = |(lo, hi): &([f64; 3], [f64; 3])| {
             area.intersects(Aabb::new(
                 Vec3::new(lo[0], lo[1], lo[2]),

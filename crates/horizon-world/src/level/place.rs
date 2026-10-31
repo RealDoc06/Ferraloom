@@ -171,11 +171,11 @@ impl Ctx {
 }
 
 impl<C: super::tick_access::TickContext> Sim<'_, C> {
-    fn item_is(&self, ctx: &Ctx, block: BlockId) -> bool {
+    fn item_is(&mut self, ctx: &Ctx, block: BlockId) -> bool {
         !ctx.item.is_empty() && *self.b.block_data(block).item == *ctx.item
     }
     /// `BlockState.canBeReplaced(BlockPlaceContext)`.
-    pub(crate) fn can_be_replaced(&self, state: BlockStateId, ctx: &Ctx) -> bool {
+    pub(crate) fn can_be_replaced(&mut self, state: BlockStateId, ctx: &Ctx) -> bool {
         let b = self.b;
         let p = b.props;
         let block = b.block(state);
@@ -260,7 +260,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         default(self)
     }
 
-    fn fluid_is_water_source(&self, pos: BlockPos) -> bool {
+    fn fluid_is_water_source(&mut self, pos: BlockPos) -> bool {
         self.fluid_at(pos) == FluidState::WATER || {
             let f = self.fluid_at(pos);
             f.kind() == crate::fluid::FluidKind::Water
@@ -1158,7 +1158,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     /// joining another takes the less weathered of the two blocks (both unwaxed
     /// when only one was waxed), keeping its own properties.
     pub(crate) fn copper_chest_least_oxidized(
-        &self,
+        &mut self,
         state: BlockStateId,
         pos: BlockPos,
     ) -> BlockStateId {
@@ -1199,7 +1199,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     /// `CopperChestBlock.getFromCopperBlock`: the copper chest a copper block
     /// becomes under a copper golem's pumpkin, facing `facing`.
     pub(crate) fn copper_chest_from_block(
-        &self,
+        &mut self,
         copper: BlockStateId,
         facing: Direction,
         pos: BlockPos,
@@ -1233,7 +1233,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         Some(self.copper_chest_least_oxidized(state, pos))
     }
     fn chest_candidate_partner_facing(
-        &self,
+        &mut self,
         chest: BlockStateId,
         pos: BlockPos,
         direction: Direction,
@@ -1249,7 +1249,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `ChorusPlantBlock.getStateWithConnections`.
     pub(crate) fn chorus_plant_with_connections(
-        &self,
+        &mut self,
         pos: BlockPos,
         state: BlockStateId,
     ) -> BlockStateId {
@@ -1270,7 +1270,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
         result
     }
-    fn wall_hanging_sign_can_place(&self, state: BlockStateId, pos: BlockPos) -> bool {
+    fn wall_hanging_sign_can_place(&mut self, state: BlockStateId, pos: BlockPos) -> bool {
         let b = self.b;
         let facing = b.facing(state);
         let attach = |side: Direction, face: Direction| {
@@ -1287,7 +1287,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             || attach(counter_clockwise(facing), clockwise(facing))
     }
     fn multiface_placement(
-        &self,
+        &mut self,
         block: BlockId,
         old: BlockStateId,
         pos: BlockPos,
@@ -1313,7 +1313,12 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
                 .set_bool(state, self.direction_prop(direction), true),
         )
     }
-    fn vine_can_support_at(&self, vine: BlockStateId, pos: BlockPos, direction: Direction) -> bool {
+    fn vine_can_support_at(
+        &mut self,
+        vine: BlockStateId,
+        pos: BlockPos,
+        direction: Direction,
+    ) -> bool {
         let b = self.b;
         if direction == Direction::Down {
             return false;
@@ -1329,7 +1334,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             && b.table.bool(above_state, self.direction_prop(direction))
     }
     fn speleothem_thickness_for(
-        &self,
+        &mut self,
         block: BlockId,
         pos: BlockPos,
         tip: Direction,
@@ -1366,7 +1371,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     /// `DoorBlock.getHinge`.
-    fn door_hinge(&self, ctx: &Ctx) -> &'static str {
+    fn door_hinge(&mut self, ctx: &Ctx) -> &'static str {
         let b = self.b;
         let pos = ctx.pos;
         let place = ctx.horizontal_direction();
@@ -1602,7 +1607,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     /// `ScaffoldingBlockItem.updatePlacementContext`.
-    fn scaffolding_update_context(&self, ctx: &Ctx, block: BlockId) -> Option<Ctx> {
+    fn scaffolding_update_context(&mut self, ctx: &Ctx, block: BlockId) -> Option<Ctx> {
         let b = self.b;
         let pos = ctx.pos;
         if !b.is_block(self.state(pos), block) {

@@ -207,14 +207,14 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     pub(crate) fn place_placed_feature(&mut self, name: &str, pos: BlockPos) -> bool {
         super::feature_context::place(self, name, pos, super::feature_context::Placement::Placed)
     }
-    fn feature_exists(&self, name: &str) -> bool {
+    fn feature_exists(&mut self, name: &str) -> bool {
         self.b
             .live_features()
             .is_some_and(|f| f.configured(name).is_some())
     }
 
     /// `TreeGrower.hasFlowers`: a flower within 2 blocks horizontally, 1 vertically.
-    fn tree_has_flowers(&self, pos: BlockPos) -> bool {
+    fn tree_has_flowers(&mut self, pos: BlockPos) -> bool {
         let b = self.b;
         let Some(flowers) = b.tag("minecraft:flowers") else {
             return false;
@@ -231,7 +231,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         false
     }
     /// `TreeGrower.findTwoByTwoSaplingPos`.
-    fn two_by_two(&self, state: BlockStateId, pos: BlockPos) -> Option<(i32, i32, Saplings)> {
+    fn two_by_two(&mut self, state: BlockStateId, pos: BlockPos) -> Option<(i32, i32, Saplings)> {
         let block = self.b.block(state);
         for dx in [0, -1] {
             for dz in [0, -1] {
@@ -319,7 +319,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     /// `TreeGrower.getMinimumHeight`: the shortest tree's trunk base height.
-    pub(crate) fn tree_minimum_height(&self, grower: &TreeGrower) -> i32 {
+    pub(crate) fn tree_minimum_height(&mut self, grower: &TreeGrower) -> i32 {
         grower
             .shortest
             .and_then(|name| self.b.live_features()?.configured_json(name))

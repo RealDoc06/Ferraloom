@@ -105,13 +105,13 @@ mod tests {
         owner: RefCell<Option<LegacyRandom>>,
     }
     impl LevelAccess for Level {
-        fn block_state(&self, _: BlockPos) -> BlockStateId {
+        fn block_state(&mut self, _: BlockPos) -> BlockStateId {
             BlockStateId(0)
         }
         fn set_raw(&mut self, _: BlockPos, _: BlockStateId) -> Option<BlockStateId> {
             unreachable!()
         }
-        fn is_loaded(&self, _: BlockPos) -> bool {
+        fn is_loaded(&mut self, _: BlockPos) -> bool {
             true
         }
         fn with_random<R>(&mut self, draw: impl FnOnce(&mut LegacyRandom) -> R) -> R {

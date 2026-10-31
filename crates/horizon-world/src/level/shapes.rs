@@ -817,7 +817,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
 
     /// `PotentSulfurBlock.validBlockState` (the geyser block-entity countdown
     /// reset is the caller's).
-    pub(crate) fn potent_sulfur_state(&self, state: BlockStateId, pos: BlockPos) -> BlockStateId {
+    pub(crate) fn potent_sulfur_state(
+        &mut self,
+        state: BlockStateId,
+        pos: BlockPos,
+    ) -> BlockStateId {
         let b = self.b;
         let key = b.props.potent_sulfur_state;
         if self.fluid_at(above(pos)).kind() != FluidKind::Water {
@@ -841,7 +845,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
 
-    fn bed_neighbour_direction(&self, state: BlockStateId) -> Direction {
+    fn bed_neighbour_direction(&mut self, state: BlockStateId) -> Direction {
         let facing = self.b.facing(state);
         if self.b.table.text(state, self.b.props.part) == "foot" {
             facing
@@ -849,7 +853,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             facing.opposite()
         }
     }
-    pub(crate) fn chest_can_connect_to(&self, state: BlockStateId, other: BlockStateId) -> bool {
+    pub(crate) fn chest_can_connect_to(
+        &mut self,
+        state: BlockStateId,
+        other: BlockStateId,
+    ) -> bool {
         let b = self.b;
         if b.instance_of(state, Class::CopperChest) {
             b.tag("minecraft:copper_chests")
@@ -860,7 +868,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     /// `ChestBlock.getConnectedDirection`.
-    pub(crate) fn chest_connected_direction(&self, state: BlockStateId) -> Direction {
+    pub(crate) fn chest_connected_direction(&mut self, state: BlockStateId) -> Direction {
         let facing = self.b.facing(state);
         if self.b.table.text(state, self.b.props.kind) == "left" {
             clockwise(facing)
@@ -870,7 +878,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `FenceBlock.connectsTo`.
     pub(crate) fn fence_connects_to(
-        &self,
+        &mut self,
         fence: BlockStateId,
         state: BlockStateId,
         face_solid: bool,
@@ -885,7 +893,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         (!b.is_exception_for_connection(state) && face_solid) || same_fence || gate
     }
     /// `IronBarsBlock.attachsTo`.
-    pub(crate) fn bars_attach_to(&self, state: BlockStateId, face_solid: bool) -> bool {
+    pub(crate) fn bars_attach_to(&mut self, state: BlockStateId, face_solid: bool) -> bool {
         let b = self.b;
         (!b.is_exception_for_connection(state) && face_solid)
             || b.instance_of(state, Class::IronBars)
@@ -893,7 +901,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `WallBlock.connectsTo`.
     pub(crate) fn wall_connects_to(
-        &self,
+        &mut self,
         state: BlockStateId,
         face_solid: bool,
         direction: Direction,
@@ -908,7 +916,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `WallBlock.updateShape(level, state, topPos, topNeighbour, n, e, s, w)`.
     pub(crate) fn wall_shape(
-        &self,
+        &mut self,
         state: BlockStateId,
         top_pos: BlockPos,
         top: BlockStateId,
@@ -962,7 +970,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         table.set_bool(result, b.props.up, raise)
     }
     /// `StairBlock.getStairsShape`.
-    pub(crate) fn stairs_shape(&self, state: BlockStateId, pos: BlockPos) -> &'static str {
+    pub(crate) fn stairs_shape(&mut self, state: BlockStateId, pos: BlockPos) -> &'static str {
         let b = self.b;
         let p = b.props;
         let table = &b.table;
@@ -997,7 +1005,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         "straight"
     }
     fn stairs_can_take_shape(
-        &self,
+        &mut self,
         state: BlockStateId,
         pos: BlockPos,
         direction: Direction,
@@ -1010,7 +1018,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `TripWireBlock.shouldConnectTo`.
     pub(crate) fn tripwire_should_connect_to(
-        &self,
+        &mut self,
         state: BlockStateId,
         direction: Direction,
     ) -> bool {
@@ -1022,7 +1030,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     /// `LeavesBlock.getDistanceAt`.
-    pub(crate) fn leaf_distance_at(&self, state: BlockStateId) -> i32 {
+    pub(crate) fn leaf_distance_at(&mut self, state: BlockStateId) -> i32 {
         let b = self.b;
         if b.in_set(state, &b.tags.prevents_nearby_leaf_decay) {
             0
@@ -1033,7 +1041,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     /// `ConcretePowderBlock.touchesLiquid`.
-    pub(crate) fn concrete_touches_liquid(&self, pos: BlockPos) -> bool {
+    pub(crate) fn concrete_touches_liquid(&mut self, pos: BlockPos) -> bool {
         let b = self.b;
         let solidifies = |state: BlockStateId| b.is_water_fluid(b.fluid(state).kind());
         let mut test = pos;
@@ -1049,13 +1057,17 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
         false
     }
-    pub(crate) fn coral_scan_for_water(&self, pos: BlockPos) -> bool {
+    pub(crate) fn coral_scan_for_water(&mut self, pos: BlockPos) -> bool {
         Direction::ALL
             .into_iter()
             .any(|d| self.b.is_water_fluid(self.fluid_at(rel(pos, d)).kind()))
     }
     /// `BaseCoralPlantTypeBlock.scanForWater(state, level, pos)`.
-    pub(crate) fn coral_plant_scan_for_water(&self, state: BlockStateId, pos: BlockPos) -> bool {
+    pub(crate) fn coral_plant_scan_for_water(
+        &mut self,
+        state: BlockStateId,
+        pos: BlockPos,
+    ) -> bool {
         if self.b.is_waterlogged(state) {
             return true;
         }
@@ -1070,7 +1082,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     /// `BubbleColumnBlock.canOccupy`.
-    pub(crate) fn bubble_column_can_occupy(&self, state: BlockStateId) -> bool {
+    pub(crate) fn bubble_column_can_occupy(&mut self, state: BlockStateId) -> bool {
         let b = self.b;
         let fluid = b.fluid(state);
         b.is_block(state, b.named.bubble_column)
@@ -1079,7 +1091,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
                 && fluid.is_source()
                 && fluid.amount() >= 8)
     }
-    pub(crate) fn should_bubble_column_occupy(&self, state: BlockStateId) -> bool {
+    pub(crate) fn should_bubble_column_occupy(&mut self, state: BlockStateId) -> bool {
         let fluid = self.b.fluid(state);
         self.b
             .fluid_in(fluid.kind(), self.b.fluid_tags.bubble_column_can_occupy)
@@ -1102,7 +1114,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     /// `NoteBlock.setInstrument`.
-    pub(crate) fn note_block_instrument(&self, pos: BlockPos, state: BlockStateId) -> BlockStateId {
+    pub(crate) fn note_block_instrument(
+        &mut self,
+        pos: BlockPos,
+        state: BlockStateId,
+    ) -> BlockStateId {
         let b = self.b;
         let above = b.facts(self.above_state(pos)).instrument;
         let name = if super::data::instrument_works_above(above) {
@@ -1123,7 +1139,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `SpeleothemBlock.calculateSpeleothemThickness`.
     pub(crate) fn speleothem_thickness(
-        &self,
+        &mut self,
         pos: BlockPos,
         tip: Direction,
         merge: bool,
@@ -1161,7 +1177,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     /// `FireBlock.getStateWithAge` via `BaseFireBlock.getState`.
-    pub(crate) fn fire_state_with_age(&self, pos: BlockPos, age: i32) -> BlockStateId {
+    pub(crate) fn fire_state_with_age(&mut self, pos: BlockPos, age: i32) -> BlockStateId {
         let b = self.b;
         let placement = self.fire_state_for(pos);
         if b.is_block(placement, b.named.fire) {
@@ -1171,7 +1187,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     /// `BaseFireBlock.getState(level, pos)`.
-    pub(crate) fn fire_state_for(&self, pos: BlockPos) -> BlockStateId {
+    pub(crate) fn fire_state_for(&mut self, pos: BlockPos) -> BlockStateId {
         let b = self.b;
         let below_pos = below(pos);
         let below_state = self.state(below_pos);
@@ -1197,7 +1213,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `MossyCarpetBlock.getUpdatedState`.
     pub(crate) fn mossy_carpet_updated_state(
-        &self,
+        &mut self,
         mut state: BlockStateId,
         pos: BlockPos,
         create_sides: bool,
@@ -1246,7 +1262,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
         state
     }
-    pub(crate) fn mossy_carpet_has_faces(&self, state: BlockStateId) -> bool {
+    pub(crate) fn mossy_carpet_has_faces(&mut self, state: BlockStateId) -> bool {
         let b = self.b;
         table_bool(b, state)
             || [

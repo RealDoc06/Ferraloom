@@ -21,7 +21,7 @@ struct Level {
 const CROP: BlockPos = BlockPos::new(0, 65, 0);
 
 impl LevelAccess for Level {
-    fn block_state(&self, pos: BlockPos) -> BlockStateId {
+    fn block_state(&mut self, pos: BlockPos) -> BlockStateId {
         if pos == CROP {
             self.crop
         } else if pos.y == 64 {
@@ -35,7 +35,7 @@ impl LevelAccess for Level {
         self.writes += 1;
         Some(std::mem::replace(&mut self.crop, state))
     }
-    fn is_loaded(&self, _pos: BlockPos) -> bool {
+    fn is_loaded(&mut self, _pos: BlockPos) -> bool {
         true
     }
     #[inline]

@@ -455,12 +455,12 @@ fn spiral_around(
 
 impl<C: super::tick_access::TickContext> Sim<'_, C> {
     /// `PortalForcer.canPortalReplaceBlock`.
-    fn portal_can_replace(&self, pos: BlockPos) -> bool {
+    fn portal_can_replace(&mut self, pos: BlockPos) -> bool {
         let state = self.state(pos);
         self.b.is_replaceable(state) && self.b.fluid(state).kind() == FluidKind::Empty
     }
     /// `PortalForcer.canHostFrame`.
-    fn can_host_frame(&self, origin: BlockPos, direction: Direction, offset: i32) -> bool {
+    fn can_host_frame(&mut self, origin: BlockPos, direction: Direction, offset: i32) -> bool {
         let side = clockwise(direction);
         for width in -1..3 {
             for height in -1..4 {

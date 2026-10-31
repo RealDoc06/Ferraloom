@@ -100,7 +100,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn sculk_rand(&mut self, bound: i32) -> i32 {
         self.random().next_int_bound(bound).unwrap_or(0)
     }
-    fn sculk_in_tag(&self, state: BlockStateId, tag: &str) -> bool {
+    fn sculk_in_tag(&mut self, state: BlockStateId, tag: &str) -> bool {
         self.b.tag(tag).is_some_and(|set| self.b.in_set(state, set))
     }
     fn sculk_sound(&mut self, pos: BlockPos, sound: &str, volume: f32, pitch: f32) {
@@ -115,7 +115,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     // ---- sensors ----
 
     /// `SculkSensorBlock.canActivate`.
-    pub(crate) fn sensor_phase(&self, state: BlockStateId) -> &'static str {
+    pub(crate) fn sensor_phase(&mut self, state: BlockStateId) -> &'static str {
         match self.b.table.text(state, self.b.props.sculk_sensor_phase) {
             "active" => "active",
             "cooldown" => "cooldown",
@@ -219,7 +219,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
 
     // ---- the spreader ----
 
-    fn sculk_behaviour(&self, state: BlockStateId) -> Behaviour {
+    fn sculk_behaviour(&mut self, state: BlockStateId) -> Behaviour {
         let block = self.b.block(state);
         if block == self.b.named.sculk {
             Behaviour::Sculk
@@ -229,18 +229,23 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             Behaviour::Default
         }
     }
-    fn is_vein(&self, state: BlockStateId) -> bool {
+    fn is_vein(&mut self, state: BlockStateId) -> bool {
         self.b.block(state) == self.b.named.sculk_vein
     }
-    fn vein_has_face(&self, state: BlockStateId, face: Direction) -> bool {
+    fn vein_has_face(&mut self, state: BlockStateId, face: Direction) -> bool {
         self.is_vein(state) && self.multiface_has_face(state, face)
     }
-    fn vein_with_face(&self, state: BlockStateId, face: Direction, value: bool) -> BlockStateId {
+    fn vein_with_face(
+        &mut self,
+        state: BlockStateId,
+        face: Direction,
+        value: bool,
+    ) -> BlockStateId {
         self.b
             .table
             .set_bool(state, self.direction_prop(face), value)
     }
-    fn available_faces(&self, state: BlockStateId) -> Vec<Direction> {
+    fn available_faces(&mut self, state: BlockStateId) -> Vec<Direction> {
         if !self.b.instance_of(state, Class::Multiface) {
             return Vec::new();
         }
@@ -249,7 +254,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             .filter(|d| self.multiface_has_face(state, *d))
             .collect()
     }
-    fn is_sculk_source(&self, state: BlockStateId) -> bool {
+    fn is_sculk_source(&mut self, state: BlockStateId) -> bool {
         self.sculk_behaviour(state) != Behaviour::Default
     }
 
@@ -458,7 +463,12 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
         count
     }
-    fn sculk_valid_for_placement(&self, old: BlockStateId, pos: BlockPos, face: Direction) -> bool {
+    fn sculk_valid_for_placement(
+        &mut self,
+        old: BlockStateId,
+        pos: BlockPos,
+        face: Direction,
+    ) -> bool {
         if self.vein_has_face(old, face) {
             return false;
         }
@@ -467,7 +477,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `MultifaceBlock.getStateForPlacement` for the sculk vein.
     fn sculk_state_for_placement(
-        &self,
+        &mut self,
         old: BlockStateId,
         pos: BlockPos,
         face: Direction,
@@ -487,7 +497,12 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         Some(self.vein_with_face(base, face, true))
     }
     /// `SculkVeinSpreaderConfig.canSpreadInto` (with the default config).
-    fn sculk_can_spread_into(&self, source: BlockPos, target: BlockPos, face: Direction) -> bool {
+    fn sculk_can_spread_into(
+        &mut self,
+        source: BlockPos,
+        target: BlockPos,
+        face: Direction,
+    ) -> bool {
         let b = self.b;
         let existing = self.state(target);
         let against = self.state(rel(target, face));
@@ -604,7 +619,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     /// `SculkBlock.canPlaceGrowth`.
-    fn sculk_can_place_growth(&self, pos: BlockPos) -> bool {
+    fn sculk_can_place_growth(&mut self, pos: BlockPos) -> bool {
         let b = self.b;
         let state_above = self.state(above(pos));
         let open = b.is_air(state_above)
@@ -733,7 +748,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         let _ = b;
         (best != pos).then_some(best)
     }
-    fn sculk_unobstructed_move(&self, from: BlockPos, to: BlockPos) -> bool {
+    fn sculk_unobstructed_move(&mut self, from: BlockPos, to: BlockPos) -> bool {
         let manhattan = (from.x - to.x).abs() + (from.y - to.y).abs() + (from.z - to.z).abs();
         if manhattan == 1 {
             return true;
