@@ -104,6 +104,16 @@ the owned table directly, without a lock or generation lookup. The collection
 ownership change has a separate reentrant-rehash/parity gate and a before/after
 attribute-lookup benchmark; a slowdown above about 2% blocks it.
 
+`Region<W>` carries one concrete resident-world value and its original `Ticks`
+queues. It has one type parameter: Horizon supplies its current `World`, while
+shared code has no client dependency. A checked `OwnershipSlot` lends the actual
+value out of the serial shell and records absence explicitly. Reading or taking
+an absent value returns an ownership error; compatibility field access fails
+loudly. Restoring over a resident value is rejected and returns the incoming
+value without overwriting live mutations. No empty world, default ticks or air
+stands in for a lent owner. This is ownership preparation; it enables no workers
+and changes no phase or callback order.
+
 `Chunk` and `World` remain in Horizon for now: their block-entity types have
 inherent implementations across containers, sculk, spawners and other gameplay
 modules. Move those types with their methods in later units, rather than adding
