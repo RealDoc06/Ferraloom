@@ -243,7 +243,12 @@ scoped tick reads. Shared resources and fixed metadata remain immutable. Small
 private helpers return owned answers/handles and end canonical borrows before
 callbacks or handoffs. Resident chunk reads still return owned `Arc` handles
 through `RandomTickChunk::get_owned`, retaining its existing weak-cache fast
-path. Repeat the paired cost gate before accepting the mutable adapter.
+path. Use at most two targeted generated-code attempts to reduce residual cost,
+with paired samples around half a second. The 2% microbenchmark limit screens
+implementations; it is not the server performance objective. If roughly 1–2 ns
+per read remains, compare `--regions serial` with `off` at explore 100 on CT 121
+in an approved idle slot, and let the coordinator decide with the whole-tick
+MSPT/P99/TPS result. Do not spend further rounds chasing the micro number.
 
 Resolve the separate canonical `Ticks` borrow before enabling workers. A
 `TickAccess` facade performs short scoped borrows of the same live tick state;
