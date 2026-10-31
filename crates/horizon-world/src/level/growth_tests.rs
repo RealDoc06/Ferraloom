@@ -280,7 +280,7 @@ fn a_tree_with_bees_fills_its_nest() {
     let [(at, nbt)] = &w.level.block_entities[..] else {
         panic!("one block entity: {:?}", w.level.block_entities);
     };
-    assert_eq!(w.name(*at), "minecraft:bee_nest");
+    let at = *at;
     let Some(crate::nbt::Tag::List(bees)) = nbt.get(&"bees".into()) else {
         panic!("bees: {nbt:?}");
     };
@@ -288,6 +288,7 @@ fn a_tree_with_bees_fills_its_nest() {
         (2..=3).contains(&bees.len()),
         "BeehiveDecorator stores 2 or 3 bees"
     );
+    assert_eq!(w.name(at), "minecraft:bee_nest");
 }
 #[test]
 fn single_saplings_grow() {

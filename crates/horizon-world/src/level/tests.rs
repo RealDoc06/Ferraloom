@@ -151,7 +151,7 @@ impl<'f> World<'f> {
     fn get(&mut self, pos: BlockPos) -> BlockStateId {
         self.level.block_state(pos)
     }
-    fn name(&self, pos: BlockPos) -> String {
+    fn name(&mut self, pos: BlockPos) -> String {
         let state = self.f.registry.state(self.get(pos)).unwrap();
         let props: Vec<String> = state
             .properties
@@ -164,7 +164,7 @@ impl<'f> World<'f> {
             props.join(",")
         )
     }
-    fn prop(&self, pos: BlockPos, key: &str) -> String {
+    fn prop(&mut self, pos: BlockPos, key: &str) -> String {
         self.f
             .registry
             .state(self.get(pos))
