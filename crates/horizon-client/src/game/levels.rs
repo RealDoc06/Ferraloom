@@ -19,10 +19,9 @@ use super::{
     ominous_item_spawner, persist, raids::Raiding, sculk::SculkState, tnt, trident,
 };
 use horizon_client::{
-    Result, block_entity_anim::BlockEntityAnims, random_tick_sections::RandomTickSections,
-    save::SaveDir, streaming::Streaming, vanillagen::VanillaTerrain, world::World,
+    Result, block_entity_anim::BlockEntityAnims, save::SaveDir, streaming::Streaming,
+    vanillagen::VanillaTerrain, world::World,
 };
-use horizon_world::level::LevelEvent;
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -36,13 +35,11 @@ const IDLE_TICKS: u32 = 300;
 
 /// A level that is not in place: every per-level field of `Game`.
 pub(super) struct Parked {
-    world: World,
+    world: ferraloom_game::ownership::OwnershipSlot<World>,
     streaming: Streaming,
     locator: Option<Arc<VanillaTerrain>>,
     save: Arc<SaveDir>,
     server_level: ferraloom_game::server_level::ServerLevel,
-    random_tick_sections: RandomTickSections,
-    level_events: Vec<LevelEvent>,
     falling: Vec<FallingBlock>,
     paintings: Vec<horizon_client::entities::Painting>,
     item_frames: Vec<horizon_client::entities::ItemFrame>,
@@ -140,13 +137,11 @@ impl Game<'_> {
         let mut world = World::new(self.res.facts().air, self.level.seed);
         world.fast_lava = dim == Dim::Nether;
         Ok(Parked {
-            world,
+            world: world.into(),
             streaming,
             locator,
             save,
             server_level: ferraloom_game::server_level::ServerLevel::new(self.level.seed as i32),
-            random_tick_sections: Default::default(),
-            level_events: Vec::new(),
             falling: Vec::new(),
             paintings: Vec::new(),
             item_frames: Vec::new(),
@@ -197,8 +192,6 @@ impl Game<'_> {
         self.share_spawn_conditions();
         swap(&mut self.save, &mut p.save);
         swap(&mut self.server_level, &mut p.server_level);
-        swap(&mut self.random_tick_sections, &mut p.random_tick_sections);
-        swap(&mut self.level_events, &mut p.level_events);
         swap(&mut self.falling, &mut p.falling);
         swap(&mut self.paintings, &mut p.paintings);
         swap(&mut self.item_frames, &mut p.item_frames);

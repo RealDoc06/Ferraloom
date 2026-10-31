@@ -2,7 +2,7 @@
 //! Rules mirror the natively-validated `block_survival` port; dispatch follows
 //! the Java class chain so `super.canSurvive` reaches the next override.
 use super::{
-    LevelAccess, Sim,
+    Sim,
     classes::Class,
     query::is_horizontal,
     update::{HORIZONTAL, above, below, rel},
@@ -10,12 +10,12 @@ use super::{
 use crate::registry::BlockStateId;
 use horizon_core::{geometry::Direction, position::BlockPos};
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     /// `BlockState.canSurvive(level, pos)`.
-    pub fn can_survive(&self, state: BlockStateId, pos: BlockPos) -> bool {
+    pub fn can_survive(&mut self, state: BlockStateId, pos: BlockPos) -> bool {
         self.can_survive_at(0, state, pos)
     }
-    fn can_survive_at(&self, depth: usize, state: BlockStateId, pos: BlockPos) -> bool {
+    fn can_survive_at(&mut self, depth: usize, state: BlockStateId, pos: BlockPos) -> bool {
         let chain = &self.b.data(state).chain;
         for (index, class) in chain.iter().enumerate().skip(depth) {
             if let Some(result) = self.can_survive_class(*class, index, state, pos) {
@@ -25,7 +25,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         true
     }
     fn can_survive_class(
-        &self,
+        &mut self,
         class: Class,
         depth: usize,
         state: BlockStateId,
@@ -159,7 +159,12 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                     return Some(self.can_survive_at(depth + 1, state, pos));
                 }
                 let below = below(pos);
-                self.may_place_on(state, self.state(below), below)
+                {
+                    let queried_argument_0 = state;
+                    let queried_argument_1 = self.state(below);
+                    let queried_argument_2 = below;
+                    self.may_place_on(queried_argument_0, queried_argument_1, queried_argument_2)
+                }
             }
             Class::TallSeagrass => {
                 if b.table.text(state, p.half) == "upper" {
@@ -283,7 +288,12 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             Class::Scaffolding => self.scaffolding_distance(pos) < 7,
             Class::SeaPickle => {
                 let below = below(pos);
-                self.may_place_on(state, self.state(below), below)
+                {
+                    let queried_argument_0 = state;
+                    let queried_argument_1 = self.state(below);
+                    let queried_argument_2 = below;
+                    self.may_place_on(queried_argument_0, queried_argument_1, queried_argument_2)
+                }
             }
             Class::SnowLayer => {
                 let below_state = self.below_state(pos);
@@ -334,7 +344,12 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             }
             Class::Vegetation => {
                 let below = below(pos);
-                self.may_place_on(state, self.state(below), below)
+                {
+                    let queried_argument_0 = state;
+                    let queried_argument_1 = self.state(below);
+                    let queried_argument_2 = below;
+                    self.may_place_on(queried_argument_0, queried_argument_1, queried_argument_2)
+                }
             }
             Class::Vine => {
                 let updated = self.vine_updated_state(state, pos);
@@ -349,7 +364,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
 
     /// `VegetationBlock.mayPlaceOn` (virtual) for `state`'s block.
     pub fn may_place_on(
-        &self,
+        &mut self,
         state: BlockStateId,
         ground: BlockStateId,
         ground_pos: BlockPos,
@@ -407,7 +422,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         false
     }
 
-    fn frogspawn_may_place_on(&self, pos: BlockPos) -> bool {
+    fn frogspawn_may_place_on(&mut self, pos: BlockPos) -> bool {
         let b = self.b;
         let fluid = self.fluid_at(pos);
         let above = self.fluid_at(above(pos));
@@ -470,10 +485,11 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         }
     }
     /// `FireBlock.isValidFireLocation`.
-    pub(crate) fn is_valid_fire_location(&self, pos: BlockPos) -> bool {
-        Direction::ALL
-            .into_iter()
-            .any(|direction| self.can_burn(self.rel_state(pos, direction)))
+    pub(crate) fn is_valid_fire_location(&mut self, pos: BlockPos) -> bool {
+        Direction::ALL.into_iter().any(|direction| {
+            let queried_argument_0 = self.rel_state(pos, direction);
+            self.can_burn(queried_argument_0)
+        })
     }
     /// `FireBlock.canBurn`: ignite odds above zero (waterlogged states never burn).
     pub(crate) fn can_burn(&self, state: BlockStateId) -> bool {
@@ -494,7 +510,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         }
     }
     /// `ScaffoldingBlock.getDistance`.
-    pub(crate) fn scaffolding_distance(&self, pos: BlockPos) -> i32 {
+    pub(crate) fn scaffolding_distance(&mut self, pos: BlockPos) -> i32 {
         let b = self.b;
         let below_pos = below(pos);
         let below_state = self.state(below_pos);
@@ -517,7 +533,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
     /// `SpeleothemBlock.isValidSpeleothemPlacement`.
     pub(crate) fn is_valid_speleothem_placement(
-        &self,
+        &mut self,
         block: super::states::BlockId,
         pos: BlockPos,
         tip: Direction,
@@ -530,7 +546,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
     /// `VineBlock.getUpdatedState`.
     pub(crate) fn vine_updated_state(
-        &self,
+        &mut self,
         mut state: BlockStateId,
         pos: BlockPos,
     ) -> BlockStateId {
@@ -556,7 +572,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         state
     }
     fn vine_can_support_at_face(
-        &self,
+        &mut self,
         state: BlockStateId,
         pos: BlockPos,
         direction: Direction,

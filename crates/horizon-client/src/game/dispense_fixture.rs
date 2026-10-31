@@ -117,8 +117,9 @@ impl Game<'_> {
         Ok(())
     }
 
-    fn fixture_reset(&mut self, seed: i64) {
-        self.world = World::new(self.res.facts().air, seed);
+    pub(super) fn fixture_reset(&mut self, seed: i64) {
+        self.world
+            .replace_storage(World::new(self.res.facts().air, seed));
         // The oracle level is plains everywhere (bone meal's flowers, freezing).
         let plains = u32::from(self.res.biomes().id("minecraft:plains"));
         for cx in -2..=2 {
@@ -133,7 +134,7 @@ impl Game<'_> {
                 self.world.chunks.insert((cx, cz), Arc::new(chunk));
             }
         }
-        self.server_level.block_ticks = Ticks::new(0);
+        self.server_level.block_ticks = Ticks::new(0).into();
         self.server_level.tick_chunks.clear();
         self.sync_tick_chunks();
         self.mobs.clear();
@@ -145,7 +146,7 @@ impl Game<'_> {
         self.armor_stands.clear();
         self.rockets.clear();
         self.potions.clear_thrown();
-        self.level_events.clear();
+        self.world.level_events.clear();
         self.orbs.clear();
         self.falling.clear();
         // Hopper cooldowns of an earlier case.

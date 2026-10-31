@@ -39,7 +39,7 @@ struct Cells {
     removals: std::rc::Rc<Vec<PreRemove>>,
 }
 impl LevelAccess for Cells {
-    fn block_state(&self, pos: BlockPos) -> BlockStateId {
+    fn block_state(&mut self, pos: BlockPos) -> BlockStateId {
         self.cells.get(&pos).copied().unwrap_or(self.air)
     }
     fn set_raw(&mut self, pos: BlockPos, state: BlockStateId) -> Option<BlockStateId> {
@@ -51,13 +51,13 @@ impl LevelAccess for Cells {
         }
         Some(old)
     }
-    fn is_loaded(&self, _pos: BlockPos) -> bool {
+    fn is_loaded(&mut self, _pos: BlockPos) -> bool {
         true
     }
     /// Fresh block entities hold nothing, but a lectern whose state has a book
     /// reads page progress 1 of an empty book: signal 14.
     fn block_entity_analog_signal(
-        &self,
+        &mut self,
         _pos: BlockPos,
         state: BlockStateId,
         _direction: Direction,
@@ -79,16 +79,17 @@ impl LevelAccess for Cells {
             false,
         ))
     }
-    fn random(&mut self) -> &mut LegacyRandom {
-        &mut self.random
+    #[inline]
+    fn with_random<R>(&mut self, draw: impl FnOnce(&mut LegacyRandom) -> R) -> R {
+        draw(&mut self.random)
     }
     fn game_time(&self) -> i64 {
         self.time
     }
-    fn block_light(&self, _pos: BlockPos) -> i32 {
+    fn block_light(&mut self, _pos: BlockPos) -> i32 {
         self.block
     }
-    fn sky_light(&self, _pos: BlockPos) -> i32 {
+    fn sky_light(&mut self, _pos: BlockPos) -> i32 {
         self.sky
     }
     fn is_raining(&self) -> bool {
@@ -97,7 +98,7 @@ impl LevelAccess for Cells {
     fn is_thundering(&self) -> bool {
         self.thundering
     }
-    fn is_raining_at(&self, _pos: BlockPos) -> bool {
+    fn is_raining_at(&mut self, _pos: BlockPos) -> bool {
         self.raining
     }
     fn dimension(&self) -> Dimension {
@@ -106,7 +107,7 @@ impl LevelAccess for Cells {
     fn game_rules(&self) -> GameRules {
         GameRules::default()
     }
-    fn count_entities(&self, _area: Aabb, _query: EntityQuery) -> usize {
+    fn count_entities(&mut self, _area: Aabb, _query: EntityQuery) -> usize {
         0
     }
     fn emit(&mut self, event: LevelEvent) {
@@ -176,7 +177,7 @@ fn p(pos: BlockPos) -> String {
     format!("{},{},{}", pos.x, pos.y, pos.z)
 }
 
-fn summary(level: &Cells, before: &HashMap<BlockPos, BlockStateId>, out: &mut String) {
+fn summary(level: &mut Cells, before: &HashMap<BlockPos, BlockStateId>, out: &mut String) {
     let mut all: BTreeMap<(i32, i32, i32), ()> = BTreeMap::new();
     for pos in before.keys().chain(level.cells.keys()) {
         all.insert((pos.x, pos.y, pos.z), ());
@@ -318,7 +319,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 behaviours.tick_scheduled(&mut level, &mut ticks);
                                 if snap {
                                     let _ = writeln!(result, "tick {}", level.time);
-                                    summary(&level, &before, &mut result);
+                                    summary(&mut level, &before, &mut result);
                                 }
                             }
                         }
@@ -328,7 +329,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             other => panic!("unknown mode {other}"),
         }
-        summary(&level, &before, &mut result);
+        summary(&mut level, &before, &mut result);
         // Pending scheduled ticks, sorted as the oracle sorts its rows.
         let mut rows: Vec<String> = Vec::new();
         for x in -3..=3 {

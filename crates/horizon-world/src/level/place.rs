@@ -170,17 +170,17 @@ impl Ctx {
     }
 }
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn item_is(&self, ctx: &Ctx, block: BlockId) -> bool {
         !ctx.item.is_empty() && *self.b.block_data(block).item == *ctx.item
     }
     /// `BlockState.canBeReplaced(BlockPlaceContext)`.
-    pub(crate) fn can_be_replaced(&self, state: BlockStateId, ctx: &Ctx) -> bool {
+    pub(crate) fn can_be_replaced(&mut self, state: BlockStateId, ctx: &Ctx) -> bool {
         let b = self.b;
         let p = b.props;
         let block = b.block(state);
         let data = b.data(state);
-        let default = |sim: &Self| {
+        let default = |sim: &mut Self| {
             b.is_replaceable(state) && (ctx.item.is_empty() || !sim.item_is(ctx, block))
         };
         for class in &data.chain {
@@ -260,7 +260,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         default(self)
     }
 
-    fn fluid_is_water_source(&self, pos: BlockPos) -> bool {
+    fn fluid_is_water_source(&mut self, pos: BlockPos) -> bool {
         self.fluid_at(pos) == FluidState::WATER || {
             let f = self.fluid_at(pos);
             f.kind() == crate::fluid::FluidKind::Water
@@ -313,7 +313,11 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         Some(match class {
             Class::AbstractBed => {
                 let relative = rel(pos, horizontal);
-                if self.can_be_replaced(self.state(relative), ctx) {
+                if {
+                    let queried_argument_0 = self.state(relative);
+                    let queried_argument_1 = ctx;
+                    self.can_be_replaced(queried_argument_0, queried_argument_1)
+                } {
                     Some(table.set_dir(default, p.facing, horizontal))
                 } else {
                     None
@@ -356,7 +360,11 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                 for direction in ctx.nearest_looking_directions() {
                     if is_horizontal(direction) {
                         state = table.set_dir(state, p.facing, direction.opposite());
-                        if !self.can_be_replaced(self.state(rel(pos, direction)), ctx) {
+                        if !{
+                            let queried_argument_0 = self.state(rel(pos, direction));
+                            let queried_argument_1 = ctx;
+                            self.can_be_replaced(queried_argument_0, queried_argument_1)
+                        } {
                             return Some(Some(state));
                         }
                     }
@@ -797,9 +805,11 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                 Some(table.set_bool(wl(state), p.cracked, false))
             }
             Class::Door => {
-                if pos.y < self.level.max_y() - 1
-                    && self.can_be_replaced(self.state(above(pos)), ctx)
-                {
+                if pos.y < self.level.max_y() - 1 && {
+                    let queried_argument_0 = self.state(above(pos));
+                    let queried_argument_1 = ctx;
+                    self.can_be_replaced(queried_argument_0, queried_argument_1)
+                } {
                     let powered =
                         self.has_neighbor_signal(pos) || self.has_neighbor_signal(above(pos));
                     let hinge = self.door_hinge(ctx);
@@ -813,9 +823,11 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                 }
             }
             Class::DoublePlant => {
-                if pos.y < self.level.max_y() - 1
-                    && self.can_be_replaced(self.state(above(pos)), ctx)
-                {
+                if pos.y < self.level.max_y() - 1 && {
+                    let queried_argument_0 = self.state(above(pos));
+                    let queried_argument_1 = ctx;
+                    self.can_be_replaced(queried_argument_0, queried_argument_1)
+                } {
                     sup!()
                 } else {
                     None
@@ -941,7 +953,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             }
             Class::FenceGate => {
                 let open = self.has_neighbor_signal(pos);
-                let wall = |sim: &Self, d: Direction| b.in_set(sim.rel_state(pos, d), &t.walls);
+                let wall = |sim: &mut Self, d: Direction| b.in_set(sim.rel_state(pos, d), &t.walls);
                 let in_wall = match axis_of(horizontal) {
                     Axis::Z => wall(self, Direction::West) || wall(self, Direction::East),
                     _ => wall(self, Direction::North) || wall(self, Direction::South),
@@ -1017,8 +1029,12 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                 let state = wl(table.set_bool(default, p.persistent, true));
                 let mut distance = 7;
                 for direction in Direction::ALL {
-                    distance =
-                        distance.min(self.leaf_distance_at(self.rel_state(pos, direction)) + 1);
+                    distance = distance.min(
+                        {
+                            let queried_argument_0 = self.rel_state(pos, direction);
+                            self.leaf_distance_at(queried_argument_0)
+                        } + 1,
+                    );
                     if distance == 1 {
                         break;
                     }
@@ -1127,8 +1143,11 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             Class::TripWire => {
                 let mut state = default;
                 for direction in HORIZONTAL {
-                    let connect =
-                        self.tripwire_should_connect_to(self.rel_state(pos, direction), direction);
+                    let connect = {
+                        let queried_argument_0 = self.rel_state(pos, direction);
+                        let queried_argument_1 = direction;
+                        self.tripwire_should_connect_to(queried_argument_0, queried_argument_1)
+                    };
                     state = table.set_bool(state, self.direction_prop(direction), connect);
                 }
                 Some(state)
@@ -1158,7 +1177,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     /// joining another takes the less weathered of the two blocks (both unwaxed
     /// when only one was waxed), keeping its own properties.
     pub(crate) fn copper_chest_least_oxidized(
-        &self,
+        &mut self,
         state: BlockStateId,
         pos: BlockPos,
     ) -> BlockStateId {
@@ -1168,7 +1187,11 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         {
             return state;
         }
-        let connected = self.rel_state(pos, self.chest_connected_direction(state));
+        let connected = {
+            let queried_argument_0 = pos;
+            let queried_argument_1 = self.chest_connected_direction(state);
+            self.rel_state(queried_argument_0, queried_argument_1)
+        };
         if !b.instance_of(connected, Class::CopperChest) {
             return state;
         }
@@ -1199,7 +1222,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     /// `CopperChestBlock.getFromCopperBlock`: the copper chest a copper block
     /// becomes under a copper golem's pumpkin, facing `facing`.
     pub(crate) fn copper_chest_from_block(
-        &self,
+        &mut self,
         copper: BlockStateId,
         facing: Direction,
         pos: BlockPos,
@@ -1233,7 +1256,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         Some(self.copper_chest_least_oxidized(state, pos))
     }
     fn chest_candidate_partner_facing(
-        &self,
+        &mut self,
         chest: BlockStateId,
         pos: BlockPos,
         direction: Direction,
@@ -1249,7 +1272,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
     /// `ChorusPlantBlock.getStateWithConnections`.
     pub(crate) fn chorus_plant_with_connections(
-        &self,
+        &mut self,
         pos: BlockPos,
         state: BlockStateId,
     ) -> BlockStateId {
@@ -1270,10 +1293,10 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         }
         result
     }
-    fn wall_hanging_sign_can_place(&self, state: BlockStateId, pos: BlockPos) -> bool {
+    fn wall_hanging_sign_can_place(&mut self, state: BlockStateId, pos: BlockPos) -> bool {
         let b = self.b;
         let facing = b.facing(state);
-        let attach = |side: Direction, face: Direction| {
+        let mut attach = |side: Direction, face: Direction| {
             let attach_state = self.rel_state(pos, side);
             if b.tag("minecraft:wall_hanging_signs")
                 .is_some_and(|tag| b.in_set(attach_state, tag))
@@ -1287,7 +1310,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             || attach(counter_clockwise(facing), clockwise(facing))
     }
     fn multiface_placement(
-        &self,
+        &mut self,
         block: BlockId,
         old: BlockStateId,
         pos: BlockPos,
@@ -1313,7 +1336,12 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                 .set_bool(state, self.direction_prop(direction), true),
         )
     }
-    fn vine_can_support_at(&self, vine: BlockStateId, pos: BlockPos, direction: Direction) -> bool {
+    fn vine_can_support_at(
+        &mut self,
+        vine: BlockStateId,
+        pos: BlockPos,
+        direction: Direction,
+    ) -> bool {
         let b = self.b;
         if direction == Direction::Down {
             return false;
@@ -1329,7 +1357,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             && b.table.bool(above_state, self.direction_prop(direction))
     }
     fn speleothem_thickness_for(
-        &self,
+        &mut self,
         block: BlockId,
         pos: BlockPos,
         tip: Direction,
@@ -1366,7 +1394,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         }
     }
     /// `DoorBlock.getHinge`.
-    fn door_hinge(&self, ctx: &Ctx) -> &'static str {
+    fn door_hinge(&mut self, ctx: &Ctx) -> &'static str {
         let b = self.b;
         let pos = ctx.pos;
         let place = ctx.horizontal_direction();
@@ -1508,11 +1536,21 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             item: input.item.clone(),
             replace_clicked: true,
         };
-        ctx.replace_clicked = self.can_be_replaced(self.state(input.clicked_pos), &ctx);
+        ctx.replace_clicked = {
+            let queried_argument_0 = self.state(input.clicked_pos);
+            let queried_argument_1 = &ctx;
+            self.can_be_replaced(queried_argument_0, queried_argument_1)
+        };
         if !ctx.replace_clicked {
             ctx.pos = rel(input.clicked_pos, input.face);
         }
-        if !ctx.replace_clicked && !self.can_be_replaced(self.state(ctx.pos), &ctx) {
+        if !ctx.replace_clicked
+            && !{
+                let queried_argument_0 = self.state(ctx.pos);
+                let queried_argument_1 = &ctx;
+                self.can_be_replaced(queried_argument_0, queried_argument_1)
+            }
+        {
             return None;
         }
         if binding.kind == ItemKind::Scaffolding {
@@ -1602,7 +1640,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         }
     }
     /// `ScaffoldingBlockItem.updatePlacementContext`.
-    fn scaffolding_update_context(&self, ctx: &Ctx, block: BlockId) -> Option<Ctx> {
+    fn scaffolding_update_context(&mut self, ctx: &Ctx, block: BlockId) -> Option<Ctx> {
         let b = self.b;
         let pos = ctx.pos;
         if !b.is_block(self.state(pos), block) {
@@ -1679,7 +1717,7 @@ impl Behaviours {
         ticks: &mut Ticks,
         ctx: &PlaceContext,
     ) -> bool {
-        let sim = self.sim(level, ticks);
+        let mut sim = self.sim(level, ticks);
         let inner = Ctx {
             pos: ctx.clicked_pos,
             hit_pos: ctx.clicked_pos,
@@ -1692,7 +1730,11 @@ impl Behaviours {
             item: ctx.item.clone(),
             replace_clicked: true,
         };
-        sim.can_be_replaced(sim.state(ctx.clicked_pos), &inner)
+        {
+            let queried_argument_0 = sim.state(ctx.clicked_pos);
+            let queried_argument_1 = &inner;
+            sim.can_be_replaced(queried_argument_0, queried_argument_1)
+        }
     }
     /// The position and state `BlockItem.place` would place for `ctx`, without
     /// writing anything (None when vanilla's placement fails).
@@ -1729,7 +1771,11 @@ impl Behaviours {
             item: input.item.clone(),
             replace_clicked: true,
         };
-        ctx.replace_clicked = sim.can_be_replaced(sim.state(input.clicked_pos), &ctx);
+        ctx.replace_clicked = {
+            let queried_argument_0 = sim.state(input.clicked_pos);
+            let queried_argument_1 = &ctx;
+            sim.can_be_replaced(queried_argument_0, queried_argument_1)
+        };
         if !ctx.replace_clicked {
             ctx.pos = rel(input.clicked_pos, input.face);
         }

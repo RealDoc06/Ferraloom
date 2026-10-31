@@ -9,7 +9,7 @@ use super::{
 use crate::{fluid::FluidKind, registry::BlockStateId};
 use horizon_core::{geometry::Direction, position::BlockPos, random::RandomSource};
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn speleothem_tag(&self, state: BlockStateId) -> bool {
         self.b
             .tag("minecraft:speleothems")
@@ -33,7 +33,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
     /// `SpeleothemBlock.findBlockVertical`.
     fn find_block_vertical(
-        &self,
+        &mut self,
         pos: BlockPos,
         up: bool,
         path: impl Fn(&Self, BlockPos, BlockStateId) -> bool,
@@ -54,7 +54,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         None
     }
     fn speleothem_find_tip(
-        &self,
+        &mut self,
         state: BlockStateId,
         pos: BlockPos,
         max: i32,
@@ -132,7 +132,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             && self.b.is_block(state, block)
     }
     fn speleothem_can_tip_grow(
-        &self,
+        &mut self,
         block: BlockId,
         tip: BlockStateId,
         tip_pos: BlockPos,
@@ -240,7 +240,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     /// `PointedDripstoneBlock.getFluidAboveStalactite`: (position above the
     /// root, fluid, state there).
     fn dripstone_fluid_above(
-        &self,
+        &mut self,
         state: BlockStateId,
         pos: BlockPos,
     ) -> Option<(BlockPos, FluidKind, BlockStateId)> {
@@ -317,7 +317,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             false
         }
     }
-    fn dripstone_find_cauldron(&self, tip: BlockPos, fluid: FluidKind) -> Option<BlockPos> {
+    fn dripstone_find_cauldron(&mut self, tip: BlockPos, fluid: FluidKind) -> Option<BlockPos> {
         self.find_block_vertical(
             tip,
             false,

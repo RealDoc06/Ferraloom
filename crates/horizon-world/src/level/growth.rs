@@ -39,7 +39,7 @@ impl Behaviours {
             return false;
         };
         let mut sim = self.sim(level, ticks);
-        let mut random = sim.random().clone();
+        let mut random = sim.level.with_random(|random| random.clone());
         {
             let mut world = LevelFeatureWorld {
                 sim: &mut sim,
@@ -49,7 +49,7 @@ impl Behaviours {
                 crate::worldgen::structure::BoundingBox::new([i32::MIN; 3], [i32::MAX; 3]);
             for piece in &jigsaw.pieces {
                 let mut place_feature =
-                    |w: &mut LevelFeatureWorld<'_, '_, L>,
+                    |w: &mut LevelFeatureWorld<'_, '_, _>,
                      r: &mut horizon_core::random::LegacyRandom,
                      name: &str,
                      p: [i32; 3]| { Ok(features.place_placed(name, w, r, p)) };
@@ -65,7 +65,7 @@ impl Behaviours {
                 }
             }
         }
-        *sim.random() = random;
+        sim.level.with_random(|live| *live = random);
         true
     }
 }
@@ -192,41 +192,20 @@ fn weighted<R: RandomSource>(
     None
 }
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
-    /// `ConfiguredFeature.place(level, generator, level.random, pos)`. The
-    /// feature draws from a copy of the level random that replaces it after.
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
+    /// `TreeGrower#growTree` passes the level's same live `RandomSource` into
+    /// feature placement, including draws made by synchronous block callbacks.
     pub(crate) fn place_configured_feature(&mut self, name: &str, pos: BlockPos) -> bool {
-        let b = self.b;
-        let Some(features) = b.live_features() else {
-            return false;
-        };
-        let mut random = self.random().clone();
-        let placed = {
-            let mut world = LevelFeatureWorld {
-                sim: self,
-                features,
-            };
-            features.place_configured(name, &mut world, &mut random, [pos.x, pos.y, pos.z])
-        };
-        *self.random() = random;
-        placed
+        super::feature_context::place(
+            self,
+            name,
+            pos,
+            super::feature_context::Placement::Configured,
+        )
     }
     /// `PlacedFeature.place(level, generator, level.random, pos)`.
     pub(crate) fn place_placed_feature(&mut self, name: &str, pos: BlockPos) -> bool {
-        let b = self.b;
-        let Some(features) = b.live_features() else {
-            return false;
-        };
-        let mut random = self.random().clone();
-        let placed = {
-            let mut world = LevelFeatureWorld {
-                sim: self,
-                features,
-            };
-            features.place_placed(name, &mut world, &mut random, [pos.x, pos.y, pos.z])
-        };
-        *self.random() = random;
-        placed
+        super::feature_context::place(self, name, pos, super::feature_context::Placement::Placed)
     }
     fn feature_exists(&self, name: &str) -> bool {
         self.b
@@ -235,7 +214,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
 
     /// `TreeGrower.hasFlowers`: a flower within 2 blocks horizontally, 1 vertically.
-    fn tree_has_flowers(&self, pos: BlockPos) -> bool {
+    fn tree_has_flowers(&mut self, pos: BlockPos) -> bool {
         let b = self.b;
         let Some(flowers) = b.tag("minecraft:flowers") else {
             return false;
@@ -252,11 +231,11 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         false
     }
     /// `TreeGrower.findTwoByTwoSaplingPos`.
-    fn two_by_two(&self, state: BlockStateId, pos: BlockPos) -> Option<(i32, i32, Saplings)> {
+    fn two_by_two(&mut self, state: BlockStateId, pos: BlockPos) -> Option<(i32, i32, Saplings)> {
         let block = self.b.block(state);
         for dx in [0, -1] {
             for dz in [0, -1] {
-                let at = |x: i32, z: i32| {
+                let mut at = |x: i32, z: i32| {
                     let p = pos.offset(dx + x, 0, dz + z);
                     (self.state(p), p)
                 };
@@ -284,7 +263,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         pos: BlockPos,
         state: BlockStateId,
     ) -> bool {
-        if let Some(mega) = weighted(grower.mega_trees, self.random())
+        if let Some(mega) = weighted(grower.mega_trees, &mut self.random())
             && self.feature_exists(mega)
             && let Some((dx, dz, around)) = self.two_by_two(state, pos)
         {
@@ -305,7 +284,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         } else {
             grower.trees
         };
-        let Some(feature) = weighted(list, self.random()) else {
+        let Some(feature) = weighted(list, &mut self.random()) else {
             return false;
         };
         if !self.feature_exists(feature) {
@@ -331,8 +310,8 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         } else {
             grower.trees
         };
-        let feature = weighted(list, self.random());
-        let mega = weighted(grower.mega_trees, self.random());
+        let feature = weighted(list, &mut self.random());
+        let mega = weighted(grower.mega_trees, &mut self.random());
         if feature.is_none() && mega.is_some() {
             self.two_by_two(state, pos).is_some()
         } else {

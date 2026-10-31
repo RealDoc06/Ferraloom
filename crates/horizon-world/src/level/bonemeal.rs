@@ -179,7 +179,7 @@ impl Behaviours {
     }
 }
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn next_int(&mut self, bound: i32) -> i32 {
         self.random().next_int_bound(bound).unwrap_or(0)
     }
@@ -307,7 +307,8 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             }
             Kind::PlantHead => {
                 let growth = rel(pos, b.data(state).growth_direction);
-                self.plant_can_grow_into(state, self.state(growth))
+                let growth_state = self.state(growth);
+                self.plant_can_grow_into(state, growth_state)
                     && self.is_inside_build_height(growth.y)
             }
             Kind::CaveVines | Kind::CaveVinesPlant => !b.table.bool(state, p.berries),
@@ -315,15 +316,19 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                 Some(head) => {
                     let head_state = self.state(head);
                     let growth = rel(head, b.data(state).growth_direction);
-                    self.plant_can_grow_into(head_state, self.state(growth))
+                    let growth_state = self.state(growth);
+                    self.plant_can_grow_into(head_state, growth_state)
                         && self.is_inside_build_height(growth.y)
                 }
                 None => false,
             },
             Kind::Seagrass => b.is_block(self.state(up), b.named.water),
             Kind::SeaPickle => {
-                b.table.bool(state, p.waterlogged)
-                    && self.in_tag(self.below_state(pos), "minecraft:coral_blocks")
+                b.table.bool(state, p.waterlogged) && {
+                    let queried_argument_0 = self.below_state(pos);
+                    let queried_argument_1 = "minecraft:coral_blocks";
+                    self.in_tag(queried_argument_0, queried_argument_1)
+                }
             }
             Kind::BigDripleaf => self.dripleaf_can_grow_into(up),
             Kind::BigDripleafStem => {
@@ -442,7 +447,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                 self.set_block(pos, next, 2);
             }
             Kind::Stem => {
-                let increase = next_int_between(self.random(), 2, 5);
+                let increase = next_int_between(&mut self.random(), 2, 5);
                 let age = 7.min(b.table.int(state, p.age) + increase);
                 let next = b.table.set_int(state, p.age, age);
                 self.set_block(pos, next, 2);
@@ -632,14 +637,14 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         if b.instance_of(state, Class::TorchflowerCrop) {
             1
         } else if b.instance_of(state, Class::Beetroot) {
-            next_int_between(self.random(), 2, 5) / 3
+            next_int_between(&mut self.random(), 2, 5) / 3
         } else {
-            next_int_between(self.random(), 2, 5)
+            next_int_between(&mut self.random(), 2, 5)
         }
     }
     /// `PitcherCropBlock.getLowerHalf`.
     fn pitcher_lower(
-        &self,
+        &mut self,
         pos: BlockPos,
         state: BlockStateId,
     ) -> Option<(BlockPos, BlockStateId)> {
@@ -655,7 +660,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         is_lower(below_state).then_some((below_pos, below_state))
     }
     /// `PitcherCropBlock.canGrow`.
-    fn pitcher_can_grow(&self, lower_pos: BlockPos, lower: BlockStateId, new_age: i32) -> bool {
+    fn pitcher_can_grow(&mut self, lower_pos: BlockPos, lower: BlockStateId, new_age: i32) -> bool {
         let b = self.b;
         let upper = self.state(above(lower_pos));
         b.table.int(lower, b.props.age) < 4
@@ -712,7 +717,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             .find(|&n| self.is_empty_block(n) && self.can_survive(to_place, n))
     }
     /// `NetherrackBlock`: (warped nylium nearby, crimson nylium nearby).
-    fn netherrack_nylium_near(&self, pos: BlockPos) -> (bool, bool) {
+    fn netherrack_nylium_near(&mut self, pos: BlockPos) -> (bool, bool) {
         let (mut warped, mut crimson) = (false, false);
         for x in -1..=1 {
             for y in -1..=1 {
@@ -764,8 +769,11 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             1
         };
         for _ in 0..count {
-            if !self.plant_can_grow_into(state, self.state(forward))
-                || !self.is_inside_build_height(forward.y)
+            if !{
+                let queried_argument_0 = state;
+                let queried_argument_1 = self.state(forward);
+                self.plant_can_grow_into(queried_argument_0, queried_argument_1)
+            } || !self.is_inside_build_height(forward.y)
             {
                 break;
             }
@@ -775,7 +783,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         }
     }
     /// `GrowingPlantBodyBlock.getHeadPos` (`BlockUtil.getTopConnectedBlock`).
-    fn plant_head_pos(&self, pos: BlockPos, state: BlockStateId) -> Option<BlockPos> {
+    fn plant_head_pos(&mut self, pos: BlockPos, state: BlockStateId) -> Option<BlockPos> {
         let b = self.b;
         let name = b.table.name(state);
         let head = b.table.block_by_name(name.strip_suffix("_plant")?)?;
@@ -783,7 +791,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
     /// `BlockUtil.getTopConnectedBlock`.
     fn top_connected(
-        &self,
+        &mut self,
         pos: BlockPos,
         body: super::states::BlockId,
         direction: Direction,
@@ -802,7 +810,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         }
     }
     /// `HangingMossBlock.getTip`.
-    fn hanging_moss_tip(&self, pos: BlockPos, state: BlockStateId) -> BlockPos {
+    fn hanging_moss_tip(&mut self, pos: BlockPos, state: BlockStateId) -> BlockPos {
         let block = self.b.block(state);
         let mut forward = pos;
         loop {
@@ -845,7 +853,11 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                     if position != pos
                         && self.next_int(6) == 0
                         && b.is_block(self.state(position), b.named.water)
-                        && self.in_tag(self.below_state(position), "minecraft:coral_blocks")
+                        && {
+                            let queried_argument_0 = self.below_state(position);
+                            let queried_argument_1 = "minecraft:coral_blocks";
+                            self.in_tag(queried_argument_0, queried_argument_1)
+                        }
                     {
                         let pickles = self.next_int(4) + 1;
                         let pickle =
@@ -866,7 +878,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         self.set_block(pos, b.table.set_int(state, p.pickles, 4), 2);
     }
     /// `BigDripleafBlock.canGrowInto` / `canPlaceAt`.
-    fn dripleaf_can_grow_into(&self, pos: BlockPos) -> bool {
+    fn dripleaf_can_grow_into(&mut self, pos: BlockPos) -> bool {
         let b = self.b;
         let state = self.state(pos);
         self.is_inside_build_height(pos.y)
@@ -893,7 +905,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
     /// `BigDripleafBlock.placeWithRandomHeight`.
     fn dripleaf_place_random_height(&mut self, bottom: BlockPos, facing: Direction) {
-        let desired = next_int_between(self.random(), 2, 5);
+        let desired = next_int_between(&mut self.random(), 2, 5);
         let mut pos = bottom;
         let mut height = 0;
         while height < desired && self.dripleaf_can_grow_into(pos) {
@@ -927,7 +939,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
     /// `DefaultSpreaderConfig.canSpreadInto`.
     fn lichen_can_spread_into(
-        &self,
+        &mut self,
         block: super::states::BlockId,
         at: BlockPos,
         face: Direction,
@@ -943,7 +955,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
     /// `MultifaceSpreader.getSpreadFromFaceTowardDirection`.
     fn lichen_spread_target(
-        &self,
+        &mut self,
         state: BlockStateId,
         pos: BlockPos,
         from: Direction,
@@ -961,7 +973,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             .find(|&(at, face)| self.lichen_can_spread_into(block, at, face))
     }
     fn lichen_can_spread_in_any_direction(
-        &self,
+        &mut self,
         state: BlockStateId,
         pos: BlockPos,
         from: Direction,

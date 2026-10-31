@@ -9,7 +9,7 @@ use super::{
 use crate::registry::BlockStateId;
 use horizon_core::{geometry::Direction, position::BlockPos, random::RandomSource};
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     /// `BlockState.handleNeighborChanged`.
     pub fn neighbor_changed(
         &mut self,
@@ -154,7 +154,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                 Class::LightningRod => {
                     if !same
                         && b.table.bool(state, b.props.powered)
-                        && !self.ticks.has_block_tick(pos, block)
+                        && !self.has_block_tick(pos, block)
                     {
                         self.schedule_tick(pos, block, 8);
                     }
@@ -168,7 +168,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                 Class::Observer => {
                     if !same
                         && b.table.bool(state, b.props.powered)
-                        && !self.ticks.has_block_tick(pos, block)
+                        && !self.has_block_tick(pos, block)
                     {
                         let next = b.table.set_bool(state, b.props.powered, false);
                         self.set_block(pos, next, 18);
@@ -202,7 +202,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                 Class::SculkSensor => {
                     if !same
                         && b.table.int(state, b.props.power) > 0
-                        && !self.ticks.has_block_tick(pos, block)
+                        && !self.has_block_tick(pos, block)
                     {
                         self.set_block(pos, b.table.set_int(state, b.props.power, 0), 18);
                     }
@@ -228,7 +228,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                 Class::Target => {
                     if !same
                         && b.table.int(state, b.props.power) > 0
-                        && !self.ticks.has_block_tick(pos, block)
+                        && !self.has_block_tick(pos, block)
                     {
                         self.set_block(pos, b.table.set_int(state, b.props.power, 0), 18);
                     }
@@ -328,8 +328,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                     }
                 }
                 Class::Observer => {
-                    if b.table.bool(state, b.props.powered) && self.ticks.has_block_tick(pos, block)
-                    {
+                    if b.table.bool(state, b.props.powered) && self.has_block_tick(pos, block) {
                         let off = b.table.set_bool(state, b.props.powered, false);
                         self.observer_update_in_front(pos, off);
                     }
@@ -478,7 +477,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             }
         } else if data.is(Class::TripWire)
             && !b.table.bool(state, b.props.powered)
-            && !self.ticks.has_block_tick(pos, b.block(state))
+            && !self.has_block_tick(pos, b.block(state))
         {
             self.tripwire_check_pressed(pos);
         }
@@ -570,7 +569,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         }
         count > 1
     }
-    fn frosted_ice_fewer_neighbours_than(&self, pos: BlockPos, limit: i32) -> bool {
+    fn frosted_ice_fewer_neighbours_than(&mut self, pos: BlockPos, limit: i32) -> bool {
         let mut count = 0;
         for direction in Direction::ALL {
             if self

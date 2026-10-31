@@ -32,7 +32,7 @@ struct Cells {
     nether: bool,
 }
 impl LevelAccess for Cells {
-    fn block_state(&self, pos: BlockPos) -> BlockStateId {
+    fn block_state(&mut self, pos: BlockPos) -> BlockStateId {
         self.cells.get(&pos).copied().unwrap_or(self.air)
     }
     fn set_raw(&mut self, pos: BlockPos, state: BlockStateId) -> Option<BlockStateId> {
@@ -44,7 +44,7 @@ impl LevelAccess for Cells {
         }
         Some(old)
     }
-    fn is_loaded(&self, _pos: BlockPos) -> bool {
+    fn is_loaded(&mut self, _pos: BlockPos) -> bool {
         true
     }
     fn min_y(&self) -> i32 {
@@ -53,8 +53,9 @@ impl LevelAccess for Cells {
     fn max_y(&self) -> i32 {
         if self.nether { 256 } else { 320 }
     }
-    fn random(&mut self) -> &mut LegacyRandom {
-        &mut self.random
+    #[inline]
+    fn with_random<R>(&mut self, draw: impl FnOnce(&mut LegacyRandom) -> R) -> R {
+        draw(&mut self.random)
     }
     fn game_time(&self) -> i64 {
         0
@@ -93,7 +94,7 @@ fn level(case: &Value, key: &str, air: BlockStateId, nether: bool) -> Cells {
 
 fn run(case: &Value, b: &Behaviours, air: BlockStateId, out: &mut Vec<String>) {
     let from_nether = case["from"] == "nether";
-    let source = level(case, "source", air, from_nether);
+    let mut source = level(case, "source", air, from_nether);
     let mut target = level(case, "target", air, !from_nether);
     let dims = &case["entity"]["dims"];
     let (width, height) = (
@@ -219,7 +220,7 @@ fn run(case: &Value, b: &Behaviours, air: BlockStateId, out: &mut Vec<String>) {
         .collect();
     changed.sort_by_key(|p| (p.x, p.y, p.z));
     changed.dedup();
-    let before = level(case, "target", air, !from_nether);
+    let mut before = level(case, "target", air, !from_nether);
     for p in changed {
         let now = target.block_state(p);
         if before.block_state(p) != now {

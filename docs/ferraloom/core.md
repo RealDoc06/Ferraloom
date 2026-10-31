@@ -104,6 +104,20 @@ the owned table directly, without a lock or generation lookup. The collection
 ownership change has a separate reentrant-rehash/parity gate and a before/after
 attribute-lookup benchmark; a slowdown above about 2% blocks it.
 
+`Region<W>` carries one concrete resident-world value and its original `Ticks`
+queues. The random-section cache and ordered pending level events now reside
+with the client world, so callbacks carry them with the canonical owner.
+Storage replacement retains their existing lifetimes and effect-flush boundary;
+dimension swaps transfer them with the world. No block-entity method moves.
+It has one type parameter: Horizon supplies its current `World`, while
+shared code has no client dependency. A checked `OwnershipSlot` lends the actual
+value out of the serial shell and records absence explicitly. Reading or taking
+an absent value returns an ownership error; compatibility field access fails
+loudly. Restoring over a resident value is rejected and returns the incoming
+value without overwriting live mutations. No empty world, default ticks or air
+stands in for a lent owner. This is ownership preparation; it enables no workers
+and changes no phase or callback order.
+
 `Chunk` and `World` remain in Horizon for now: their block-entity types have
 inherent implementations across containers, sculk, spawners and other gameplay
 modules. Move those types with their methods in later units, rather than adding
@@ -210,13 +224,46 @@ Coalescing and tie-breaking use only simulation state and stable region
 ordinals, never worker count, measured cost or completion timing. The carrier
 and phase contracts must also serve block entities, scheduled ticks and mobs.
 
-The concrete adapter may keep one private `RefCell<Option<Region>>`, owned by
-the active job on its worker and never shared between workers. Small helpers
-return owned answers/handles and end their state borrows before invoking a
-callback or parking. No borrow guard or reference into canonical region state
-may escape a helper. A reentrant borrow panic is a bug, not a serial-fallback
-signal. Resident chunk reads return owned `Arc` handles through
-`RandomTickChunk::get_owned`, retaining the existing weak-cache fast path.
+M3 keeps the original direct path as the default (`--regions off`). The opt-in
+`--regions serial` path exercises one owned region through the same random-block
+kernel, with the existing chunk capture, RNG, clocks and effect-flush boundary.
+No workers run in either mode yet. M3's closure is the whole dimension;
+all loaded chunks are part of the actual returned owner. Multi-region closure
+planning, split/merge and unresolved-owner routing belong to M4 and must pass
+before its worker flag can run. A single region's exclusive calls run in their
+original stack order; multi-job grant bookkeeping is deferred until it is used. The concrete client adapter owns
+`Region<World>` and immutable shared resources; current entities and global loot
+services stay with the serial coordinator. It lends the actual world and tick
+queues back to checked shell slots for those immediate leaf operations, then
+retakes their current values before resuming. It never builds a per-region Game.
+Ordinary effects remain in the resident event buffer until the original flush.
+
+The initial private `RefCell<Option<Region<World>>>` adapter failed the paired
+real block-read cost gate: 18.61 ns borrowed versus 20.21 ns owned (+8.57%,
+12 alternating pairs of five million reads on CPU 2), above the 2% limit.
+Reject that design. The adapter instead owns a plain `Option<Box<Region<World>>>`;
+world queries that can resolve ownership or park take a mutable facade, as do
+scoped tick reads. Shared resources and fixed metadata remain immutable. Small
+private helpers return owned answers/handles and end canonical borrows before
+callbacks or handoffs. Resident chunk reads still return owned `Arc` handles
+through `RandomTickChunk::get_owned`, retaining its existing weak-cache fast
+path. Use at most two targeted generated-code attempts to reduce residual cost,
+with paired samples around half a second. The 2% microbenchmark limit screens
+implementations; it is not the server performance objective. If roughly 1–2 ns
+per read remains, compare `--regions serial` with `off` at explore 100 on CT 121
+in an approved idle slot, and let the coordinator decide with the whole-tick
+MSPT/P99/TPS result. Do not spend further rounds chasing the micro number.
+
+The final boxed adapter measured 19.04 ns borrowed versus 19.48 ns owned
+(+0.45 ns, +2.34%) after the two generated-code attempts. An idle CT 121
+explore-100 ABBA control on the same production binary (`271e08230`) measured
+`off`, `serial`, `serial`, `off` means of 100.06, 101.30, 101.93 and 100.53 ms.
+The two serial-minus-off pairs are +1.24 and +1.40 ms, averaging +1.32 ms
+(+1.32%). This cost is accepted for the opt-in adapter; `off` remains default.
+The off mean of 100.30 ms is about 2.5% above PR #3's single 97.88 ms run;
+that is an observation, not proof of a refactor regression. M4 must compare
+parallel execution against `off`, and include a fresh PR #3 binary explore-100
+control in the same ABBA session before attributing a stack cost.
 
 Resolve the separate canonical `Ticks` borrow before enabling workers. A
 `TickAccess` facade performs short scoped borrows of the same live tick state;
@@ -225,12 +272,30 @@ behaviour frames retain the facade and handles/scalars, not `&mut Ticks` or a
 queue borrow across a world callback. Reentrant callback/handoff tests must
 observe mutations of that same canonical tick state after resumption.
 
-Gate the adapter cell with a paired block-read hot-path benchmark, using the
-same compiler/profile/input and alternating before/after trials as the
-attribute lookup gate. Reject a regression above about 2%; use the wider
-`&mut` read-API conversion only if the cell fails this bar. Include a focused
-reentrant callback test. Neither this design nor a passing type assertion
-claims that the adapter or continuation driver has been implemented yet.
+Level RNG access follows the same rule. `LevelAccess::with_random` lends the
+canonical `LegacyRandom` only for a scoped operation; `LevelRandom` implements
+`RandomSource` by forwarding each primitive draw through that scope. Concrete
+serial adapters inline to their existing field. Gaussian cache and fork draws
+remain on the same source. Gate this exact-trace refactor with paired timings
+of real random-chunk and crop-bonemeal calls, rejecting a regression above about
+2%, plus random-tick, scheduled-tick, mob-AI and native-motion parity. Correcting
+live features' inherited clone-and-overwrite behavior remains a separate,
+vanilla-backed change, rather than part of that access refactor.
+
+The live configured/placed-feature boundary uses a canonical feature selector:
+world operations and feature draws borrow their common context for individual
+operations. `TreeGrower#growTree` passes the same source into placement;
+`SimpleBlockFeature#place` also draws through `level.getRandom` when placing pale
+moss. Callback draws must remain visible to the next feature draw. Test that
+path against the actual vanilla feature, keeping this behavior correction in
+its own commit. Jigsaw command placement remains serial and is outside this
+correction.
+
+The owned adapter's focused gate compares the direct and one-region traces,
+including immediate loot/RNG callback visibility, same-key chunk replacement,
+reentrant queue mutation and owner restoration during unwind. M3 enables no
+workers; closure planning, split/merge routing and a deterministic coordinator
+remain prerequisites for M4's first flagged worker run.
 
 With worker coverage, report wakeup overhead, parked-thread high water, RSS and
 the share of regions coalesced by the cap. Include a two-core serial control:
@@ -330,8 +395,8 @@ the next worker phase, retaining all other phases in their existing serial slots
 | --- | --- | --- |
 | 1 | Bound chunk publication per tick and keep workers off the tick core | Budget/topology tests, both-mode generation/save invariants, affected parity and pinned explorer/normal-play bench |
 | 2 | Extract the minimal block-phase kernel, real state ownership and its live adapters; retain the existing executable and tick loop | Focused affected parity, standalone game tests and client compilation; unchanged serial trace and immediate effects |
-| 3 | Introduce the reusable one-region phase driver, exclusive continuations and dependency closures with parallelism disabled | Exact reference trace; reentrant mutation, removal/replacement, teleport, commands and ownership-boundary tests |
-| 4 | Enable regional random block ticks behind a flag, joining at their original phase boundary; other phases remain serial | Flag-off exact reference; flag-on worker-count determinism, split/merge/movement and both-mode parity; measured worker coverage on all three workloads |
+| 3 | Introduce the reusable whole-dimension phase driver, scoped access and immediate exclusive leaf calls with parallelism disabled | Exact reference trace; reentrant mutation, same-key replacement, callback/RNG visibility and unwind ownership tests; focused parity |
+| 4 | Plan dependency closures and split/merge routing, then enable regional random block ticks behind a flag, joining at their original phase boundary; other phases remain serial | Flag-off exact reference; flag-on worker-count determinism, split/merge/movement and both-mode parity; full selected suite and measured worker coverage on all three workloads |
 | 5 | Reuse the kernel/driver for block entities, scheduled ticks, then mobs and spawning, extracting their dependencies as needed | Per-phase parity and ordering gates, immediate callbacks, dimension-wide budgets and measured useful parallelism |
 | 6 | Finish canonical player access and server-only runtime/startup as their dependencies require, without delaying the first independent worker phase for unrelated client cleanup | Player-action/portal/entity parity and playable login/exploration/save/reload; eventual build without renderer/audio/input dependencies |
 | 7 | Add parallel sensing/navigation and nonoverlapping decoration behind the same job contract | Apply in vanilla order, preserve synchronous answers and FEATURES visit dependencies; differential cases and explorer/farm bench |

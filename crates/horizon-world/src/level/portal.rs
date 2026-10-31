@@ -36,7 +36,7 @@ fn step(pos: BlockPos, dir: Direction, n: i32) -> BlockPos {
     pos.offset(dx * n, dy * n, dz * n)
 }
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn portal_frame(&self, state: BlockStateId) -> bool {
         let b = self.b;
         b.tag("minecraft:nether_portal_frame")
@@ -50,21 +50,24 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                 .is_some_and(|tag| b.in_set(state, tag))
             || b.is_block(state, b.named.nether_portal)
     }
-    fn portal_distance_until_edge_above_frame(&self, pos: BlockPos, dir: Direction) -> i32 {
+    fn portal_distance_until_edge_above_frame(&mut self, pos: BlockPos, dir: Direction) -> i32 {
         for width in 0..=MAX_WIDTH {
             let at = step(pos, dir, width);
             let state = self.state(at);
             if !self.portal_empty(state) {
                 return if self.portal_frame(state) { width } else { 0 };
             }
-            if !self.portal_frame(self.state(rel(at, Direction::Down))) {
+            if !{
+                let queried_argument_0 = self.state(rel(at, Direction::Down));
+                self.portal_frame(queried_argument_0)
+            } {
                 break;
             }
         }
         0
     }
     /// `PortalShape.findAnyShape`.
-    pub fn find_portal_shape(&self, pos: BlockPos, x_axis: bool) -> PortalShape {
+    pub fn find_portal_shape(&mut self, pos: BlockPos, x_axis: bool) -> PortalShape {
         let right = if x_axis {
             Direction::West
         } else {
@@ -81,7 +84,10 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         // calculateBottomLeft
         let min_y = self.level.min_y().max(pos.y - MAX_HEIGHT);
         let mut start = pos;
-        while start.y > min_y && self.portal_empty(self.state(rel(start, Direction::Down))) {
+        while start.y > min_y && {
+            let queried_argument_0 = self.state(rel(start, Direction::Down));
+            self.portal_empty(queried_argument_0)
+        } {
             start = rel(start, Direction::Down);
         }
         let left = right.opposite();
@@ -100,9 +106,13 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         let mut height = MAX_HEIGHT;
         'rows: for h in 0..MAX_HEIGHT {
             let row = step(shape.bottom_left, Direction::Up, h);
-            if !self.portal_frame(self.state(step(row, right, -1)))
-                || !self.portal_frame(self.state(step(row, right, width)))
-            {
+            if !{
+                let queried_argument_0 = self.state(step(row, right, -1));
+                self.portal_frame(queried_argument_0)
+            } || !{
+                let queried_argument_0 = self.state(step(row, right, width));
+                self.portal_frame(queried_argument_0)
+            } {
                 height = h;
                 break;
             }
@@ -118,7 +128,10 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             }
         }
         let top = step(shape.bottom_left, Direction::Up, height);
-        let has_top = (0..width).all(|i| self.portal_frame(self.state(step(top, right, i))));
+        let has_top = (0..width).all(|i| {
+            let queried_argument_0 = self.state(step(top, right, i));
+            self.portal_frame(queried_argument_0)
+        });
         shape.height = if (MIN_HEIGHT..=MAX_HEIGHT).contains(&height) && has_top {
             height
         } else {
@@ -128,7 +141,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
     /// `PortalShape.findEmptyPortalShape`: a valid frame holding no portal
     /// block yet, on the preferred axis first.
-    pub fn find_empty_portal_shape(&self, pos: BlockPos, x_axis: bool) -> Option<PortalShape> {
+    pub fn find_empty_portal_shape(&mut self, pos: BlockPos, x_axis: bool) -> Option<PortalShape> {
         [x_axis, !x_axis]
             .into_iter()
             .map(|axis| self.find_portal_shape(pos, axis))
@@ -156,7 +169,11 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         if !self.b.is_air(self.state(pos)) {
             return false;
         }
-        if self.can_survive(self.fire_state_for(pos), pos) {
+        if {
+            let queried_argument_0 = self.fire_state_for(pos);
+            let queried_argument_1 = pos;
+            self.can_survive(queried_argument_0, queried_argument_1)
+        } {
             return true;
         }
         // isPortal
@@ -167,7 +184,10 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             return false;
         }
         for face in Direction::ALL {
-            if self.portal_frame(self.state(rel(pos, face))) {
+            if {
+                let queried_argument_0 = self.state(rel(pos, face));
+                self.portal_frame(queried_argument_0)
+            } {
                 // getCounterClockWise().getAxis(): north/south turn to X.
                 let x_axis = match forward {
                     Direction::North | Direction::South => true,

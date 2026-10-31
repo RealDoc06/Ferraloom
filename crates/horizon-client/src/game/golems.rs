@@ -131,7 +131,8 @@ impl Game<'_> {
             let state = self.world.block(p[0], p[1], p[2]);
             let pos = horizon_core::position::BlockPos::new(p[0], p[1], p[2]);
             self.with_level(|b, level, ticks| b.set_block(level, ticks, pos, air, 2));
-            self.level_events
+            self.world
+                .level_events
                 .push(horizon_world::level::LevelEvent::LevelEvent {
                     id: 2001,
                     pos,

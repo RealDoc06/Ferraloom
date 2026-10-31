@@ -2,6 +2,7 @@
 //! prepared client resources and worldgen bundle (skipped when absent).
 use super::*;
 use crate::{chunk::BlockState, worldgen::generator::GeneratorData, worldgen::live::LiveFeatures};
+use horizon_core::random::RandomSource;
 use std::{
     collections::{BTreeMap, HashMap},
     path::PathBuf,
@@ -56,22 +57,27 @@ struct Level {
     biome: &'static str,
     day: i64,
     block_entities: Vec<(BlockPos, crate::nbt::Compound)>,
+    placement_callback: Option<Vec<i32>>,
 }
 impl LevelAccess for Level {
     fn day_time(&self) -> i64 {
         self.day
     }
-    fn block_state(&self, pos: BlockPos) -> BlockStateId {
+    fn block_state(&mut self, pos: BlockPos) -> BlockStateId {
         self.blocks.get(&pos).copied().unwrap_or(self.air)
     }
     fn set_raw(&mut self, pos: BlockPos, state: BlockStateId) -> Option<BlockStateId> {
+        if let Some(draws) = &mut self.placement_callback {
+            draws.push(self.random.next_int_bound(97).unwrap());
+        }
         Some(self.blocks.insert(pos, state).unwrap_or(self.air))
     }
-    fn is_loaded(&self, _pos: BlockPos) -> bool {
+    fn is_loaded(&mut self, _pos: BlockPos) -> bool {
         true
     }
-    fn random(&mut self) -> &mut LegacyRandom {
-        &mut self.random
+    #[inline]
+    fn with_random<R>(&mut self, draw: impl FnOnce(&mut LegacyRandom) -> R) -> R {
+        draw(&mut self.random)
     }
     fn game_time(&self) -> i64 {
         0
@@ -79,7 +85,7 @@ impl LevelAccess for Level {
     fn emit(&mut self, event: LevelEvent) {
         self.events.push(event);
     }
-    fn biome_name(&self, _pos: BlockPos) -> Option<&str> {
+    fn biome_name(&mut self, _pos: BlockPos) -> Option<&str> {
         Some(self.biome)
     }
     fn load_block_entity(&mut self, pos: BlockPos, nbt: crate::nbt::Compound) {
@@ -109,6 +115,7 @@ impl World {
                 biome: "minecraft:plains",
                 day: 6000,
                 block_entities: Vec::new(),
+                placement_callback: None,
             },
             f,
             ticks,
@@ -140,7 +147,7 @@ impl World {
     fn put(&mut self, pos: BlockPos, state: BlockStateId) {
         self.level.blocks.insert(pos, state);
     }
-    fn name(&self, pos: BlockPos) -> String {
+    fn name(&mut self, pos: BlockPos) -> String {
         let state = self.level.block_state(pos);
         self.f.registry.state(state).unwrap().name.clone()
     }
@@ -155,6 +162,72 @@ impl World {
             .values()
             .filter(|&&s| self.f.registry.state(s).unwrap().name.ends_with(suffix))
             .count()
+    }
+}
+
+/// `VegetationFeatures#bootstrap`'s pale moss vegetation uses a weighted
+/// provider, then `SimpleBlockFeature#place` reaches `MossyCarpetBlock#placeAt`
+/// through the world's same random source. A synchronous storage callback must
+/// consume that stream before the feature continues, rather than be overwritten.
+#[test]
+fn live_moss_feature_keeps_world_and_callback_random_draws() {
+    let Some(f) = fixture() else { return };
+    for callback in [false, true] {
+        let mut compared = 0;
+        for seed in 0..4096 {
+            let mut expected = LegacyRandom::new(seed);
+            if expected.next_int_bound(60).unwrap() >= 25 {
+                continue;
+            }
+            let callback_draw = callback.then(|| expected.next_int_bound(97).unwrap());
+            // Select no-topper cases so the Java WorldGenLevel fixture can
+            // compare this exact path without emulating neighbor updates.
+            let sides = std::array::from_fn::<_, 4, _>(|_| expected.next_boolean());
+            if sides.into_iter().any(|side| side) {
+                continue;
+            }
+            let mut world = World::new(f, seed);
+            world.floor("stone", 2);
+            let stone = world.id("stone", &[]);
+            for (x, z) in [(0, -1), (1, 0), (0, 1), (-1, 0)] {
+                for y in [64, 65] {
+                    world.put(BlockPos::new(x, y, z), stone);
+                }
+            }
+            world.level.placement_callback = callback.then(Vec::new);
+            let origin = BlockPos::new(0, 64, 0);
+            assert_eq!(
+                f.behaviours.place_feature(
+                    &mut world.level,
+                    &mut world.ticks,
+                    "minecraft:pale_moss_vegetation",
+                    origin,
+                ),
+                Some(true),
+            );
+            assert_eq!(world.name(origin), "minecraft:pale_moss_carpet");
+            assert_eq!(world.name(origin.offset(0, 1, 0)), "minecraft:air");
+            assert_eq!(
+                world.level.placement_callback,
+                callback_draw.map(|draw| vec![draw]),
+            );
+            let tail = world.level.random.next_long();
+            assert_eq!(
+                tail,
+                expected.next_long(),
+                "seed={seed}, callback={callback}"
+            );
+            println!(
+                "FEATURE_RANDOM_CASE\t{seed}\t{callback}\t{}\t{:?}\t{tail}",
+                world.level.block_state(origin).0,
+                world.level.placement_callback,
+            );
+            compared += 1;
+            if compared == 4 {
+                break;
+            }
+        }
+        assert_eq!(compared, 4, "four no-topper cases per callback mode");
     }
 }
 
@@ -207,7 +280,7 @@ fn a_tree_with_bees_fills_its_nest() {
     let [(at, nbt)] = &w.level.block_entities[..] else {
         panic!("one block entity: {:?}", w.level.block_entities);
     };
-    assert_eq!(w.name(*at), "minecraft:bee_nest");
+    let at = *at;
     let Some(crate::nbt::Tag::List(bees)) = nbt.get(&"bees".into()) else {
         panic!("bees: {nbt:?}");
     };
@@ -215,6 +288,7 @@ fn a_tree_with_bees_fills_its_nest() {
         (2..=3).contains(&bees.len()),
         "BeehiveDecorator stores 2 or 3 bees"
     );
+    assert_eq!(w.name(at), "minecraft:bee_nest");
 }
 #[test]
 fn single_saplings_grow() {
@@ -385,18 +459,18 @@ fn snowy_biomes_freeze_and_snow() {
     w.put(BlockPos::new(1, 63, 0), water);
     let b = &f.behaviours;
     let grass = b
-        .precipitation_info(&w.level, BlockPos::new(0, 70, 0))
+        .precipitation_info(&mut w.level, BlockPos::new(0, 70, 0))
         .unwrap();
     assert_eq!(grass.top, BlockPos::new(0, 64, 0));
     assert!(grass.snows_at_top && !grass.freezes_below);
     assert_eq!(grass.kind, PrecipitationKind::Snow);
     let pond = b
-        .precipitation_info(&w.level, BlockPos::new(1, 70, 0))
+        .precipitation_info(&mut w.level, BlockPos::new(1, 70, 0))
         .unwrap();
     assert!(pond.freezes_below, "a water source at the edge freezes");
     w.level.biome = "minecraft:plains";
     let rain = b
-        .precipitation_info(&w.level, BlockPos::new(0, 70, 0))
+        .precipitation_info(&mut w.level, BlockPos::new(0, 70, 0))
         .unwrap();
     assert!(!rain.snows_at_top && !rain.freezes_below);
     assert_eq!(rain.kind, PrecipitationKind::Rain);

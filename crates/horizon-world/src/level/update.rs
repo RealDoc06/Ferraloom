@@ -1,11 +1,12 @@
 //! `Level.setBlock`, `LevelChunk.setBlockState` and the
 //! `CollectingNeighborUpdater` that orders neighbour and shape updates.
+use super::tick_access::TickScope;
 use super::{LevelAccess, LevelEvent, Sim, classes::Class, flags, states::BlockId};
 use crate::{fluid::FluidState, registry::BlockStateId};
 use horizon_core::{
     geometry::Direction,
     position::BlockPos,
-    random::{LegacyRandom, RandomSource},
+    random::RandomSource,
     ticks::{ScheduleResult, TickPriority},
 };
 
@@ -170,14 +171,15 @@ impl Update {
     }
 }
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
-    pub fn state(&self, pos: BlockPos) -> BlockStateId {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
+    pub fn state(&mut self, pos: BlockPos) -> BlockStateId {
         self.level.block_state(pos)
     }
-    pub fn fluid_at(&self, pos: BlockPos) -> FluidState {
+    pub fn fluid_at(&mut self, pos: BlockPos) -> FluidState {
         self.b.fluid(self.state(pos))
     }
-    pub fn random(&mut self) -> &mut LegacyRandom {
+    #[inline]
+    pub fn random(&mut self) -> super::LevelRandom<'_, C::Level> {
         self.level.random()
     }
     pub fn emit(&mut self, event: LevelEvent) {
@@ -244,7 +246,9 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         priority: TickPriority,
     ) -> ScheduleResult {
         let time = self.level.game_time();
-        self.ticks.schedule_block(time, pos, block, delay, priority)
+        self.write_ticks(TickScope::Dimension, |ticks| {
+            ticks.schedule_block(time, pos, block, delay, priority)
+        })
     }
     pub fn schedule_fluid_tick(
         &mut self,
@@ -253,7 +257,9 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         delay: i32,
     ) -> ScheduleResult {
         let time = self.level.game_time();
-        self.ticks.schedule_fluid(time, pos, fluid, delay)
+        self.write_ticks(TickScope::Dimension, |ticks| {
+            ticks.schedule_fluid(time, pos, fluid, delay)
+        })
     }
 
     // ---- Level.setBlock ----
@@ -344,7 +350,11 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         {
             self.affect_neighbors_after_removal(old, pos, moved);
         }
-        if self.block_of(self.state(pos)) != new_block {
+        if {
+            let queried_argument_0 = self.state(pos);
+            self.block_of(queried_argument_0)
+        } != new_block
+        {
             return None;
         }
         if update_flags & flags::UPDATE_SKIP_ON_PLACE == 0 {
@@ -506,46 +516,63 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         });
     }
     fn add_and_run(&mut self, update: Update) {
-        let updater = &mut self.ticks.updater;
-        let running = updater.count > 0;
-        let too_many = updater.count >= MAX_CHAINED_NEIGHBOR_UPDATES;
-        updater.count += 1;
-        if !too_many {
-            if running {
-                updater.added.push(update);
-            } else {
-                updater.stack.push(update);
+        let running = self.write_ticks(TickScope::Current, |ticks| {
+            let updater = &mut ticks.updater;
+            let running = updater.count > 0;
+            let too_many = updater.count >= MAX_CHAINED_NEIGHBOR_UPDATES;
+            updater.count += 1;
+            if !too_many {
+                if running {
+                    updater.added.push(update);
+                } else {
+                    updater.stack.push(update);
+                }
             }
-        }
+            running
+        });
         if !running {
             self.run_updates();
         }
     }
     fn run_updates(&mut self) {
         loop {
-            let updater = &mut self.ticks.updater;
-            if updater.stack.is_empty() && updater.added.is_empty() {
+            let running = self.write_ticks(TickScope::Current, |ticks| {
+                let updater = &mut ticks.updater;
+                if updater.stack.is_empty() && updater.added.is_empty() {
+                    return false;
+                }
+                while let Some(update) = updater.added.pop() {
+                    updater.stack.push(update);
+                }
+                true
+            });
+            if !running {
                 break;
             }
-            while let Some(update) = updater.added.pop() {
-                updater.stack.push(update);
-            }
-            while let Some(top) = self.ticks.updater.stack.last_mut() {
-                let (step, more) = top.next();
+            loop {
+                let next = self.write_ticks(TickScope::Current, |ticks| {
+                    ticks.updater.stack.last_mut().map(Update::next)
+                });
+                let Some((step, more)) = next else { break };
                 self.execute(step);
-                if !more {
-                    self.ticks.updater.stack.pop();
-                    break;
-                }
-                if !self.ticks.updater.added.is_empty() {
+                let interrupted = self.write_ticks(TickScope::Current, |ticks| {
+                    if !more {
+                        ticks.updater.stack.pop();
+                        true
+                    } else {
+                        !ticks.updater.added.is_empty()
+                    }
+                });
+                if interrupted {
                     break;
                 }
             }
         }
-        let updater = &mut self.ticks.updater;
-        updater.stack.clear();
-        updater.added.clear();
-        updater.count = 0;
+        self.write_ticks(TickScope::Current, |ticks| {
+            ticks.updater.stack.clear();
+            ticks.updater.added.clear();
+            ticks.updater.count = 0;
+        });
     }
     fn execute(&mut self, step: Step) {
         match step {

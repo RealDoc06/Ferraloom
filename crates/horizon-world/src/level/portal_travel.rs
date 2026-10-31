@@ -453,14 +453,14 @@ fn spiral_around(
     }
 }
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     /// `PortalForcer.canPortalReplaceBlock`.
-    fn portal_can_replace(&self, pos: BlockPos) -> bool {
+    fn portal_can_replace(&mut self, pos: BlockPos) -> bool {
         let state = self.state(pos);
         self.b.is_replaceable(state) && self.b.fluid(state).kind() == FluidKind::Empty
     }
     /// `PortalForcer.canHostFrame`.
-    fn can_host_frame(&self, origin: BlockPos, direction: Direction, offset: i32) -> bool {
+    fn can_host_frame(&mut self, origin: BlockPos, direction: Direction, offset: i32) -> bool {
         let side = clockwise(direction);
         for width in -1..3 {
             for height in -1..4 {
@@ -503,7 +503,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         let mut full: Option<(f64, BlockPos)> = None;
         let mut partial: Option<(f64, BlockPos)> = None;
         for column in spiral_around(origin, 16, Direction::East, Direction::South) {
-            let top = self.b.motion_blocking_top(&*self.level, column).y;
+            let top = self.b.motion_blocking_top(&mut *self.level, column).y;
             let height = max_placeable.min(top);
             if !border.contains_block(column) || !border.contains_block(step(column, direction, 1))
             {

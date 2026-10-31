@@ -15,7 +15,7 @@ fn axis_directions(axis: &str) -> [Direction; 2] {
     }
 }
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     /// `EnvironmentAttributes.CREAKING_ACTIVE`: the overworld day timeline
     /// turns it on from 12600 to 23400.
     pub(crate) fn creaking_active(&self) -> bool {
@@ -23,7 +23,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             && (12600..23401).contains(&self.level.day_time().rem_euclid(24000))
     }
     /// `CreakingHeartBlock.hasRequiredLogs`: pale oak logs along the axis.
-    pub(crate) fn heart_has_required_logs(&self, state: BlockStateId, pos: BlockPos) -> bool {
+    pub(crate) fn heart_has_required_logs(&mut self, state: BlockStateId, pos: BlockPos) -> bool {
         let b = self.b;
         let axis = b.table.text(state, b.props.axis);
         axis_directions(axis).into_iter().all(|d| {
@@ -34,7 +34,11 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
     /// `CreakingHeartBlock.updateState`: an uprooted heart with its logs wakes
     /// (at night) or goes dormant.
-    pub(crate) fn heart_update_state(&self, state: BlockStateId, pos: BlockPos) -> BlockStateId {
+    pub(crate) fn heart_update_state(
+        &mut self,
+        state: BlockStateId,
+        pos: BlockPos,
+    ) -> BlockStateId {
         let b = self.b;
         let uprooted = b.table.text(state, b.props.creaking_heart_state) == "uprooted";
         if uprooted && self.heart_has_required_logs(state, pos) {
@@ -56,7 +60,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         }
     }
     /// `CreakingHeartBlock.getStateForPlacement` after the axis is set.
-    pub(crate) fn heart_placement(&self, state: BlockStateId, pos: BlockPos) -> BlockStateId {
+    pub(crate) fn heart_placement(&mut self, state: BlockStateId, pos: BlockPos) -> BlockStateId {
         self.heart_update_state(state, pos)
     }
 }

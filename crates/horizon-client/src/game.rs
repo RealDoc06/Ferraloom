@@ -130,6 +130,7 @@ mod net_harness;
 mod nether_portal;
 mod ominous_item_spawner;
 mod options;
+mod owned_region;
 mod packs;
 mod pad;
 mod pad_menu;
@@ -299,6 +300,7 @@ struct Options {
     time: Option<i64>,
     weather: Option<String>,
     dimension: Option<String>,
+    regions: owned_region::Mode,
     /// Options.pauseOnLostFocus off (F3+P), for scripted testing.
     no_pause: bool,
     /// Control socket path (`--control`), for `horizon-ctl`.
@@ -367,6 +369,8 @@ impl Options {
             time: None,
             weather: None,
             dimension: None,
+            regions: std::env::var("FERRALOOM_REGIONS")
+                .map_or(Ok(owned_region::Mode::Off), |v| v.parse())?,
             no_pause: false,
             control: None,
             offscreen: false,
@@ -390,7 +394,7 @@ impl Options {
             match arg.as_str() {
                 "--help" | "-h" => {
                     println!(
-                        "Horizon — Minecraft Java Edition {} in Rust\n\n  --resources PATH        Prepared resources (horizon-prepare)\n  --render-distance N     Chunks, 2..64 (default 12)\n  --world NAME            World folder under saves/ (default \"New World\")\n  --seed N                World seed for new worlds (default 0)\n  --width N, --height N   Window size (default 1280 x 720)\n  --creative              Creative mode (default survival)\n  --test-terrain          Simple test terrain instead of vanilla generation\n  --frames N              Exit after N frames (testing)\n  --world-frames N        Exit after N frames drawn in the world (testing)\n  --smoke-report PATH     Write a JSON report on exit\n  --benchmark SCENARIO    Run a benchmark (standard, village, forest, ocean, mountain), write its report to benchmarks/ and quit\n  --control               Accept horizon-ctl commands on a local socket\n  --control-socket PATH   Control socket path (default $XDG_RUNTIME_DIR/horizon-control.sock)\n  --server HOST[:PORT]    Join a multiplayer server (offline mode) at start\n  --quickPlaySingleplayer WORLD  Open this world of saves/ at start, only if it exists (vanilla's)\n  --quickPlayMultiplayer HOST[:PORT]  The same as --server (vanilla's name)\n  --name NAME             Player name for multiplayer (default: generated once, kept in horizon-player.txt)\n  --session-file PATH     Signed-in account from the launcher (read once, then deleted)\n  --dev-mod PATH          A Horizon mod (.hmod or folder) to develop: always on, reloaded when rebuilt\n  --in-frame              Run single player's world in the frame, not on its server thread\n  --pregen                Add Horizon's /pregen command (docs/pregeneration.md)\n\nControls: mouse look, WASD move, Space jump, Left Shift sneak, Left Ctrl sprint,\nleft click break, right click place/use, 1-9/scroll hotbar, E inventory,\nQ drop, F3 debug, Esc pause.",
+                        "Horizon — Minecraft Java Edition {} in Rust\n\n  --resources PATH        Prepared resources (horizon-prepare)\n  --render-distance N     Chunks, 2..64 (default 12)\n  --regions MODE          off (default) or serial; before --dedicated\n  --world NAME            World folder under saves/ (default \"New World\")\n  --seed N                World seed for new worlds (default 0)\n  --width N, --height N   Window size (default 1280 x 720)\n  --creative              Creative mode (default survival)\n  --test-terrain          Simple test terrain instead of vanilla generation\n  --frames N              Exit after N frames (testing)\n  --world-frames N        Exit after N frames drawn in the world (testing)\n  --smoke-report PATH     Write a JSON report on exit\n  --benchmark SCENARIO    Run a benchmark (standard, village, forest, ocean, mountain), write its report to benchmarks/ and quit\n  --control               Accept horizon-ctl commands on a local socket\n  --control-socket PATH   Control socket path (default $XDG_RUNTIME_DIR/horizon-control.sock)\n  --server HOST[:PORT]    Join a multiplayer server (offline mode) at start\n  --quickPlaySingleplayer WORLD  Open this world of saves/ at start, only if it exists (vanilla's)\n  --quickPlayMultiplayer HOST[:PORT]  The same as --server (vanilla's name)\n  --name NAME             Player name for multiplayer (default: generated once, kept in horizon-player.txt)\n  --session-file PATH     Signed-in account from the launcher (read once, then deleted)\n  --dev-mod PATH          A Horizon mod (.hmod or folder) to develop: always on, reloaded when rebuilt\n  --in-frame              Run single player's world in the frame, not on its server thread\n  --pregen                Add Horizon's /pregen command (docs/pregeneration.md)\n\nControls: mouse look, WASD move, Space jump, Left Shift sneak, Left Ctrl sprint,\nleft click break, right click place/use, 1-9/scroll hotbar, E inventory,\nQ drop, F3 debug, Esc pause.",
                         horizon_core::VANILLA_VERSION
                     );
                     return Ok(None);
@@ -415,6 +419,7 @@ impl Options {
                         .ok_or_else(|| format!("missing value after {arg}"))?;
                     match arg.as_str() {
                         "--resources" => o.resources = value.into(),
+                        "--regions" => o.regions = value.parse()?,
                         "--render-distance" | "--radius" => {
                             o.distance = value.parse()?;
                             o.distance_override = Some(o.distance);
@@ -571,7 +576,6 @@ struct GameLevel<'w> {
     world: &'w mut World,
     facts: &'w BlockFacts,
     collision: &'w BlockCollisionRegistry<'w>,
-    events: &'w mut Vec<LevelEvent>,
     dimension: LevelDimension,
     darken: i32,
     /// The environment of the level's dimension (`SUN_ANGLE`).
@@ -618,7 +622,6 @@ struct GameLevel<'w> {
     spill: &'w mut spill::Spill,
     /// Where the chunk tickets let blocks tick.
     tickets: horizon_client::ticket_levels::Levels,
-    random_tick_sections: &'w mut horizon_client::random_tick_sections::RandomTickSections,
     /// Players with each chest open (a trapped chest's signal).
     lid_openers: &'w HashMap<(i32, i32, i32), i32>,
     /// `Level.isClientSide`: a client's copy of the level (a guest of a LAN
@@ -813,17 +816,17 @@ impl LevelAccess for GameLevel<'_> {
     fn is_client_side(&self) -> bool {
         self.client_side
     }
-    fn world_surface(&self, x: i32, z: i32) -> i32 {
+    fn world_surface(&mut self, x: i32, z: i32) -> i32 {
         self.world.world_surface(x, z, |s| self.facts.is_air(s))
     }
-    fn precipitation(&self, pos: BlockPos) -> Option<horizon_world::level::Precipitation> {
+    fn precipitation(&mut self, pos: BlockPos) -> Option<horizon_world::level::Precipitation> {
         self.behaviours.precipitation_info(self, pos)
     }
-    fn is_raining_at(&self, pos: BlockPos) -> bool {
+    fn is_raining_at(&mut self, pos: BlockPos) -> bool {
         self.behaviours.is_raining_at(self, pos)
     }
     fn block_entity_analog_signal(
-        &self,
+        &mut self,
         pos: BlockPos,
         state: BlockStateId,
         direction: Direction,
@@ -866,7 +869,7 @@ impl LevelAccess for GameLevel<'_> {
         }
         machines::container_signal(self.world, self.behaviours, self.items, self.registry, pos)
     }
-    fn item_frame_analog_output(&self, pos: BlockPos, facing: Direction) -> Option<i32> {
+    fn item_frame_analog_output(&mut self, pos: BlockPos, facing: Direction) -> Option<i32> {
         let mut frames = self
             .item_frames
             .iter()
@@ -881,7 +884,7 @@ impl LevelAccess for GameLevel<'_> {
         )
     }
     fn block_entity_signal(
-        &self,
+        &mut self,
         pos: BlockPos,
         _state: BlockStateId,
         _direction: Direction,
@@ -892,7 +895,7 @@ impl LevelAccess for GameLevel<'_> {
         }
         jukebox::jukebox_signals(self.world, self.items, pos).map_or(0, |(signal, _)| signal)
     }
-    fn biome_name(&self, pos: BlockPos) -> Option<&str> {
+    fn biome_name(&mut self, pos: BlockPos) -> Option<&str> {
         let chunk = self.world.chunks.get(&(pos.x >> 4, pos.z >> 4))?;
         Some(&self.biomes.get(chunk.biome(pos.x, pos.y, pos.z)).name)
     }
@@ -911,7 +914,7 @@ impl LevelAccess for GameLevel<'_> {
     /// `ServerLevel.canSpreadFireAround`: a player (not a spectator) closer
     /// than the `fire_spread_radius_around_player` rule to the block's corner
     /// (`ChunkMap.anyPlayerCloseEnoughTo`); -1 spreads everywhere.
-    fn can_spread_fire_around(&self, pos: BlockPos) -> bool {
+    fn can_spread_fire_around(&mut self, pos: BlockPos) -> bool {
         let radius = self.rules.fire_spread_radius_around_player;
         radius == -1
             || self.fire_players.iter().any(|p| {
@@ -923,7 +926,7 @@ impl LevelAccess for GameLevel<'_> {
                 d[0] * d[0] + d[1] * d[1] + d[2] * d[2] < f64::from(radius) * f64::from(radius)
             })
     }
-    fn increased_fire_burnout(&self, pos: BlockPos) -> bool {
+    fn increased_fire_burnout(&mut self, pos: BlockPos) -> bool {
         self.world
             .chunks
             .get(&(pos.x >> 4, pos.z >> 4))
@@ -933,7 +936,7 @@ impl LevelAccess for GameLevel<'_> {
                     .increased_fire_burnout
             })
     }
-    fn block_state(&self, pos: BlockPos) -> BlockStateId {
+    fn block_state(&mut self, pos: BlockPos) -> BlockStateId {
         self.world.block(pos.x, pos.y, pos.z)
     }
     fn set_raw(&mut self, pos: BlockPos, state: BlockStateId) -> Option<BlockStateId> {
@@ -944,7 +947,7 @@ impl LevelAccess for GameLevel<'_> {
         self.world.set(pos.x, pos.y, pos.z, state).ok()?;
         Some(previous)
     }
-    fn is_loaded(&self, pos: BlockPos) -> bool {
+    fn is_loaded(&mut self, pos: BlockPos) -> bool {
         self.world.loaded(pos.x, pos.z)
     }
     fn min_y(&self) -> i32 {
@@ -962,22 +965,26 @@ impl LevelAccess for GameLevel<'_> {
             MIN_Y + HEIGHT
         }
     }
-    fn random(&mut self) -> &mut horizon_core::random::LegacyRandom {
-        &mut self.world.random
+    #[inline]
+    fn with_random<R>(
+        &mut self,
+        draw: impl FnOnce(&mut horizon_core::random::LegacyRandom) -> R,
+    ) -> R {
+        draw(&mut self.world.random)
     }
     fn game_time(&self) -> i64 {
         self.world.game_time
     }
-    fn block_light(&self, pos: BlockPos) -> i32 {
+    fn block_light(&mut self, pos: BlockPos) -> i32 {
         i32::from(self.world.light(pos.x, pos.y, pos.z) & 15)
     }
-    fn sky_light(&self, pos: BlockPos) -> i32 {
+    fn sky_light(&mut self, pos: BlockPos) -> i32 {
         i32::from(self.world.light(pos.x, pos.y, pos.z) >> 4)
     }
     fn sky_darken(&self) -> i32 {
         self.darken
     }
-    fn sun_angle(&self, _pos: BlockPos) -> f32 {
+    fn sun_angle(&mut self, _pos: BlockPos) -> f32 {
         self.environment
             .sample(self.world.day_time, None, None)
             .sun_angle
@@ -994,7 +1001,7 @@ impl LevelAccess for GameLevel<'_> {
     /// `Level.isUnobstructed`: the placed state's collision shape against the player.
     /// `Level.isUnobstructed(state, pos, CollisionContext.of(player))`: no
     /// entity that blocks building is in the state's collision shape.
-    fn is_unobstructed(&self, pos: BlockPos, state: BlockStateId) -> bool {
+    fn is_unobstructed(&mut self, pos: BlockPos, state: BlockStateId) -> bool {
         let player = self.player_collision.as_ref();
         let context = player.map_or_else(
             || CollisionContext::empty(false),
@@ -1047,14 +1054,14 @@ impl LevelAccess for GameLevel<'_> {
     }
     /// `ServerLevel.isPositionTickingWithEntitiesLoaded`: block ticking, and
     /// a ticking chunk.
-    fn is_ticking_chunk(&self, chunk: horizon_core::position::ChunkPos) -> bool {
+    fn is_ticking_chunk(&mut self, chunk: horizon_core::position::ChunkPos) -> bool {
         self.tickets.block_ticking(chunk.x, chunk.z) && ticking_chunk(self.world, chunk.x, chunk.z)
     }
     /// Entities that trigger pressure plates, tripwires, detector rails and
     /// wooden buttons: the players (the host and the LAN guests), the mobs,
     /// the minecarts and the other entities that don't ignore block triggers,
     /// and for `EntityQuery::Arrows` the arrows.
-    fn count_entities(&self, area: Aabb, query: EntityQuery) -> usize {
+    fn count_entities(&mut self, area: Aabb, query: EntityQuery) -> usize {
         let hit = |(lo, hi): &([f64; 3], [f64; 3])| {
             area.intersects(Aabb::new(
                 Vec3::new(lo[0], lo[1], lo[2]),
@@ -1119,7 +1126,7 @@ impl LevelAccess for GameLevel<'_> {
                 state,
                 effect: PlayerEffect::InteractLoot(table),
             } => self.drop_interact_loot(pos, state, table),
-            event => self.events.push(event),
+            event => self.world.level_events.push(event),
         }
     }
     fn remove_block_entity(&mut self, pos: BlockPos, old: BlockStateId, side_effects: bool) -> u8 {
@@ -1419,7 +1426,7 @@ struct Game<'a> {
     screen_fx: horizon_client::screen_effects::ScreenEffects,
     weather_parameters: horizon_client::weather::ParameterCache,
     panorama_rotation: horizon_client::gfx::panorama::Rotation,
-    world: World,
+    world: ferraloom_game::ownership::OwnershipSlot<World>,
     streaming: Streaming,
     lod: Option<horizon_client::lod::Lod>,
     lod_source_attempted: bool,
@@ -1703,8 +1710,6 @@ struct Game<'a> {
     end: end::EndState,
     /// Canonical per-level simulation state, moved intact between dimensions.
     server_level: ferraloom_game::server_level::ServerLevel,
-    random_tick_sections: horizon_client::random_tick_sections::RandomTickSections,
-    level_events: Vec<LevelEvent>,
     falling: Vec<FallingBlock>,
     paintings: Vec<horizon_client::entities::Painting>,
     painting_variants: paintings::PaintingVariants,
@@ -2824,6 +2829,16 @@ impl Game<'_> {
         &mut self,
         f: impl FnOnce(&Behaviours, &mut GameLevel<'_>, &mut Ticks) -> R,
     ) -> R {
+        let result = self.with_level_unflushed(f);
+        self.flush_spill();
+        result
+    }
+    /// A serial leaf in a larger live phase. Its caller retains the original
+    /// effect boundary, including when a regional callback takes this lane.
+    fn with_level_unflushed<R>(
+        &mut self,
+        f: impl FnOnce(&Behaviours, &mut GameLevel<'_>, &mut Ticks) -> R,
+    ) -> R {
         let darken = self.sky_darken();
         let (rain, thunder) = self.world.weather.levels(1.0);
         // Spectators ignore block triggers (Entity.isIgnoringBlockTriggers).
@@ -2918,7 +2933,6 @@ impl Game<'_> {
             world: &mut self.world,
             facts: self.res.facts(),
             collision: self.collision,
-            events: &mut self.level_events,
             dimension,
             darken,
             environment: match dimension {
@@ -2951,17 +2965,14 @@ impl Game<'_> {
             pending: &mut self.pending,
             spill: &mut self.spill,
             tickets: self.server_level.tickets.levels(),
-            random_tick_sections: &mut self.random_tick_sections,
             lid_openers: &self.lid_openers,
             client_side: self.remote.is_some(),
         };
-        let result = f(
+        f(
             self.res.behaviours(),
             &mut level,
             &mut self.server_level.block_ticks,
-        );
-        self.flush_spill();
-        result
+        )
     }
     /// Level.setBlock(pos, state, UPDATE_ALL) with neighbour/shape updates.
     fn level_set(&mut self, pos: [i32; 3], state: BlockStateId) -> Result<()> {
@@ -3001,7 +3012,7 @@ impl Game<'_> {
             self.register_chunk_ticks(key);
         }
         for &key in self.server_level.tick_chunks.removed() {
-            self.random_tick_sections.remove(&key);
+            self.world.random_tick_sections.remove(&key);
             self.portals.sections.remove(&key);
             self.server_level
                 .block_ticks
@@ -3198,18 +3209,7 @@ impl Game<'_> {
         });
         self.process_level_events()?;
         self.tick_scheduled()?;
-        self.with_level(|b, level, ticks| {
-            ferraloom_game::block_phase::tick_random_chunks(
-                b,
-                level,
-                ticks,
-                ticking
-                    .into_iter()
-                    .map(|(x, z)| horizon_core::position::ChunkPos::new(x, z)),
-            );
-            b.run_block_events(level, ticks);
-            b.tick_block_entities(level, ticks);
-        });
+        self.tick_region_block_phase(ticking);
         // `PistonMovingBlockEntity.tick` pushes what its block just ran into,
         // with the progress it is about to take.
         let pushes = std::mem::take(&mut self.server_level.block_ticks.piston_pushes);
@@ -3251,7 +3251,7 @@ impl Game<'_> {
                         // Events and drops must be applied before the next tick:
                         // they can summon entities, change rules or trigger blocks.
                         if !more
-                            || !level.events.is_empty()
+                            || !level.world.level_events.is_empty()
                             || !level.spill.spawns.is_empty()
                             || !level.spill.orbs.is_empty()
                             || !level.spill.removed.is_empty()
@@ -3260,7 +3260,7 @@ impl Game<'_> {
                         }
                     }
                 });
-                if !self.level_events.is_empty() {
+                if !self.world.level_events.is_empty() {
                     self.process_level_events()?;
                 }
                 if !more {
@@ -3273,7 +3273,7 @@ impl Game<'_> {
     }
     /// Side effects reported by the behaviour library, in vanilla order.
     fn process_level_events(&mut self) -> Result<()> {
-        let events = std::mem::take(&mut self.level_events);
+        let events = std::mem::take(&mut self.world.level_events);
         self.lan_record_events(&events);
         dispense_fixture::record_events(&events);
         for event in events {
@@ -4509,7 +4509,7 @@ impl Game<'_> {
         // SolidBucketItem.getPlaceSound replaces it with the bucket's own.
         let solid_bucket = &*stack.item == "minecraft:powder_snow_bucket";
         if solid_bucket {
-            for event in &mut self.level_events {
+            for event in &mut self.world.level_events {
                 if let LevelEvent::Sound { pos: at, sound, .. } = event
                     && *at == pos
                 {
@@ -5095,7 +5095,8 @@ impl Game<'_> {
         if running {
             self.world.game_time += 1;
             if self.ui.rules.bool("advance_weather") {
-                self.world.weather.tick_timers(&mut self.world.random);
+                let world = &mut *self.world;
+                world.weather.tick_timers(&mut world.random);
             }
             self.world.weather.tick_levels();
             self.tick_weather_effects();
@@ -9080,7 +9081,7 @@ impl Game<'_> {
         self.pitch = pitch;
         self.selected = level.selected_slot.clamp(0, 8) as usize;
         self.streaming = streaming;
-        self.world = world;
+        self.world.replace_storage(world);
         self.inventory = inventory;
         self.save = save;
         self.level = level;
@@ -9092,7 +9093,7 @@ impl Game<'_> {
         self.dim = dim;
         self.world_root = save_root.clone();
         self.world_flat = horizon_client::save::WorldGen::read(&save_root).is_some_and(|w| w.flat);
-        self.server_level.block_ticks = Ticks::new(self.level.seed as i32);
+        self.server_level.block_ticks = Ticks::new(self.level.seed as i32).into();
         self.server_level.tick_chunks.clear();
         self.clear_entities();
         self.travelling = None;
@@ -9212,11 +9213,11 @@ impl Game<'_> {
         // The sculk tables' watched blocks are built once per game.
         world.watched = std::mem::take(&mut self.world.watched);
         self.streaming = streaming;
-        self.world = world;
+        self.world.replace_storage(world);
         self.save = save;
         self.dim = target;
         self.level.dimension = target.id().to_owned();
-        self.server_level.block_ticks = Ticks::new(self.level.seed as i32);
+        self.server_level.block_ticks = Ticks::new(self.level.seed as i32).into();
         self.server_level.tick_chunks.clear();
         self.falling.clear();
         self.tnts.clear();
@@ -9423,7 +9424,8 @@ impl Game<'_> {
         self.boss_overlay.reset();
         self.bosses = Default::default();
         self.streaming.paused = true;
-        self.world = World::new(self.res.facts().air, 0);
+        self.world
+            .replace_storage(World::new(self.res.facts().air, 0));
         self.player = None;
         self.sleeping = None;
         self.sleep_timer = 0;
@@ -10759,9 +10761,10 @@ impl Game<'_> {
     }
     /// `LevelExtractor.allChanged`: every loaded section is rebuilt.
     fn all_sections_changed(&mut self) {
-        for &(x, z) in self.world.chunks.keys() {
+        let world = &mut *self.world;
+        for &(x, z) in world.chunks.keys() {
             for sy in 0..horizon_client::chunk::HEIGHT / 16 {
-                self.world.dirty_sections.insert((x, sy, z));
+                world.dirty_sections.insert((x, sy, z));
             }
         }
     }
@@ -13704,7 +13707,7 @@ impl<'a> Game<'a> {
             screen_fx: Default::default(),
             weather_parameters: Default::default(),
             panorama_rotation: Default::default(),
-            world,
+            world: world.into(),
             streaming,
             lod: None,
             lod_source_attempted: false,
@@ -13887,8 +13890,6 @@ impl<'a> Game<'a> {
             win: None,
             end: Default::default(),
             server_level: ferraloom_game::server_level::ServerLevel::new(0),
-            random_tick_sections: Default::default(),
-            level_events: Vec::new(),
             falling: Vec::new(),
             paintings: Vec::new(),
             painting_variants: prepared.painting_variants,
@@ -14331,6 +14332,7 @@ fn synchronous_startup(options: &Options) -> bool {
         || !options.execution_role.is_client()
         || std::env::var_os("HORIZON_DISPENSE_FIXTURE").is_some()
         || std::env::var_os("HORIZON_SCULK_FIXTURE").is_some()
+        || std::env::var_os("HORIZON_REGION_FIXTURE").is_some()
         || std::env::var_os("HORIZON_COMMAND_SCRIPT").is_some()
         || std::env::var_os("HORIZON_NET_REPORT").is_some()
 }
@@ -14900,6 +14902,10 @@ fn start_game<'a>(
                 game_dir: std::env::current_dir()?,
             },
         );
+    }
+    if let Ok(spec) = std::env::var("HORIZON_REGION_FIXTURE") {
+        game.run_component_harness(integrated::ComponentHarness::Region(spec))?;
+        return Ok(None);
     }
     if let Ok(spec) = std::env::var("HORIZON_DISPENSE_FIXTURE") {
         game.run_component_harness(integrated::ComponentHarness::Dispenser(spec))?;

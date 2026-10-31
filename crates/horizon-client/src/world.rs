@@ -52,6 +52,10 @@ pub struct World {
     pub fast_lava: bool,
     pub chunks: crate::chunk_map::ChunkMap,
     pub random: LegacyRandom,
+    /// Live random-section eligibility cache, transferred with resident storage.
+    pub random_tick_sections: crate::random_tick_sections::RandomTickSections,
+    /// Ordered block callbacks awaiting the caller's existing effect boundary.
+    pub level_events: Vec<horizon_world::level::LevelEvent>,
     pub revision: u64,
     pub health_rules: HealthRules,
     pub air: BlockStateId,
@@ -200,6 +204,8 @@ impl World {
         Self {
             chunks: Default::default(),
             random: LegacyRandom::new(seed),
+            random_tick_sections: Default::default(),
+            level_events: Vec::new(),
             revision: 0,
             health_rules: HealthRules::default(),
             air,
@@ -224,6 +230,17 @@ impl World {
             moving_pistons: Vec::new(),
             pois: Default::default(),
         }
+    }
+    /// Replace storage without adding an event flush or resetting the section
+    /// cache. These buffers used to be separate `Game` fields and retain their
+    /// previous lifetime at world load, disconnect and fixture-reset boundaries.
+    pub fn replace_storage(&mut self, mut next: Self) {
+        std::mem::swap(
+            &mut self.random_tick_sections,
+            &mut next.random_tick_sections,
+        );
+        std::mem::swap(&mut self.level_events, &mut next.level_events);
+        *self = next;
     }
     /// A controlled blockstate scene for the native scene probes: material
     /// layers, a stepped pyramid and the model gallery. Not generated terrain.
@@ -449,6 +466,25 @@ mod tests {
     use crate::chunk::Chunk;
     use horizon_world::registry::BlockStateId;
     use std::sync::Arc;
+
+    #[test]
+    fn storage_replacement_keeps_pending_events_until_the_original_flush() {
+        use horizon_core::position::BlockPos;
+        use horizon_world::level::LevelEvent;
+        let mut world = World::new(BlockStateId(0), 42);
+        let events = [1501, 1009].map(|id| LevelEvent::LevelEvent {
+            id,
+            pos: BlockPos::new(0, 64, 0),
+            data: 0,
+        });
+        world.level_events.extend(events.clone());
+        world.chunks.insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+        world.replace_storage(World::new(BlockStateId(7), 99));
+        assert_eq!(world.air, BlockStateId(7));
+        assert!(world.chunks.is_empty());
+        assert_eq!(std::mem::take(&mut world.level_events), events);
+        assert!(world.level_events.is_empty());
+    }
 
     fn access_world() -> World {
         let mut world = World::new(BlockStateId(7), 0);

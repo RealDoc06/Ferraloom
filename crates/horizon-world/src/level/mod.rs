@@ -47,13 +47,13 @@
 //!
 //! struct GameLevel { chunks: Chunks, random: LegacyRandom, time: i64, events: Vec<LevelEvent> }
 //! impl LevelAccess for GameLevel {
-//!     fn block_state(&self, pos: BlockPos) -> BlockStateId { self.chunks.get(pos) }
+//!     fn block_state(&mut self, pos: BlockPos) -> BlockStateId { self.chunks.get(pos) }
 //!     fn set_raw(&mut self, pos: BlockPos, state: BlockStateId) -> Option<BlockStateId> {
 //!         let old = self.chunks.set(pos, state)?; // also mark light/heightmap/mesh dirty
 //!         Some(old)
 //!     }
-//!     fn is_loaded(&self, pos: BlockPos) -> bool { self.chunks.contains(pos.chunk()) }
-//!     fn random(&mut self) -> &mut LegacyRandom { &mut self.random }
+//!     fn is_loaded(&mut self, pos: BlockPos) -> bool { self.chunks.contains(pos.chunk()) }
+//!     fn with_random<R>(&mut self, draw: impl FnOnce(&mut LegacyRandom) -> R) -> R { draw(&mut self.random) }
 //!     fn game_time(&self) -> i64 { self.time }
 //!     fn block_light(&self, pos: BlockPos) -> i32 { self.chunks.block_light(pos) }
 //!     fn sky_light(&self, pos: BlockPos) -> i32 { self.chunks.sky_light(pos) }
@@ -98,12 +98,15 @@ use std::{collections::HashMap, io, path::Path, sync::Arc, sync::Mutex};
 pub mod classes;
 pub mod data;
 pub mod states;
+pub mod tick_access;
 pub mod ticks;
 
 mod bonemeal;
 mod buckets;
 mod creaking;
 mod falling;
+mod feature_context;
+mod feature_random;
 mod feature_world;
 mod fluids;
 mod growth;
@@ -118,8 +121,10 @@ pub mod portal_travel;
 mod query;
 pub(crate) use query::data_2d;
 mod rails;
+mod random_access;
 mod redstone;
 pub mod removal;
+pub use random_access::{LevelPositional, LevelRandom};
 pub mod sculk;
 mod shapes;
 mod shelf;
@@ -302,12 +307,14 @@ pub trait LevelAccess {
     fn is_client_side(&self) -> bool {
         false
     }
-    /// `getBlockState`. Unloaded or out-of-bounds positions read as air.
-    fn block_state(&self, pos: BlockPos) -> BlockStateId;
+    /// `getBlockState`. Resolve the live owner before reading. Only confirmed
+    /// unloaded or out-of-bounds positions read as air. The mutable facade
+    /// permits a synchronous ownership handoff without borrowing region state.
+    fn block_state(&mut self, pos: BlockPos) -> BlockStateId;
     /// Storage write (`LevelChunkSection.setBlockState`). Returns the previous
     /// state, or None when nothing could be stored (unloaded chunk).
     fn set_raw(&mut self, pos: BlockPos, state: BlockStateId) -> Option<BlockStateId>;
-    fn is_loaded(&self, pos: BlockPos) -> bool;
+    fn is_loaded(&mut self, pos: BlockPos) -> bool;
     /// Inclusive minimum and exclusive maximum build height.
     fn min_y(&self) -> i32 {
         -64
@@ -318,16 +325,22 @@ pub trait LevelAccess {
     /// `getHeight(WORLD_SURFACE, x, z)`: one above the column's highest
     /// block that isn't air. Only air lies above it, so scans for the other
     /// heightmaps start there. The default, `max_y`, scans the whole column.
-    fn world_surface(&self, _x: i32, _z: i32) -> i32 {
+    fn world_surface(&mut self, _x: i32, _z: i32) -> i32 {
         self.max_y()
     }
-    /// Vanilla `level.random` (a `LegacyRandomSource`).
-    fn random(&mut self) -> &mut LegacyRandom;
+    /// A primitive operation on vanilla's canonical `level.random` stream.
+    /// The result cannot retain a reference into the temporary RNG borrow.
+    fn with_random<R>(&mut self, draw: impl FnOnce(&mut LegacyRandom) -> R) -> R;
+    /// Borrow only the level adapter; individual draws scope canonical state.
+    #[inline]
+    fn random(&mut self) -> LevelRandom<'_, Self> {
+        LevelRandom::new(self)
+    }
     fn game_time(&self) -> i64;
-    fn block_light(&self, _pos: BlockPos) -> i32 {
+    fn block_light(&mut self, _pos: BlockPos) -> i32 {
         0
     }
-    fn sky_light(&self, _pos: BlockPos) -> i32 {
+    fn sky_light(&mut self, _pos: BlockPos) -> i32 {
         15
     }
     /// `Level.getSkyDarken` (0 at noon, up to 11 at night).
@@ -335,7 +348,7 @@ pub trait LevelAccess {
         0
     }
     /// `EnvironmentAttributes.SUN_ANGLE` at `pos`, in degrees (0 at noon).
-    fn sun_angle(&self, _pos: BlockPos) -> f32 {
+    fn sun_angle(&mut self, _pos: BlockPos) -> f32 {
         0.0
     }
     fn is_raining(&self) -> bool {
@@ -344,7 +357,7 @@ pub trait LevelAccess {
     fn is_thundering(&self) -> bool {
         false
     }
-    fn is_raining_at(&self, _pos: BlockPos) -> bool {
+    fn is_raining_at(&mut self, _pos: BlockPos) -> bool {
         false
     }
     fn dimension(&self) -> Dimension {
@@ -358,24 +371,24 @@ pub trait LevelAccess {
         2
     }
     /// `ServerLevel.canSpreadFireAround` (fire-spread radius around players).
-    fn can_spread_fire_around(&self, _pos: BlockPos) -> bool {
+    fn can_spread_fire_around(&mut self, _pos: BlockPos) -> bool {
         true
     }
     /// The `INCREASED_FIRE_BURNOUT` environment attribute at `pos` (a biome
     /// attribute).
-    fn increased_fire_burnout(&self, _pos: BlockPos) -> bool {
+    fn increased_fire_burnout(&mut self, _pos: BlockPos) -> bool {
         false
     }
     /// `Level.isUnobstructed(state, pos, context)`: whether the state's
     /// collision shape at `pos` would intersect an entity.
-    fn is_unobstructed(&self, _pos: BlockPos, _state: BlockStateId) -> bool {
+    fn is_unobstructed(&mut self, _pos: BlockPos, _state: BlockStateId) -> bool {
         true
     }
     /// Comparator input from a block entity (`getAnalogOutputSignal` of
     /// containers, jukeboxes, lecterns, ...). State-only sources (cake,
     /// composter, cauldrons, beehives, ...) are evaluated by the library.
     fn block_entity_analog_signal(
-        &self,
+        &mut self,
         _pos: BlockPos,
         _state: BlockStateId,
         _direction: Direction,
@@ -385,7 +398,7 @@ pub trait LevelAccess {
     /// `ItemFrame.getAnalogOutput` of the one item frame in the block at
     /// `pos` that faces `facing` (`ComparatorBlock.getItemFrame`), or None when
     /// there is not exactly one.
-    fn item_frame_analog_output(&self, _pos: BlockPos, _facing: Direction) -> Option<i32> {
+    fn item_frame_analog_output(&mut self, _pos: BlockPos, _facing: Direction) -> Option<i32> {
         None
     }
     /// `ContainerOpenersCounter.recheckOpenCount` for the chest or ender chest
@@ -408,7 +421,7 @@ pub trait LevelAccess {
     /// Weak/strong signal of a block-entity-driven source (trapped chest
     /// openers); other sources are evaluated by the library.
     fn block_entity_signal(
-        &self,
+        &mut self,
         _pos: BlockPos,
         _state: BlockStateId,
         _direction: Direction,
@@ -417,16 +430,16 @@ pub trait LevelAccess {
     }
     /// Biome answers for a precipitation tick at the column of `pos` (see
     /// [`Precipitation`]); None skips snow/ice formation and cauldron filling.
-    fn precipitation(&self, _pos: BlockPos) -> Option<Precipitation> {
+    fn precipitation(&mut self, _pos: BlockPos) -> Option<Precipitation> {
         None
     }
     /// Count of entities intersecting `area` that trigger pressure plates or
     /// tripwires under `query`.
-    fn count_entities(&self, _area: Aabb, _query: EntityQuery) -> usize {
+    fn count_entities(&mut self, _area: Aabb, _query: EntityQuery) -> usize {
         0
     }
     /// `ServerLevel.isPositionTickingWithEntitiesLoaded` for scheduled ticks.
-    fn is_ticking_chunk(&self, _chunk: ChunkPos) -> bool {
+    fn is_ticking_chunk(&mut self, _chunk: ChunkPos) -> bool {
         true
     }
     fn emit(&mut self, _event: LevelEvent) {}
@@ -451,7 +464,7 @@ pub trait LevelAccess {
     fn load_block_entity(&mut self, _pos: BlockPos, _nbt: crate::nbt::Compound) {}
     /// Biome identifier at `pos` (`minecraft:plains`), for features placed by
     /// block behaviour (bone meal flowers). None when unknown.
-    fn biome_name(&self, _pos: BlockPos) -> Option<&str> {
+    fn biome_name(&mut self, _pos: BlockPos) -> Option<&str> {
         None
     }
     /// World seed (`WorldGenLevel.getSeed`) for seed-derived feature noise.
@@ -466,7 +479,11 @@ pub trait LevelAccess {
 }
 
 /// Raw brightness as `Level.getRawBrightness(pos, skyDarken)`.
-pub fn raw_brightness<L: LevelAccess + ?Sized>(level: &L, pos: BlockPos, sky_darken: i32) -> i32 {
+pub fn raw_brightness<L: LevelAccess + ?Sized>(
+    level: &mut L,
+    pos: BlockPos,
+    sky_darken: i32,
+) -> i32 {
     (level.sky_light(pos) - sky_darken).max(level.block_light(pos))
 }
 
@@ -906,10 +923,9 @@ impl Behaviours {
 }
 
 /// One mutable view used by the ported behaviour code.
-pub(crate) struct Sim<'a, L: LevelAccess + ?Sized> {
+pub(crate) struct Sim<'a, C: tick_access::TickContext> {
     pub b: &'a Behaviours,
-    pub level: &'a mut L,
-    pub ticks: &'a mut Ticks,
+    pub level: C,
     /// `RedstoneWireBlock.shouldSignal` is false while a wire samples its
     /// neighbours (`getBlockSignal`).
     pub wire_signal_off: std::cell::Cell<bool>,
@@ -919,12 +935,44 @@ impl Behaviours {
         &'a self,
         level: &'a mut L,
         ticks: &'a mut Ticks,
-    ) -> Sim<'a, L> {
+    ) -> Sim<'a, tick_access::BorrowedLevelTicks<'a, L>> {
+        self.sim_context(tick_access::BorrowedLevelTicks::new(level, ticks))
+    }
+
+    pub(crate) fn sim_context<C: tick_access::TickContext>(&self, level: C) -> Sim<'_, C> {
         Sim {
             b: self,
             level,
-            ticks,
             wire_signal_off: std::cell::Cell::new(false),
         }
+    }
+}
+
+impl<C: tick_access::TickContext> Sim<'_, C> {
+    fn read_ticks<R>(
+        &mut self,
+        scope: tick_access::TickScope,
+        read: impl FnOnce(&Ticks) -> R,
+    ) -> R {
+        self.level.read_ticks(scope, read)
+    }
+    fn write_ticks<R>(
+        &mut self,
+        scope: tick_access::TickScope,
+        write: impl FnOnce(&mut Ticks) -> R,
+    ) -> R {
+        self.level.write_ticks(scope, write)
+    }
+    fn has_block_tick(&mut self, pos: BlockPos, block: BlockId) -> bool {
+        self.read_ticks(
+            tick_access::TickScope::Chunk(ChunkPos::new(pos.x >> 4, pos.z >> 4)),
+            |ticks| ticks.has_block_tick(pos, block),
+        )
+    }
+    fn will_block_tick_this_tick(&mut self, pos: BlockPos, block: BlockId) -> bool {
+        self.write_ticks(
+            tick_access::TickScope::Chunk(ChunkPos::new(pos.x >> 4, pos.z >> 4)),
+            |ticks| ticks.will_block_tick_this_tick(pos, block),
+        )
     }
 }

@@ -1,6 +1,7 @@
 //! Redstone: `SignalGetter`, redstone wire (default evaluator), torches,
 //! diodes (repeaters, comparators), observers, lamps and the power-driven
 //! responses of doors, trapdoors, gates and other consumers.
+use super::tick_access::TickScope;
 use super::{
     LevelAccess, LevelEvent, Sim,
     classes::Class,
@@ -26,7 +27,7 @@ const SIGNAL_ORDER: [Direction; 6] = [
     Direction::East,
 ];
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn nibble(word: u32, direction: Direction) -> i32 {
         ((word >> (4 * direction as u32)) & 15) as i32
     }
@@ -38,7 +39,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
     /// `BlockState.getSignal(level, pos, direction)`.
     pub(crate) fn state_signal(
-        &self,
+        &mut self,
         state: BlockStateId,
         pos: BlockPos,
         direction: Direction,
@@ -65,7 +66,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
     /// `BlockState.getDirectSignal(level, pos, direction)`.
     pub(crate) fn state_direct_signal(
-        &self,
+        &mut self,
         state: BlockStateId,
         pos: BlockPos,
         direction: Direction,
@@ -93,14 +94,12 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             _ => Self::nibble(b.facts(state).strong, direction),
         }
     }
-    pub(crate) fn comparator_output(&self, pos: BlockPos) -> i32 {
-        self.ticks
-            .comparator_outputs
-            .get(&pos)
-            .copied()
-            .unwrap_or(0)
+    pub(crate) fn comparator_output(&mut self, pos: BlockPos) -> i32 {
+        self.read_ticks(TickScope::at(pos), |ticks| {
+            ticks.comparator_outputs.get(&pos).copied().unwrap_or(0)
+        })
     }
-    fn wire_signal(&self, state: BlockStateId, pos: BlockPos, direction: Direction) -> i32 {
+    fn wire_signal(&mut self, state: BlockStateId, pos: BlockPos, direction: Direction) -> i32 {
         if self.wire_signal_off.get() || direction == Direction::Down {
             return 0;
         }
@@ -122,11 +121,16 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         power
     }
     /// `SignalGetter.getDirectSignal(pos, direction)`.
-    pub fn direct_signal(&self, pos: BlockPos, direction: Direction) -> i32 {
-        self.state_direct_signal(self.state(pos), pos, direction)
+    pub fn direct_signal(&mut self, pos: BlockPos, direction: Direction) -> i32 {
+        {
+            let queried_argument_0 = self.state(pos);
+            let queried_argument_1 = pos;
+            let queried_argument_2 = direction;
+            self.state_direct_signal(queried_argument_0, queried_argument_1, queried_argument_2)
+        }
     }
     /// `SignalGetter.getDirectSignalTo`.
-    pub fn direct_signal_to(&self, pos: BlockPos) -> i32 {
+    pub fn direct_signal_to(&mut self, pos: BlockPos) -> i32 {
         let mut result = 0;
         for direction in SIGNAL_ORDER {
             result = result.max(self.direct_signal(rel(pos, direction), direction));
@@ -137,7 +141,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         result
     }
     /// `SignalGetter.getSignal(pos, direction)`.
-    pub fn signal(&self, pos: BlockPos, direction: Direction) -> i32 {
+    pub fn signal(&mut self, pos: BlockPos, direction: Direction) -> i32 {
         let state = self.state(pos);
         let signal = self.state_signal(state, pos, direction);
         if self.is_redstone_conductor(state, pos) {
@@ -146,17 +150,17 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             signal
         }
     }
-    pub fn has_signal(&self, pos: BlockPos, direction: Direction) -> bool {
+    pub fn has_signal(&mut self, pos: BlockPos, direction: Direction) -> bool {
         self.signal(pos, direction) > 0
     }
     /// `SignalGetter.hasNeighborSignal`.
-    pub fn has_neighbor_signal(&self, pos: BlockPos) -> bool {
+    pub fn has_neighbor_signal(&mut self, pos: BlockPos) -> bool {
         SIGNAL_ORDER
             .into_iter()
             .any(|direction| self.signal(rel(pos, direction), direction) > 0)
     }
     /// `SignalGetter.getBestNeighborSignal`.
-    pub fn best_neighbor_signal(&self, pos: BlockPos) -> i32 {
+    pub fn best_neighbor_signal(&mut self, pos: BlockPos) -> i32 {
         let mut best = 0;
         for direction in SIGNAL_ORDER {
             let signal = self.signal(rel(pos, direction), direction);
@@ -168,7 +172,12 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         best
     }
     /// `SignalGetter.getControlInputSignal`.
-    fn control_input_signal(&self, pos: BlockPos, direction: Direction, only_diodes: bool) -> i32 {
+    fn control_input_signal(
+        &mut self,
+        pos: BlockPos,
+        direction: Direction,
+        only_diodes: bool,
+    ) -> i32 {
         let b = self.b;
         let state = self.state(pos);
         if only_diodes {
@@ -206,7 +215,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         self.b.is_face_sturdy(state, Direction::Up) || self.b.is_block(state, self.b.named.hopper)
     }
     fn wire_connecting_side(
-        &self,
+        &mut self,
         pos: BlockPos,
         direction: Direction,
         can_connect_up: bool,
@@ -217,8 +226,11 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         if can_connect_up {
             let placeable_above =
                 b.instance_of(relative, Class::TrapDoor) || self.wire_can_survive_on(relative);
-            if placeable_above && self.should_wire_connect_to(self.state(above(relative_pos)), None)
-            {
+            if placeable_above && {
+                let queried_argument_0 = self.state(above(relative_pos));
+                let queried_argument_1 = None;
+                self.should_wire_connect_to(queried_argument_0, queried_argument_1)
+            } {
                 return if b.is_face_sturdy(relative, direction.opposite()) {
                     "up"
                 } else {
@@ -228,15 +240,23 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         }
         if !self.should_wire_connect_to(relative, Some(direction))
             && (self.is_redstone_conductor(relative, relative_pos)
-                || !self.should_wire_connect_to(self.state(below(relative_pos)), None))
+                || !{
+                    let queried_argument_0 = self.state(below(relative_pos));
+                    let queried_argument_1 = None;
+                    self.should_wire_connect_to(queried_argument_0, queried_argument_1)
+                })
         {
             "none"
         } else {
             "side"
         }
     }
-    fn wire_can_connect_up(&self, pos: BlockPos) -> bool {
-        !self.is_redstone_conductor(self.above_state(pos), pos)
+    fn wire_can_connect_up(&mut self, pos: BlockPos) -> bool {
+        !{
+            let queried_argument_0 = self.above_state(pos);
+            let queried_argument_1 = pos;
+            self.is_redstone_conductor(queried_argument_0, queried_argument_1)
+        }
     }
     fn wire_connected(&self, state: BlockStateId, direction: Direction) -> bool {
         self.b.table.text(state, self.direction_prop(direction)) != "none"
@@ -262,7 +282,11 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         b.table.set_int(state, b.props.power, power)
     }
     /// `RedstoneWireBlock.getConnectionState`.
-    pub(crate) fn wire_connection_state(&self, state: BlockStateId, pos: BlockPos) -> BlockStateId {
+    pub(crate) fn wire_connection_state(
+        &mut self,
+        state: BlockStateId,
+        pos: BlockPos,
+    ) -> BlockStateId {
         let b = self.b;
         let table = &b.table;
         let was_dot = self.wire_is_dot(state);
@@ -302,7 +326,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         result
     }
     pub(crate) fn redstone_wire_update_shape(
-        &self,
+        &mut self,
         state: BlockStateId,
         pos: BlockPos,
         direction: Direction,
@@ -320,7 +344,16 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             }
             Direction::Up => self.wire_connection_state(state, pos),
             _ => {
-                let side = self.wire_connecting_side(pos, direction, self.wire_can_connect_up(pos));
+                let side = {
+                    let queried_argument_0 = pos;
+                    let queried_argument_1 = direction;
+                    let queried_argument_2 = self.wire_can_connect_up(pos);
+                    self.wire_connecting_side(
+                        queried_argument_0,
+                        queried_argument_1,
+                        queried_argument_2,
+                    )
+                };
                 let key = self.direction_prop(direction);
                 if (side != "none") == self.wire_connected(state, direction)
                     && !self.wire_is_cross(state)
@@ -377,7 +410,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             }
         }
     }
-    fn wire_block_signal(&self, pos: BlockPos) -> i32 {
+    fn wire_block_signal(&mut self, pos: BlockPos) -> i32 {
         self.wire_signal_off.set(true);
         let signal = self.best_neighbor_signal(pos);
         self.wire_signal_off.set(false);
@@ -390,7 +423,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             0
         }
     }
-    fn wire_incoming_signal(&self, pos: BlockPos) -> i32 {
+    fn wire_incoming_signal(&mut self, pos: BlockPos) -> i32 {
         let mut signal = 0;
         for direction in HORIZONTAL {
             let neighbour_pos = rel(pos, direction);
@@ -398,11 +431,21 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             signal = signal.max(self.wire_power_of(neighbour));
             let above_pos = above(pos);
             if self.is_redstone_conductor(neighbour, neighbour_pos)
-                && !self.is_redstone_conductor(self.state(above_pos), above_pos)
+                && !{
+                    let queried_argument_0 = self.state(above_pos);
+                    let queried_argument_1 = above_pos;
+                    self.is_redstone_conductor(queried_argument_0, queried_argument_1)
+                }
             {
-                signal = signal.max(self.wire_power_of(self.state(above(neighbour_pos))));
+                signal = signal.max({
+                    let queried_argument_0 = self.state(above(neighbour_pos));
+                    self.wire_power_of(queried_argument_0)
+                });
             } else if !self.is_redstone_conductor(neighbour, neighbour_pos) {
-                signal = signal.max(self.wire_power_of(self.state(below(neighbour_pos))));
+                signal = signal.max({
+                    let queried_argument_0 = self.state(below(neighbour_pos));
+                    self.wire_power_of(queried_argument_0)
+                });
             }
         }
         (signal - 1).max(0)
@@ -447,7 +490,11 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         }
         for direction in HORIZONTAL {
             let target = rel(pos, direction);
-            if self.is_redstone_conductor(self.state(target), target) {
+            if {
+                let queried_argument_0 = self.state(target);
+                let queried_argument_1 = target;
+                self.is_redstone_conductor(queried_argument_0, queried_argument_1)
+            } {
                 self.wire_check_corner(above(target));
             } else {
                 self.wire_check_corner(below(target));
@@ -464,10 +511,10 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             2
         }
     }
-    pub(crate) fn diode_is_locked(&self, pos: BlockPos, state: BlockStateId) -> bool {
+    pub(crate) fn diode_is_locked(&mut self, pos: BlockPos, state: BlockStateId) -> bool {
         self.b.instance_of(state, Class::Repeater) && self.diode_alternate_signal(pos, state) > 0
     }
-    fn diode_alternate_signal(&self, pos: BlockPos, state: BlockStateId) -> i32 {
+    fn diode_alternate_signal(&mut self, pos: BlockPos, state: BlockStateId) -> i32 {
         let facing = self.b.facing(state);
         let only_diodes = self.b.instance_of(state, Class::Repeater);
         let cw = clockwise(facing);
@@ -475,7 +522,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         self.control_input_signal(rel(pos, cw), cw, only_diodes)
             .max(self.control_input_signal(rel(pos, ccw), ccw, only_diodes))
     }
-    fn diode_input_signal(&self, pos: BlockPos, state: BlockStateId) -> i32 {
+    fn diode_input_signal(&mut self, pos: BlockPos, state: BlockStateId) -> i32 {
         let b = self.b;
         let facing = b.facing(state);
         let target = rel(pos, facing);
@@ -506,7 +553,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         }
         result
     }
-    pub(crate) fn diode_should_turn_on(&self, pos: BlockPos, state: BlockStateId) -> bool {
+    pub(crate) fn diode_should_turn_on(&mut self, pos: BlockPos, state: BlockStateId) -> bool {
         if self.b.instance_of(state, Class::Comparator) {
             let input = self.diode_input_signal(pos, state);
             if input == 0 {
@@ -519,7 +566,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             self.diode_input_signal(pos, state) > 0
         }
     }
-    fn diode_should_prioritize(&self, pos: BlockPos, state: BlockStateId) -> bool {
+    fn diode_should_prioritize(&mut self, pos: BlockPos, state: BlockStateId) -> bool {
         let direction = self.b.facing(state).opposite();
         let opposite = self.rel_state(pos, direction);
         self.b.instance_of(opposite, Class::Diode) && self.b.facing(opposite) != direction
@@ -531,7 +578,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         self.neighbor_changed_at(opposite_pos, block);
         self.update_neighbors_at_except(opposite_pos, block, direction);
     }
-    fn comparator_calculate_output(&self, pos: BlockPos, state: BlockStateId) -> i32 {
+    fn comparator_calculate_output(&mut self, pos: BlockPos, state: BlockStateId) -> i32 {
         let input = self.diode_input_signal(pos, state);
         if input == 0 {
             return 0;
@@ -549,7 +596,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     pub(crate) fn diode_check_tick_on_neighbor(&mut self, pos: BlockPos, state: BlockStateId) {
         let block = self.b.block(state);
         if self.b.instance_of(state, Class::Comparator) {
-            if !self.ticks.will_block_tick_this_tick(pos, block) {
+            if !self.will_block_tick_this_tick(pos, block) {
                 let output = self.comparator_calculate_output(pos, state);
                 let old = self.comparator_output(pos);
                 if output != old
@@ -571,7 +618,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         }
         let on = self.b.table.bool(state, self.b.props.powered);
         let should = self.diode_should_turn_on(pos, state);
-        if on != should && !self.ticks.will_block_tick_this_tick(pos, block) {
+        if on != should && !self.will_block_tick_this_tick(pos, block) {
             let priority = if self.diode_should_prioritize(pos, state) {
                 TickPriority::ExtremelyHigh
             } else if on {
@@ -608,11 +655,9 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     pub(crate) fn comparator_refresh(&mut self, pos: BlockPos, state: BlockStateId) {
         let b = self.b;
         let output = self.comparator_calculate_output(pos, state);
-        let old = self
-            .ticks
-            .comparator_outputs
-            .insert(pos, output)
-            .unwrap_or(0);
+        let old = self.write_ticks(TickScope::at(pos), |ticks| {
+            ticks.comparator_outputs.insert(pos, output).unwrap_or(0)
+        });
         if old != output || b.table.text(state, b.props.mode) == "compare" {
             let should = self.diode_should_turn_on(pos, state);
             let on = b.table.bool(state, b.props.powered);
@@ -643,7 +688,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
 
     /// `getAnalogOutputSignal` for state-only sources; others ask the caller.
     pub(crate) fn analog_output(
-        &self,
+        &mut self,
         state: BlockStateId,
         pos: BlockPos,
         direction: Direction,
@@ -687,7 +732,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
 
     // ---- torches ----
 
-    fn torch_has_neighbor_signal(&self, pos: BlockPos, state: BlockStateId) -> bool {
+    fn torch_has_neighbor_signal(&mut self, pos: BlockPos, state: BlockStateId) -> bool {
         if self.b.instance_of(state, Class::RedstoneWallTorch) {
             let opposite = self.b.facing(state).opposite();
             self.has_signal(rel(pos, opposite), opposite)
@@ -704,7 +749,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     pub(crate) fn torch_neighbor_changed(&mut self, pos: BlockPos, state: BlockStateId) {
         let block = self.b.block(state);
         if self.b.table.bool(state, self.b.props.lit) == self.torch_has_neighbor_signal(pos, state)
-            && !self.ticks.will_block_tick_this_tick(pos, block)
+            && !self.will_block_tick_this_tick(pos, block)
         {
             self.schedule_tick(pos, block, 2);
         }
@@ -712,28 +757,33 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     fn torch_toggled_too_frequently(&mut self, pos: BlockPos, add: bool) -> bool {
         if add {
             let time = self.level.game_time();
-            self.ticks.torch_toggles.push((pos, time));
+            self.write_ticks(TickScope::Dimension, |ticks| {
+                ticks.torch_toggles.push((pos, time))
+            });
         }
-        self.ticks
-            .torch_toggles
-            .iter()
-            .filter(|(p, _)| *p == pos)
-            .take(8)
-            .count()
-            >= 8
+        self.read_ticks(TickScope::Dimension, |ticks| {
+            ticks
+                .torch_toggles
+                .iter()
+                .filter(|(p, _)| *p == pos)
+                .take(8)
+                .count()
+                >= 8
+        })
     }
     pub(crate) fn torch_tick(&mut self, pos: BlockPos, state: BlockStateId) {
         let b = self.b;
         let signal = self.torch_has_neighbor_signal(pos, state);
         let time = self.level.game_time();
-        while self
-            .ticks
-            .torch_toggles
-            .first()
-            .is_some_and(|(_, when)| time - when > 60)
-        {
-            self.ticks.torch_toggles.remove(0);
-        }
+        self.write_ticks(TickScope::Dimension, |ticks| {
+            while ticks
+                .torch_toggles
+                .first()
+                .is_some_and(|(_, when)| time - when > 60)
+            {
+                ticks.torch_toggles.remove(0);
+            }
+        });
         if b.table.bool(state, b.props.lit) {
             if signal {
                 self.set_block_and_update(pos, b.table.set_bool(state, b.props.lit, false));
@@ -751,7 +801,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     // ---- observers ----
 
     pub(crate) fn observer_start_signal(&mut self, pos: BlockPos, block: BlockId) {
-        if !self.ticks.has_block_tick(pos, block) {
+        if !self.has_block_tick(pos, block) {
             self.schedule_tick(pos, block, 2);
         }
     }
@@ -796,7 +846,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             0
         }
     }
-    fn plate_signal_strength(&self, pos: BlockPos, state: BlockStateId) -> i32 {
+    fn plate_signal_strength(&mut self, pos: BlockPos, state: BlockStateId) -> i32 {
         use horizon_core::geometry::{Aabb, Vec3};
         let b = self.b;
         let area = Aabb::new(
@@ -901,11 +951,12 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     pub(crate) fn button_check_pressed(&mut self, pos: BlockPos, state: BlockStateId) {
         let b = self.b;
         let data = b.data(state);
-        let should_be_pressed = data.set_type.as_ref().is_some_and(|s| s.arrows)
-            && self
-                .level
-                .count_entities(self.button_bounds(pos, state), super::EntityQuery::Arrows)
-                > 0;
+        let should_be_pressed = data.set_type.as_ref().is_some_and(|s| s.arrows) && {
+            let bounds = self.button_bounds(pos, state);
+            self.level
+                .count_entities(bounds, super::EntityQuery::Arrows)
+                > 0
+        };
         let was_pressed = b.table.bool(state, b.props.powered);
         if should_be_pressed != was_pressed {
             self.set_block_and_update(
@@ -1349,7 +1400,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         };
         let strength = ((15.0 * ((0.5 - distance) / 0.5).clamp(0.0, 1.0)).ceil() as i32).max(1);
         let block = b.block(state);
-        if !self.ticks.has_block_tick(pos, block) {
+        if !self.has_block_tick(pos, block) {
             // `setOutputPower`.
             self.set_block_and_update(pos, b.table.set_int(state, b.props.power, strength));
             self.schedule_tick(pos, block, if arrow { 20 } else { 8 });
