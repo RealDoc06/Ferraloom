@@ -49,7 +49,7 @@ impl Behaviours {
                 crate::worldgen::structure::BoundingBox::new([i32::MIN; 3], [i32::MAX; 3]);
             for piece in &jigsaw.pieces {
                 let mut place_feature =
-                    |w: &mut LevelFeatureWorld<'_, '_, L>,
+                    |w: &mut LevelFeatureWorld<'_, '_, _>,
                      r: &mut horizon_core::random::LegacyRandom,
                      name: &str,
                      p: [i32; 3]| { Ok(features.place_placed(name, w, r, p)) };
