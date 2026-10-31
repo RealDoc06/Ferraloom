@@ -1,6 +1,7 @@
 //! Redstone: `SignalGetter`, redstone wire (default evaluator), torches,
 //! diodes (repeaters, comparators), observers, lamps and the power-driven
 //! responses of doors, trapdoors, gates and other consumers.
+use super::tick_access::TickScope;
 use super::{
     LevelAccess, LevelEvent, Sim,
     classes::Class,
@@ -26,7 +27,7 @@ const SIGNAL_ORDER: [Direction; 6] = [
     Direction::East,
 ];
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn nibble(word: u32, direction: Direction) -> i32 {
         ((word >> (4 * direction as u32)) & 15) as i32
     }
@@ -94,11 +95,9 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         }
     }
     pub(crate) fn comparator_output(&self, pos: BlockPos) -> i32 {
-        self.ticks
-            .comparator_outputs
-            .get(&pos)
-            .copied()
-            .unwrap_or(0)
+        self.read_ticks(TickScope::at(pos), |ticks| {
+            ticks.comparator_outputs.get(&pos).copied().unwrap_or(0)
+        })
     }
     fn wire_signal(&self, state: BlockStateId, pos: BlockPos, direction: Direction) -> i32 {
         if self.wire_signal_off.get() || direction == Direction::Down {
@@ -549,7 +548,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     pub(crate) fn diode_check_tick_on_neighbor(&mut self, pos: BlockPos, state: BlockStateId) {
         let block = self.b.block(state);
         if self.b.instance_of(state, Class::Comparator) {
-            if !self.ticks.will_block_tick_this_tick(pos, block) {
+            if !self.will_block_tick_this_tick(pos, block) {
                 let output = self.comparator_calculate_output(pos, state);
                 let old = self.comparator_output(pos);
                 if output != old
@@ -571,7 +570,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         }
         let on = self.b.table.bool(state, self.b.props.powered);
         let should = self.diode_should_turn_on(pos, state);
-        if on != should && !self.ticks.will_block_tick_this_tick(pos, block) {
+        if on != should && !self.will_block_tick_this_tick(pos, block) {
             let priority = if self.diode_should_prioritize(pos, state) {
                 TickPriority::ExtremelyHigh
             } else if on {
@@ -608,11 +607,9 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     pub(crate) fn comparator_refresh(&mut self, pos: BlockPos, state: BlockStateId) {
         let b = self.b;
         let output = self.comparator_calculate_output(pos, state);
-        let old = self
-            .ticks
-            .comparator_outputs
-            .insert(pos, output)
-            .unwrap_or(0);
+        let old = self.write_ticks(TickScope::at(pos), |ticks| {
+            ticks.comparator_outputs.insert(pos, output).unwrap_or(0)
+        });
         if old != output || b.table.text(state, b.props.mode) == "compare" {
             let should = self.diode_should_turn_on(pos, state);
             let on = b.table.bool(state, b.props.powered);
@@ -704,7 +701,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     pub(crate) fn torch_neighbor_changed(&mut self, pos: BlockPos, state: BlockStateId) {
         let block = self.b.block(state);
         if self.b.table.bool(state, self.b.props.lit) == self.torch_has_neighbor_signal(pos, state)
-            && !self.ticks.will_block_tick_this_tick(pos, block)
+            && !self.will_block_tick_this_tick(pos, block)
         {
             self.schedule_tick(pos, block, 2);
         }
@@ -712,28 +709,33 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     fn torch_toggled_too_frequently(&mut self, pos: BlockPos, add: bool) -> bool {
         if add {
             let time = self.level.game_time();
-            self.ticks.torch_toggles.push((pos, time));
+            self.write_ticks(TickScope::Dimension, |ticks| {
+                ticks.torch_toggles.push((pos, time))
+            });
         }
-        self.ticks
-            .torch_toggles
-            .iter()
-            .filter(|(p, _)| *p == pos)
-            .take(8)
-            .count()
-            >= 8
+        self.read_ticks(TickScope::Dimension, |ticks| {
+            ticks
+                .torch_toggles
+                .iter()
+                .filter(|(p, _)| *p == pos)
+                .take(8)
+                .count()
+                >= 8
+        })
     }
     pub(crate) fn torch_tick(&mut self, pos: BlockPos, state: BlockStateId) {
         let b = self.b;
         let signal = self.torch_has_neighbor_signal(pos, state);
         let time = self.level.game_time();
-        while self
-            .ticks
-            .torch_toggles
-            .first()
-            .is_some_and(|(_, when)| time - when > 60)
-        {
-            self.ticks.torch_toggles.remove(0);
-        }
+        self.write_ticks(TickScope::Dimension, |ticks| {
+            while ticks
+                .torch_toggles
+                .first()
+                .is_some_and(|(_, when)| time - when > 60)
+            {
+                ticks.torch_toggles.remove(0);
+            }
+        });
         if b.table.bool(state, b.props.lit) {
             if signal {
                 self.set_block_and_update(pos, b.table.set_bool(state, b.props.lit, false));
@@ -751,7 +753,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     // ---- observers ----
 
     pub(crate) fn observer_start_signal(&mut self, pos: BlockPos, block: BlockId) {
-        if !self.ticks.has_block_tick(pos, block) {
+        if !self.has_block_tick(pos, block) {
             self.schedule_tick(pos, block, 2);
         }
     }
@@ -1349,7 +1351,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         };
         let strength = ((15.0 * ((0.5 - distance) / 0.5).clamp(0.0, 1.0)).ceil() as i32).max(1);
         let block = b.block(state);
-        if !self.ticks.has_block_tick(pos, block) {
+        if !self.has_block_tick(pos, block) {
             // `setOutputPower`.
             self.set_block_and_update(pos, b.table.set_int(state, b.props.power, strength));
             self.schedule_tick(pos, block, if arrow { 20 } else { 8 });

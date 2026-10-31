@@ -14,7 +14,7 @@ use horizon_core::{
     ticks::TickTypeId,
 };
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn rand_int(&mut self, bound: i32) -> i32 {
         self.random().next_int_bound(bound).unwrap_or(0)
     }
@@ -1727,8 +1727,26 @@ impl Behaviours {
         level: &mut L,
         ticks: &mut Ticks,
         chunk: ChunkPos,
-        mut next_ticking: impl FnMut(&mut L, i32) -> Option<i32>,
-        mut read_state: impl FnMut(&L, BlockPos) -> BlockStateId,
+        next_ticking: impl FnMut(&mut L, i32) -> Option<i32>,
+        read_state: impl FnMut(&L, BlockPos) -> BlockStateId,
+    ) {
+        self.tick_chunk_random_with_context(
+            super::tick_access::BorrowedLevelTicks::new(level, ticks),
+            chunk,
+            next_ticking,
+            read_state,
+        );
+    }
+
+    /// The same chunk phase with tick data accessed only through short scoped
+    /// operations. The owned context is reborrowed for each live callback; no
+    /// canonical tick-state reference spans a world call or ownership handoff.
+    pub fn tick_chunk_random_with_context<C: super::tick_access::TickContext>(
+        &self,
+        mut level: C,
+        chunk: ChunkPos,
+        mut next_ticking: impl FnMut(&mut C::Level, i32) -> Option<i32>,
+        mut read_state: impl FnMut(&C::Level, BlockPos) -> BlockStateId,
     ) {
         let speed = level.game_rules().random_tick_speed;
         if speed <= 0 {
@@ -1737,18 +1755,23 @@ impl Behaviours {
         let (min_x, min_z) = (chunk.x * 16, chunk.z * 16);
         for _ in 0..speed {
             if level.random().next_int_bound(48).unwrap_or(1) == 0 {
-                let pos = ticks.block_random_pos(min_x, 0, min_z, 15);
+                let pos = level.write_ticks(super::tick_access::TickScope::Current, |ticks| {
+                    ticks.block_random_pos(min_x, 0, min_z, 15)
+                });
                 if let Some(info) = level.precipitation(pos) {
-                    self.sim(level, ticks).precipitation_tick(info);
+                    self.sim_context(level.reborrow()).precipitation_tick(info);
                 }
             }
         }
         let mut from = level.min_y();
-        while let Some(min_y) = next_ticking(level, from).filter(|&y| y < level.max_y()) {
+        while let Some(min_y) = next_ticking(&mut *level, from).filter(|&y| y < level.max_y()) {
             for _ in 0..speed {
-                let pos = ticks.block_random_pos(min_x, min_y, min_z, 15);
-                let state = read_state(level, pos);
-                self.sim(level, ticks).random_tick_state(pos, state);
+                let pos = level.write_ticks(super::tick_access::TickScope::Current, |ticks| {
+                    ticks.block_random_pos(min_x, min_y, min_z, 15)
+                });
+                let state = read_state(&*level, pos);
+                self.sim_context(level.reborrow())
+                    .random_tick_state(pos, state);
             }
             from = min_y + 16;
         }

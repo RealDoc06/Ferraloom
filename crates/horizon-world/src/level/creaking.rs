@@ -15,7 +15,7 @@ fn axis_directions(axis: &str) -> [Direction; 2] {
     }
 }
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     /// `EnvironmentAttributes.CREAKING_ACTIVE`: the overworld day timeline
     /// turns it on from 12600 to 23400.
     pub(crate) fn creaking_active(&self) -> bool {

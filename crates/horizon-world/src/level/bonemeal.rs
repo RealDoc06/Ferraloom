@@ -179,7 +179,7 @@ impl Behaviours {
     }
 }
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn next_int(&mut self, bound: i32) -> i32 {
         self.random().next_int_bound(bound).unwrap_or(0)
     }

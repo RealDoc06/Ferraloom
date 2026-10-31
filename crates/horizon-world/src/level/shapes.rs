@@ -17,7 +17,7 @@ use horizon_core::{
     random::RandomSource,
 };
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     /// `BlockState.updateShape(level, ticks, pos, direction, neighbourPos, neighbourState, random)`.
     pub fn update_shape(
         &mut self,
@@ -711,7 +711,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                 let tip = table
                     .dir(state, p.vertical_direction)
                     .unwrap_or(Direction::Up);
-                if tip == Direction::Down && self.ticks.has_block_tick(pos, block) {
+                if tip == Direction::Down && self.has_block_tick(pos, block) {
                     return Some(state);
                 }
                 if dir == tip.opposite() && !self.can_survive(state, pos) {

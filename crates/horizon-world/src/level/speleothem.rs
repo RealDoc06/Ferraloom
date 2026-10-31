@@ -9,7 +9,7 @@ use super::{
 use crate::{fluid::FluidKind, registry::BlockStateId};
 use horizon_core::{geometry::Direction, position::BlockPos, random::RandomSource};
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn speleothem_tag(&self, state: BlockStateId) -> bool {
         self.b
             .tag("minecraft:speleothems")

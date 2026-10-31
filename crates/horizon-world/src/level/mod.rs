@@ -98,6 +98,7 @@ use std::{collections::HashMap, io, path::Path, sync::Arc, sync::Mutex};
 pub mod classes;
 pub mod data;
 pub mod states;
+pub mod tick_access;
 pub mod ticks;
 
 mod bonemeal;
@@ -906,10 +907,9 @@ impl Behaviours {
 }
 
 /// One mutable view used by the ported behaviour code.
-pub(crate) struct Sim<'a, L: LevelAccess + ?Sized> {
+pub(crate) struct Sim<'a, C: tick_access::TickContext> {
     pub b: &'a Behaviours,
-    pub level: &'a mut L,
-    pub ticks: &'a mut Ticks,
+    pub level: C,
     /// `RedstoneWireBlock.shouldSignal` is false while a wire samples its
     /// neighbours (`getBlockSignal`).
     pub wire_signal_off: std::cell::Cell<bool>,
@@ -919,12 +919,40 @@ impl Behaviours {
         &'a self,
         level: &'a mut L,
         ticks: &'a mut Ticks,
-    ) -> Sim<'a, L> {
+    ) -> Sim<'a, tick_access::BorrowedLevelTicks<'a, L>> {
+        self.sim_context(tick_access::BorrowedLevelTicks::new(level, ticks))
+    }
+
+    pub(crate) fn sim_context<C: tick_access::TickContext>(&self, level: C) -> Sim<'_, C> {
         Sim {
             b: self,
             level,
-            ticks,
             wire_signal_off: std::cell::Cell::new(false),
         }
+    }
+}
+
+impl<C: tick_access::TickContext> Sim<'_, C> {
+    fn read_ticks<R>(&self, scope: tick_access::TickScope, read: impl FnOnce(&Ticks) -> R) -> R {
+        self.level.read_ticks(scope, read)
+    }
+    fn write_ticks<R>(
+        &mut self,
+        scope: tick_access::TickScope,
+        write: impl FnOnce(&mut Ticks) -> R,
+    ) -> R {
+        self.level.write_ticks(scope, write)
+    }
+    fn has_block_tick(&self, pos: BlockPos, block: BlockId) -> bool {
+        self.read_ticks(
+            tick_access::TickScope::Chunk(ChunkPos::new(pos.x >> 4, pos.z >> 4)),
+            |ticks| ticks.has_block_tick(pos, block),
+        )
+    }
+    fn will_block_tick_this_tick(&mut self, pos: BlockPos, block: BlockId) -> bool {
+        self.write_ticks(
+            tick_access::TickScope::Chunk(ChunkPos::new(pos.x >> 4, pos.z >> 4)),
+            |ticks| ticks.will_block_tick_this_tick(pos, block),
+        )
     }
 }

@@ -4,6 +4,7 @@
 //! queue (`ServerLevel.blockEvent` / `runBlockEvents`).
 //!
 //! Entity pushing by moving blocks is the caller's (see `piston_movement`).
+use super::tick_access::TickScope;
 use super::{
     Behaviours, LevelAccess, LevelEvent, Sim, Ticks,
     data::PushReaction,
@@ -101,7 +102,7 @@ fn rel_n(pos: BlockPos, direction: Direction, n: i32) -> BlockPos {
     pos.offset(x * n, y * n, z * n)
 }
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     // ---- block events ----
     pub(crate) fn block_event(
         &mut self,
@@ -116,9 +117,11 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             param_a,
             param_b,
         };
-        if !self.ticks.block_events.contains(&event) {
-            self.ticks.block_events.push(event);
-        }
+        self.write_ticks(TickScope::Dimension, |ticks| {
+            if !ticks.block_events.contains(&event) {
+                ticks.block_events.push(event);
+            }
+        });
     }
     /// `BlockState.triggerEvent`.
     fn trigger_event(&mut self, state: BlockStateId, pos: BlockPos, a: i32, b: i32) -> bool {
@@ -139,25 +142,27 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
 
     // ---- moving piston block entities ----
     pub(crate) fn moving_piston(&self, pos: BlockPos) -> Option<MovingPiston> {
-        self.ticks
-            .moving_pistons
-            .iter()
-            .find(|(p, _)| *p == pos)
-            .map(|(_, m)| *m)
+        self.read_ticks(TickScope::Dimension, |ticks| {
+            ticks
+                .moving_pistons
+                .iter()
+                .find(|(p, _)| *p == pos)
+                .map(|(_, m)| *m)
+        })
     }
     fn set_moving_piston(&mut self, pos: BlockPos, mut piston: MovingPiston) {
-        self.ticks.moving_pistons.retain(|(p, _)| *p != pos);
-        self.ticks.next_block_entity_id += 1;
-        piston.id = self.ticks.next_block_entity_id;
-        self.ticks.moving_pistons.push((pos, piston));
+        self.write_ticks(TickScope::Dimension, |ticks| {
+            ticks.moving_pistons.retain(|(p, _)| *p != pos);
+            ticks.next_block_entity_id += 1;
+            piston.id = ticks.next_block_entity_id;
+            ticks.moving_pistons.push((pos, piston));
+        });
     }
     pub(crate) fn remove_moving_piston(&mut self, pos: BlockPos) -> Option<MovingPiston> {
-        let index = self
-            .ticks
-            .moving_pistons
-            .iter()
-            .position(|(p, _)| *p == pos)?;
-        Some(self.ticks.moving_pistons.remove(index).1)
+        self.write_ticks(TickScope::Dimension, |ticks| {
+            let index = ticks.moving_pistons.iter().position(|(p, _)| *p == pos)?;
+            Some(ticks.moving_pistons.remove(index).1)
+        })
     }
     /// `PistonMovingBlockEntity.finalTick`.
     fn moving_piston_final_tick(&mut self, pos: BlockPos) {
@@ -197,14 +202,11 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                 // The client's copy waits for the server's state before
                 // placing the block itself (deathTicks < 5).
                 piston.death_ticks += 1;
-                if let Some(entry) = self
-                    .ticks
-                    .moving_pistons
-                    .iter_mut()
-                    .find(|(p, _)| *p == pos)
-                {
-                    entry.1 = piston;
-                }
+                self.write_ticks(TickScope::Dimension, |ticks| {
+                    if let Some(entry) = ticks.moving_pistons.iter_mut().find(|(p, _)| *p == pos) {
+                        entry.1 = piston;
+                    }
+                });
                 return;
             }
             self.remove_moving_piston(pos);
@@ -234,16 +236,13 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             // so the push carries the piston as it was before the advance.
             let old = piston;
             let new_progress = (old.progress + 0.5).min(1.0);
-            let current = self
-                .ticks
-                .moving_pistons
-                .iter_mut()
-                .find(|(p, _)| *p == pos);
-            if let Some(entry) = current {
-                piston.progress = new_progress;
-                entry.1 = piston;
-                self.ticks.piston_pushes.push((pos, old, new_progress));
-            }
+            self.write_ticks(TickScope::Dimension, |ticks| {
+                if let Some(entry) = ticks.moving_pistons.iter_mut().find(|(p, _)| *p == pos) {
+                    piston.progress = new_progress;
+                    entry.1 = piston;
+                    ticks.piston_pushes.push((pos, old, new_progress));
+                }
+            });
         }
     }
 
@@ -290,7 +289,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                     if piston.extending
                         && (piston.progress_o < 0.5
                             || self.level.game_time() == piston.last_ticked
-                            || self.ticks.handling_tick)
+                            || self.read_ticks(TickScope::Dimension, |ticks| ticks.handling_tick))
                     {
                         event = 2;
                     }

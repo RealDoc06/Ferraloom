@@ -96,7 +96,7 @@ pub fn unpack_faces(data: i32) -> Vec<Direction> {
         .collect()
 }
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn sculk_rand(&mut self, bound: i32) -> i32 {
         self.random().next_int_bound(bound).unwrap_or(0)
     }

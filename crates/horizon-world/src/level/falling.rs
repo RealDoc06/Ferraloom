@@ -18,7 +18,7 @@ pub enum Landing {
     Continue,
 }
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     /// `FallingBlockEntity.fall`.
     pub(crate) fn falling_block_fall(&mut self, pos: BlockPos, state: BlockStateId) {
         let b = self.b;

@@ -192,7 +192,7 @@ fn weighted<R: RandomSource>(
     None
 }
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     /// `ConfiguredFeature.place(level, generator, level.random, pos)`. The
     /// feature draws from a copy of the level random that replaces it after.
     pub(crate) fn place_configured_feature(&mut self, name: &str, pos: BlockPos) -> bool {

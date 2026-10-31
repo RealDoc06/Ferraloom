@@ -94,7 +94,7 @@ pub enum PlayerEffect {
     RespawnAnchor,
 }
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn player_effect(&mut self, pos: BlockPos, state: BlockStateId, effect: PlayerEffect) {
         self.emit(LevelEvent::Player { pos, state, effect });
     }

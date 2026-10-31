@@ -4,7 +4,10 @@ use crate::{
     random_tick_sections::{SectionOwner, Sections},
 };
 use horizon_core::position::ChunkPos;
-use horizon_world::level::{Behaviours, LevelAccess, RandomTickChunk, Ticks};
+use horizon_world::level::{
+    Behaviours, LevelAccess, RandomTickChunk, Ticks,
+    tick_access::{BorrowedLevelTicks, TickContext},
+};
 use std::sync::Arc;
 
 /// Resident storage and section eligibility used by the block phase kernel.
@@ -34,13 +37,25 @@ pub fn tick_random_chunks<L: BlockPhaseLevel + ?Sized>(
     ticks: &mut Ticks,
     chunks: impl IntoIterator<Item = ChunkPos>,
 ) {
+    tick_random_chunks_with_context(behaviours, BorrowedLevelTicks::new(level, ticks), chunks);
+}
+
+/// The live context form releases tick-state borrows before each block callback.
+/// The compatibility entry point above and the owned-region driver share this
+/// body, so changing ownership does not select a different block algorithm.
+pub fn tick_random_chunks_with_context<C: TickContext>(
+    behaviours: &Behaviours,
+    mut level: C,
+    chunks: impl IntoIterator<Item = ChunkPos>,
+) where
+    C::Level: BlockPhaseLevel,
+{
     for chunk in chunks {
         let mut read = None;
         let mut sections = Sections::default();
         let mut current_chunk = RandomTickChunk::default();
-        behaviours.tick_chunk_random_with_reader(
-            level,
-            ticks,
+        behaviours.tick_chunk_random_with_context(
+            level.reborrow(),
             chunk,
             |level, from| {
                 if read != Some(level.block_revision()) {

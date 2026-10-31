@@ -166,7 +166,7 @@ impl crate::block_collision::DynamicCollisionWorld for NoBlockEntities {
     }
 }
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     /// Shape queries over `getCollisionShape(level, pos)`, including the
     /// position-dependent shapes (bamboo, speleothems, shulker boxes).
     pub(crate) fn shape_info_at(
@@ -211,7 +211,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
     /// `Level.getRawBrightness(pos, darken)`.
     pub fn raw_brightness(&self, pos: BlockPos, darken: i32) -> i32 {
-        super::raw_brightness(self.level, pos, darken)
+        super::raw_brightness(&*self.level, pos, darken)
     }
     /// `LevelReader.getMaxLocalRawBrightness(pos)`.
     pub fn max_local_raw_brightness(&self, pos: BlockPos) -> i32 {

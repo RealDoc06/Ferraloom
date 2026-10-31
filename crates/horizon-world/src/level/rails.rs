@@ -71,7 +71,7 @@ struct Rail {
     connections: Vec<BlockPos>,
 }
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     pub(crate) fn rail_shape(&self, state: BlockStateId) -> &str {
         self.b.table.text(state, self.b.props.shape)
     }

@@ -77,7 +77,7 @@ struct Neighbors {
 
 const MAX_CHAIN_LENGTH: usize = 3;
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn shelf_part(&self, state: BlockStateId) -> Part {
         Part::parse(self.b.table.text(state, self.b.props.side_chain))
     }

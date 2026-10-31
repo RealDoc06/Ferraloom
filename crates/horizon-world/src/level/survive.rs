@@ -10,7 +10,7 @@ use super::{
 use crate::registry::BlockStateId;
 use horizon_core::{geometry::Direction, position::BlockPos};
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     /// `BlockState.canSurvive(level, pos)`.
     pub fn can_survive(&self, state: BlockStateId, pos: BlockPos) -> bool {
         self.can_survive_at(0, state, pos)

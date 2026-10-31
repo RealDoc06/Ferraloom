@@ -36,7 +36,7 @@ fn step(pos: BlockPos, dir: Direction, n: i32) -> BlockPos {
     pos.offset(dx * n, dy * n, dz * n)
 }
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn portal_frame(&self, state: BlockStateId) -> bool {
         let b = self.b;
         b.tag("minecraft:nether_portal_frame")

@@ -57,7 +57,7 @@ impl SpreadContext {
     }
 }
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn fast_lava(&self) -> bool {
         self.level.dimension() == Dimension::Nether
     }

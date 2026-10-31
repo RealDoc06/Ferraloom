@@ -170,7 +170,7 @@ impl Ctx {
     }
 }
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn item_is(&self, ctx: &Ctx, block: BlockId) -> bool {
         !ctx.item.is_empty() && *self.b.block_data(block).item == *ctx.item
     }

@@ -453,7 +453,7 @@ fn spiral_around(
     }
 }
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     /// `PortalForcer.canPortalReplaceBlock`.
     fn portal_can_replace(&self, pos: BlockPos) -> bool {
         let state = self.state(pos);
