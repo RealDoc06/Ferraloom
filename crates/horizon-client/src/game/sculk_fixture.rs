@@ -338,7 +338,7 @@ impl Game<'_> {
                 }
             }
         }
-        self.server_level.block_ticks = Ticks::new(0);
+        self.server_level.block_ticks = Ticks::new(0).into();
         self.server_level.tick_chunks.clear();
         self.sync_tick_chunks();
         self.mobs.clear();

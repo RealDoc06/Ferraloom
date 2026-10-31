@@ -35,7 +35,7 @@ const IDLE_TICKS: u32 = 300;
 
 /// A level that is not in place: every per-level field of `Game`.
 pub(super) struct Parked {
-    world: World,
+    world: ferraloom_game::ownership::OwnershipSlot<World>,
     streaming: Streaming,
     locator: Option<Arc<VanillaTerrain>>,
     save: Arc<SaveDir>,
@@ -137,7 +137,7 @@ impl Game<'_> {
         let mut world = World::new(self.res.facts().air, self.level.seed);
         world.fast_lava = dim == Dim::Nether;
         Ok(Parked {
-            world,
+            world: world.into(),
             streaming,
             locator,
             save,

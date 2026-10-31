@@ -1421,7 +1421,7 @@ struct Game<'a> {
     screen_fx: horizon_client::screen_effects::ScreenEffects,
     weather_parameters: horizon_client::weather::ParameterCache,
     panorama_rotation: horizon_client::gfx::panorama::Rotation,
-    world: World,
+    world: ferraloom_game::ownership::OwnershipSlot<World>,
     streaming: Streaming,
     lod: Option<horizon_client::lod::Lod>,
     lod_source_attempted: bool,
@@ -9090,7 +9090,7 @@ impl Game<'_> {
         self.dim = dim;
         self.world_root = save_root.clone();
         self.world_flat = horizon_client::save::WorldGen::read(&save_root).is_some_and(|w| w.flat);
-        self.server_level.block_ticks = Ticks::new(self.level.seed as i32);
+        self.server_level.block_ticks = Ticks::new(self.level.seed as i32).into();
         self.server_level.tick_chunks.clear();
         self.clear_entities();
         self.travelling = None;
@@ -9214,7 +9214,7 @@ impl Game<'_> {
         self.save = save;
         self.dim = target;
         self.level.dimension = target.id().to_owned();
-        self.server_level.block_ticks = Ticks::new(self.level.seed as i32);
+        self.server_level.block_ticks = Ticks::new(self.level.seed as i32).into();
         self.server_level.tick_chunks.clear();
         self.falling.clear();
         self.tnts.clear();
@@ -13703,7 +13703,7 @@ impl<'a> Game<'a> {
             screen_fx: Default::default(),
             weather_parameters: Default::default(),
             panorama_rotation: Default::default(),
-            world,
+            world: world.into(),
             streaming,
             lod: None,
             lod_source_attempted: false,
