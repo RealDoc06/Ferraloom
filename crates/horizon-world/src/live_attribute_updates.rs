@@ -2,7 +2,7 @@
 use crate::{
     attribute_map::ValueKind,
     attribute_updates::{self, UpdateWorld, UpdatedAttribute},
-    attributes::live::{Error, Handle, Key, LiveAttributes},
+    attributes::live::{Error, Handle, IdentitySource, Key, LiveAttributes},
     object_open_set::CursorError,
 };
 
@@ -10,7 +10,7 @@ use crate::{
 /// entity's current attributes. Map and instance accessors are direct storage
 /// reads; virtual entity methods remain explicit dispatch points.
 pub trait LiveAttributeWorld: UpdateWorld<Key> {
-    type Identity: FnMut() -> i32;
+    type Identity: IdentitySource;
     fn get_attributes(&mut self) -> Result<Self::Attributes, Self::Error>;
     fn live_attributes(&self, map: Self::Attributes) -> &LiveAttributes<Self::Identity>;
     fn live_attributes_mut(&mut self, map: Self::Attributes)

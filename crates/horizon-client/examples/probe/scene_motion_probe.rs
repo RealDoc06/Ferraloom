@@ -274,24 +274,20 @@ pub fn main() -> Result<()> {
                     .expect("missing holder identity") as i32
             })
             .collect();
-        let mut instances = f["instance_hashes"]
+        let instances = f["instance_hashes"]
             .as_array()
             .ok_or("missing instance identities")?
             .iter()
             .map(|v| v.as_i64().unwrap() as i32)
-            .collect::<Vec<_>>()
-            .into_iter();
+            .collect::<Vec<_>>();
         let count = instances.len();
-        let used = std::rc::Rc::new(std::cell::Cell::new(0));
-        let counter = used.clone();
+        let (identities, used) =
+            horizon_world::attributes::live::IdentityCounter::recorded(instances);
         let mut player = PlayerMotion::with_attribute_identities(
             &resources,
             vector(&f["position"]),
             &hashes,
-            Box::new(move || {
-                counter.set(counter.get() + 1);
-                instances.next().expect("unexpected instance allocation")
-            }),
+            identities,
         )?;
         // The oracle runs block-inside effects only in "snow_tick".
         player.block_effects = false;
@@ -712,7 +708,7 @@ pub fn main() -> Result<()> {
             )?;
         }
         writeln!(out, "end")?;
-        if used.get() != count {
+        if used.load(std::sync::atomic::Ordering::Relaxed) != count {
             return Err("reference instance allocation count differs".into());
         }
     }

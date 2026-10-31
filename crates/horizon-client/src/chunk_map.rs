@@ -75,6 +75,18 @@ impl<'a> IntoIterator for &'a ChunkMap {
         self.columns.iter()
     }
 }
+impl ferraloom_game::tick_chunk_membership::LoadedTickChunks for ChunkMap {
+    fn membership_revision(&self) -> u64 {
+        self.membership_revision()
+    }
+    fn contains_chunk(&self, key: &Key) -> bool {
+        self.columns.contains_key(key)
+    }
+    fn chunk_keys(&self) -> impl Iterator<Item = Key> {
+        self.columns.keys().copied()
+    }
+}
+
 impl crate::light::LightWorld for ChunkMap {
     fn section(&self, cx: i32, s: usize, cz: i32) -> Option<&Arc<crate::chunk::Section>> {
         self.columns.section(cx, s, cz)

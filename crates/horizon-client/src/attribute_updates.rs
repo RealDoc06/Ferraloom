@@ -105,7 +105,7 @@ impl UpdateWorld<Key> for PlayerMotion {
     }
 }
 impl LiveAttributeWorld for PlayerMotion {
-    type Identity = Box<dyn FnMut() -> i32>;
+    type Identity = horizon_world::attributes::live::IdentityCounter;
     fn get_attributes(&mut self) -> Result<()> {
         Ok(())
     }

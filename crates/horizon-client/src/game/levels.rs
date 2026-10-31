@@ -20,10 +20,9 @@ use super::{
 };
 use horizon_client::{
     Result, block_entity_anim::BlockEntityAnims, random_tick_sections::RandomTickSections,
-    save::SaveDir, streaming::Streaming, tick_chunk_membership::TickChunkMembership,
-    ticket_levels::ChunkTickets, vanillagen::VanillaTerrain, world::World,
+    save::SaveDir, streaming::Streaming, vanillagen::VanillaTerrain, world::World,
 };
-use horizon_world::level::{LevelEvent, Ticks};
+use horizon_world::level::LevelEvent;
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -41,9 +40,7 @@ pub(super) struct Parked {
     streaming: Streaming,
     locator: Option<Arc<VanillaTerrain>>,
     save: Arc<SaveDir>,
-    block_ticks: Ticks,
-    tick_chunks: TickChunkMembership,
-    tickets: ChunkTickets,
+    server_level: ferraloom_game::server_level::ServerLevel,
     random_tick_sections: RandomTickSections,
     level_events: Vec<LevelEvent>,
     falling: Vec<FallingBlock>,
@@ -147,9 +144,7 @@ impl Game<'_> {
             streaming,
             locator,
             save,
-            block_ticks: Ticks::new(self.level.seed as i32),
-            tick_chunks: Default::default(),
-            tickets: Default::default(),
+            server_level: ferraloom_game::server_level::ServerLevel::new(self.level.seed as i32),
             random_tick_sections: Default::default(),
             level_events: Vec::new(),
             falling: Vec::new(),
@@ -201,9 +196,7 @@ impl Game<'_> {
         self.end.set_locator(locator);
         self.share_spawn_conditions();
         swap(&mut self.save, &mut p.save);
-        swap(&mut self.block_ticks, &mut p.block_ticks);
-        swap(&mut self.tick_chunks, &mut p.tick_chunks);
-        swap(&mut self.tickets, &mut p.tickets);
+        swap(&mut self.server_level, &mut p.server_level);
         swap(&mut self.random_tick_sections, &mut p.random_tick_sections);
         swap(&mut self.level_events, &mut p.level_events);
         swap(&mut self.falling, &mut p.falling);

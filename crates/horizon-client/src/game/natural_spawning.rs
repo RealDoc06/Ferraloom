@@ -480,7 +480,7 @@ impl<'a> Game<'a> {
             }
         }
         let count = candidates.len() as i32;
-        let levels = self.tickets.levels();
+        let levels = self.server_level.tickets.levels();
         candidates.retain(|&(cx, cz)| {
             levels.loaded_ticking(cx, cz)
                 && super::ticking_chunk(&self.world, cx, cz)

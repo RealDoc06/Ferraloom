@@ -30,7 +30,7 @@ impl Game<'_> {
             return;
         }
         let (_, mut chunks) = self.spawning_chunks(&self.level_players());
-        let levels = self.tickets.levels();
+        let levels = self.server_level.tickets.levels();
         chunks.retain(|&(x, z)| levels.random_ticking(x, z));
         for (cx, cz) in chunks {
             if self.world.random.next_int_bound(100_000).unwrap_or(1) != 0 {
