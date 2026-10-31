@@ -6133,8 +6133,8 @@ pub(super) fn input_ordinal(input: Input) -> i32 {
 
 /// The client's world for a guess at what a click does: reads go to the
 /// world, writes stay here and are dropped.
-struct DryLevel<'w> {
-    base: &'w dyn horizon_world::level::LevelAccess,
+struct DryLevel<'w, L: horizon_world::level::LevelAccess + ?Sized> {
+    base: &'w L,
     changed: HashMap<horizon_core::position::BlockPos, BlockStateId>,
     random: horizon_core::random::LegacyRandom,
     /// The sounds the use plays (a door's creak).
@@ -6165,8 +6165,8 @@ pub(super) fn hand_operated(name: &str) -> bool {
         || name == "lever"
 }
 
-impl<'w> DryLevel<'w> {
-    fn new(base: &'w dyn horizon_world::level::LevelAccess) -> Self {
+impl<'w, L: horizon_world::level::LevelAccess + ?Sized> DryLevel<'w, L> {
+    fn new(base: &'w L) -> Self {
         Self {
             base,
             changed: HashMap::new(),
@@ -6176,7 +6176,9 @@ impl<'w> DryLevel<'w> {
     }
 }
 
-impl horizon_world::level::LevelAccess for DryLevel<'_> {
+impl<L: horizon_world::level::LevelAccess + ?Sized> horizon_world::level::LevelAccess
+    for DryLevel<'_, L>
+{
     fn emit(&mut self, event: horizon_world::level::LevelEvent) {
         if let horizon_world::level::LevelEvent::Sound {
             pos,
