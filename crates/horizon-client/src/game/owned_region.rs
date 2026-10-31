@@ -115,11 +115,14 @@ impl<S: Services> OwnedLevel<S> {
     fn exclusive(&self, request: Request) -> Reply {
         let region = self.region.borrow_mut().take().expect("nested region loan");
         let Returned { region, result } = self.services.call(region, request);
-        let previous = self.region.borrow_mut().replace(region);
-        assert!(
-            previous.is_none(),
-            "exclusive callback replaced an active owner"
-        );
+        {
+            let mut owner = self.region.borrow_mut();
+            assert!(
+                owner.is_none(),
+                "exclusive callback replaced an active owner"
+            );
+            *owner = Some(region);
+        }
         self.handoffs.set(self.handoffs.get().wrapping_add(1));
         result.unwrap_or_else(|panic| std::panic::resume_unwind(panic))
     }
