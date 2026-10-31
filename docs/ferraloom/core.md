@@ -190,6 +190,55 @@ point. Teleports and multi-target commands cannot become next-tick messages.
 Implement and test this continuation protocol before enabling parallel regions;
 a mutex around the world is not its substitute.
 
+### Stack carriers and live adapters
+
+Use blocking Rust stacks on OS threads for the first continuation driver.
+The normal pool has `worker-count` runnable threads; each runs region jobs in
+sequence on its own stack. Do not pin one thread to each region or wake a
+thread for each job. When a job parks, its carrier remains blocked with that
+call stack, returns canonical ownership and releases its runnable slot. An idle
+spare, or one grown lazily from the bounded spare pool, takes over the slot.
+Thread demand is the worker count plus currently parked stacks. With no parks,
+only the normal workers wake for the phase. Pool synchronization lives in the
+runtime, outside simulation state.
+
+The coordinator waits until all phase jobs finish or park, then serves exclusive
+requests in stable phase/region/operation order and resumes the original call.
+It never chooses a winner by arrival time. Bound region count and therefore
+parked-stack/spare demand through deterministic conservative coalescing.
+Coalescing and tie-breaking use only simulation state and stable region
+ordinals, never worker count, measured cost or completion timing. The carrier
+and phase contracts must also serve block entities, scheduled ticks and mobs.
+
+The concrete adapter may keep one private `RefCell<Option<Region>>`, owned by
+the active job on its worker and never shared between workers. Small helpers
+return owned answers/handles and end their state borrows before invoking a
+callback or parking. No borrow guard or reference into canonical region state
+may escape a helper. A reentrant borrow panic is a bug, not a serial-fallback
+signal. Resident chunk reads return owned `Arc` handles through
+`RandomTickChunk::get_owned`, retaining the existing weak-cache fast path.
+
+Resolve the separate canonical `Ticks` borrow before enabling workers. A
+`TickAccess` facade performs short scoped borrows of the same live tick state;
+legacy `Ticks` can implement the facade while existing callers migrate. Active
+behaviour frames retain the facade and handles/scalars, not `&mut Ticks` or a
+queue borrow across a world callback. Reentrant callback/handoff tests must
+observe mutations of that same canonical tick state after resumption.
+
+Gate the adapter cell with a paired block-read hot-path benchmark, using the
+same compiler/profile/input and alternating before/after trials as the
+attribute lookup gate. Reject a regression above about 2%; use the wider
+`&mut` read-API conversion only if the cell fails this bar. Include a focused
+reentrant callback test. Neither this design nor a passing type assertion
+claims that the adapter or continuation driver has been implemented yet.
+
+With worker coverage, report wakeup overhead, parked-thread high water, RSS and
+the share of regions coalesced by the cap. Include a two-core serial control:
+regional execution must not lose to serial there. Keep a serial-slot fallback
+when dispatch is slower, chosen before phase work and preserving the mode's
+RNG, ordering and callback semantics. Execution policy must not change the
+simulation-driven coalescing decisions or worker-count determinism.
+
 ## Work outside the tick
 
 Capture chunk-send/save inputs at their original visibility points. Existing
