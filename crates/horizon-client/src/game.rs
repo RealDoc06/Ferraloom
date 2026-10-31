@@ -12,6 +12,7 @@ mod beehives;
 mod block_entity_anims;
 mod block_entity_ticks;
 mod block_items;
+mod block_phase;
 mod blockctl;
 mod boat_passengers;
 mod boats;
@@ -3198,38 +3199,14 @@ impl Game<'_> {
         self.process_level_events()?;
         self.tick_scheduled()?;
         self.with_level(|b, level, ticks| {
-            for (x, z) in ticking {
-                // The sections are read again only after a block changed.
-                let mut read = None;
-                let mut sections = Default::default();
-                let pos = horizon_core::position::ChunkPos::new(x, z);
-                let mut current_chunk = horizon_world::level::RandomTickChunk::default();
-                b.tick_chunk_random_with_reader(
-                    level,
-                    ticks,
-                    pos,
-                    |level, from| {
-                        if read != Some(level.world.revision) {
-                            read = Some(level.world.revision);
-                            sections = level
-                                .world
-                                .chunks
-                                .get(&(x, z))
-                                .map_or_else(Default::default, |chunk| {
-                                    level.random_tick_sections.get((x, z), chunk, level.facts)
-                                });
-                        }
-                        sections.from(from)
-                    },
-                    |level, at| {
-                        let current = current_chunk
-                            .get(level.world.revision, || level.world.chunks.get(&(x, z)));
-                        current.map_or(level.world.air, |chunk| {
-                            chunk.block(at.x & 15, at.y, at.z & 15)
-                        })
-                    },
-                );
-            }
+            ferraloom_game::block_phase::tick_random_chunks(
+                b,
+                level,
+                ticks,
+                ticking
+                    .into_iter()
+                    .map(|(x, z)| horizon_core::position::ChunkPos::new(x, z)),
+            );
             b.run_block_events(level, ticks);
             b.tick_block_entities(level, ticks);
         });

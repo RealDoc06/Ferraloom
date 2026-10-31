@@ -75,6 +75,16 @@ impl<T> RandomTickChunk<T> {
     where
         T: 'a,
     {
+        self.get_owned(revision, || load().cloned())
+    }
+
+    /// Like `get`, with an owned handle so a live adapter can end its storage
+    /// borrow before returning the chunk. Unchanged reads keep the weak fast path.
+    pub fn get_owned(
+        &mut self,
+        revision: u64,
+        load: impl FnOnce() -> Option<std::sync::Arc<T>>,
+    ) -> Option<std::sync::Arc<T>> {
         if self.revision == Some(revision) {
             if let Some(chunk) = self.chunk.upgrade() {
                 return Some(chunk);
@@ -84,8 +94,8 @@ impl<T> RandomTickChunk<T> {
         // advancing the world's block revision. An expired pointer reloads too.
         let chunk = load()?;
         self.revision = Some(revision);
-        self.chunk = std::sync::Arc::downgrade(chunk);
-        Some(chunk.clone())
+        self.chunk = std::sync::Arc::downgrade(&chunk);
+        Some(chunk)
     }
 }
 
