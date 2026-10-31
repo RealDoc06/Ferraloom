@@ -2,6 +2,7 @@
 //! prepared client resources and worldgen bundle (skipped when absent).
 use super::*;
 use crate::{chunk::BlockState, worldgen::generator::GeneratorData, worldgen::live::LiveFeatures};
+use horizon_core::random::RandomSource;
 use std::{
     collections::{BTreeMap, HashMap},
     path::PathBuf,
