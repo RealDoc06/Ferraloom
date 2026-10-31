@@ -72,14 +72,17 @@ struct Rail {
 }
 
 impl<C: super::tick_access::TickContext> Sim<'_, C> {
-    pub(crate) fn rail_shape(&mut self, state: BlockStateId) -> &str {
+    pub(crate) fn rail_shape(&self, state: BlockStateId) -> &str {
         self.b.table.text(state, self.b.props.shape)
     }
-    fn is_rail(&mut self, state: BlockStateId) -> bool {
+    fn is_rail(&self, state: BlockStateId) -> bool {
         self.b.in_set(state, &self.b.tags.rails) && self.b.instance_of(state, Class::BaseRail)
     }
     fn is_rail_at(&mut self, pos: BlockPos) -> bool {
-        self.is_rail(self.state(pos))
+        {
+            let queried_argument_0 = self.state(pos);
+            self.is_rail(queried_argument_0)
+        }
     }
     fn rail_connections(pos: BlockPos, shape: RailShape) -> Vec<BlockPos> {
         let (n, s, w, e) = (
@@ -101,7 +104,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             RailShape::NorthEast => vec![e, n],
         }
     }
-    fn rail_new(&mut self, pos: BlockPos, state: BlockStateId) -> Rail {
+    fn rail_new(&self, pos: BlockPos, state: BlockStateId) -> Rail {
         let shape = RailShape::parse(self.rail_shape(state));
         Rail {
             pos,
@@ -185,7 +188,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
         shape
     }
-    fn rail_set_shape(&mut self, state: BlockStateId, shape: RailShape) -> BlockStateId {
+    fn rail_set_shape(&self, state: BlockStateId, shape: RailShape) -> BlockStateId {
         self.b
             .table
             .set_text(state, self.b.props.shape, shape.name())
@@ -343,7 +346,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             return;
         }
         let shape = RailShape::parse(self.rail_shape(state));
-        let support = |sim: &Self, p: BlockPos| sim.can_support_rigid_block(p);
+        let support = |sim: &mut Self, p: BlockPos| sim.can_support_rigid_block(p);
         let remove = !support(self, below(pos))
             || match shape {
                 RailShape::AscendingEast => !support(self, rel(pos, Direction::East)),
@@ -369,7 +372,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             }
         }
     }
-    fn is_signal_source_default(&mut self, state: BlockStateId) -> bool {
+    fn is_signal_source_default(&self, state: BlockStateId) -> bool {
         self.b
             .has_flag(state, super::data::state_flags::SIGNAL_SOURCE)
     }

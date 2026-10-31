@@ -224,10 +224,10 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             state: Some(state),
         });
     }
-    pub fn block_of(&mut self, state: BlockStateId) -> BlockId {
+    pub fn block_of(&self, state: BlockStateId) -> BlockId {
         self.b.table.block(state)
     }
-    pub fn is_in_valid_bounds(&mut self, pos: BlockPos) -> bool {
+    pub fn is_in_valid_bounds(&self, pos: BlockPos) -> bool {
         pos.y >= self.level.min_y()
             && pos.y < self.level.max_y()
             && (-30_000_000..30_000_000).contains(&pos.x)
@@ -350,7 +350,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         {
             self.affect_neighbors_after_removal(old, pos, moved);
         }
-        if self.block_of(self.state(pos)) != new_block {
+        if {
+            let queried_argument_0 = self.state(pos);
+            self.block_of(queried_argument_0)
+        } != new_block
+        {
             return None;
         }
         if update_flags & flags::UPDATE_SKIP_ON_PLACE == 0 {
@@ -360,7 +364,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `BlockState.shouldChangedStateKeepBlockEntity(oldState)`: copper chests
     /// and copper golem statues keep theirs across their weathering states.
-    fn keeps_block_entity(&mut self, new: BlockStateId, old: BlockStateId) -> bool {
+    fn keeps_block_entity(&self, new: BlockStateId, old: BlockStateId) -> bool {
         let (new, old) = (self.block_of(new), self.block_of(old));
         let tags = &self.b.tags;
         (tags.copper_chests.contains(new) && tags.copper_chests.contains(old))

@@ -69,7 +69,8 @@ impl Behaviours {
         let below = BlockPos::new(top.x, top.y - 1, top.z);
         let settings = self.biome_settings(level, top)?;
         let sea = sea_level(level);
-        let inside = |p: BlockPos| p.y >= level.min_y() && p.y < level.max_y();
+        let (min_y, max_y) = (level.min_y(), level.max_y());
+        let inside = |p: BlockPos| p.y >= min_y && p.y < max_y;
         // Biome.shouldFreeze(level, below, true)
         let freezes_below = settings.height_adjusted(below, sea) < 0.15
             && inside(below)

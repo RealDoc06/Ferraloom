@@ -134,7 +134,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
                         state,
                         kind: "brushable",
                     });
-                    if self.is_free(self.below_state(pos)) && pos.y >= self.level.min_y() {
+                    if {
+                        let queried_argument_0 = self.below_state(pos);
+                        self.is_free(queried_argument_0)
+                    } && pos.y >= self.level.min_y()
+                    {
                         self.falling_block_fall(pos, state);
                     }
                 }
@@ -300,7 +304,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
                         && self.random().next_double() < data.grow_probability
                     {
                         let growth = rel(pos, data.growth_direction);
-                        if self.growing_plant_can_grow_into(state, self.state(growth)) {
+                        if {
+                            let queried_argument_0 = state;
+                            let queried_argument_1 = self.state(growth);
+                            self.growing_plant_can_grow_into(queried_argument_0, queried_argument_1)
+                        } {
                             let next = self.growing_plant_grow_into_state(state);
                             self.set_block_and_update(growth, next);
                         }
@@ -425,7 +433,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         self.game_event(pos, "minecraft:block_change");
     }
     /// `FallingBlock.isFree`.
-    pub(crate) fn is_free(&mut self, state: BlockStateId) -> bool {
+    pub(crate) fn is_free(&self, state: BlockStateId) -> bool {
         let b = self.b;
         b.is_air(state)
             || b.tag("minecraft:fire")
@@ -436,7 +444,12 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn leaves_update_distance(&mut self, state: BlockStateId, pos: BlockPos) -> BlockStateId {
         let mut distance = 7;
         for direction in Direction::ALL {
-            distance = distance.min(self.leaf_distance_at(self.rel_state(pos, direction)) + 1);
+            distance = distance.min(
+                {
+                    let queried_argument_0 = self.rel_state(pos, direction);
+                    self.leaf_distance_at(queried_argument_0)
+                } + 1,
+            );
             if distance == 1 {
                 break;
             }
@@ -477,7 +490,10 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         };
         self.set_block(pos, column_state, 2);
         let mut up = above(pos);
-        while self.bubble_column_can_occupy(self.state(up)) {
+        while {
+            let queried_argument_0 = self.state(up);
+            self.bubble_column_can_occupy(queried_argument_0)
+        } {
             if !self.set_block(up, column_state, 2) {
                 return;
             }
@@ -571,7 +587,13 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
                 }
                 return;
             }
-            if age == 15 && self.rand_int(4) == 0 && !self.can_burn(self.below_state(pos)) {
+            if age == 15
+                && self.rand_int(4) == 0
+                && !{
+                    let queried_argument_0 = self.below_state(pos);
+                    self.can_burn(queried_argument_0)
+                }
+            {
                 self.remove_block(pos, false);
                 return;
             }
@@ -626,7 +648,10 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
         Direction::ALL
             .into_iter()
-            .map(|d| self.ignite_odds(self.rel_state(pos, d)))
+            .map(|d| {
+                let queried_argument_0 = self.rel_state(pos, d);
+                self.ignite_odds(queried_argument_0)
+            })
             .max()
             .unwrap_or(0)
     }
@@ -639,7 +664,10 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     fn fire_check_burn_out(&mut self, pos: BlockPos, chance: i32, age: i32) {
         let b = self.b;
-        let odds = self.burn_odds(self.state(pos));
+        let odds = {
+            let queried_argument_0 = self.state(pos);
+            self.burn_odds(queried_argument_0)
+        };
         if self.rand_int(chance) < odds {
             let old = self.state(pos);
             if self.rand_int(age + 10) < 5 && !self.level.is_raining_at(pos) {
@@ -657,7 +685,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn frosted_ice_tick(&mut self, pos: BlockPos, state: BlockStateId) {
         let b = self.b;
         let block = b.block(state);
-        let fewer = |sim: &Self, at: BlockPos, limit: i32| {
+        let fewer = |sim: &mut Self, at: BlockPos, limit: i32| {
             let mut count = 0;
             for d in Direction::ALL {
                 if sim.b.is_block(sim.rel_state(at, d), block) {
@@ -740,7 +768,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
                 speed += block_speed;
             }
         }
-        let is = |at: BlockPos| b.is_block(self.state(at), block);
+        let mut is = |at: BlockPos| b.is_block(self.state(at), block);
         let (n, s, w, e) = (
             rel(pos, Direction::North),
             rel(pos, Direction::South),
@@ -847,7 +875,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     pub(crate) fn growing_plant_can_grow_into(
-        &mut self,
+        &self,
         plant: BlockStateId,
         state: BlockStateId,
     ) -> bool {
@@ -970,7 +998,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         pos.offset(x, y, z)
     }
     /// `LightEngine.getLightDampeningInto(state, above, UP, above.dampening) < 15`.
-    fn top_face_lets_light(&mut self, state: BlockStateId, above_state: BlockStateId) -> bool {
+    fn top_face_lets_light(&self, state: BlockStateId, above_state: BlockStateId) -> bool {
         let b = self.b;
         let occluding = |s: BlockStateId| {
             b.has_flag(s, state_flags::CAN_OCCLUDE)
@@ -989,7 +1017,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         into < 15
     }
     fn can_be_nylium(&mut self, state: BlockStateId, pos: BlockPos) -> bool {
-        self.top_face_lets_light(state, self.above_state(pos))
+        {
+            let queried_argument_0 = state;
+            let queried_argument_1 = self.above_state(pos);
+            self.top_face_lets_light(queried_argument_0, queried_argument_1)
+        }
     }
     fn snowy_can_stay_alive(&mut self, state: BlockStateId, pos: BlockPos) -> bool {
         let b = self.b;
@@ -1182,39 +1214,55 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
                 let cw_test = rel(test, cw);
                 let ccw_test = rel(test, ccw);
                 if cw_face && b.multiface_can_attach(self.state(cw_test), cw) {
-                    self.set_block(
-                        test,
-                        b.table.set_bool(default, self.direction_prop(cw), true),
-                        2,
-                    );
+                    {
+                        let queried_argument_0 = test;
+                        let queried_argument_1 =
+                            b.table.set_bool(default, self.direction_prop(cw), true);
+                        let queried_argument_2 = 2;
+                        self.set_block(queried_argument_0, queried_argument_1, queried_argument_2)
+                    };
                 } else if ccw_face && b.multiface_can_attach(self.state(ccw_test), ccw) {
-                    self.set_block(
-                        test,
-                        b.table.set_bool(default, self.direction_prop(ccw), true),
-                        2,
-                    );
+                    {
+                        let queried_argument_0 = test;
+                        let queried_argument_1 =
+                            b.table.set_bool(default, self.direction_prop(ccw), true);
+                        let queried_argument_2 = 2;
+                        self.set_block(queried_argument_0, queried_argument_1, queried_argument_2)
+                    };
                 } else {
                     let opposite = direction.opposite();
                     if cw_face
                         && self.is_empty_block(cw_test)
                         && b.multiface_can_attach(self.rel_state(pos, cw), opposite)
                     {
-                        self.set_block(
-                            cw_test,
-                            b.table
-                                .set_bool(default, self.direction_prop(opposite), true),
-                            2,
-                        );
+                        {
+                            let queried_argument_0 = cw_test;
+                            let queried_argument_1 =
+                                b.table
+                                    .set_bool(default, self.direction_prop(opposite), true);
+                            let queried_argument_2 = 2;
+                            self.set_block(
+                                queried_argument_0,
+                                queried_argument_1,
+                                queried_argument_2,
+                            )
+                        };
                     } else if ccw_face
                         && self.is_empty_block(ccw_test)
                         && b.multiface_can_attach(self.rel_state(pos, ccw), opposite)
                     {
-                        self.set_block(
-                            ccw_test,
-                            b.table
-                                .set_bool(default, self.direction_prop(opposite), true),
-                            2,
-                        );
+                        {
+                            let queried_argument_0 = ccw_test;
+                            let queried_argument_1 =
+                                b.table
+                                    .set_bool(default, self.direction_prop(opposite), true);
+                            let queried_argument_2 = 2;
+                            self.set_block(
+                                queried_argument_0,
+                                queried_argument_1,
+                                queried_argument_2,
+                            )
+                        };
                     } else if self.random().next_float() < 0.05
                         && b.multiface_can_attach(self.state(above(test)), Direction::Up)
                     {
@@ -1222,12 +1270,14 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
                     }
                 }
             } else if b.multiface_can_attach(edge, direction) {
-                self.set_block(
-                    pos,
-                    b.table
-                        .set_bool(state, self.direction_prop(direction), true),
-                    2,
-                );
+                {
+                    let queried_argument_0 = pos;
+                    let queried_argument_1 =
+                        b.table
+                            .set_bool(state, self.direction_prop(direction), true);
+                    let queried_argument_2 = 2;
+                    self.set_block(queried_argument_0, queried_argument_1, queried_argument_2)
+                };
             }
             return;
         }
@@ -1335,7 +1385,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         } else if b.is_air(below_state) {
             grow_up = true;
         }
-        let all_empty = |sim: &Self, at: BlockPos, ignore: Option<Direction>| {
+        let all_empty = |sim: &mut Self, at: BlockPos, ignore: Option<Direction>| {
             HORIZONTAL
                 .into_iter()
                 .all(|d| Some(d) == ignore || sim.is_empty_block(rel(at, d)))
@@ -1475,7 +1525,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     /// `WeatheringCopper.getNext` by registry naming.
-    pub(crate) fn copper_next(&mut self, state: BlockStateId) -> Option<BlockStateId> {
+    pub(crate) fn copper_next(&self, state: BlockStateId) -> Option<BlockStateId> {
         let b = self.b;
         let name = &*b.table.info(b.block(state)).name;
         let path = name.strip_prefix("minecraft:")?;
@@ -1510,7 +1560,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             })
         }
     }
-    fn copper_stepped(&mut self, state: BlockStateId, all_the_way: bool) -> Option<BlockStateId> {
+    fn copper_stepped(&self, state: BlockStateId, all_the_way: bool) -> Option<BlockStateId> {
         let b = self.b;
         let name = &*b.table.info(b.block(state)).name;
         let mut path = Self::copper_previous_name(name.strip_prefix("minecraft:")?)?;
@@ -1596,7 +1646,7 @@ impl Behaviours {
         let time = level.game_time();
         ticks.handling_tick = true;
         {
-            let level_ref: &L = level;
+            let level_ref: &mut L = level;
             if ticks
                 .blocks
                 .begin_tick(time, 65536, |chunk: ChunkPos| {
@@ -1617,7 +1667,7 @@ impl Behaviours {
         }
         let _ = ticks.blocks.finish_tick();
         {
-            let level_ref: &L = level;
+            let level_ref: &mut L = level;
             if ticks
                 .fluids
                 .begin_tick(time, 65536, |chunk: ChunkPos| {
@@ -1652,7 +1702,7 @@ impl Behaviours {
     ) -> bool {
         let time = level.game_time();
         ticks.handling_tick = true;
-        let level_ref: &L = level;
+        let level_ref: &mut L = level;
         let queue = if fluids {
             &mut ticks.fluids
         } else {
@@ -1732,7 +1782,7 @@ impl Behaviours {
         ticks: &mut Ticks,
         chunk: ChunkPos,
         next_ticking: impl FnMut(&mut L, i32) -> Option<i32>,
-        read_state: impl FnMut(&L, BlockPos) -> BlockStateId,
+        read_state: impl FnMut(&mut L, BlockPos) -> BlockStateId,
     ) {
         self.tick_chunk_random_with_context(
             super::tick_access::BorrowedLevelTicks::new(level, ticks),
@@ -1750,7 +1800,7 @@ impl Behaviours {
         mut level: C,
         chunk: ChunkPos,
         mut next_ticking: impl FnMut(&mut C::Level, i32) -> Option<i32>,
-        mut read_state: impl FnMut(&C::Level, BlockPos) -> BlockStateId,
+        mut read_state: impl FnMut(&mut C::Level, BlockPos) -> BlockStateId,
     ) {
         let speed = level.game_rules().random_tick_speed;
         if speed <= 0 {
@@ -1773,7 +1823,7 @@ impl Behaviours {
                 let pos = level.write_ticks(super::tick_access::TickScope::Current, |ticks| {
                     ticks.block_random_pos(min_x, min_y, min_z, 15)
                 });
-                let state = read_state(&*level, pos);
+                let state = read_state(&mut *level, pos);
                 self.sim_context(level.reborrow())
                     .random_tick_state(pos, state);
             }

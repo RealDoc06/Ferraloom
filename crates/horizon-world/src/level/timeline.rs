@@ -26,24 +26,24 @@ pub(crate) fn box_scan_order(min: BlockPos, max: BlockPos) -> Vec<BlockPos> {
 }
 
 impl<C: super::tick_access::TickContext> Sim<'_, C> {
-    fn day_ticks(&mut self) -> Option<i64> {
+    fn day_ticks(&self) -> Option<i64> {
         (self.level.dimension() == Dimension::Overworld)
             .then(|| self.level.day_time().rem_euclid(24000))
     }
     /// `EnvironmentAttributes.EYEBLOSSOM_OPEN` (day timeline: open from 12600
     /// to 23400); None (TriState.DEFAULT) outside the overworld.
-    fn eyeblossom_open(&mut self) -> Option<bool> {
+    fn eyeblossom_open(&self) -> Option<bool> {
         self.day_ticks().map(|t| (12600..23401).contains(&t))
     }
     /// `EnvironmentAttributes.TURTLE_EGG_HATCH_CHANCE`: 1.0 around dawn
     /// (21062..21905), otherwise the 0.002 default.
-    fn turtle_hatch_chance(&mut self) -> f32 {
+    fn turtle_hatch_chance(&self) -> f32 {
         match self.day_ticks() {
             Some(t) if (21062..21905).contains(&t) => 1.0,
             _ => 0.002,
         }
     }
-    fn named_state(&mut self, name: &str) -> Option<BlockStateId> {
+    fn named_state(&self, name: &str) -> Option<BlockStateId> {
         self.b
             .table
             .block_by_name(name)

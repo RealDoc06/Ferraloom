@@ -37,13 +37,13 @@ fn step(pos: BlockPos, dir: Direction, n: i32) -> BlockPos {
 }
 
 impl<C: super::tick_access::TickContext> Sim<'_, C> {
-    fn portal_frame(&mut self, state: BlockStateId) -> bool {
+    fn portal_frame(&self, state: BlockStateId) -> bool {
         let b = self.b;
         b.tag("minecraft:nether_portal_frame")
             .is_some_and(|tag| b.in_set(state, tag))
     }
     /// `PortalShape.isEmpty`: air, fire or a portal block.
-    fn portal_empty(&mut self, state: BlockStateId) -> bool {
+    fn portal_empty(&self, state: BlockStateId) -> bool {
         let b = self.b;
         b.is_air(state)
             || b.tag("minecraft:fire")
@@ -57,7 +57,10 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             if !self.portal_empty(state) {
                 return if self.portal_frame(state) { width } else { 0 };
             }
-            if !self.portal_frame(self.state(rel(at, Direction::Down))) {
+            if !{
+                let queried_argument_0 = self.state(rel(at, Direction::Down));
+                self.portal_frame(queried_argument_0)
+            } {
                 break;
             }
         }
@@ -81,7 +84,10 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         // calculateBottomLeft
         let min_y = self.level.min_y().max(pos.y - MAX_HEIGHT);
         let mut start = pos;
-        while start.y > min_y && self.portal_empty(self.state(rel(start, Direction::Down))) {
+        while start.y > min_y && {
+            let queried_argument_0 = self.state(rel(start, Direction::Down));
+            self.portal_empty(queried_argument_0)
+        } {
             start = rel(start, Direction::Down);
         }
         let left = right.opposite();
@@ -100,9 +106,13 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         let mut height = MAX_HEIGHT;
         'rows: for h in 0..MAX_HEIGHT {
             let row = step(shape.bottom_left, Direction::Up, h);
-            if !self.portal_frame(self.state(step(row, right, -1)))
-                || !self.portal_frame(self.state(step(row, right, width)))
-            {
+            if !{
+                let queried_argument_0 = self.state(step(row, right, -1));
+                self.portal_frame(queried_argument_0)
+            } || !{
+                let queried_argument_0 = self.state(step(row, right, width));
+                self.portal_frame(queried_argument_0)
+            } {
                 height = h;
                 break;
             }
@@ -118,7 +128,10 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             }
         }
         let top = step(shape.bottom_left, Direction::Up, height);
-        let has_top = (0..width).all(|i| self.portal_frame(self.state(step(top, right, i))));
+        let has_top = (0..width).all(|i| {
+            let queried_argument_0 = self.state(step(top, right, i));
+            self.portal_frame(queried_argument_0)
+        });
         shape.height = if (MIN_HEIGHT..=MAX_HEIGHT).contains(&height) && has_top {
             height
         } else {
@@ -156,7 +169,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         if !self.b.is_air(self.state(pos)) {
             return false;
         }
-        if self.can_survive(self.fire_state_for(pos), pos) {
+        if {
+            let queried_argument_0 = self.fire_state_for(pos);
+            let queried_argument_1 = pos;
+            self.can_survive(queried_argument_0, queried_argument_1)
+        } {
             return true;
         }
         // isPortal
@@ -167,7 +184,10 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             return false;
         }
         for face in Direction::ALL {
-            if self.portal_frame(self.state(rel(pos, face))) {
+            if {
+                let queried_argument_0 = self.state(rel(pos, face));
+                self.portal_frame(queried_argument_0)
+            } {
                 // getCounterClockWise().getAxis(): north/south turn to X.
                 let x_axis = match forward {
                     Direction::North | Direction::South => true,

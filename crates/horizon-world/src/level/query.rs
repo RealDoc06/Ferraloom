@@ -170,7 +170,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     /// Shape queries over `getCollisionShape(level, pos)`, including the
     /// position-dependent shapes (bamboo, speleothems, shulker boxes).
     pub(crate) fn shape_info_at(
-        &mut self,
+        &self,
         state: BlockStateId,
         pos: BlockPos,
     ) -> super::data::ShapeInfo {
@@ -211,13 +211,13 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `Level.getRawBrightness(pos, darken)`.
     pub fn raw_brightness(&mut self, pos: BlockPos, darken: i32) -> i32 {
-        super::raw_brightness(&*self.level, pos, darken)
+        super::raw_brightness(&mut *self.level, pos, darken)
     }
     /// `LevelReader.getMaxLocalRawBrightness(pos)`.
     pub fn max_local_raw_brightness(&mut self, pos: BlockPos) -> i32 {
         self.raw_brightness(pos, self.level.sky_darken())
     }
-    pub fn is_redstone_conductor(&mut self, state: BlockStateId, _pos: BlockPos) -> bool {
+    pub fn is_redstone_conductor(&self, state: BlockStateId, _pos: BlockPos) -> bool {
         self.b.has_flag(state, state_flags::CONDUCTOR)
     }
     pub(crate) fn above_state(&mut self, pos: BlockPos) -> BlockStateId {
@@ -229,7 +229,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     pub(crate) fn rel_state(&mut self, pos: BlockPos, direction: Direction) -> BlockStateId {
         self.state(rel(pos, direction))
     }
-    pub(crate) fn is_inside_build_height(&mut self, y: i32) -> bool {
+    pub(crate) fn is_inside_build_height(&self, y: i32) -> bool {
         y >= self.level.min_y() && y < self.level.max_y()
     }
 }

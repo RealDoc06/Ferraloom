@@ -18,7 +18,7 @@ fn axis_directions(axis: &str) -> [Direction; 2] {
 impl<C: super::tick_access::TickContext> Sim<'_, C> {
     /// `EnvironmentAttributes.CREAKING_ACTIVE`: the overworld day timeline
     /// turns it on from 12600 to 23400.
-    pub(crate) fn creaking_active(&mut self) -> bool {
+    pub(crate) fn creaking_active(&self) -> bool {
         self.level.dimension() == Dimension::Overworld
             && (12600..23401).contains(&self.level.day_time().rem_euclid(24000))
     }

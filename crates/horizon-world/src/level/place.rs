@@ -171,7 +171,7 @@ impl Ctx {
 }
 
 impl<C: super::tick_access::TickContext> Sim<'_, C> {
-    fn item_is(&mut self, ctx: &Ctx, block: BlockId) -> bool {
+    fn item_is(&self, ctx: &Ctx, block: BlockId) -> bool {
         !ctx.item.is_empty() && *self.b.block_data(block).item == *ctx.item
     }
     /// `BlockState.canBeReplaced(BlockPlaceContext)`.
@@ -180,7 +180,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         let p = b.props;
         let block = b.block(state);
         let data = b.data(state);
-        let default = |sim: &Self| {
+        let default = |sim: &mut Self| {
             b.is_replaceable(state) && (ctx.item.is_empty() || !sim.item_is(ctx, block))
         };
         for class in &data.chain {
@@ -313,7 +313,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         Some(match class {
             Class::AbstractBed => {
                 let relative = rel(pos, horizontal);
-                if self.can_be_replaced(self.state(relative), ctx) {
+                if {
+                    let queried_argument_0 = self.state(relative);
+                    let queried_argument_1 = ctx;
+                    self.can_be_replaced(queried_argument_0, queried_argument_1)
+                } {
                     Some(table.set_dir(default, p.facing, horizontal))
                 } else {
                     None
@@ -356,7 +360,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
                 for direction in ctx.nearest_looking_directions() {
                     if is_horizontal(direction) {
                         state = table.set_dir(state, p.facing, direction.opposite());
-                        if !self.can_be_replaced(self.state(rel(pos, direction)), ctx) {
+                        if !{
+                            let queried_argument_0 = self.state(rel(pos, direction));
+                            let queried_argument_1 = ctx;
+                            self.can_be_replaced(queried_argument_0, queried_argument_1)
+                        } {
                             return Some(Some(state));
                         }
                     }
@@ -797,9 +805,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
                 Some(table.set_bool(wl(state), p.cracked, false))
             }
             Class::Door => {
-                if pos.y < self.level.max_y() - 1
-                    && self.can_be_replaced(self.state(above(pos)), ctx)
-                {
+                if pos.y < self.level.max_y() - 1 && {
+                    let queried_argument_0 = self.state(above(pos));
+                    let queried_argument_1 = ctx;
+                    self.can_be_replaced(queried_argument_0, queried_argument_1)
+                } {
                     let powered =
                         self.has_neighbor_signal(pos) || self.has_neighbor_signal(above(pos));
                     let hinge = self.door_hinge(ctx);
@@ -813,9 +823,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
                 }
             }
             Class::DoublePlant => {
-                if pos.y < self.level.max_y() - 1
-                    && self.can_be_replaced(self.state(above(pos)), ctx)
-                {
+                if pos.y < self.level.max_y() - 1 && {
+                    let queried_argument_0 = self.state(above(pos));
+                    let queried_argument_1 = ctx;
+                    self.can_be_replaced(queried_argument_0, queried_argument_1)
+                } {
                     sup!()
                 } else {
                     None
@@ -941,7 +953,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             }
             Class::FenceGate => {
                 let open = self.has_neighbor_signal(pos);
-                let wall = |sim: &Self, d: Direction| b.in_set(sim.rel_state(pos, d), &t.walls);
+                let wall = |sim: &mut Self, d: Direction| b.in_set(sim.rel_state(pos, d), &t.walls);
                 let in_wall = match axis_of(horizontal) {
                     Axis::Z => wall(self, Direction::West) || wall(self, Direction::East),
                     _ => wall(self, Direction::North) || wall(self, Direction::South),
@@ -1017,8 +1029,12 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
                 let state = wl(table.set_bool(default, p.persistent, true));
                 let mut distance = 7;
                 for direction in Direction::ALL {
-                    distance =
-                        distance.min(self.leaf_distance_at(self.rel_state(pos, direction)) + 1);
+                    distance = distance.min(
+                        {
+                            let queried_argument_0 = self.rel_state(pos, direction);
+                            self.leaf_distance_at(queried_argument_0)
+                        } + 1,
+                    );
                     if distance == 1 {
                         break;
                     }
@@ -1127,8 +1143,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             Class::TripWire => {
                 let mut state = default;
                 for direction in HORIZONTAL {
-                    let connect =
-                        self.tripwire_should_connect_to(self.rel_state(pos, direction), direction);
+                    let connect = {
+                        let queried_argument_0 = self.rel_state(pos, direction);
+                        let queried_argument_1 = direction;
+                        self.tripwire_should_connect_to(queried_argument_0, queried_argument_1)
+                    };
                     state = table.set_bool(state, self.direction_prop(direction), connect);
                 }
                 Some(state)
@@ -1168,7 +1187,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         {
             return state;
         }
-        let connected = self.rel_state(pos, self.chest_connected_direction(state));
+        let connected = {
+            let queried_argument_0 = pos;
+            let queried_argument_1 = self.chest_connected_direction(state);
+            self.rel_state(queried_argument_0, queried_argument_1)
+        };
         if !b.instance_of(connected, Class::CopperChest) {
             return state;
         }
@@ -1273,7 +1296,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn wall_hanging_sign_can_place(&mut self, state: BlockStateId, pos: BlockPos) -> bool {
         let b = self.b;
         let facing = b.facing(state);
-        let attach = |side: Direction, face: Direction| {
+        let mut attach = |side: Direction, face: Direction| {
             let attach_state = self.rel_state(pos, side);
             if b.tag("minecraft:wall_hanging_signs")
                 .is_some_and(|tag| b.in_set(attach_state, tag))
@@ -1513,11 +1536,21 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             item: input.item.clone(),
             replace_clicked: true,
         };
-        ctx.replace_clicked = self.can_be_replaced(self.state(input.clicked_pos), &ctx);
+        ctx.replace_clicked = {
+            let queried_argument_0 = self.state(input.clicked_pos);
+            let queried_argument_1 = &ctx;
+            self.can_be_replaced(queried_argument_0, queried_argument_1)
+        };
         if !ctx.replace_clicked {
             ctx.pos = rel(input.clicked_pos, input.face);
         }
-        if !ctx.replace_clicked && !self.can_be_replaced(self.state(ctx.pos), &ctx) {
+        if !ctx.replace_clicked
+            && !{
+                let queried_argument_0 = self.state(ctx.pos);
+                let queried_argument_1 = &ctx;
+                self.can_be_replaced(queried_argument_0, queried_argument_1)
+            }
+        {
             return None;
         }
         if binding.kind == ItemKind::Scaffolding {
@@ -1684,7 +1717,7 @@ impl Behaviours {
         ticks: &mut Ticks,
         ctx: &PlaceContext,
     ) -> bool {
-        let sim = self.sim(level, ticks);
+        let mut sim = self.sim(level, ticks);
         let inner = Ctx {
             pos: ctx.clicked_pos,
             hit_pos: ctx.clicked_pos,
@@ -1697,7 +1730,11 @@ impl Behaviours {
             item: ctx.item.clone(),
             replace_clicked: true,
         };
-        sim.can_be_replaced(sim.state(ctx.clicked_pos), &inner)
+        {
+            let queried_argument_0 = sim.state(ctx.clicked_pos);
+            let queried_argument_1 = &inner;
+            sim.can_be_replaced(queried_argument_0, queried_argument_1)
+        }
     }
     /// The position and state `BlockItem.place` would place for `ctx`, without
     /// writing anything (None when vanilla's placement fails).
@@ -1734,7 +1771,11 @@ impl Behaviours {
             item: input.item.clone(),
             replace_clicked: true,
         };
-        ctx.replace_clicked = sim.can_be_replaced(sim.state(input.clicked_pos), &ctx);
+        ctx.replace_clicked = {
+            let queried_argument_0 = sim.state(input.clicked_pos);
+            let queried_argument_1 = &ctx;
+            sim.can_be_replaced(queried_argument_0, queried_argument_1)
+        };
         if !ctx.replace_clicked {
             ctx.pos = rel(input.clicked_pos, input.face);
         }

@@ -519,7 +519,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             Class::GrowingPlantHead => {
                 let growth = b.data(state).growth_direction;
                 let (_, body) = self.growing_plant_pair(block);
-                let to_body = |sim: &Self| {
+                let to_body = |sim: &mut Self| {
                     let body_state = b.default_of(body);
                     if class_is(b, block, Class::CaveVines) {
                         sim.b
@@ -845,7 +845,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
 
-    fn bed_neighbour_direction(&mut self, state: BlockStateId) -> Direction {
+    fn bed_neighbour_direction(&self, state: BlockStateId) -> Direction {
         let facing = self.b.facing(state);
         if self.b.table.text(state, self.b.props.part) == "foot" {
             facing
@@ -853,11 +853,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             facing.opposite()
         }
     }
-    pub(crate) fn chest_can_connect_to(
-        &mut self,
-        state: BlockStateId,
-        other: BlockStateId,
-    ) -> bool {
+    pub(crate) fn chest_can_connect_to(&self, state: BlockStateId, other: BlockStateId) -> bool {
         let b = self.b;
         if b.instance_of(state, Class::CopperChest) {
             b.tag("minecraft:copper_chests")
@@ -868,7 +864,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     /// `ChestBlock.getConnectedDirection`.
-    pub(crate) fn chest_connected_direction(&mut self, state: BlockStateId) -> Direction {
+    pub(crate) fn chest_connected_direction(&self, state: BlockStateId) -> Direction {
         let facing = self.b.facing(state);
         if self.b.table.text(state, self.b.props.kind) == "left" {
             clockwise(facing)
@@ -878,7 +874,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `FenceBlock.connectsTo`.
     pub(crate) fn fence_connects_to(
-        &mut self,
+        &self,
         fence: BlockStateId,
         state: BlockStateId,
         face_solid: bool,
@@ -893,7 +889,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         (!b.is_exception_for_connection(state) && face_solid) || same_fence || gate
     }
     /// `IronBarsBlock.attachsTo`.
-    pub(crate) fn bars_attach_to(&mut self, state: BlockStateId, face_solid: bool) -> bool {
+    pub(crate) fn bars_attach_to(&self, state: BlockStateId, face_solid: bool) -> bool {
         let b = self.b;
         (!b.is_exception_for_connection(state) && face_solid)
             || b.instance_of(state, Class::IronBars)
@@ -901,7 +897,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `WallBlock.connectsTo`.
     pub(crate) fn wall_connects_to(
-        &mut self,
+        &self,
         state: BlockStateId,
         face_solid: bool,
         direction: Direction,
@@ -916,7 +912,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `WallBlock.updateShape(level, state, topPos, topNeighbour, n, e, s, w)`.
     pub(crate) fn wall_shape(
-        &mut self,
+        &self,
         state: BlockStateId,
         top_pos: BlockPos,
         top: BlockStateId,
@@ -943,7 +939,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             result = table.set_text(result, self.direction_prop(direction), value);
         }
         // shouldRaisePost
-        let side = |d: Direction| table.text(result, self.direction_prop(d)).to_owned();
+        let mut side = |d: Direction| table.text(result, self.direction_prop(d)).to_owned();
         let (north, south, east, west) = (
             side(Direction::North),
             side(Direction::South),
@@ -1018,7 +1014,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `TripWireBlock.shouldConnectTo`.
     pub(crate) fn tripwire_should_connect_to(
-        &mut self,
+        &self,
         state: BlockStateId,
         direction: Direction,
     ) -> bool {
@@ -1030,7 +1026,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     /// `LeavesBlock.getDistanceAt`.
-    pub(crate) fn leaf_distance_at(&mut self, state: BlockStateId) -> i32 {
+    pub(crate) fn leaf_distance_at(&self, state: BlockStateId) -> i32 {
         let b = self.b;
         if b.in_set(state, &b.tags.prevents_nearby_leaf_decay) {
             0
@@ -1082,7 +1078,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     /// `BubbleColumnBlock.canOccupy`.
-    pub(crate) fn bubble_column_can_occupy(&mut self, state: BlockStateId) -> bool {
+    pub(crate) fn bubble_column_can_occupy(&self, state: BlockStateId) -> bool {
         let b = self.b;
         let fluid = b.fluid(state);
         b.is_block(state, b.named.bubble_column)
@@ -1091,7 +1087,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
                 && fluid.is_source()
                 && fluid.amount() >= 8)
     }
-    pub(crate) fn should_bubble_column_occupy(&mut self, state: BlockStateId) -> bool {
+    pub(crate) fn should_bubble_column_occupy(&self, state: BlockStateId) -> bool {
         let fluid = self.b.fluid(state);
         self.b
             .fluid_in(fluid.kind(), self.b.fluid_tags.bubble_column_can_occupy)
@@ -1201,7 +1197,10 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
                 if direction == Direction::Down {
                     continue;
                 }
-                let burn = self.can_burn(self.rel_state(pos, direction));
+                let burn = {
+                    let queried_argument_0 = self.rel_state(pos, direction);
+                    self.can_burn(queried_argument_0)
+                };
                 result = b
                     .table
                     .set_bool(result, self.direction_prop(direction), burn);
@@ -1262,7 +1261,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
         state
     }
-    pub(crate) fn mossy_carpet_has_faces(&mut self, state: BlockStateId) -> bool {
+    pub(crate) fn mossy_carpet_has_faces(&self, state: BlockStateId) -> bool {
         let b = self.b;
         table_bool(b, state)
             || [

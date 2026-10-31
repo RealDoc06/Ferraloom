@@ -100,7 +100,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn sculk_rand(&mut self, bound: i32) -> i32 {
         self.random().next_int_bound(bound).unwrap_or(0)
     }
-    fn sculk_in_tag(&mut self, state: BlockStateId, tag: &str) -> bool {
+    fn sculk_in_tag(&self, state: BlockStateId, tag: &str) -> bool {
         self.b.tag(tag).is_some_and(|set| self.b.in_set(state, set))
     }
     fn sculk_sound(&mut self, pos: BlockPos, sound: &str, volume: f32, pitch: f32) {
@@ -115,7 +115,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     // ---- sensors ----
 
     /// `SculkSensorBlock.canActivate`.
-    pub(crate) fn sensor_phase(&mut self, state: BlockStateId) -> &'static str {
+    pub(crate) fn sensor_phase(&self, state: BlockStateId) -> &'static str {
         match self.b.table.text(state, self.b.props.sculk_sensor_phase) {
             "active" => "active",
             "cooldown" => "cooldown",
@@ -219,7 +219,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
 
     // ---- the spreader ----
 
-    fn sculk_behaviour(&mut self, state: BlockStateId) -> Behaviour {
+    fn sculk_behaviour(&self, state: BlockStateId) -> Behaviour {
         let block = self.b.block(state);
         if block == self.b.named.sculk {
             Behaviour::Sculk
@@ -229,23 +229,18 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             Behaviour::Default
         }
     }
-    fn is_vein(&mut self, state: BlockStateId) -> bool {
+    fn is_vein(&self, state: BlockStateId) -> bool {
         self.b.block(state) == self.b.named.sculk_vein
     }
-    fn vein_has_face(&mut self, state: BlockStateId, face: Direction) -> bool {
+    fn vein_has_face(&self, state: BlockStateId, face: Direction) -> bool {
         self.is_vein(state) && self.multiface_has_face(state, face)
     }
-    fn vein_with_face(
-        &mut self,
-        state: BlockStateId,
-        face: Direction,
-        value: bool,
-    ) -> BlockStateId {
+    fn vein_with_face(&self, state: BlockStateId, face: Direction, value: bool) -> BlockStateId {
         self.b
             .table
             .set_bool(state, self.direction_prop(face), value)
     }
-    fn available_faces(&mut self, state: BlockStateId) -> Vec<Direction> {
+    fn available_faces(&self, state: BlockStateId) -> Vec<Direction> {
         if !self.b.instance_of(state, Class::Multiface) {
             return Vec::new();
         }
@@ -254,7 +249,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             .filter(|d| self.multiface_has_face(state, *d))
             .collect()
     }
-    fn is_sculk_source(&mut self, state: BlockStateId) -> bool {
+    fn is_sculk_source(&self, state: BlockStateId) -> bool {
         self.sculk_behaviour(state) != Behaviour::Default
     }
 
@@ -735,11 +730,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             // SculkVeinBlock.hasSubstrateAccess
             if self.is_vein(transferee)
                 && Direction::ALL.into_iter().any(|d| {
-                    self.multiface_has_face(transferee, d)
-                        && self.sculk_in_tag(
-                            self.state(rel(neighbour, d)),
-                            "minecraft:sculk_replaceable",
-                        )
+                    self.multiface_has_face(transferee, d) && {
+                        let queried_argument_0 = self.state(rel(neighbour, d));
+                        let queried_argument_1 = "minecraft:sculk_replaceable";
+                        self.sculk_in_tag(queried_argument_0, queried_argument_1)
+                    }
                 })
             {
                 break;
@@ -776,7 +771,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         } else {
             (dir_x, dir_y)
         };
-        let free = |direction: Direction| {
+        let mut free = |direction: Direction| {
             let test = rel(from, direction);
             !self
                 .b
@@ -831,7 +826,7 @@ impl Behaviours {
         ticks: &mut Ticks,
         pos: BlockPos,
     ) -> i32 {
-        let sim = self.sim(level, ticks);
+        let mut sim = self.sim(level, ticks);
         let state = sim.state(pos);
         let direction = self.facing(state).opposite();
         sim.signal(rel(pos, direction), direction)

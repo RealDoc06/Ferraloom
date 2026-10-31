@@ -183,11 +183,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn next_int(&mut self, bound: i32) -> i32 {
         self.random().next_int_bound(bound).unwrap_or(0)
     }
-    fn block_named(&mut self, name: &str) -> Option<BlockStateId> {
+    fn block_named(&self, name: &str) -> Option<BlockStateId> {
         let b = self.b;
         b.table.block_by_name(name).map(|id| b.default_of(id))
     }
-    fn in_tag(&mut self, state: BlockStateId, tag: &str) -> bool {
+    fn in_tag(&self, state: BlockStateId, tag: &str) -> bool {
         self.b.tag(tag).is_some_and(|set| self.b.in_set(state, set))
     }
 
@@ -307,23 +307,34 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             }
             Kind::PlantHead => {
                 let growth = rel(pos, b.data(state).growth_direction);
-                self.plant_can_grow_into(state, self.state(growth))
-                    && self.is_inside_build_height(growth.y)
+                {
+                    let queried_argument_0 = state;
+                    let queried_argument_1 = self.state(growth);
+                    self.plant_can_grow_into(queried_argument_0, queried_argument_1)
+                }
+                &&self.is_inside_build_height(growth.y)
             }
             Kind::CaveVines | Kind::CaveVinesPlant => !b.table.bool(state, p.berries),
             Kind::PlantBody => match self.plant_head_pos(pos, state) {
                 Some(head) => {
                     let head_state = self.state(head);
                     let growth = rel(head, b.data(state).growth_direction);
-                    self.plant_can_grow_into(head_state, self.state(growth))
-                        && self.is_inside_build_height(growth.y)
+                    {
+                        let queried_argument_0 = head_state;
+                        let queried_argument_1 = self.state(growth);
+                        self.plant_can_grow_into(queried_argument_0, queried_argument_1)
+                    }
+                    &&self.is_inside_build_height(growth.y)
                 }
                 None => false,
             },
             Kind::Seagrass => b.is_block(self.state(up), b.named.water),
             Kind::SeaPickle => {
-                b.table.bool(state, p.waterlogged)
-                    && self.in_tag(self.below_state(pos), "minecraft:coral_blocks")
+                b.table.bool(state, p.waterlogged) && {
+                    let queried_argument_0 = self.below_state(pos);
+                    let queried_argument_1 = "minecraft:coral_blocks";
+                    self.in_tag(queried_argument_0, queried_argument_1)
+                }
             }
             Kind::BigDripleaf => self.dripleaf_can_grow_into(up),
             Kind::BigDripleafStem => {
@@ -606,7 +617,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         });
     }
     /// `CropBlock.getMaxAge`.
-    pub(crate) fn crop_max_age(&mut self, state: BlockStateId) -> i32 {
+    pub(crate) fn crop_max_age(&self, state: BlockStateId) -> i32 {
         let b = self.b;
         if b.instance_of(state, Class::TorchflowerCrop) {
             2
@@ -615,7 +626,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     /// `CropBlock.getStateForAge` (torchflower crops become torchflowers).
-    pub(crate) fn crop_state_for_age(&mut self, state: BlockStateId, age: i32) -> BlockStateId {
+    pub(crate) fn crop_state_for_age(&self, state: BlockStateId, age: i32) -> BlockStateId {
         let b = self.b;
         if b.instance_of(state, Class::TorchflowerCrop)
             && age == 2
@@ -664,7 +675,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             && (new_age < 3 || b.is_air(upper) || b.is_block(upper, b.named.pitcher_crop))
     }
     /// `TallGrassBlock.getGrownBlock`.
-    fn tall_grass_grown(&mut self, state: BlockStateId) -> Option<BlockStateId> {
+    fn tall_grass_grown(&self, state: BlockStateId) -> Option<BlockStateId> {
         let name = if self.b.table.name(state) == "minecraft:fern" {
             "minecraft:large_fern"
         } else {
@@ -735,7 +746,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         (warped, crimson)
     }
     /// `GrowingPlantHeadBlock.canGrowInto` of the head's block.
-    fn plant_can_grow_into(&mut self, head: BlockStateId, state: BlockStateId) -> bool {
+    fn plant_can_grow_into(&self, head: BlockStateId, state: BlockStateId) -> bool {
         let b = self.b;
         if b.instance_of(head, Class::Kelp) {
             b.is_block(state, b.named.water)
@@ -764,8 +775,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             1
         };
         for _ in 0..count {
-            if !self.plant_can_grow_into(state, self.state(forward))
-                || !self.is_inside_build_height(forward.y)
+            if !{
+                let queried_argument_0 = state;
+                let queried_argument_1 = self.state(forward);
+                self.plant_can_grow_into(queried_argument_0, queried_argument_1)
+            } || !self.is_inside_build_height(forward.y)
             {
                 break;
             }
@@ -845,7 +859,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
                     if position != pos
                         && self.next_int(6) == 0
                         && b.is_block(self.state(position), b.named.water)
-                        && self.in_tag(self.below_state(position), "minecraft:coral_blocks")
+                        && {
+                            let queried_argument_0 = self.below_state(position);
+                            let queried_argument_1 = "minecraft:coral_blocks";
+                            self.in_tag(queried_argument_0, queried_argument_1)
+                        }
                     {
                         let pickles = self.next_int(4) + 1;
                         let pickle =

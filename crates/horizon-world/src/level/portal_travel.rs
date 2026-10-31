@@ -503,7 +503,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         let mut full: Option<(f64, BlockPos)> = None;
         let mut partial: Option<(f64, BlockPos)> = None;
         for column in spiral_around(origin, 16, Direction::East, Direction::South) {
-            let top = self.b.motion_blocking_top(&*self.level, column).y;
+            let top = self.b.motion_blocking_top(&mut *self.level, column).y;
             let height = max_placeable.min(top);
             if !border.contains_block(column) || !border.contains_block(step(column, direction, 1))
             {

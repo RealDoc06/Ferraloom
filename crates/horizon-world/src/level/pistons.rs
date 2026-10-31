@@ -247,7 +247,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
 
     // ---- PistonBaseBlock ----
-    fn is_sticky_piston(&mut self, state: BlockStateId) -> bool {
+    fn is_sticky_piston(&self, state: BlockStateId) -> bool {
         self.b.is_block(state, self.b.named.sticky_piston)
     }
     fn piston_neighbor_signal(&mut self, pos: BlockPos, push: Direction) -> bool {
@@ -300,7 +300,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `PistonBaseBlock.isPushable`.
     fn is_pushable(
-        &mut self,
+        &self,
         state: BlockStateId,
         pos: BlockPos,
         direction: Direction,
@@ -338,11 +338,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
         !b.has_flag(state, super::data::state_flags::BLOCK_ENTITY)
     }
-    fn is_slime_or_honey(&mut self, state: BlockStateId) -> bool {
+    fn is_slime_or_honey(&self, state: BlockStateId) -> bool {
         self.b.is_block(state, self.b.named.slime_block)
             || self.b.is_block(state, self.b.named.honey_block)
     }
-    fn can_stick(&mut self, first: BlockStateId, second: BlockStateId) -> bool {
+    fn can_stick(&self, first: BlockStateId, second: BlockStateId) -> bool {
         let n = self.b.named;
         let (honey1, slime1) = (
             self.b.is_block(first, n.honey_block),
@@ -397,7 +397,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         let mut i = 0;
         while i < r.to_push.len() {
             let pos = r.to_push[i];
-            if self.is_slime_or_honey(self.state(pos)) && !self.add_branching_blocks(&mut r, pos) {
+            if {
+                let queried_argument_0 = self.state(pos);
+                self.is_slime_or_honey(queried_argument_0)
+            } && !self.add_branching_blocks(&mut r, pos)
+            {
                 return None;
             }
             i += 1;
@@ -454,8 +458,10 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
                 self.reorder_at_collision(r, added, collision);
                 for j in 0..=collision + added {
                     let block_pos = r.to_push[j];
-                    if self.is_slime_or_honey(self.state(block_pos))
-                        && !self.add_branching_blocks(r, block_pos)
+                    if {
+                        let queried_argument_0 = self.state(block_pos);
+                        self.is_slime_or_honey(queried_argument_0)
+                    } && !self.add_branching_blocks(r, block_pos)
                     {
                         return false;
                     }
@@ -483,7 +489,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             i += 1;
         }
     }
-    fn reorder_at_collision(&mut self, r: &mut Resolver, added: usize, collision: usize) {
+    fn reorder_at_collision(&self, r: &mut Resolver, added: usize, collision: usize) {
         let len = r.to_push.len();
         let head: Vec<BlockPos> = r.to_push[..collision].to_vec();
         let last_line: Vec<BlockPos> = r.to_push[len - added..].to_vec();
@@ -508,7 +514,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
         true
     }
-    fn moving_piston_state(&mut self, direction: Direction, sticky: bool) -> BlockStateId {
+    fn moving_piston_state(&self, direction: Direction, sticky: bool) -> BlockStateId {
         let b = self.b;
         let state = b.table.set_dir(
             b.default_of(b.named.moving_piston),
@@ -757,11 +763,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
 
     // ---- PistonHeadBlock ----
-    pub(crate) fn piston_head_fitting_base(
-        &mut self,
-        head: BlockStateId,
-        base: BlockStateId,
-    ) -> bool {
+    pub(crate) fn piston_head_fitting_base(&self, head: BlockStateId, base: BlockStateId) -> bool {
         let b = self.b;
         let expected = if b.table.text(head, b.props.kind) == "sticky" {
             b.named.sticky_piston

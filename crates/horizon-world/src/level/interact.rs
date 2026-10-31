@@ -460,9 +460,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         self.set_block_and_update(pos, next);
         for direction in horizontal {
             let relative = super::update::rel(pos, direction);
-            if connected(state, direction) != connected(next, direction)
-                && self.is_redstone_conductor(self.state(relative), relative)
-            {
+            if connected(state, direction) != connected(next, direction) && {
+                let queried_argument_0 = self.state(relative);
+                let queried_argument_1 = relative;
+                self.is_redstone_conductor(queried_argument_0, queried_argument_1)
+            } {
                 let block = b.block(next);
                 self.update_neighbors_at_except(relative, block, direction.opposite());
             }

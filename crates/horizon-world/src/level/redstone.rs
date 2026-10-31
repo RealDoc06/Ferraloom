@@ -31,7 +31,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn nibble(word: u32, direction: Direction) -> i32 {
         ((word >> (4 * direction as u32)) & 15) as i32
     }
-    pub(crate) fn is_signal_source(&mut self, state: BlockStateId) -> bool {
+    pub(crate) fn is_signal_source(&self, state: BlockStateId) -> bool {
         if self.b.is_block(state, self.b.named.redstone_wire) {
             return !self.wire_signal_off.get();
         }
@@ -122,7 +122,12 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `SignalGetter.getDirectSignal(pos, direction)`.
     pub fn direct_signal(&mut self, pos: BlockPos, direction: Direction) -> i32 {
-        self.state_direct_signal(self.state(pos), pos, direction)
+        {
+            let queried_argument_0 = self.state(pos);
+            let queried_argument_1 = pos;
+            let queried_argument_2 = direction;
+            self.state_direct_signal(queried_argument_0, queried_argument_1, queried_argument_2)
+        }
     }
     /// `SignalGetter.getDirectSignalTo`.
     pub fn direct_signal_to(&mut self, pos: BlockPos) -> i32 {
@@ -194,11 +199,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
 
     // ---- redstone wire ----
 
-    fn should_wire_connect_to(
-        &mut self,
-        state: BlockStateId,
-        direction: Option<Direction>,
-    ) -> bool {
+    fn should_wire_connect_to(&self, state: BlockStateId, direction: Option<Direction>) -> bool {
         let b = self.b;
         match b.data(state).class {
             Class::RedstoneWire => true,
@@ -210,7 +211,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             _ => self.is_signal_source(state) && direction.is_some(),
         }
     }
-    fn wire_can_survive_on(&mut self, state: BlockStateId) -> bool {
+    fn wire_can_survive_on(&self, state: BlockStateId) -> bool {
         self.b.is_face_sturdy(state, Direction::Up) || self.b.is_block(state, self.b.named.hopper)
     }
     fn wire_connecting_side(
@@ -225,8 +226,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         if can_connect_up {
             let placeable_above =
                 b.instance_of(relative, Class::TrapDoor) || self.wire_can_survive_on(relative);
-            if placeable_above && self.should_wire_connect_to(self.state(above(relative_pos)), None)
-            {
+            if placeable_above && {
+                let queried_argument_0 = self.state(above(relative_pos));
+                let queried_argument_1 = None;
+                self.should_wire_connect_to(queried_argument_0, queried_argument_1)
+            } {
                 return if b.is_face_sturdy(relative, direction.opposite()) {
                     "up"
                 } else {
@@ -236,7 +240,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
         if !self.should_wire_connect_to(relative, Some(direction))
             && (self.is_redstone_conductor(relative, relative_pos)
-                || !self.should_wire_connect_to(self.state(below(relative_pos)), None))
+                || !{
+                    let queried_argument_0 = self.state(below(relative_pos));
+                    let queried_argument_1 = None;
+                    self.should_wire_connect_to(queried_argument_0, queried_argument_1)
+                })
         {
             "none"
         } else {
@@ -244,22 +252,26 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
     }
     fn wire_can_connect_up(&mut self, pos: BlockPos) -> bool {
-        !self.is_redstone_conductor(self.above_state(pos), pos)
+        !{
+            let queried_argument_0 = self.above_state(pos);
+            let queried_argument_1 = pos;
+            self.is_redstone_conductor(queried_argument_0, queried_argument_1)
+        }
     }
-    fn wire_connected(&mut self, state: BlockStateId, direction: Direction) -> bool {
+    fn wire_connected(&self, state: BlockStateId, direction: Direction) -> bool {
         self.b.table.text(state, self.direction_prop(direction)) != "none"
     }
-    fn wire_is_cross(&mut self, state: BlockStateId) -> bool {
+    fn wire_is_cross(&self, state: BlockStateId) -> bool {
         HORIZONTAL
             .into_iter()
             .all(|d| self.wire_connected(state, d))
     }
-    fn wire_is_dot(&mut self, state: BlockStateId) -> bool {
+    fn wire_is_dot(&self, state: BlockStateId) -> bool {
         !HORIZONTAL
             .into_iter()
             .any(|d| self.wire_connected(state, d))
     }
-    pub(crate) fn wire_cross_state(&mut self, power: i32) -> BlockStateId {
+    pub(crate) fn wire_cross_state(&self, power: i32) -> BlockStateId {
         let b = self.b;
         let mut state = b.default_of(b.named.redstone_wire);
         for direction in HORIZONTAL {
@@ -332,7 +344,16 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             }
             Direction::Up => self.wire_connection_state(state, pos),
             _ => {
-                let side = self.wire_connecting_side(pos, direction, self.wire_can_connect_up(pos));
+                let side = {
+                    let queried_argument_0 = pos;
+                    let queried_argument_1 = direction;
+                    let queried_argument_2 = self.wire_can_connect_up(pos);
+                    self.wire_connecting_side(
+                        queried_argument_0,
+                        queried_argument_1,
+                        queried_argument_2,
+                    )
+                };
                 let key = self.direction_prop(direction);
                 if (side != "none") == self.wire_connected(state, direction)
                     && !self.wire_is_cross(state)
@@ -395,7 +416,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         self.wire_signal_off.set(false);
         signal
     }
-    fn wire_power_of(&mut self, state: BlockStateId) -> i32 {
+    fn wire_power_of(&self, state: BlockStateId) -> i32 {
         if self.b.is_block(state, self.b.named.redstone_wire) {
             self.b.table.int(state, self.b.props.power)
         } else {
@@ -410,11 +431,21 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             signal = signal.max(self.wire_power_of(neighbour));
             let above_pos = above(pos);
             if self.is_redstone_conductor(neighbour, neighbour_pos)
-                && !self.is_redstone_conductor(self.state(above_pos), above_pos)
+                && !{
+                    let queried_argument_0 = self.state(above_pos);
+                    let queried_argument_1 = above_pos;
+                    self.is_redstone_conductor(queried_argument_0, queried_argument_1)
+                }
             {
-                signal = signal.max(self.wire_power_of(self.state(above(neighbour_pos))));
+                signal = signal.max({
+                    let queried_argument_0 = self.state(above(neighbour_pos));
+                    self.wire_power_of(queried_argument_0)
+                });
             } else if !self.is_redstone_conductor(neighbour, neighbour_pos) {
-                signal = signal.max(self.wire_power_of(self.state(below(neighbour_pos))));
+                signal = signal.max({
+                    let queried_argument_0 = self.state(below(neighbour_pos));
+                    self.wire_power_of(queried_argument_0)
+                });
             }
         }
         (signal - 1).max(0)
@@ -459,7 +490,11 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
         for direction in HORIZONTAL {
             let target = rel(pos, direction);
-            if self.is_redstone_conductor(self.state(target), target) {
+            if {
+                let queried_argument_0 = self.state(target);
+                let queried_argument_1 = target;
+                self.is_redstone_conductor(queried_argument_0, queried_argument_1)
+            } {
                 self.wire_check_corner(above(target));
             } else {
                 self.wire_check_corner(below(target));
@@ -469,7 +504,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
 
     // ---- diodes ----
 
-    pub(crate) fn diode_delay(&mut self, state: BlockStateId) -> i32 {
+    pub(crate) fn diode_delay(&self, state: BlockStateId) -> i32 {
         if self.b.instance_of(state, Class::Repeater) {
             self.b.table.int(state, self.b.props.delay) * 2
         } else {
@@ -801,7 +836,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         self.update_neighbors_at(pos, block);
         self.update_neighbors_at(below(pos), block);
     }
-    pub(crate) fn plate_signal_for_state(&mut self, state: BlockStateId) -> i32 {
+    pub(crate) fn plate_signal_for_state(&self, state: BlockStateId) -> i32 {
         let b = self.b;
         if b.instance_of(state, Class::WeightedPressurePlate) {
             b.table.int(state, b.props.power)
@@ -916,11 +951,12 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     pub(crate) fn button_check_pressed(&mut self, pos: BlockPos, state: BlockStateId) {
         let b = self.b;
         let data = b.data(state);
-        let should_be_pressed = data.set_type.as_ref().is_some_and(|s| s.arrows)
-            && self
-                .level
-                .count_entities(self.button_bounds(pos, state), super::EntityQuery::Arrows)
-                > 0;
+        let should_be_pressed = data.set_type.as_ref().is_some_and(|s| s.arrows) && {
+            let bounds = self.button_bounds(pos, state);
+            self.level
+                .count_entities(bounds, super::EntityQuery::Arrows)
+                > 0
+        };
         let was_pressed = b.table.bool(state, b.props.powered);
         if should_be_pressed != was_pressed {
             self.set_block_and_update(
@@ -951,11 +987,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `ButtonBlock.getShape(...).bounds().move(pos)`: a 6 by 4 plate on the
     /// face it is attached to, 2 pixels thick (1 when pressed).
-    fn button_bounds(
-        &mut self,
-        pos: BlockPos,
-        state: BlockStateId,
-    ) -> horizon_core::geometry::Aabb {
+    fn button_bounds(&self, pos: BlockPos, state: BlockStateId) -> horizon_core::geometry::Aabb {
         use horizon_core::geometry::{Aabb, Vec3};
         let b = self.b;
         let thickness = if b.table.bool(state, b.props.powered) {
