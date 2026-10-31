@@ -5101,7 +5101,8 @@ impl Game<'_> {
         if running {
             self.world.game_time += 1;
             if self.ui.rules.bool("advance_weather") {
-                self.world.weather.tick_timers(&mut self.world.random);
+                let world = &mut *self.world;
+                world.weather.tick_timers(&mut world.random);
             }
             self.world.weather.tick_levels();
             self.tick_weather_effects();
