@@ -307,24 +307,18 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             }
             Kind::PlantHead => {
                 let growth = rel(pos, b.data(state).growth_direction);
-                {
-                    let queried_argument_0 = state;
-                    let queried_argument_1 = self.state(growth);
-                    self.plant_can_grow_into(queried_argument_0, queried_argument_1)
-                }
-                &&self.is_inside_build_height(growth.y)
+                let growth_state = self.state(growth);
+                self.plant_can_grow_into(state, growth_state)
+                    && self.is_inside_build_height(growth.y)
             }
             Kind::CaveVines | Kind::CaveVinesPlant => !b.table.bool(state, p.berries),
             Kind::PlantBody => match self.plant_head_pos(pos, state) {
                 Some(head) => {
                     let head_state = self.state(head);
                     let growth = rel(head, b.data(state).growth_direction);
-                    {
-                        let queried_argument_0 = head_state;
-                        let queried_argument_1 = self.state(growth);
-                        self.plant_can_grow_into(queried_argument_0, queried_argument_1)
-                    }
-                    &&self.is_inside_build_height(growth.y)
+                    let growth_state = self.state(growth);
+                    self.plant_can_grow_into(head_state, growth_state)
+                        && self.is_inside_build_height(growth.y)
                 }
                 None => false,
             },
