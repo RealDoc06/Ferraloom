@@ -227,7 +227,11 @@ and phase contracts must also serve block entities, scheduled ticks and mobs.
 M3 keeps the original direct path as the default (`--regions off`). The opt-in
 `--regions serial` path exercises one owned region through the same random-block
 kernel, with the existing chunk capture, RNG, clocks and effect-flush boundary.
-No workers run in either mode yet. The concrete client adapter owns
+No workers run in either mode yet. M3's closure is the whole dimension;
+all loaded chunks are part of the actual returned owner. Multi-region closure
+planning, split/merge and unresolved-owner routing belong to M4 and must pass
+before its worker flag can run. A single region's exclusive calls run in their
+original stack order; multi-job grant bookkeeping is deferred until it is used. The concrete client adapter owns
 `Region<World>` and immutable shared resources; current entities and global loot
 services stay with the serial coordinator. It lends the actual world and tick
 queues back to checked shell slots for those immediate leaf operations, then
@@ -237,7 +241,7 @@ Ordinary effects remain in the resident event buffer until the original flush.
 The initial private `RefCell<Option<Region<World>>>` adapter failed the paired
 real block-read cost gate: 18.61 ns borrowed versus 20.21 ns owned (+8.57%,
 12 alternating pairs of five million reads on CPU 2), above the 2% limit.
-Reject that design. The adapter instead owns a plain `Option<Region<World>>`;
+Reject that design. The adapter instead owns a plain `Option<Box<Region<World>>>`;
 world queries that can resolve ownership or park take a mutable facade, as do
 scoped tick reads. Shared resources and fixed metadata remain immutable. Small
 private helpers return owned answers/handles and end canonical borrows before
