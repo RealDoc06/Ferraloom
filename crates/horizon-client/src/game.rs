@@ -571,7 +571,6 @@ struct GameLevel<'w> {
     world: &'w mut World,
     facts: &'w BlockFacts,
     collision: &'w BlockCollisionRegistry<'w>,
-    events: &'w mut Vec<LevelEvent>,
     dimension: LevelDimension,
     darken: i32,
     /// The environment of the level's dimension (`SUN_ANGLE`).
@@ -618,7 +617,6 @@ struct GameLevel<'w> {
     spill: &'w mut spill::Spill,
     /// Where the chunk tickets let blocks tick.
     tickets: horizon_client::ticket_levels::Levels,
-    random_tick_sections: &'w mut horizon_client::random_tick_sections::RandomTickSections,
     /// Players with each chest open (a trapped chest's signal).
     lid_openers: &'w HashMap<(i32, i32, i32), i32>,
     /// `Level.isClientSide`: a client's copy of the level (a guest of a LAN
@@ -1123,7 +1121,7 @@ impl LevelAccess for GameLevel<'_> {
                 state,
                 effect: PlayerEffect::InteractLoot(table),
             } => self.drop_interact_loot(pos, state, table),
-            event => self.events.push(event),
+            event => self.world.level_events.push(event),
         }
     }
     fn remove_block_entity(&mut self, pos: BlockPos, old: BlockStateId, side_effects: bool) -> u8 {
@@ -1707,8 +1705,6 @@ struct Game<'a> {
     end: end::EndState,
     /// Canonical per-level simulation state, moved intact between dimensions.
     server_level: ferraloom_game::server_level::ServerLevel,
-    random_tick_sections: horizon_client::random_tick_sections::RandomTickSections,
-    level_events: Vec<LevelEvent>,
     falling: Vec<FallingBlock>,
     paintings: Vec<horizon_client::entities::Painting>,
     painting_variants: paintings::PaintingVariants,
@@ -2922,7 +2918,6 @@ impl Game<'_> {
             world: &mut self.world,
             facts: self.res.facts(),
             collision: self.collision,
-            events: &mut self.level_events,
             dimension,
             darken,
             environment: match dimension {
@@ -2955,7 +2950,6 @@ impl Game<'_> {
             pending: &mut self.pending,
             spill: &mut self.spill,
             tickets: self.server_level.tickets.levels(),
-            random_tick_sections: &mut self.random_tick_sections,
             lid_openers: &self.lid_openers,
             client_side: self.remote.is_some(),
         };
@@ -3005,7 +2999,7 @@ impl Game<'_> {
             self.register_chunk_ticks(key);
         }
         for &key in self.server_level.tick_chunks.removed() {
-            self.random_tick_sections.remove(&key);
+            self.world.random_tick_sections.remove(&key);
             self.portals.sections.remove(&key);
             self.server_level
                 .block_ticks
@@ -3255,7 +3249,7 @@ impl Game<'_> {
                         // Events and drops must be applied before the next tick:
                         // they can summon entities, change rules or trigger blocks.
                         if !more
-                            || !level.events.is_empty()
+                            || !level.world.level_events.is_empty()
                             || !level.spill.spawns.is_empty()
                             || !level.spill.orbs.is_empty()
                             || !level.spill.removed.is_empty()
@@ -3264,7 +3258,7 @@ impl Game<'_> {
                         }
                     }
                 });
-                if !self.level_events.is_empty() {
+                if !self.world.level_events.is_empty() {
                     self.process_level_events()?;
                 }
                 if !more {
@@ -3277,7 +3271,7 @@ impl Game<'_> {
     }
     /// Side effects reported by the behaviour library, in vanilla order.
     fn process_level_events(&mut self) -> Result<()> {
-        let events = std::mem::take(&mut self.level_events);
+        let events = std::mem::take(&mut self.world.level_events);
         self.lan_record_events(&events);
         dispense_fixture::record_events(&events);
         for event in events {
@@ -4513,7 +4507,7 @@ impl Game<'_> {
         // SolidBucketItem.getPlaceSound replaces it with the bucket's own.
         let solid_bucket = &*stack.item == "minecraft:powder_snow_bucket";
         if solid_bucket {
-            for event in &mut self.level_events {
+            for event in &mut self.world.level_events {
                 if let LevelEvent::Sound { pos: at, sound, .. } = event
                     && *at == pos
                 {
@@ -9084,7 +9078,7 @@ impl Game<'_> {
         self.pitch = pitch;
         self.selected = level.selected_slot.clamp(0, 8) as usize;
         self.streaming = streaming;
-        self.world = world;
+        self.world.replace_storage(world);
         self.inventory = inventory;
         self.save = save;
         self.level = level;
@@ -9216,7 +9210,7 @@ impl Game<'_> {
         // The sculk tables' watched blocks are built once per game.
         world.watched = std::mem::take(&mut self.world.watched);
         self.streaming = streaming;
-        self.world = world;
+        self.world.replace_storage(world);
         self.save = save;
         self.dim = target;
         self.level.dimension = target.id().to_owned();
@@ -9427,7 +9421,8 @@ impl Game<'_> {
         self.boss_overlay.reset();
         self.bosses = Default::default();
         self.streaming.paused = true;
-        self.world = World::new(self.res.facts().air, 0);
+        self.world
+            .replace_storage(World::new(self.res.facts().air, 0));
         self.player = None;
         self.sleeping = None;
         self.sleep_timer = 0;
@@ -13891,8 +13886,6 @@ impl<'a> Game<'a> {
             win: None,
             end: Default::default(),
             server_level: ferraloom_game::server_level::ServerLevel::new(0),
-            random_tick_sections: Default::default(),
-            level_events: Vec::new(),
             falling: Vec::new(),
             paintings: Vec::new(),
             painting_variants: prepared.painting_variants,

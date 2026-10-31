@@ -393,7 +393,8 @@ impl Game<'_> {
         streaming.remote = true;
         streaming.radius = self.settings.render_distance;
         self.streaming = streaming;
-        self.world = World::new(self.res.facts().air, 0);
+        self.world
+            .replace_storage(World::new(self.res.facts().air, 0));
         self.save = Arc::new(SaveDir::new(
             std::env::temp_dir().join("horizon-remote-unused"),
         ));
@@ -565,7 +566,8 @@ impl Game<'_> {
         self.score.board = Default::default();
         self.streaming = Streaming::new(Arc::new(NoTerrain), self.pack.context.clone(), 1);
         self.streaming.paused = true;
-        self.world = World::new(self.res.facts().air, 0);
+        self.world
+            .replace_storage(World::new(self.res.facts().air, 0));
         self.player = None;
         self.mobs.clear();
         self.clear_remote_objects();
@@ -1063,7 +1065,8 @@ impl Game<'_> {
             let old = std::mem::take(&mut self.world.chunks);
             let count = old.len();
             horizon_client::chunk::free_columns(old, count);
-            self.world = World::new(self.res.facts().air, spawn.seed);
+            self.world
+                .replace_storage(World::new(self.res.facts().air, spawn.seed));
             self.world.game_time = time;
             self.world.day_time = day;
             self.world.weather = weather;

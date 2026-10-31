@@ -408,7 +408,7 @@ impl Game<'_> {
     }
     /// Queue and play level event `id` at `pos` (`Level.levelEvent`).
     pub(super) fn level_event_at(&mut self, id: i32, pos: [i32; 3], data: i32) {
-        self.level_events.push(LevelEvent::LevelEvent {
+        self.world.level_events.push(LevelEvent::LevelEvent {
             id,
             pos: BlockPos::new(pos[0], pos[1], pos[2]),
             data,

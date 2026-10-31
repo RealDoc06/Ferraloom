@@ -105,7 +105,11 @@ ownership change has a separate reentrant-rehash/parity gate and a before/after
 attribute-lookup benchmark; a slowdown above about 2% blocks it.
 
 `Region<W>` carries one concrete resident-world value and its original `Ticks`
-queues. It has one type parameter: Horizon supplies its current `World`, while
+queues. The random-section cache and ordered pending level events now reside
+with the client world, so callbacks carry them with the canonical owner.
+Storage replacement retains their existing lifetimes and effect-flush boundary;
+dimension swaps transfer them with the world. No block-entity method moves.
+It has one type parameter: Horizon supplies its current `World`, while
 shared code has no client dependency. A checked `OwnershipSlot` lends the actual
 value out of the serial shell and records absence explicitly. Reading or taking
 an absent value returns an ownership error; compatibility field access fails
