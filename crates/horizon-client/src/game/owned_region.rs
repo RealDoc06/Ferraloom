@@ -94,7 +94,7 @@ impl<S: Services> OwnedLevel<S> {
             revision: Cell::new((u64::MAX, u64::MAX, u64::MAX, 0)),
         }
     }
-    #[inline]
+    #[inline(always)]
     fn read<R>(&self, read: impl FnOnce(&Region<World>) -> R) -> R {
         read(
             self.region
@@ -222,7 +222,7 @@ impl<S: Services> LevelAccess for OwnedLevel<S> {
                 })
         })
     }
-    #[inline]
+    #[inline(always)]
     fn block_state(&mut self, pos: BlockPos) -> BlockStateId {
         self.read(|r| r.world.block(pos.x, pos.y, pos.z))
     }
