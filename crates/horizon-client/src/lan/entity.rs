@@ -5,7 +5,7 @@
 //! movement, motion, metadata and equipment packets that bring them up to
 //! date at the entity type's update interval (`tracking`); each client's
 //! `Tracker` is the set of entities it has been paired with.
-use super::tracking;
+use super::{conn::PacketBody, tracking};
 use horizon_protocol::{
     buf::pack_degrees,
     entity_data::{Value, serializer},
@@ -570,22 +570,63 @@ impl ServerEntity {
 #[derive(Default)]
 pub struct Tracker {
     seen: crate::fast_hash::FxHashSet<i32>,
+    /// Fast membership for ids below 65,536, capped at 1,024 cached words.
+    /// The set still defines iteration and removal order.
+    low_ids: Vec<u64>,
+    #[cfg(test)]
+    use_hash: bool,
 }
 
 impl Tracker {
     pub fn is_tracking(&self, id: i32) -> bool {
+        #[cfg(test)]
+        if self.use_hash {
+            return self.seen.contains(&id);
+        }
+        if let Ok(id) = usize::try_from(id)
+            && id < 65_536
+        {
+            return self
+                .low_ids
+                .get(id / 64)
+                .is_some_and(|word| word & (1 << (id % 64)) != 0);
+        }
         self.seen.contains(&id)
+    }
+    fn cache(&mut self, id: i32, tracked: bool) {
+        #[cfg(test)]
+        if self.use_hash {
+            return;
+        }
+        if let Ok(id) = usize::try_from(id)
+            && id < 65_536
+        {
+            let word = id / 64;
+            if tracked {
+                self.low_ids.resize(self.low_ids.len().max(word + 1), 0);
+                self.low_ids[word] |= 1 << (id % 64);
+            } else if let Some(word) = self.low_ids.get_mut(word) {
+                *word &= !(1 << (id % 64));
+            }
+        }
+    }
+    fn track(&mut self, id: i32) {
+        self.seen.insert(id);
+        self.cache(id, true);
     }
     pub fn ids(&self) -> Vec<i32> {
         self.seen.iter().copied().collect()
     }
     pub fn clear(&mut self) {
         self.seen.clear();
+        self.low_ids.fill(0);
     }
     /// Stop tracking `id` without a packet: the caller removes it from the
     /// client, and the next tick pairs it again if it is still in range.
     pub fn forget(&mut self, id: i32) -> bool {
-        self.seen.remove(&id)
+        let removed = self.seen.remove(&id);
+        self.cache(id, false);
+        removed
     }
     pub fn len(&self) -> usize {
         self.seen.len()
@@ -607,7 +648,7 @@ pub struct Viewer<'a> {
     pub chunks: &'a crate::fast_hash::FxHashSet<(i32, i32)>,
     pub tracker: &'a mut Tracker,
     /// What the tick sends it, in order.
-    pub out: &'a mut Vec<Vec<u8>>,
+    pub out: &'a mut Vec<PacketBody>,
 }
 
 /// One entity as this tick's range checks read it: where it is
@@ -666,16 +707,25 @@ pub struct Entities {
     is_moved: Vec<bool>,
     /// One entity's packets and their bodies, kept between entities.
     packets: Vec<play::Clientbound>,
-    bodies: Vec<Vec<u8>>,
+    bodies: Vec<PacketBody>,
+    #[cfg(test)]
+    owned_packets: bool,
 }
 
 /// The client sees the entity this tick, and already tracked it.
 const SEES: u8 = 1;
 const TRACKS: u8 = 2;
 
-fn encode_all(packets: &[play::Clientbound], bodies: &mut Vec<Vec<u8>>) {
+fn encode_all(packets: &[play::Clientbound], bodies: &mut Vec<PacketBody>, shared: bool) {
     bodies.clear();
-    bodies.extend(packets.iter().map(play::Clientbound::encode));
+    bodies.extend(packets.iter().map(|packet| {
+        let body = packet.encode();
+        if shared {
+            PacketBody::Shared(body.into())
+        } else {
+            PacketBody::Owned(body)
+        }
+    }));
 }
 
 impl Entities {
@@ -781,7 +831,7 @@ impl Entities {
                 flags.extend(self.probes.iter().zip(pairs.iter_mut()).map(|(p, pairs)| {
                     if p.id == v.entity_id || !sees(v, p, chunks, held) {
                         0
-                    } else if v.tracker.seen.contains(&p.id) {
+                    } else if v.tracker.is_tracking(p.id) {
                         kept += 1;
                         SEES | TRACKS
                     } else {
@@ -796,7 +846,7 @@ impl Entities {
                 let is_moved = &self.is_moved;
                 flags.extend(self.probes.iter().zip(pairs.iter_mut()).zip(is_moved).map(
                     |((p, pairs), &moved)| {
-                        let tracks = v.tracker.seen.contains(&p.id);
+                        let tracks = v.tracker.is_tracking(p.id);
                         if p.id == v.entity_id || (moved && !sees(v, p, chunks, held)) {
                             0
                         } else if tracks {
@@ -846,10 +896,13 @@ impl Entities {
                 });
             }
             if !removed.is_empty() {
-                v.out.push(
+                for &id in &removed {
+                    v.tracker.cache(id, false);
+                }
+                v.out.push(PacketBody::Owned(
                     play::Clientbound::RemoveEntities(play::RemoveEntities { ids: removed })
                         .encode(),
-                );
+                ));
             }
         }
         for (index, e) in entities.iter().enumerate() {
@@ -866,7 +919,11 @@ impl Entities {
                 continue;
             }
             let mut encoded = false;
-            let mut pairing: Option<Vec<Vec<u8>>> = None;
+            let mut pairing: Option<Vec<PacketBody>> = None;
+            #[cfg(test)]
+            let shared = !self.owned_packets;
+            #[cfg(not(test))]
+            let shared = true;
             for (v, flags) in viewers.iter_mut().zip(&self.flags) {
                 let f = flags[index];
                 if f & TRACKS != 0 {
@@ -874,7 +931,7 @@ impl Entities {
                         continue;
                     }
                     if !encoded {
-                        encode_all(&self.packets, &mut self.bodies);
+                        encode_all(&self.packets, &mut self.bodies, shared);
                         encoded = true;
                     }
                     v.out.extend(self.bodies.iter().cloned());
@@ -884,10 +941,12 @@ impl Entities {
                     let bodies = pairing.get_or_insert_with(|| {
                         let mut packets = Vec::new();
                         s.pairing(e, kind, riding, &mut packets);
-                        packets.iter().map(play::Clientbound::encode).collect()
+                        let mut bodies = Vec::new();
+                        encode_all(&packets, &mut bodies, shared);
+                        bodies
                     });
                     v.out.extend(bodies.iter().cloned());
-                    v.tracker.seen.insert(e.id);
+                    v.tracker.track(e.id);
                 }
             }
         }
@@ -898,6 +957,185 @@ impl Entities {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tracking_cache_handles_forget_clear_and_high_ids() {
+        let mut tracker = Tracker::default();
+        let ids = [-1, 0, 63, 64, 65_535, 65_536, i32::MAX];
+        for id in ids {
+            tracker.track(id);
+        }
+        for id in ids {
+            assert!(tracker.is_tracking(id));
+            assert!(tracker.forget(id));
+            assert!(!tracker.is_tracking(id));
+            assert!(!tracker.forget(id));
+        }
+        for id in ids {
+            tracker.track(id);
+        }
+        tracker.clear();
+        for id in ids {
+            assert!(!tracker.is_tracking(id));
+        }
+        assert!(tracker.low_ids.len() <= 1024);
+    }
+
+    /// The membership checks in the moving 500-receiver range pass.
+    #[test]
+    #[ignore]
+    fn tracking_membership_benchmark() {
+        use std::{hint::black_box, time::Instant};
+        let trackers: Vec<_> = (0..500)
+            .map(|receiver| {
+                let mut tracker = Tracker::default();
+                for id in 0..500 {
+                    if (id + receiver) % 3 != 0 {
+                        tracker.track(id);
+                    }
+                }
+                tracker
+            })
+            .collect();
+        for cached in [false, true] {
+            let mut samples = Vec::new();
+            for _ in 0..7 {
+                let start = Instant::now();
+                let mut count = 0;
+                for _ in 0..100 {
+                    for tracker in black_box(&trackers) {
+                        for id in 0..500 {
+                            count += usize::from(if cached {
+                                tracker.is_tracking(black_box(id))
+                            } else {
+                                tracker.seen.contains(&black_box(id))
+                            });
+                        }
+                    }
+                }
+                black_box(count);
+                samples.push(start.elapsed().as_secs_f64() * 1e3 / 100.0);
+            }
+            samples.sort_by(f64::total_cmp);
+            println!(
+                "tracking_membership cached={cached} median_ms_per_tick={:.3}",
+                samples[3]
+            );
+        }
+    }
+
+    /// Full 300-normal + 200-explorer tracking pass, including packet fanout.
+    #[test]
+    #[ignore]
+    fn five_hundred_viewers_benchmark() {
+        use std::{
+            hash::{Hash, Hasher},
+            hint::black_box,
+            time::Instant,
+        };
+        let mut expected = None;
+        for cached in [false, true] {
+            for shared in [false, true] {
+                let mut samples = Vec::new();
+                for _ in 0..5 {
+                    let mut states: Vec<_> = (0..500)
+                        .map(|id| EntityState {
+                            id,
+                            uuid: id as u128 + 1,
+                            kind: "minecraft:player".into(),
+                            position: [
+                                if id < 300 {
+                                    (id % 30) as f64 * 1.5
+                                } else {
+                                    id as f64 * 32.0
+                                },
+                                64.0,
+                                (id % 10) as f64 * 2.0,
+                            ],
+                            ..state(0.0)
+                        })
+                        .collect();
+                    let chunks: crate::fast_hash::FxHashSet<_> = states
+                        .iter()
+                        .flat_map(|e| {
+                            let x = e.position[0].floor() as i32 >> 4;
+                            let z = e.position[2].floor() as i32 >> 4;
+                            (-2..=2).flat_map(move |dx| (-2..=2).map(move |dz| (x + dx, z + dz)))
+                        })
+                        .collect();
+                    let mut trackers: Vec<_> = (0..500)
+                        .map(|_| Tracker {
+                            use_hash: !cached,
+                            ..Tracker::default()
+                        })
+                        .collect();
+                    let mut outs: Vec<Vec<PacketBody>> = (0..500).map(|_| Vec::new()).collect();
+                    let mut level = Entities {
+                        owned_packets: !shared,
+                        ..Entities::default()
+                    };
+                    let riding = Riding::default();
+                    let mut elapsed = std::time::Duration::ZERO;
+                    let mut hash = std::collections::hash_map::DefaultHasher::new();
+                    let mut packets = 0;
+                    for tick in 0..31 {
+                        for e in &mut states {
+                            e.position[0] += 0.2;
+                            e.yaw += 1.0;
+                        }
+                        for out in &mut outs {
+                            out.clear();
+                        }
+                        let refs: Vec<_> = states.iter().collect();
+                        let mut viewers: Vec<_> = trackers
+                            .iter_mut()
+                            .zip(&mut outs)
+                            .zip(&states)
+                            .map(|((tracker, out), e)| Viewer {
+                                entity_id: e.id,
+                                moved: true,
+                                position: e.position,
+                                view_distance: 8,
+                                chunks: &chunks,
+                                tracker,
+                                out,
+                            })
+                            .collect();
+                        let start = Instant::now();
+                        level.tick(black_box(&refs), &riding, black_box(&mut viewers), |_| {
+                            Some(1)
+                        });
+                        if tick != 0 {
+                            elapsed += start.elapsed();
+                        }
+                        drop(viewers);
+                        if tick != 0 {
+                            for (conn, out) in outs.iter().enumerate() {
+                                conn.hash(&mut hash);
+                                for body in out {
+                                    body[..].hash(&mut hash);
+                                    packets += 1;
+                                }
+                            }
+                        }
+                    }
+                    let result = (packets, hash.finish());
+                    assert_eq!(*expected.get_or_insert(result), result);
+                    samples.push(elapsed.as_secs_f64() * 1e3 / 30.0);
+                    println!(
+                        "tracking500 cached={cached} shared={shared} packets={packets} hash={} ms_per_tick={:.3}",
+                        result.1,
+                        samples.last().unwrap()
+                    );
+                }
+                samples.sort_by(f64::total_cmp);
+                println!(
+                    "tracking500 cached={cached} shared={shared} median_ms_per_tick={:.3}",
+                    samples[2]
+                );
+            }
+        }
+    }
 
     fn state(x: f64) -> EntityState {
         EntityState {
@@ -1286,7 +1524,7 @@ mod tests {
     struct Clients {
         chunks: crate::fast_hash::FxHashSet<(i32, i32)>,
         trackers: [Tracker; 2],
-        out: [Vec<Vec<u8>>; 2],
+        out: [Vec<PacketBody>; 2],
         positions: [[f64; 3]; 2],
         moved: [bool; 2],
     }
@@ -1331,8 +1569,8 @@ mod tests {
         }
     }
 
-    fn body(p: play::Clientbound) -> Vec<u8> {
-        p.encode()
+    fn body(p: play::Clientbound) -> PacketBody {
+        PacketBody::Owned(p.encode())
     }
 
     /// ChunkMap checks a pair again only when one side moves: a zombie
@@ -1394,6 +1632,10 @@ mod tests {
         c.tick(&mut level, &[&e]);
         assert!(!c.out[0].is_empty());
         assert_eq!(c.out[0], c.out[1]);
+        let (PacketBody::Shared(a), PacketBody::Shared(b)) = (&c.out[0][0], &c.out[1][0]) else {
+            panic!("entity updates must share their encoded bytes")
+        };
+        assert!(std::sync::Arc::ptr_eq(a, b));
     }
 
     #[test]

@@ -163,11 +163,62 @@ pub enum HostEvent {
     Error(String),
 }
 
+/// Profiling-only telemetry. Missing columns are movement observations, not
+/// teleport reasons; the bot's client-side waits remain in `waited_ticks`.
+#[cfg(feature = "profiler")]
+#[derive(Default)]
+struct CorrectionCounts {
+    block_refusal: std::cell::Cell<bool>,
+    initial_positions: u64,
+    block_intersection: u64,
+    other_teleports: u64,
+    absent_column_packets: u64,
+    absent_current_packets: u64,
+    absent_target_packets: u64,
+    accepted_into_absent_target: u64,
+    pending_absent_target: bool,
+}
+
+#[cfg(feature = "profiler")]
+impl CorrectionCounts {
+    fn teleport(&mut self, initial: bool) {
+        let block = self.block_refusal.replace(false);
+        if initial {
+            self.initial_positions += 1;
+        } else if block {
+            self.block_intersection += 1;
+        } else {
+            self.other_teleports += 1;
+        }
+    }
+}
+
+#[cfg(feature = "profiler")]
+impl Drop for CorrectionCounts {
+    fn drop(&mut self) {
+        eprintln!(
+            "ferraloom_corrections initial_positions={} block_intersection={} other_teleports={}",
+            self.initial_positions, self.block_intersection, self.other_teleports,
+        );
+        eprintln!(
+            "ferraloom_movement_observations not_teleport_reasons=true absent_column_packets={} absent_current_packets={} absent_target_packets={} accepted_into_absent_target={}",
+            self.absent_column_packets,
+            self.absent_current_packets,
+            self.absent_target_packets,
+            self.accepted_into_absent_target,
+        );
+    }
+}
+
 pub struct Hub {
     pub lan: Lan,
     pub config: HubConfig,
     pub encoder: ChunkEncoder,
     pub guests: Vec<Guest>,
+    /// Rebuilt at the network polling boundary; guest storage can change between ticks.
+    inbox_index: crate::fast_hash::FxHashMap<u32, usize>,
+    #[cfg(feature = "profiler")]
+    corrections: CorrectionCounts,
     pub(super) sync: Arc<SyncData>,
     pub ticks: u64,
     /// The `player_movement_check` and `elytra_movement_check` game rules,
@@ -210,7 +261,7 @@ pub struct Hub {
     /// Each level's tracked entities, by dimension.
     entities: std::collections::HashMap<String, Entities>,
     /// What one tick of entity tracking sends each guest, kept between ticks.
-    entity_out: Vec<Vec<Vec<u8>>>,
+    entity_out: Vec<Vec<super::conn::PacketBody>>,
     /// Player snapshots reused after each tracking tick.
     entity_players: Vec<EntityState>,
     /// Server mods' commands, a root in the commands report's format, sent
@@ -361,6 +412,9 @@ impl Hub {
             config,
             encoder,
             guests: Vec::new(),
+            inbox_index: Default::default(),
+            #[cfg(feature = "profiler")]
+            corrections: Default::default(),
             sync,
             ticks: 0,
             immediate_respawn: false,
@@ -991,6 +1045,9 @@ impl Hub {
             g.position = p;
             g.previous_position = p;
         }
+        // Match the bots' pulled_back counter: their first position is not a correction.
+        #[cfg(feature = "profiler")]
+        self.corrections.teleport(g.teleport_counter == 0);
         g.teleport_counter = (g.teleport_counter + 1) & 0x7FFF_FFFF;
         let id = g.teleport_counter;
         g.awaiting_teleport = Some((id, g.position));
@@ -1137,22 +1194,25 @@ impl Hub {
     /// packets queued for its own level's pass.
     pub fn poll(&mut self, ctx: &mut TickCtx) -> Vec<HostEvent> {
         self.ticks += 1;
+        self.reindex_inboxes();
         let mut events = Vec::new();
         for event in self.lan.poll() {
             match event {
                 NetEvent::Joined(j) => {
                     let conn = self.admit(*j, ctx);
+                    self.reindex_inboxes();
                     events.push(HostEvent::Joined(conn));
                 }
                 NetEvent::Left(conn, reason) => {
                     if let Some(i) = self.guests.iter().position(|g| g.conn == conn) {
                         let g = self.remove_guest(i, &reason);
+                        self.reindex_inboxes();
                         events.push(HostEvent::Left(Box::new(g)));
                     }
                 }
                 NetEvent::Packet(conn, packet) => {
-                    if let Some(g) = self.guest_mut(conn) {
-                        g.inbox.push_back(*packet);
+                    if let Some(&i) = self.inbox_index.get(&conn) {
+                        self.guests[i].inbox.push_back(*packet);
                     }
                 }
                 NetEvent::Duplicate(uuid) => {
@@ -1172,6 +1232,12 @@ impl Hub {
             }
         }
         events
+    }
+
+    fn reindex_inboxes(&mut self) {
+        self.inbox_index.clear();
+        self.inbox_index
+            .extend(self.guests.iter().enumerate().map(|(i, g)| (g.conn, i)));
     }
 
     /// The level in place's part of the tick (`ServerLevel.tick`'s chunk
@@ -1844,7 +1910,7 @@ impl Hub {
         });
         drop(viewers);
         for (g, out) in self.guests.iter().filter(|g| here(g)).zip(outs.iter_mut()) {
-            g.sender.send_many(out.drain(..));
+            g.sender.send_bodies(out.drain(..));
         }
         self.entity_out = outs;
         all.clear();
@@ -2275,6 +2341,20 @@ impl Hub {
         }
         let to = pos.unwrap_or(g.position);
         let rot = rot.unwrap_or((g.yaw, g.pitch));
+        #[cfg(feature = "profiler")]
+        if pos.is_some() {
+            let current = self.guests[i].chunk();
+            let target = (
+                (to[0].clamp(-3.0E7, 3.0E7).floor() as i32) >> 4,
+                (to[2].clamp(-3.0E7, 3.0E7).floor() as i32) >> 4,
+            );
+            let absent_current = !ctx.world.chunks.contains_key(&current);
+            let absent_target = !ctx.world.chunks.contains_key(&target);
+            self.corrections.absent_current_packets += u64::from(absent_current);
+            self.corrections.absent_target_packets += u64::from(absent_target);
+            self.corrections.absent_column_packets += u64::from(absent_current || absent_target);
+            self.corrections.pending_absent_target = absent_target;
+        }
         self.position_change(i, to, rot, flags, ctx, events);
     }
 
@@ -2297,6 +2377,8 @@ impl Hub {
             to[2].clamp(-3.0E7, 3.0E7),
         ];
         let (yaw, pitch) = (wrap_degrees(yaw), wrap_degrees(pitch));
+        #[cfg(feature = "profiler")]
+        let absent_target = std::mem::take(&mut self.corrections.pending_absent_target);
         // A passenger only turns: its vehicle carries it (absSnapTo where it is).
         if g.vehicle.is_some() {
             (g.yaw, g.pitch) = (yaw, pitch);
@@ -2369,6 +2451,10 @@ impl Hub {
         g.head_yaw = g.yaw;
         g.on_ground = flags & 1 != 0;
         g.ticks = g.ticks.max(1);
+        #[cfg(feature = "profiler")]
+        if absent_target && start != to {
+            self.corrections.accepted_into_absent_target += 1;
+        }
     }
 
     /// The collision part of handlePlayerPositionChange: whether the move
@@ -2436,6 +2522,8 @@ impl Hub {
                 .join_is_not_empty(&old_shape, ShapeOp::AND)
                 .unwrap_or(true)
             {
+                #[cfg(feature = "profiler")]
+                self.corrections.block_refusal.set(true);
                 return (fail, true);
             }
         }
@@ -2798,6 +2886,46 @@ fn shared_flags(sneaking: bool, sprinting: bool, body: &BodyFlags) -> i8 {
 mod tests {
     use super::*;
     use crate::fast_hash::FxHashSet;
+
+    /// Isolate routing 500 players' inbound packets, including index rebuild.
+    #[test]
+    #[ignore]
+    fn inbox_routing_benchmark() {
+        use std::{hint::black_box, time::Instant};
+        for indexed in [false, true] {
+            let mut guests: Vec<_> = (0..500u32)
+                .map(|conn| (conn, std::collections::VecDeque::new()))
+                .collect();
+            let mut index = crate::fast_hash::FxHashMap::default();
+            let mut samples = Vec::new();
+            for _ in 0..7 {
+                let start = Instant::now();
+                for _ in 0..200 {
+                    if indexed {
+                        index.clear();
+                        index.extend(guests.iter().enumerate().map(|(i, g)| (g.0, i)));
+                    }
+                    for conn in (0..500).cycle().take(2000) {
+                        let guest = if indexed {
+                            &mut guests[index[&black_box(conn)]]
+                        } else {
+                            guests.iter_mut().find(|g| g.0 == black_box(conn)).unwrap()
+                        };
+                        guest.1.push_back(black_box(conn));
+                    }
+                    for g in &mut guests {
+                        g.1.clear();
+                    }
+                }
+                samples.push(start.elapsed().as_secs_f64() * 1e6 / 200.0);
+            }
+            samples.sort_by(f64::total_cmp);
+            println!(
+                "inbox indexed={indexed} median_us_per_tick={:.3}",
+                samples[3]
+            );
+        }
+    }
 
     /// `requeue` as it was, scanning the queue for each chunk of the view.
     fn requeue_scan(
