@@ -939,7 +939,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             result = table.set_text(result, self.direction_prop(direction), value);
         }
         // shouldRaisePost
-        let mut side = |d: Direction| table.text(result, self.direction_prop(d)).to_owned();
+        let side = |d: Direction| table.text(result, self.direction_prop(d)).to_owned();
         let (north, south, east, west) = (
             side(Direction::North),
             side(Direction::South),
