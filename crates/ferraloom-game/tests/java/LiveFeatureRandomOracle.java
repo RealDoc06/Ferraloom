@@ -67,6 +67,7 @@ public final class LiveFeatureRandomOracle {
     }
 
     public static void main(String[] args) {
+        var output = System.out;
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
         // The actual provider registered by VegetationFeatures#bootstrap.
@@ -98,7 +99,7 @@ public final class LiveFeatureRandomOracle {
                         + " " + fixture.callbackDraws + " " + tail);
                 }
                 String callbacks = callback ? "Some(" + fixture.callbackDraws + ")" : "None";
-                System.out.println("FEATURE_RANDOM_CASE\t" + seed + "\t" + callback + "\t" + state
+                output.println("FEATURE_RANDOM_CASE\t" + seed + "\t" + callback + "\t" + state
                     + "\t" + callbacks + "\t" + tail);
                 compared++;
             }
