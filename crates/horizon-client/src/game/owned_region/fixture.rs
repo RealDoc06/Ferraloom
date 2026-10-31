@@ -79,7 +79,7 @@ impl Game<'_> {
             services
                 .game
                 .into_inner()
-                .restore_block_region(region.unwrap());
+                .restore_block_region(*region.unwrap());
             (nanos, checksum)
         }
     }
@@ -291,14 +291,14 @@ struct CallbackServices<'g, 'r> {
     callback: fn(&mut Game<'_>) -> Reply,
 }
 impl Services for CallbackServices<'_, '_> {
-    fn call(&self, region: Region<World>, _request: Request) -> Returned {
+    fn call(&self, region: Box<Region<World>>, _request: Request) -> Returned {
         let mut game = self.game.borrow_mut();
         let id = region.id;
-        game.restore_block_region(region);
+        game.restore_block_region(*region);
         let result =
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| (self.callback)(&mut game)));
         Returned {
-            region: game.take_block_region(id),
+            region: Box::new(game.take_block_region(id)),
             result,
         }
     }
@@ -459,7 +459,7 @@ impl Game<'_> {
             services
                 .game
                 .into_inner()
-                .restore_block_region(region.unwrap());
+                .restore_block_region(*region.unwrap());
         }
         json!({"same_key_replacement":true,"reentrant_callback":true,"unwind_keeps_live_owner":true})
     }

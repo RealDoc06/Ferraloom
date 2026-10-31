@@ -68,17 +68,17 @@ enum Reply {
 }
 type Panic = Box<dyn std::any::Any + Send>;
 struct Returned {
-    region: Region<World>,
+    region: Box<Region<World>>,
     result: std::result::Result<Reply, Panic>,
 }
 trait Services {
     /// Returns the actual owner even if the serial callback unwinds. The caller
     /// restores its slot before resuming the panic.
-    fn call(&self, region: Region<World>, request: Request) -> Returned;
+    fn call(&self, region: Box<Region<World>>, request: Request) -> Returned;
 }
 
 struct OwnedLevel<S> {
-    region: Option<Region<World>>,
+    region: Option<Box<Region<World>>>,
     frame: Frame,
     services: S,
     handoffs: Cell<u64>,
@@ -87,7 +87,7 @@ struct OwnedLevel<S> {
 impl<S: Services> OwnedLevel<S> {
     fn new(region: Region<World>, frame: Frame, services: S) -> Self {
         Self {
-            region: Some(region),
+            region: Some(Box::new(region)),
             frame,
             services,
             handoffs: Cell::new(0),
@@ -392,10 +392,10 @@ struct SerialServices<'g, 'r> {
     game: RefCell<&'g mut Game<'r>>,
 }
 impl Services for SerialServices<'_, '_> {
-    fn call(&self, region: Region<World>, request: Request) -> Returned {
+    fn call(&self, region: Box<Region<World>>, request: Request) -> Returned {
         let mut game = self.game.borrow_mut();
         let id = region.id;
-        game.restore_block_region(region);
+        game.restore_block_region(*region);
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             game.with_level_unflushed(|_, level, _| match request {
                 Request::Analog(pos, state, direction) => {
@@ -423,7 +423,7 @@ impl Services for SerialServices<'_, '_> {
             })
         }));
         Returned {
-            region: game.take_block_region(id),
+            region: Box::new(game.take_block_region(id)),
             result,
         }
     }
@@ -532,7 +532,7 @@ impl Game<'_> {
         services
             .game
             .into_inner()
-            .restore_block_region(region.expect("active region did not return"));
+            .restore_block_region(*region.expect("active region did not return"));
         if let Err(panic) = result {
             std::panic::resume_unwind(panic);
         }
