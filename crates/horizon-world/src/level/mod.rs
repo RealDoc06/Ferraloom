@@ -105,6 +105,8 @@ mod bonemeal;
 mod buckets;
 mod creaking;
 mod falling;
+mod feature_context;
+mod feature_random;
 mod feature_world;
 mod fluids;
 mod growth;

@@ -235,6 +235,15 @@ of real random-chunk and crop-bonemeal calls, rejecting a regression above about
 live features' inherited clone-and-overwrite behavior remains a separate,
 vanilla-backed change, rather than part of that access refactor.
 
+The live configured/placed-feature boundary uses a canonical feature selector:
+world operations and feature draws borrow their common context for individual
+operations. `TreeGrower#growTree` passes the same source into placement;
+`SimpleBlockFeature#place` also draws through `level.getRandom` when placing pale
+moss. Callback draws must remain visible to the next feature draw. Test that
+path against the actual vanilla feature, keeping this behavior correction in
+its own commit. Jigsaw command placement remains serial and is outside this
+correction.
+
 Gate the adapter cell with a paired block-read hot-path benchmark, using the
 same compiler/profile/input and alternating before/after trials as the
 attribute lookup gate. Reject a regression above about 2%; use the wider

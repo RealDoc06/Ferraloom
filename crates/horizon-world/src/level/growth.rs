@@ -193,40 +193,19 @@ fn weighted<R: RandomSource>(
 }
 
 impl<C: super::tick_access::TickContext> Sim<'_, C> {
-    /// `ConfiguredFeature.place(level, generator, level.random, pos)`. The
-    /// feature draws from a copy of the level random that replaces it after.
+    /// `TreeGrower#growTree` passes the level's same live `RandomSource` into
+    /// feature placement, including draws made by synchronous block callbacks.
     pub(crate) fn place_configured_feature(&mut self, name: &str, pos: BlockPos) -> bool {
-        let b = self.b;
-        let Some(features) = b.live_features() else {
-            return false;
-        };
-        let mut random = self.level.with_random(|random| random.clone());
-        let placed = {
-            let mut world = LevelFeatureWorld {
-                sim: self,
-                features,
-            };
-            features.place_configured(name, &mut world, &mut random, [pos.x, pos.y, pos.z])
-        };
-        self.level.with_random(|live| *live = random);
-        placed
+        super::feature_context::place(
+            self,
+            name,
+            pos,
+            super::feature_context::Placement::Configured,
+        )
     }
     /// `PlacedFeature.place(level, generator, level.random, pos)`.
     pub(crate) fn place_placed_feature(&mut self, name: &str, pos: BlockPos) -> bool {
-        let b = self.b;
-        let Some(features) = b.live_features() else {
-            return false;
-        };
-        let mut random = self.level.with_random(|random| random.clone());
-        let placed = {
-            let mut world = LevelFeatureWorld {
-                sim: self,
-                features,
-            };
-            features.place_placed(name, &mut world, &mut random, [pos.x, pos.y, pos.z])
-        };
-        self.level.with_random(|live| *live = random);
-        placed
+        super::feature_context::place(self, name, pos, super::feature_context::Placement::Placed)
     }
     fn feature_exists(&self, name: &str) -> bool {
         self.b

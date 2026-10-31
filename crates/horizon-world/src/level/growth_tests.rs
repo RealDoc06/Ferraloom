@@ -56,6 +56,7 @@ struct Level {
     biome: &'static str,
     day: i64,
     block_entities: Vec<(BlockPos, crate::nbt::Compound)>,
+    placement_callback: Option<Vec<i32>>,
 }
 impl LevelAccess for Level {
     fn day_time(&self) -> i64 {
@@ -65,6 +66,9 @@ impl LevelAccess for Level {
         self.blocks.get(&pos).copied().unwrap_or(self.air)
     }
     fn set_raw(&mut self, pos: BlockPos, state: BlockStateId) -> Option<BlockStateId> {
+        if let Some(draws) = &mut self.placement_callback {
+            draws.push(self.random.next_int_bound(97).unwrap());
+        }
         Some(self.blocks.insert(pos, state).unwrap_or(self.air))
     }
     fn is_loaded(&self, _pos: BlockPos) -> bool {
@@ -110,6 +114,7 @@ impl World {
                 biome: "minecraft:plains",
                 day: 6000,
                 block_entities: Vec::new(),
+                placement_callback: None,
             },
             f,
             ticks,
@@ -156,6 +161,72 @@ impl World {
             .values()
             .filter(|&&s| self.f.registry.state(s).unwrap().name.ends_with(suffix))
             .count()
+    }
+}
+
+/// `VegetationFeatures#bootstrap`'s pale moss vegetation uses a weighted
+/// provider, then `SimpleBlockFeature#place` reaches `MossyCarpetBlock#placeAt`
+/// through the world's same random source. A synchronous storage callback must
+/// consume that stream before the feature continues, rather than be overwritten.
+#[test]
+fn live_moss_feature_keeps_world_and_callback_random_draws() {
+    let Some(f) = fixture() else { return };
+    for callback in [false, true] {
+        let mut compared = 0;
+        for seed in 0..4096 {
+            let mut expected = LegacyRandom::new(seed);
+            if expected.next_int_bound(60).unwrap() >= 25 {
+                continue;
+            }
+            let callback_draw = callback.then(|| expected.next_int_bound(97).unwrap());
+            // Select no-topper cases so the Java WorldGenLevel fixture can
+            // compare this exact path without emulating neighbor updates.
+            let sides = std::array::from_fn::<_, 4, _>(|_| expected.next_boolean());
+            if sides.into_iter().any(|side| side) {
+                continue;
+            }
+            let mut world = World::new(f, seed);
+            world.floor("stone", 2);
+            let stone = world.id("stone", &[]);
+            for (x, z) in [(0, -1), (1, 0), (0, 1), (-1, 0)] {
+                for y in [64, 65] {
+                    world.put(BlockPos::new(x, y, z), stone);
+                }
+            }
+            world.level.placement_callback = callback.then(Vec::new);
+            let origin = BlockPos::new(0, 64, 0);
+            assert_eq!(
+                f.behaviours.place_feature(
+                    &mut world.level,
+                    &mut world.ticks,
+                    "minecraft:pale_moss_vegetation",
+                    origin,
+                ),
+                Some(true),
+            );
+            assert_eq!(world.name(origin), "minecraft:pale_moss_carpet");
+            assert_eq!(world.name(origin.offset(0, 1, 0)), "minecraft:air");
+            assert_eq!(
+                world.level.placement_callback,
+                callback_draw.map(|draw| vec![draw]),
+            );
+            let tail = world.level.random.next_long();
+            assert_eq!(
+                tail,
+                expected.next_long(),
+                "seed={seed}, callback={callback}"
+            );
+            println!(
+                "FEATURE_RANDOM_CASE\t{seed}\t{callback}\t{}\t{:?}\t{tail}",
+                world.level.block_state(origin).0,
+                world.level.placement_callback,
+            );
+            compared += 1;
+            if compared == 4 {
+                break;
+            }
+        }
+        assert_eq!(compared, 4, "four no-topper cases per callback mode");
     }
 }
 
