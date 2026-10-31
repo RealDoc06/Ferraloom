@@ -94,7 +94,7 @@ fn level(case: &Value, key: &str, air: BlockStateId, nether: bool) -> Cells {
 
 fn run(case: &Value, b: &Behaviours, air: BlockStateId, out: &mut Vec<String>) {
     let from_nether = case["from"] == "nether";
-    let source = level(case, "source", air, from_nether);
+    let mut source = level(case, "source", air, from_nether);
     let mut target = level(case, "target", air, !from_nether);
     let dims = &case["entity"]["dims"];
     let (width, height) = (
@@ -220,7 +220,7 @@ fn run(case: &Value, b: &Behaviours, air: BlockStateId, out: &mut Vec<String>) {
         .collect();
     changed.sort_by_key(|p| (p.x, p.y, p.z));
     changed.dedup();
-    let before = level(case, "target", air, !from_nether);
+    let mut before = level(case, "target", air, !from_nether);
     for p in changed {
         let now = target.block_state(p);
         if before.block_state(p) != now {

@@ -177,7 +177,7 @@ fn p(pos: BlockPos) -> String {
     format!("{},{},{}", pos.x, pos.y, pos.z)
 }
 
-fn summary(level: &Cells, before: &HashMap<BlockPos, BlockStateId>, out: &mut String) {
+fn summary(level: &mut Cells, before: &HashMap<BlockPos, BlockStateId>, out: &mut String) {
     let mut all: BTreeMap<(i32, i32, i32), ()> = BTreeMap::new();
     for pos in before.keys().chain(level.cells.keys()) {
         all.insert((pos.x, pos.y, pos.z), ());
@@ -319,7 +319,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 behaviours.tick_scheduled(&mut level, &mut ticks);
                                 if snap {
                                     let _ = writeln!(result, "tick {}", level.time);
-                                    summary(&level, &before, &mut result);
+                                    summary(&mut level, &before, &mut result);
                                 }
                             }
                         }
@@ -329,7 +329,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             other => panic!("unknown mode {other}"),
         }
-        summary(&level, &before, &mut result);
+        summary(&mut level, &before, &mut result);
         // Pending scheduled ticks, sorted as the oracle sorts its rows.
         let mut rows: Vec<String> = Vec::new();
         for x in -3..=3 {
