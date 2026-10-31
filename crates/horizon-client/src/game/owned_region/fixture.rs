@@ -282,7 +282,8 @@ impl Game<'_> {
         }
         self.options.regions = previous;
         assert!(writes > 0, "the trace must exercise live block callbacks");
-        json!({"seeds":8,"steps_per_seed":32,"ordered_writes":writes,"identical":true})
+        let immediate_callbacks = self.region_immediate_callback_check();
+        json!({"seeds":8,"steps_per_seed":32,"ordered_writes":writes,"immediate_callbacks":immediate_callbacks,"identical":true})
     }
 }
 
@@ -462,5 +463,77 @@ impl Game<'_> {
                 .restore_block_region(*region.unwrap());
         }
         json!({"same_key_replacement":true,"reentrant_callback":true,"unwind_keeps_live_owner":true})
+    }
+}
+
+fn drop_before_sound<L: LevelAccess>(level: &mut L, pos: BlockPos, state: BlockStateId) {
+    level.emit(LevelEvent::DropResources { pos, state });
+    let pitch = level.random().next_float() * 0.4 + 0.8;
+    level.emit(LevelEvent::Sound {
+        pos,
+        sound: Arc::from("minecraft:block.grass.break"),
+        volume: 1.0,
+        pitch,
+    });
+}
+impl Game<'_> {
+    fn region_drop_trace(&mut self, owned: bool) -> (Vec<LevelEvent>, i64, Vec<Value>, u64) {
+        self.fixture_reset(42);
+        self.next_entity = 0;
+        self.pending = Default::default();
+        self.spill = Default::default();
+        let pos = BlockPos::new(1, 64, 1);
+        let state = self
+            .pack
+            .assets
+            .registry
+            .default_state("minecraft:grass_block")
+            .unwrap();
+        self.world.set(pos.x, pos.y, pos.z, state).unwrap();
+        let handoffs = if !owned {
+            self.with_level(|_, level, _| drop_before_sound(level, pos, state));
+            0
+        } else {
+            let frame = self.block_region_frame();
+            let region = self.take_block_region(ferraloom_game::region::RegionId::REFERENCE);
+            let mut level = OwnedLevel::new(
+                region,
+                frame,
+                SerialServices {
+                    game: RefCell::new(self),
+                },
+            );
+            drop_before_sound(&mut level, pos, state);
+            let count = level.handoffs.get();
+            let OwnedLevel {
+                region, services, ..
+            } = level;
+            let game = services.game.into_inner();
+            game.restore_block_region(*region.unwrap());
+            game.flush_spill();
+            count
+        };
+        let events = self.world.level_events.clone();
+        let random = self.world.random.clone().next_long();
+        // Startup item motion has its own unseeded stream. IDs, stacks and
+        // world-RNG-derived pop positions are the observable seeded effects.
+        let items = self.dropped.iter().map(|item|json!({
+            "id":item.id,"item":item.stack.item.as_ref(),"count":item.stack.count,
+            "position":[item.position.x.to_bits(),item.position.y.to_bits(),item.position.z.to_bits()]
+        })).collect();
+        (events, random, items, handoffs)
+    }
+    fn region_immediate_callback_check(&mut self) -> u64 {
+        let (events, random, items, _) = self.region_drop_trace(false);
+        let (owned_events, owned_random, owned_items, handoffs) = self.region_drop_trace(true);
+        assert_eq!(events, owned_events, "loot callback before sound pitch");
+        assert_eq!(random, owned_random, "canonical RNG after loot and pitch");
+        assert!(!items.is_empty(), "real loot must have spawned items");
+        assert_eq!(items, owned_items, "immediate loot callback effects");
+        assert_eq!(
+            handoffs, 1,
+            "the trace must exercise the real serial service"
+        );
+        handoffs
     }
 }
