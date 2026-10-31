@@ -4,7 +4,7 @@
 //! to the next class (the Java `super` call), the end of the chain returns the
 //! state unchanged (`BlockBehaviour.updateShape`).
 use super::{
-    LevelAccess, Sim,
+    Sim,
     classes::Class,
     query::{axis_of, clockwise, counter_clockwise, is_horizontal},
     states::BlockId,

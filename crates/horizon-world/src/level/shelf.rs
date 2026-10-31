@@ -1,7 +1,7 @@
 //! `ShelfBlock` power changes and its `SideChainPartBlock` linking: up to
 //! three powered wooden shelves facing the same way join into one chain.
 use super::{
-    LevelAccess, Sim,
+    Sim,
     query::{clockwise, counter_clockwise},
     update::rel,
 };

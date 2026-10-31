@@ -962,8 +962,12 @@ impl LevelAccess for GameLevel<'_> {
             MIN_Y + HEIGHT
         }
     }
-    fn random(&mut self) -> &mut horizon_core::random::LegacyRandom {
-        &mut self.world.random
+    #[inline]
+    fn with_random<R>(
+        &mut self,
+        draw: impl FnOnce(&mut horizon_core::random::LegacyRandom) -> R,
+    ) -> R {
+        draw(&mut self.world.random)
     }
     fn game_time(&self) -> i64 {
         self.world.game_time

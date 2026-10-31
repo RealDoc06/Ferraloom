@@ -2,7 +2,7 @@
 //! Rules mirror the natively-validated `block_survival` port; dispatch follows
 //! the Java class chain so `super.canSurvive` reaches the next override.
 use super::{
-    LevelAccess, Sim,
+    Sim,
     classes::Class,
     query::is_horizontal,
     update::{HORIZONTAL, above, below, rel},

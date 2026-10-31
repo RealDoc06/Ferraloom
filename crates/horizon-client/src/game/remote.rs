@@ -6224,8 +6224,12 @@ impl horizon_world::level::LevelAccess for DryLevel<'_> {
     fn is_unobstructed(&self, pos: horizon_core::position::BlockPos, state: BlockStateId) -> bool {
         self.base.is_unobstructed(pos, state)
     }
-    fn random(&mut self) -> &mut horizon_core::random::LegacyRandom {
-        &mut self.random
+    #[inline]
+    fn with_random<R>(
+        &mut self,
+        draw: impl FnOnce(&mut horizon_core::random::LegacyRandom) -> R,
+    ) -> R {
+        draw(&mut self.random)
     }
     fn game_time(&self) -> i64 {
         self.base.game_time()
@@ -6422,7 +6426,7 @@ mod tests {
                 assert_eq!(pos, BlockPos::new(0, 1, 0));
                 !self.obstructed
             }
-            fn random(&mut self) -> &mut LegacyRandom {
+            fn with_random<R>(&mut self, _: impl FnOnce(&mut LegacyRandom) -> R) -> R {
                 panic!("preview must not advance the live level's random source");
             }
             fn game_time(&self) -> i64 {

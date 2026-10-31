@@ -491,8 +491,12 @@ impl crate::level::LevelAccess for ShapeLevel<'_, '_> {
     fn max_y(&self) -> i32 {
         self.world.build.1
     }
-    fn random(&mut self) -> &mut horizon_core::random::LegacyRandom {
-        &mut self.random
+    #[inline]
+    fn with_random<R>(
+        &mut self,
+        draw: impl FnOnce(&mut horizon_core::random::LegacyRandom) -> R,
+    ) -> R {
+        draw(&mut self.random)
     }
     fn game_time(&self) -> i64 {
         0

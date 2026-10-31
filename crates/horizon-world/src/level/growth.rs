@@ -39,7 +39,7 @@ impl Behaviours {
             return false;
         };
         let mut sim = self.sim(level, ticks);
-        let mut random = sim.random().clone();
+        let mut random = sim.level.with_random(|random| random.clone());
         {
             let mut world = LevelFeatureWorld {
                 sim: &mut sim,
@@ -65,7 +65,7 @@ impl Behaviours {
                 }
             }
         }
-        *sim.random() = random;
+        sim.level.with_random(|live| *live = random);
         true
     }
 }
@@ -200,7 +200,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         let Some(features) = b.live_features() else {
             return false;
         };
-        let mut random = self.random().clone();
+        let mut random = self.level.with_random(|random| random.clone());
         let placed = {
             let mut world = LevelFeatureWorld {
                 sim: self,
@@ -208,7 +208,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             };
             features.place_configured(name, &mut world, &mut random, [pos.x, pos.y, pos.z])
         };
-        *self.random() = random;
+        self.level.with_random(|live| *live = random);
         placed
     }
     /// `PlacedFeature.place(level, generator, level.random, pos)`.
@@ -217,7 +217,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         let Some(features) = b.live_features() else {
             return false;
         };
-        let mut random = self.random().clone();
+        let mut random = self.level.with_random(|random| random.clone());
         let placed = {
             let mut world = LevelFeatureWorld {
                 sim: self,
@@ -225,7 +225,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             };
             features.place_placed(name, &mut world, &mut random, [pos.x, pos.y, pos.z])
         };
-        *self.random() = random;
+        self.level.with_random(|live| *live = random);
         placed
     }
     fn feature_exists(&self, name: &str) -> bool {
@@ -284,7 +284,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         pos: BlockPos,
         state: BlockStateId,
     ) -> bool {
-        if let Some(mega) = weighted(grower.mega_trees, self.random())
+        if let Some(mega) = weighted(grower.mega_trees, &mut self.random())
             && self.feature_exists(mega)
             && let Some((dx, dz, around)) = self.two_by_two(state, pos)
         {
@@ -305,7 +305,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         } else {
             grower.trees
         };
-        let Some(feature) = weighted(list, self.random()) else {
+        let Some(feature) = weighted(list, &mut self.random()) else {
             return false;
         };
         if !self.feature_exists(feature) {
@@ -331,8 +331,8 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         } else {
             grower.trees
         };
-        let feature = weighted(list, self.random());
-        let mega = weighted(grower.mega_trees, self.random());
+        let feature = weighted(list, &mut self.random());
+        let mega = weighted(grower.mega_trees, &mut self.random());
         if feature.is_none() && mega.is_some() {
             self.two_by_two(state, pos).is_some()
         } else {

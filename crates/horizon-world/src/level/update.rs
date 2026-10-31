@@ -6,7 +6,7 @@ use crate::{fluid::FluidState, registry::BlockStateId};
 use horizon_core::{
     geometry::Direction,
     position::BlockPos,
-    random::{LegacyRandom, RandomSource},
+    random::RandomSource,
     ticks::{ScheduleResult, TickPriority},
 };
 
@@ -178,7 +178,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     pub fn fluid_at(&self, pos: BlockPos) -> FluidState {
         self.b.fluid(self.state(pos))
     }
-    pub fn random(&mut self) -> &mut LegacyRandom {
+    pub fn random(&mut self) -> super::LevelRandom<'_, C::Level> {
         self.level.random()
     }
     pub fn emit(&mut self, event: LevelEvent) {

@@ -36,8 +36,9 @@ impl LevelAccess for Air {
     fn is_loaded(&self, _: BlockPos) -> bool {
         true
     }
-    fn random(&mut self) -> &mut LegacyRandom {
-        &mut self.random
+    #[inline]
+    fn with_random<R>(&mut self, draw: impl FnOnce(&mut LegacyRandom) -> R) -> R {
+        draw(&mut self.random)
     }
     fn game_time(&self) -> i64 {
         0

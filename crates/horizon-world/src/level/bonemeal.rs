@@ -442,7 +442,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
                 self.set_block(pos, next, 2);
             }
             Kind::Stem => {
-                let increase = next_int_between(self.random(), 2, 5);
+                let increase = next_int_between(&mut self.random(), 2, 5);
                 let age = 7.min(b.table.int(state, p.age) + increase);
                 let next = b.table.set_int(state, p.age, age);
                 self.set_block(pos, next, 2);
@@ -632,9 +632,9 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         if b.instance_of(state, Class::TorchflowerCrop) {
             1
         } else if b.instance_of(state, Class::Beetroot) {
-            next_int_between(self.random(), 2, 5) / 3
+            next_int_between(&mut self.random(), 2, 5) / 3
         } else {
-            next_int_between(self.random(), 2, 5)
+            next_int_between(&mut self.random(), 2, 5)
         }
     }
     /// `PitcherCropBlock.getLowerHalf`.
@@ -893,7 +893,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     }
     /// `BigDripleafBlock.placeWithRandomHeight`.
     fn dripleaf_place_random_height(&mut self, bottom: BlockPos, facing: Direction) {
-        let desired = next_int_between(self.random(), 2, 5);
+        let desired = next_int_between(&mut self.random(), 2, 5);
         let mut pos = bottom;
         let mut height = 0;
         while height < desired && self.dripleaf_can_grow_into(pos) {

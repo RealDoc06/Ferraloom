@@ -53,8 +53,9 @@ impl LevelAccess for Cells {
     fn max_y(&self) -> i32 {
         if self.nether { 256 } else { 320 }
     }
-    fn random(&mut self) -> &mut LegacyRandom {
-        &mut self.random
+    #[inline]
+    fn with_random<R>(&mut self, draw: impl FnOnce(&mut LegacyRandom) -> R) -> R {
+        draw(&mut self.random)
     }
     fn game_time(&self) -> i64 {
         0

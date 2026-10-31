@@ -225,6 +225,16 @@ behaviour frames retain the facade and handles/scalars, not `&mut Ticks` or a
 queue borrow across a world callback. Reentrant callback/handoff tests must
 observe mutations of that same canonical tick state after resumption.
 
+Level RNG access follows the same rule. `LevelAccess::with_random` lends the
+canonical `LegacyRandom` only for a scoped operation; `LevelRandom` implements
+`RandomSource` by forwarding each primitive draw through that scope. Concrete
+serial adapters inline to their existing field. Gaussian cache and fork draws
+remain on the same source. Gate this exact-trace refactor with paired timings
+of real random-chunk and crop-bonemeal calls, rejecting a regression above about
+2%, plus random-tick, scheduled-tick, mob-AI and native-motion parity. Correcting
+live features' inherited clone-and-overwrite behavior remains a separate,
+vanilla-backed change, rather than part of that access refactor.
+
 Gate the adapter cell with a paired block-read hot-path benchmark, using the
 same compiler/profile/input and alternating before/after trials as the
 attribute lookup gate. Reject a regression above about 2%; use the wider

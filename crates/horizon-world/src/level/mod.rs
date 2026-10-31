@@ -53,7 +53,7 @@
 //!         Some(old)
 //!     }
 //!     fn is_loaded(&self, pos: BlockPos) -> bool { self.chunks.contains(pos.chunk()) }
-//!     fn random(&mut self) -> &mut LegacyRandom { &mut self.random }
+//!     fn with_random<R>(&mut self, draw: impl FnOnce(&mut LegacyRandom) -> R) -> R { draw(&mut self.random) }
 //!     fn game_time(&self) -> i64 { self.time }
 //!     fn block_light(&self, pos: BlockPos) -> i32 { self.chunks.block_light(pos) }
 //!     fn sky_light(&self, pos: BlockPos) -> i32 { self.chunks.sky_light(pos) }
@@ -119,8 +119,10 @@ pub mod portal_travel;
 mod query;
 pub(crate) use query::data_2d;
 mod rails;
+mod random_access;
 mod redstone;
 pub mod removal;
+pub use random_access::{LevelPositional, LevelRandom};
 pub mod sculk;
 mod shapes;
 mod shelf;
@@ -322,8 +324,14 @@ pub trait LevelAccess {
     fn world_surface(&self, _x: i32, _z: i32) -> i32 {
         self.max_y()
     }
-    /// Vanilla `level.random` (a `LegacyRandomSource`).
-    fn random(&mut self) -> &mut LegacyRandom;
+    /// A primitive operation on vanilla's canonical `level.random` stream.
+    /// The result cannot retain a reference into the temporary RNG borrow.
+    fn with_random<R>(&mut self, draw: impl FnOnce(&mut LegacyRandom) -> R) -> R;
+    /// Borrow only the level adapter; individual draws scope canonical state.
+    #[inline]
+    fn random(&mut self) -> LevelRandom<'_, Self> {
+        LevelRandom::new(self)
+    }
     fn game_time(&self) -> i64;
     fn block_light(&self, _pos: BlockPos) -> i32 {
         0
