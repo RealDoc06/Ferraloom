@@ -254,6 +254,17 @@ per read remains, compare `--regions serial` with `off` at explore 100 on CT 121
 in an approved idle slot, and let the coordinator decide with the whole-tick
 MSPT/P99/TPS result. Do not spend further rounds chasing the micro number.
 
+The final boxed adapter measured 19.04 ns borrowed versus 19.48 ns owned
+(+0.45 ns, +2.34%) after the two generated-code attempts. An idle CT 121
+explore-100 ABBA control on the same production binary (`271e08230`) measured
+`off`, `serial`, `serial`, `off` means of 100.06, 101.30, 101.93 and 100.53 ms.
+The two serial-minus-off pairs are +1.24 and +1.40 ms, averaging +1.32 ms
+(+1.32%). This cost is accepted for the opt-in adapter; `off` remains default.
+The off mean of 100.30 ms is about 2.5% above PR #3's single 97.88 ms run;
+that is an observation, not proof of a refactor regression. M4 must compare
+parallel execution against `off`, and include a fresh PR #3 binary explore-100
+control in the same ABBA session before attributing a stack cost.
+
 Resolve the separate canonical `Ticks` borrow before enabling workers. A
 `TickAccess` facade performs short scoped borrows of the same live tick state;
 legacy `Ticks` can implement the facade while existing callers migrate. Active
@@ -280,12 +291,11 @@ path against the actual vanilla feature, keeping this behavior correction in
 its own commit. Jigsaw command placement remains serial and is outside this
 correction.
 
-Gate the adapter cell with a paired block-read hot-path benchmark, using the
-same compiler/profile/input and alternating before/after trials as the
-attribute lookup gate. Reject a regression above about 2%; use the wider
-`&mut` read-API conversion only if the cell fails this bar. Include a focused
-reentrant callback test. Neither this design nor a passing type assertion
-claims that the adapter or continuation driver has been implemented yet.
+The owned adapter's focused gate compares the direct and one-region traces,
+including immediate loot/RNG callback visibility, same-key chunk replacement,
+reentrant queue mutation and owner restoration during unwind. M3 enables no
+workers; closure planning, split/merge routing and a deterministic coordinator
+remain prerequisites for M4's first flagged worker run.
 
 With worker coverage, report wakeup overhead, parked-thread high water, RSS and
 the share of regions coalesced by the cap. Include a two-core serial control:
@@ -385,8 +395,8 @@ the next worker phase, retaining all other phases in their existing serial slots
 | --- | --- | --- |
 | 1 | Bound chunk publication per tick and keep workers off the tick core | Budget/topology tests, both-mode generation/save invariants, affected parity and pinned explorer/normal-play bench |
 | 2 | Extract the minimal block-phase kernel, real state ownership and its live adapters; retain the existing executable and tick loop | Focused affected parity, standalone game tests and client compilation; unchanged serial trace and immediate effects |
-| 3 | Introduce the reusable one-region phase driver, exclusive continuations and dependency closures with parallelism disabled | Exact reference trace; reentrant mutation, removal/replacement, teleport, commands and ownership-boundary tests |
-| 4 | Enable regional random block ticks behind a flag, joining at their original phase boundary; other phases remain serial | Flag-off exact reference; flag-on worker-count determinism, split/merge/movement and both-mode parity; measured worker coverage on all three workloads |
+| 3 | Introduce the reusable whole-dimension phase driver, scoped access and immediate exclusive leaf calls with parallelism disabled | Exact reference trace; reentrant mutation, same-key replacement, callback/RNG visibility and unwind ownership tests; focused parity |
+| 4 | Plan dependency closures and split/merge routing, then enable regional random block ticks behind a flag, joining at their original phase boundary; other phases remain serial | Flag-off exact reference; flag-on worker-count determinism, split/merge/movement and both-mode parity; full selected suite and measured worker coverage on all three workloads |
 | 5 | Reuse the kernel/driver for block entities, scheduled ticks, then mobs and spawning, extracting their dependencies as needed | Per-phase parity and ordering gates, immediate callbacks, dimension-wide budgets and measured useful parallelism |
 | 6 | Finish canonical player access and server-only runtime/startup as their dependencies require, without delaying the first independent worker phase for unrelated client cleanup | Player-action/portal/entity parity and playable login/exploration/save/reload; eventual build without renderer/audio/input dependencies |
 | 7 | Add parallel sensing/navigation and nonoverlapping decoration behind the same job contract | Apply in vanilla order, preserve synchronous answers and FEATURES visit dependencies; differential cases and explorer/farm bench |
