@@ -10767,9 +10767,10 @@ impl Game<'_> {
     }
     /// `LevelExtractor.allChanged`: every loaded section is rebuilt.
     fn all_sections_changed(&mut self) {
-        for &(x, z) in self.world.chunks.keys() {
+        let world = &mut *self.world;
+        for &(x, z) in world.chunks.keys() {
             for sy in 0..horizon_client::chunk::HEIGHT / 16 {
-                self.world.dirty_sections.insert((x, sy, z));
+                world.dirty_sections.insert((x, sy, z));
             }
         }
     }

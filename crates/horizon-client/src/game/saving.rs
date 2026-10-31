@@ -91,9 +91,8 @@ impl Game<'_> {
             return Err("a world save is already in progress".into());
         }
         if all {
-            self.world
-                .modified
-                .extend(self.world.chunks.keys().copied());
+            let world = &mut *self.world;
+            world.modified.extend(world.chunks.keys().copied());
         }
         self.keys.clear();
         self.physical_keys.clear();
