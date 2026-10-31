@@ -147,7 +147,7 @@ impl World {
     fn put(&mut self, pos: BlockPos, state: BlockStateId) {
         self.level.blocks.insert(pos, state);
     }
-    fn name(&self, pos: BlockPos) -> String {
+    fn name(&mut self, pos: BlockPos) -> String {
         let state = self.level.block_state(pos);
         self.f.registry.state(state).unwrap().name.clone()
     }
@@ -458,18 +458,18 @@ fn snowy_biomes_freeze_and_snow() {
     w.put(BlockPos::new(1, 63, 0), water);
     let b = &f.behaviours;
     let grass = b
-        .precipitation_info(&w.level, BlockPos::new(0, 70, 0))
+        .precipitation_info(&mut w.level, BlockPos::new(0, 70, 0))
         .unwrap();
     assert_eq!(grass.top, BlockPos::new(0, 64, 0));
     assert!(grass.snows_at_top && !grass.freezes_below);
     assert_eq!(grass.kind, PrecipitationKind::Snow);
     let pond = b
-        .precipitation_info(&w.level, BlockPos::new(1, 70, 0))
+        .precipitation_info(&mut w.level, BlockPos::new(1, 70, 0))
         .unwrap();
     assert!(pond.freezes_below, "a water source at the edge freezes");
     w.level.biome = "minecraft:plains";
     let rain = b
-        .precipitation_info(&w.level, BlockPos::new(0, 70, 0))
+        .precipitation_info(&mut w.level, BlockPos::new(0, 70, 0))
         .unwrap();
     assert!(!rain.snows_at_top && !rain.freezes_below);
     assert_eq!(rain.kind, PrecipitationKind::Rain);

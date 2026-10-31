@@ -148,7 +148,7 @@ impl<'f> World<'f> {
     fn put(&mut self, pos: BlockPos, state: BlockStateId) {
         self.level.blocks.insert(pos, state);
     }
-    fn get(&self, pos: BlockPos) -> BlockStateId {
+    fn get(&mut self, pos: BlockPos) -> BlockStateId {
         self.level.block_state(pos)
     }
     fn name(&self, pos: BlockPos) -> String {
