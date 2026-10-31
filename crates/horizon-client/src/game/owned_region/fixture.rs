@@ -405,7 +405,7 @@ impl Game<'_> {
                 .get_owned(before, || level.resident_chunk(chunk))
                 .unwrap();
             assert_eq!(
-                old.get(1, 65, 1),
+                BlockStateId(old.get(1, 65, 1)),
                 if case == 0 {
                     stone
                 } else {
@@ -451,7 +451,7 @@ impl Game<'_> {
                 let current = cache
                     .get_owned(level.block_revision(), || level.resident_chunk(chunk))
                     .unwrap();
-                assert_eq!(current.get(1, 65, 1), grass);
+                assert_eq!(BlockStateId(current.get(1, 65, 1)), grass);
             }
             let OwnedLevel {
                 region, services, ..
