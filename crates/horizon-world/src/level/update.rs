@@ -178,6 +178,7 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
     pub fn fluid_at(&self, pos: BlockPos) -> FluidState {
         self.b.fluid(self.state(pos))
     }
+    #[inline]
     pub fn random(&mut self) -> super::LevelRandom<'_, C::Level> {
         self.level.random()
     }
