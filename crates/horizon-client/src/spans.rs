@@ -79,6 +79,74 @@ pub fn thread_cpu() -> Option<Duration> {
     horizon_threads::thread_cpu()
 }
 
+/// Mean per tick of each span while a profile runs (`summary_start`), written
+/// beside the profile: wall time, unlike its samples.
+#[derive(Default)]
+struct Summary {
+    ticks: u64,
+    wall_ms: f64,
+    spans: std::collections::BTreeMap<&'static str, (f64, f64)>,
+}
+static SUMMARY: std::sync::Mutex<Option<Summary>> = std::sync::Mutex::new(None);
+static SUMMING: AtomicBool = AtomicBool::new(false);
+
+fn summary() -> std::sync::MutexGuard<'static, Option<Summary>> {
+    SUMMARY
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+/// Start summing spans, whatever `HORIZON_SPIKES` says.
+pub fn summary_start() {
+    *summary() = Some(Summary::default());
+    SUMMING.store(true, Ordering::Relaxed);
+    enable(true);
+}
+/// Whether a summary is being made: the ticks' spans are to be taken for it.
+pub fn summing() -> bool {
+    SUMMING.load(Ordering::Relaxed)
+}
+/// A tick's spans, for the summary.
+pub fn summary_add(spans: &[Span], wall_ms: f32) {
+    if let Some(sum) = summary().as_mut() {
+        sum.ticks += 1;
+        sum.wall_ms += f64::from(wall_ms);
+        for s in spans {
+            let e = sum.spans.entry(s.name).or_default();
+            e.0 += f64::from(s.ms);
+            e.1 += f64::from(s.cpu_ms);
+        }
+    }
+}
+/// A span of another thread's work (which `take` doesn't see), for the summary.
+pub fn summary_add_span(name: &'static str, ms: f32, cpu_ms: f32) {
+    if summing()
+        && let Some(sum) = summary().as_mut()
+    {
+        let e = sum.spans.entry(name).or_default();
+        e.0 += f64::from(ms);
+        e.1 += f64::from(cpu_ms);
+    }
+}
+/// Stop summing: per span, the mean wall and CPU milliseconds per tick.
+pub fn summary_finish() -> String {
+    SUMMING.store(false, Ordering::Relaxed);
+    let Some(sum) = summary().take() else {
+        return String::new();
+    };
+    let ticks = sum.ticks.max(1) as f64;
+    let mut out = format!(
+        "ticks {} mean_wall_ms {:.2}\n",
+        sum.ticks,
+        sum.wall_ms / ticks
+    );
+    let mut rows: Vec<_> = sum.spans.into_iter().collect();
+    rows.sort_by(|a, b| b.1.0.total_cmp(&a.1.0));
+    for (name, (ms, cpu)) in rows {
+        out += &format!("{name} wall {:.2} cpu {:.2}\n", ms / ticks, cpu / ticks);
+    }
+    out
+}
+
 /// The frame's spans, summed by name, slowest first; clears them.
 pub fn take() -> Vec<Span> {
     let spans = SPANS.with(|s| std::mem::take(&mut *s.borrow_mut()));

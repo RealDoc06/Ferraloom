@@ -1243,11 +1243,13 @@ impl Hub {
     /// the chunks, block changes, containers and entities they see.
     pub fn tick_level(&mut self, ctx: &mut TickCtx) -> Vec<HostEvent> {
         let mut events = Vec::new();
-        for i in 0..self.guests.len() {
-            if self.here(&self.guests[i]) {
-                self.process_inbox(i, ctx, &mut events);
+        crate::spans::time("lan_inbox", || {
+            for i in 0..self.guests.len() {
+                if self.here(&self.guests[i]) {
+                    self.process_inbox(i, ctx, &mut events);
+                }
             }
-        }
+        });
         if !self.guests.iter().any(|g| self.here(g)) {
             // ServerTickRateManager broadcasts a change to the players there
             // are; one who joins later is sent the state as it is then
@@ -1286,13 +1288,15 @@ impl Hub {
             }
         }
         self.sync_containers(ctx.world);
-        self.track_entities(ctx);
-        for i in 0..self.guests.len() {
-            if self.here(&self.guests[i]) {
-                self.sync_player_state(i);
-                self.sync_effects(i);
+        crate::spans::time("lan_track", || self.track_entities(ctx));
+        crate::spans::time("lan_player_state", || {
+            for i in 0..self.guests.len() {
+                if self.here(&self.guests[i]) {
+                    self.sync_player_state(i);
+                    self.sync_effects(i);
+                }
             }
-        }
+        });
         events
     }
 
@@ -1465,9 +1469,8 @@ impl Hub {
             })
             .collect();
         // A column several players take is shared by them rather than copied.
-        let mut bodies: Vec<PacketBody> = self
-            .encoder
-            .bodies_in(&columns, world)
+        let made = crate::spans::time("lan_bodies", || self.encoder.bodies_in(&columns, world));
+        let mut bodies: Vec<PacketBody> = made
             .into_iter()
             .zip(&uses)
             .map(|(body, &uses)| {
@@ -1917,8 +1920,10 @@ impl Hub {
             .collect();
         level.range_percent = Some(self.entity_range_percent);
         let (types, sync) = (&mut self.entity_types, &self.sync);
-        level.tick(&entities, &self.riding, &mut viewers, |kind| {
-            entity_type(types, sync, kind)
+        crate::spans::time("lan_track_tick", || {
+            level.tick(&entities, &self.riding, &mut viewers, |kind| {
+                entity_type(types, sync, kind)
+            });
         });
         drop(viewers);
         for (g, out) in self.guests.iter().filter(|g| here(g)).zip(outs.iter_mut()) {

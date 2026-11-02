@@ -1515,8 +1515,10 @@ impl Game<'_> {
                     .filter_map(|g| Some((g.vehicle?, g.entity_id)))
                     .collect();
                 self.lan_riding(host_entity, &guests, &mut host.hub.riding);
-                self.lan_entities(host_entity, &host.mob_players, &mut host.hub, &mut states);
-                self.lan_hook_states(host_entity, &host.play, &host.hub, &mut states);
+                horizon_client::spans::time("lan_entities", || {
+                    self.lan_entities(host_entity, &host.mob_players, &mut host.hub, &mut states);
+                    self.lan_hook_states(host_entity, &host.play, &host.hub, &mut states);
+                });
             } else {
                 states.clear();
             }
@@ -1577,7 +1579,9 @@ impl Game<'_> {
                 } else {
                     Vec::new()
                 };
-                events.extend(host.hub.tick_level(&mut ctx));
+                events.extend(horizon_client::spans::time("lan_tick_level", || {
+                    host.hub.tick_level(&mut ctx)
+                }));
                 if pass.last {
                     host.hub.end_tick();
                 }
@@ -1696,18 +1700,22 @@ impl Game<'_> {
         }
         self.lan_flush_effects(&mut host);
         if !paused {
-            self.tick_guests(&mut host);
+            horizon_client::spans::time("lan_guests", || self.tick_guests(&mut host));
         }
         self.lan_living_flags(&mut host);
         self.tick_server_travel(&mut host);
         self.lan_swings(&mut host);
         self.lan_update_streaming(&host);
         self.lan_update_models(&mut host);
-        self.lan_update_waypoints(&mut host, state.as_ref());
+        horizon_client::spans::time("lan_waypoints", || {
+            self.lan_update_waypoints(&mut host, state.as_ref());
+        });
         self.lan_sync_scoreboard(&mut host);
         self.lan_sync_border(&mut host);
         drop(holding);
-        lan::flush_all(host.hub.guests.iter().map(|g| &g.sender));
+        horizon_client::spans::time("lan_flush", || {
+            lan::flush_all(host.hub.guests.iter().map(|g| &g.sender));
+        });
         self.lan = Some(host);
         // A blast from a guest's attack, and a mace's wind burst.
         self.flush_lan_explosions();
