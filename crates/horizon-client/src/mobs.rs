@@ -57,6 +57,7 @@ pub mod parrot;
 pub mod path;
 pub mod phantom;
 pub mod piglin;
+pub mod player_index;
 pub mod polar_bear;
 pub mod rabbit;
 pub mod raider;
