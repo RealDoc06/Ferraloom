@@ -1459,7 +1459,7 @@ fn hot_flags_and_contact_sections_follow_state_changes() {
     }
     let w = World::new(f);
     let mut section = PalettedContainer::new(Strategy::blocks(16), b.air().0);
-    let mut cache = ContactSections::default();
+    let mut cache = ContactSections::<std::collections::hash_map::RandomState>::default();
     let key = (-1, -4, 0);
     for (revision, name, contact, random) in [
         (0, "stone", false, false),
@@ -1573,7 +1573,7 @@ fn hot_path_lookup_benchmark() {
             .entity_inside_state(BlockPos::new(0, 0, 0), state);
     }
     let before = start.elapsed();
-    let mut cache = ContactSections::default();
+    let mut cache = ContactSections::<std::collections::hash_map::RandomState>::default();
     let start = Instant::now();
     for i in 0..iterations {
         if cache.get(black_box((0, 0, 0)), black_box(0), || {

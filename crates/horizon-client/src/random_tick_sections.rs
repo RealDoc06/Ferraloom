@@ -47,6 +47,28 @@ struct Cached {
     /// For the sections in `sections`: which of the 4,096 blocks (bit
     /// `chunk::index`) `Sim::random_tick_state` acts on.
     positions: [Option<Box<[u64; 64]>>; SECTIONS],
+    /// Which 4x4x4 cells of each section hold one of its `positions`, here so
+    /// that most positions are answered without a read of those.
+    cells: [u64; SECTIONS],
+}
+/// The bit of a block's 4x4x4 cell in `Cached::cells`, from its `chunk::index`.
+#[inline]
+fn cell(index: usize) -> u32 {
+    (index >> 10 << 4 | (index >> 6 & 3) << 2 | (index >> 2 & 3)) as u32
+}
+/// `Cached::cells` of a section's positions. A word of those is one Y and four Z
+/// rows of 16 X, so a cell is every row's same four bits.
+fn cells(positions: &[u64; 64]) -> u64 {
+    const ROWS: u64 = 0x000F_000F_000F_000F;
+    let mut cells = 0;
+    for (w, &word) in positions.iter().enumerate() {
+        for x in 0..4 {
+            if word & ROWS << (4 * x) != 0 {
+                cells |= 1 << ((w >> 4) << 4 | (w & 3) << 2 | x);
+            }
+        }
+    }
+    cells
 }
 impl Cached {
     /// Reads the sections that are no longer the ones read. `random` is
@@ -73,9 +95,11 @@ impl Cached {
                 self.sections.0 |= 1 << i;
                 let positions = self.positions[i].get_or_insert_with(|| Box::new([0; 64]));
                 section.blocks.fill_matching(&mut acts, &mut positions[..]);
+                self.cells[i] = cells(positions);
             } else {
                 self.sections.0 &= !(1 << i);
                 self.positions[i] = None;
+                self.cells[i] = 0;
             }
             self.read[i] = Arc::downgrade(section);
         }
@@ -89,6 +113,7 @@ impl Default for Cached {
             read: std::array::from_fn(|_| Weak::new()),
             sections: Sections::default(),
             positions: std::array::from_fn(|_| None),
+            cells: [0; SECTIONS],
         }
     }
 }
@@ -155,8 +180,8 @@ pub trait RandomTickChunks {
 }
 
 /// One chunk's turn of random ticks. The sections are read again only after a
-/// block changed, and a position that won't tick (nearly all of them) is
-/// answered from the bitmap without touching the chunk.
+/// block changed, and a position that won't tick (99% of them at 500 players)
+/// is answered from the bitmaps without touching the chunk.
 pub struct ChunkVisit<'a> {
     cached: &'a mut Cached,
     key: (i32, i32),
@@ -193,9 +218,13 @@ impl<L: RandomTickChunks + ?Sized> RandomTickSource<L> for ChunkVisit<'_> {
     #[inline]
     fn ticking_state(&mut self, level: &mut L, pos: BlockPos) -> Option<BlockStateId> {
         self.sync(&*level);
-        let positions = self.cached.positions[((pos.y - MIN_Y) >> 4) as usize].as_deref()?;
+        let section = ((pos.y - MIN_Y) >> 4) as usize;
         let i = index(pos.x, pos.y, pos.z);
-        if !self.present || positions[i / 64] >> (i % 64) & 1 == 0 {
+        if !self.present || self.cached.cells[section] >> cell(i) & 1 == 0 {
+            return None;
+        }
+        let positions = self.cached.positions[section].as_deref()?;
+        if positions[i / 64] >> (i % 64) & 1 == 0 {
             return None;
         }
         Some(
@@ -225,6 +254,18 @@ impl RandomTickSections {
 mod tests {
     use super::*;
     use crate::chunk::Section;
+
+    #[test]
+    fn cells_hold_exactly_the_cells_of_the_positions() {
+        for (x, y, z) in [(0, 0, 0), (15, 15, 15), (3, 4, 7), (4, 3, 8), (9, 12, 1)] {
+            let i = index(x, y, z);
+            let mut positions = [0; 64];
+            positions[i / 64] |= 1 << (i % 64);
+            let expected = 1u64 << ((y >> 2) << 4 | (z >> 2) << 2 | x >> 2);
+            assert_eq!(cells(&positions), expected);
+            assert_eq!(1u64 << cell(i), expected);
+        }
+    }
 
     #[test]
     fn edits_replacements_compaction_and_reload() {

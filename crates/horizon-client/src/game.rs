@@ -3171,7 +3171,9 @@ impl Game<'_> {
             }
             touched.sort_unstable_by_key(|p| (p.x, p.y, p.z));
             touched.dedup();
-            let mut contact = horizon_world::level::ContactSections::default();
+            let mut contact = horizon_world::level::ContactSections::<
+                horizon_client::fast_hash::FxBuild,
+            >::default();
             for pos in inside.into_iter().chain(touched) {
                 let key = (pos.x >> 4, pos.y >> 4, pos.z >> 4);
                 // Recheck after every write, including writes made by an earlier

@@ -724,19 +724,33 @@ impl PalettedContainer {
         let entries = self.strategy.entries();
         assert_eq!(out.len(), entries.div_ceil(64));
         out.fill(0);
-        let mut mark = |i: usize, matches: bool| out[i / 64] |= u64::from(matches) << (i % 64);
         match &self.palette {
             Palette::Single(value) => {
-                let matches = predicate(*value);
-                (0..entries).for_each(|i| mark(i, matches));
-            }
-            Palette::List(list) => {
-                let matching: Vec<bool> = list.iter().map(|&v| predicate(v)).collect();
-                if matching.iter().any(|&m| m) {
-                    (0..entries).for_each(|i| mark(i, matching[self.raw(i)]));
+                let every = u64::from(predicate(*value)).wrapping_neg();
+                out.fill(every);
+                if entries % 64 != 0 {
+                    out[entries / 64] &= (1 << (entries % 64)) - 1;
                 }
             }
-            Palette::Global => (0..entries).for_each(|i| mark(i, predicate(self.raw(i) as u32))),
+            Palette::List(list) => {
+                let matching: Vec<u64> = list.iter().map(|&v| u64::from(predicate(v))).collect();
+                if matching.contains(&1) {
+                    let (bits, m) = (usize::from(self.bits), mask(self.bits));
+                    let per = 64 / bits;
+                    for (w, &word) in self.words.iter().enumerate() {
+                        for slot in 0..per.min(entries.saturating_sub(w * per)) {
+                            let i = w * per + slot;
+                            out[i / 64] |=
+                                matching[(word >> (slot * bits) & m) as usize] << (i % 64);
+                        }
+                    }
+                }
+            }
+            Palette::Global => {
+                for i in 0..entries {
+                    out[i / 64] |= u64::from(predicate(self.raw(i) as u32)) << (i % 64);
+                }
+            }
         }
         out.iter().any(|&word| word != 0)
     }

@@ -1,15 +1,18 @@
 //! Contact broad phase scoped to one world's contact pass.
-use std::collections::HashMap;
+use std::{
+    collections::{HashMap, hash_map::RandomState},
+    hash::BuildHasher,
+};
 
 /// Exact section eligibility at a world revision. Create a fresh cache for each
 /// contact pass; revisions need only identify writes within that pass. Every
 /// write or chunk replacement must advance the revision before the next query.
 #[derive(Default)]
-pub struct ContactSections {
-    sections: HashMap<(i32, i32, i32), (u64, bool)>,
+pub struct ContactSections<S = RandomState> {
+    sections: HashMap<(i32, i32, i32), (u64, bool), S>,
     last: Option<((i32, i32, i32), u64, bool)>,
 }
-impl ContactSections {
+impl<S: BuildHasher> ContactSections<S> {
     pub fn get(
         &mut self,
         section: (i32, i32, i32),
@@ -41,7 +44,7 @@ mod tests {
 
     #[test]
     fn contact_sections_observe_additions_removals_and_other_sections() {
-        let mut cache = ContactSections::default();
+        let mut cache = ContactSections::<RandomState>::default();
         let section = (-1, -4, 2);
         assert!(!cache.get(section, 0, || false));
         assert!(!cache.get(section, 0, || panic!("unchanged section rescanned")));
