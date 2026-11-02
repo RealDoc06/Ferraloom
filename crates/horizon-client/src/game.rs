@@ -3069,9 +3069,11 @@ impl Game<'_> {
         let ticking: Vec<_> = self
             .world
             .chunks
-            .keys()
-            .copied()
-            .filter(|&(x, z)| levels.random_ticking(x, z) && ticking_chunk(&self.world, x, z))
+            .iter()
+            .filter(|&(&(x, z), chunk)| {
+                levels.random_ticking(x, z) && self.tick_chunks.surrounded((x, z)) && chunk.lit
+            })
+            .map(|(&key, _)| key)
             .collect();
         // Entity.checkInsideBlocks for the plates, tripwires, detector rails and
         // buttons under the players (the host and the LAN guests), the minecarts

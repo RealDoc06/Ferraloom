@@ -138,7 +138,8 @@ impl Section {
 pub struct Chunk {
     pub x: i32,
     pub z: i32,
-    pub sections: Vec<Arc<Section>>,
+    /// Inline, so a block read has one pointer less to chase.
+    pub sections: [Arc<Section>; SECTIONS],
     /// `Heightmap.Types.WORLD_SURFACE` per column (`z << 4 | x`): one above
     /// the highest non-air block, or `MIN_Y`. Built on the first read; a
     /// `set` that can move a column's surface drops it.
@@ -216,9 +217,7 @@ impl Chunk {
         Self {
             x,
             z,
-            sections: (0..SECTIONS)
-                .map(|_| Arc::new(Section::default()))
-                .collect(),
+            sections: std::array::from_fn(|_| Arc::new(Section::default())),
             surface: OnceLock::new(),
             motion_blocking: OnceLock::new(),
             lit: false,
