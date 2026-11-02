@@ -9,6 +9,7 @@ use crate::{
     mesher::{MeshTables, Mesher, Region, SectionMesh, borrow},
     world::World,
 };
+use area_tree::{AreaTree, changed_columns};
 use horizon_core::biome::BiomeZoom;
 use horizon_world::block_render::FaceVisibility;
 use horizon_world::worldgen::decoration_order::DecorationOrder;
@@ -21,6 +22,8 @@ use std::{
     },
     thread,
 };
+
+mod area_tree;
 
 /// A chunk under generation, opaque to the streamer.
 pub type Proto = Box<dyn std::any::Any + Send>;
@@ -297,8 +300,27 @@ pub struct Streaming {
     /// terrain on a player's path comes before terrain behind them. Only the
     /// order of proto generation changes, never what is loaded.
     pub ahead: Vec<(i32, i32)>,
-    /// `extra`'s squares as a grid, made again when `extra` changes.
+    /// `ahead` as a tree, made again when `ahead` changes.
+    ahead_tree: AreaTree,
+    ahead_basis: Vec<(i32, i32)>,
+    /// `extra`'s squares as a grid and a tree, made again when `extra` changes.
     cover: Option<ExtraCover>,
+    /// `update` runs with `cover` made for `extra`, which nothing can change
+    /// meanwhile: `ranges` needs no comparison of them per question.
+    cover_current: bool,
+    /// What the scans over columns were last brought up to date with.
+    scan_basis: ScanBasis,
+    /// Columns whose unloading, finishing or decoration may have changed since
+    /// the last `update`: every other column answers as it did then. Each
+    /// update looks at these rather than at every loaded chunk and proto chunk.
+    touched: FxHashSet<(i32, i32)>,
+    /// Columns touched since decoration last looked (it doesn't while enough
+    /// decorations are in flight).
+    decorate_touched: FxHashSet<(i32, i32)>,
+    /// Wanted proto chunks whose 3x3 neighbourhood is there to decorate, some
+    /// held back by lower-ranked chunks: what decoration goes through in rank
+    /// order. The other wanted ones couldn't start, and touched again if so.
+    decorate_ready: FxHashSet<(i32, i32)>,
     /// Mesh the sections for drawing (false on a server thread).
     pub mesh: bool,
     /// The pregeneration band (`set_band`).
@@ -306,6 +328,26 @@ pub struct Streaming {
     /// The columns and the next row the band's decoration ranks were given
     /// for (`set_band`).
     band_ranked: Option<(i32, i32, i32)>,
+}
+/// The inputs of the keep-or-unload answers `Streaming::touched` tracks changes
+/// to. `extra` changing is told apart column by column (`changed_columns`, a
+/// player crossing a chunk). Any other change goes back to a full scan.
+#[derive(Default)]
+struct ScanBasis {
+    /// None until a first full scan.
+    area: Option<ScanArea>,
+    forced: HashSet<(i32, i32)>,
+    extra: Vec<((i32, i32), i32)>,
+    /// `World::chunks`' membership as this module last left it: another hand
+    /// changing it (a new world) means a full scan.
+    chunks: u64,
+}
+#[derive(PartialEq)]
+struct ScanArea {
+    center: (i32, i32),
+    radius: i32,
+    band: Option<Band>,
+    remote: bool,
 }
 /// Snapshot only after a scan found no missing candidates. Public range fields
 /// and `World::chunks` can change without going through Streaming, so compare
@@ -350,7 +392,7 @@ struct GenerationInputs<'a> {
     decorates: bool,
     remote: bool,
     loading: bool,
-    ahead: &'a [(i32, i32)],
+    ahead: &'a AreaTree,
 }
 impl GenerationScan {
     /// None means the scan was skipped; Some preserves the original candidate
@@ -437,9 +479,17 @@ impl GenerationScan {
                 // as capacity opens, even if no range or membership changed.
                 self.exhausted = false;
             }
+            // The nearest few, however many are missing. Without forced chunks
+            // every candidate is distinct (the runs are merged), so the batch
+            // is the first `batch` of the full sort.
+            let batch = capacity - input.generating.len();
+            if input.ranges.forced.is_empty() && wanted.len() > batch {
+                wanted.select_nth_unstable(batch);
+                wanted.truncate(batch);
+            }
             wanted.sort_unstable();
             wanted.dedup();
-            wanted.truncate(capacity - input.generating.len());
+            wanted.truncate(batch);
             Some(wanted)
         }
     }
@@ -611,7 +661,14 @@ impl Streaming {
             remote: false,
             extra: Vec::new(),
             ahead: Vec::new(),
+            ahead_tree: AreaTree::default(),
+            ahead_basis: Vec::new(),
             cover: None,
+            cover_current: false,
+            scan_basis: ScanBasis::default(),
+            touched: Default::default(),
+            decorate_touched: Default::default(),
+            decorate_ready: Default::default(),
             mesh: true,
             band: None,
             band_ranked: None,
@@ -721,6 +778,13 @@ impl Streaming {
         self.generation_scan.exhausted = false;
         self.decorating -= 1;
         self.decorated.insert((x, z));
+        // Its neighbourhood's protos are back: columns up to two away have one
+        // of those in their 3x3.
+        for dz in -2..=2 {
+            for dx in -2..=2 {
+                self.touched.insert((x + dx, z + dz));
+            }
+        }
         for (i, proto) in region.into_iter().enumerate() {
             let key = (x + (i % 3) as i32 - 1, z + (i / 3) as i32 - 1);
             self.protos.insert(key, Some(proto));
@@ -734,7 +798,58 @@ impl Streaming {
         self.saving -= 1;
         for (key, proto) in protos {
             self.protos.insert(key, Some(proto));
+            self.touch_around(key);
         }
+    }
+    /// What a column's 3x3 neighbours decide about it (finishing, decoration)
+    /// changed with this column.
+    fn touch_around(&mut self, (x, z): (i32, i32)) {
+        for dz in -1..=1 {
+            for dx in -1..=1 {
+                self.touched.insert((x + dx, z + dz));
+            }
+        }
+    }
+    /// Bring the column scans up to date with the areas kept loaded: note the
+    /// columns they changed for, or return true if every column needs a look.
+    fn scan_changes(&mut self, world: &World) -> bool {
+        let area = ScanArea {
+            center: self.center,
+            radius: self.radius,
+            band: self.band,
+            remote: self.remote,
+        };
+        let basis = &mut self.scan_basis;
+        let mut rescan = basis.area.as_ref() != Some(&area)
+            || basis.forced != self.forced
+            || basis.chunks != world.chunks.membership_revision();
+        if !rescan && basis.extra != self.extra {
+            let sane = |areas: &[((i32, i32), i32)]| {
+                areas
+                    .iter()
+                    .all(|a| (0..=ExtraCover::GRID_RADIUS).contains(&a.1))
+            };
+            rescan = !sane(&basis.extra) || !sane(&self.extra);
+            if !rescan {
+                let (protos, chunks, touched) = (&self.protos, &world.chunks, &mut self.touched);
+                changed_columns(&basis.extra, &self.extra, ExtraCover::REACH, |x, z| {
+                    if protos.contains_key(&(x, z)) || chunks.contains_key(&(x, z)) {
+                        touched.insert((x, z));
+                    }
+                });
+            }
+        }
+        if basis.area.as_ref() != Some(&area) {
+            basis.area = Some(area);
+        }
+        if basis.forced != self.forced {
+            basis.forced.clone_from(&self.forced);
+        }
+        if basis.extra != self.extra {
+            basis.extra.clone_from(&self.extra);
+        }
+        basis.chunks = world.chunks.membership_revision();
+        rescan
     }
     /// Check out the proto chunks at `keys` and save them on a worker.
     fn save_checked_out(&mut self, keys: impl IntoIterator<Item = (i32, i32)>) {
@@ -755,6 +870,7 @@ impl Streaming {
         self.generating.remove(&key);
         self.finishing.remove(&key);
         self.decorated.insert(key);
+        self.touch_around(key);
         // A column that finished after the player moved away is dropped
         // whole: its block entities and saved entities too, or they would
         // stay in the world (and the entities spawn again, duplicated, when
@@ -976,13 +1092,29 @@ impl Streaming {
         world: &mut World,
         budget: &mut ferraloom_core::IntegrationBudget,
     ) -> (Vec<((i32, i32, i32), SectionMesh)>, Vec<Arc<Chunk>>) {
-        let mut uploads = Vec::new();
         if self.paused {
-            return (uploads, Vec::new());
+            return (Vec::new(), Vec::new());
         }
         let span = crate::spans::scope("st_cover");
         ExtraCover::refresh(&mut self.cover, &self.extra);
+        self.cover_current = true;
+        if self.ahead_basis != self.ahead {
+            self.ahead_basis.clone_from(&self.ahead);
+            self.ahead_tree = AreaTree::new(self.ahead.iter().map(|&c| (c, 0)));
+        }
         drop(span);
+        let result = self.update_steps(world, budget);
+        self.cover_current = false;
+        result
+    }
+
+    fn update_steps(
+        &mut self,
+        world: &mut World,
+        budget: &mut ferraloom_core::IntegrationBudget,
+    ) -> (Vec<((i32, i32, i32), SectionMesh)>, Vec<Arc<Chunk>>) {
+        let mut uploads = Vec::new();
+        let rescan = self.scan_changes(world);
         self.requeue();
         self.relight_edits(world);
         let span = crate::spans::scope("st_results");
@@ -1006,13 +1138,17 @@ impl Streaming {
                     self.generating.remove(&(x, z));
                     if self.in_range(x, z, 4) || self.near_finished(x, z, 2) {
                         self.protos.insert((x, z), Some(proto));
+                        self.touch_around((x, z));
                         if decorated || !self.decorates {
                             self.decorated.insert((x, z));
                         }
                     }
                 }
                 Done::Decorated(x, z, region) => self.receive_decorated(x, z, *region),
-                Done::Generated(chunk) => self.receive_generated(chunk, world),
+                Done::Generated(chunk) => {
+                    self.receive_generated(chunk, world);
+                    self.scan_basis.chunks = world.chunks.membership_revision();
+                }
                 Done::Saved(protos) => self.receive_saved(protos),
                 Done::Lit(x, z, sections, seq) => {
                     if self.lighting.get(&(x, z)) != Some(&seq) {
@@ -1074,14 +1210,25 @@ impl Streaming {
         drop(span);
         let span = crate::spans::scope("st_unload");
         // Unload far columns.
-        let far: Vec<_> = world
-            .chunks
-            .keys()
-            .copied()
-            .filter(|&(x, z)| !self.remote && self.ranges().unloaded(x, z, self.decorates))
-            .collect();
-        for key in &far {
-            self.decorated.remove(key);
+        let unloaded =
+            |&(x, z): &(i32, i32)| !self.remote && self.ranges().unloaded(x, z, self.decorates);
+        let mut far: Vec<(i32, i32)> = if self.remote {
+            Vec::new()
+        } else if rescan {
+            world.chunks.keys().copied().filter(unloaded).collect()
+        } else {
+            let resident = self.touched.iter().filter(|k| world.chunks.contains_key(k));
+            resident.copied().filter(unloaded).collect()
+        };
+        far.sort_unstable();
+        debug_assert_eq!(far, {
+            let mut all: Vec<_> = world.chunks.keys().copied().filter(unloaded).collect();
+            all.sort_unstable();
+            all
+        });
+        for &key in &far {
+            self.decorated.remove(&key);
+            self.touch_around(key);
         }
         let mut removed = Vec::with_capacity(far.len());
         for key in &far {
@@ -1101,24 +1248,32 @@ impl Streaming {
                 .dirty_sections
                 .retain_columns(|x, z| !far.contains(&(x, z)));
         }
+        self.scan_basis.chunks = world.chunks.membership_revision();
         // Drop far proto chunks that are not checked out.
         let (center, r4) = (self.center, i64::from(self.radius + 4));
         let ranges = self.ranges();
-        let far: Vec<(i32, i32)> = self
-            .protos
-            .iter()
-            .filter(|&(&(x, z), p)| {
-                p.is_some()
-                    && i64::from(x - center.0).pow(2) + i64::from(z - center.1).pow(2) > r4 * r4
-                    && !ranges.in_extra(x, z, 4)
-                    && !ranges.in_band(x, z, 4)
-                    && !ranges
-                        .forced
-                        .iter()
-                        .any(|f| (x - f.0).abs() <= 3 && (z - f.1).abs() <= 3)
-            })
-            .map(|(k, _)| *k)
-            .collect();
+        let protos = &self.protos;
+        let far_proto = |&(x, z): &(i32, i32)| {
+            matches!(protos.get(&(x, z)), Some(Some(_)))
+                && i64::from(x - center.0).pow(2) + i64::from(z - center.1).pow(2) > r4 * r4
+                && !ranges.in_extra(x, z, 4)
+                && !ranges.in_band(x, z, 4)
+                && !ranges
+                    .forced
+                    .iter()
+                    .any(|f| (x - f.0).abs() <= 3 && (z - f.1).abs() <= 3)
+        };
+        let mut far: Vec<(i32, i32)> = if rescan {
+            protos.keys().copied().filter(far_proto).collect()
+        } else {
+            self.touched.iter().copied().filter(far_proto).collect()
+        };
+        far.sort_unstable();
+        debug_assert_eq!(far, {
+            let mut all: Vec<_> = protos.keys().copied().filter(far_proto).collect();
+            all.sort_unstable();
+            all
+        });
         if !far.is_empty() {
             self.generation_scan.exhausted = false;
         }
@@ -1140,33 +1295,55 @@ impl Streaming {
         drop(span);
         let span = crate::spans::scope("st_finalize");
         // Finalize chunks whose neighbourhood is decorated.
-        let candidates: Vec<(i32, i32)> = self.protos.keys().copied().collect();
-        for (x, z) in candidates {
-            if world.chunks.contains_key(&(x, z))
-                || self.finishing.contains(&(x, z))
-                || !self.in_range(x, z, 1)
-            {
-                continue;
-            }
-            let ready = (-1..=1).all(|dz| {
-                (-1..=1).all(|dx| {
-                    self.decorated.contains(&(x + dx, z + dz))
-                        || world.chunks.contains_key(&(x + dx, z + dz))
+        let finishes = |s: &Self, &(x, z): &(i32, i32)| {
+            matches!(s.protos.get(&(x, z)), Some(Some(_)))
+                && !world.chunks.contains_key(&(x, z))
+                && !s.finishing.contains(&(x, z))
+                && s.in_range(x, z, 1)
+                && (-1..=1).all(|dz| {
+                    (-1..=1).all(|dx| {
+                        s.decorated.contains(&(x + dx, z + dz))
+                            || world.chunks.contains_key(&(x + dx, z + dz))
+                    })
                 })
-            });
-            if ready && let Some(Some(_)) = self.protos.get(&(x, z)) {
-                let proto = self
-                    .protos
-                    .remove(&(x, z))
-                    .flatten()
-                    .expect("present proto");
-                self.finishing.insert((x, z));
-                self.written.remove(&(x, z));
-                self.submit(Some((x, z)), 0, Job::Finish(proto));
-            }
+        };
+        let mut candidates: Vec<(i32, i32)> = if rescan {
+            let keys = self.protos.keys();
+            keys.copied().filter(|k| finishes(self, k)).collect()
+        } else {
+            let keys = self.touched.iter();
+            keys.copied().filter(|k| finishes(self, k)).collect()
+        };
+        candidates.sort_unstable();
+        debug_assert_eq!(candidates, {
+            let keys = self.protos.keys();
+            let mut all: Vec<_> = keys.copied().filter(|k| finishes(self, k)).collect();
+            all.sort_unstable();
+            all
+        });
+        for (x, z) in candidates {
+            let proto = self
+                .protos
+                .remove(&(x, z))
+                .flatten()
+                .expect("present proto");
+            self.finishing.insert((x, z));
+            self.written.remove(&(x, z));
+            self.submit(Some((x, z)), 0, Job::Finish(proto));
         }
         drop(span);
         let span = crate::spans::scope("st_decorate");
+        // What this update found touched is decoration's to look at next.
+        if self.decorates {
+            let protos = &self.protos;
+            if rescan {
+                self.decorate_touched.extend(protos.keys().copied());
+            } else {
+                let touched = self.touched.iter().filter(|k| protos.contains_key(k));
+                self.decorate_touched.extend(touched);
+            }
+        }
+        self.touched.clear();
         // Decorate chunks whose 3x3 proto neighbourhood is available, in
         // vanilla's order: decoration is order dependent where write regions
         // overlap (see `DecorationOrder`).
@@ -1184,7 +1361,7 @@ impl Streaming {
                 radius: self.radius,
                 extra: &self.extra,
                 forced: &self.forced,
-                cover: ExtraCover::matching(&self.cover, &self.extra),
+                cover: self.cover.as_ref(),
                 band: self.band.as_ref(),
             };
             let (protos, generating) = (&self.protos, &self.generating);
@@ -1216,23 +1393,51 @@ impl Streaming {
                         })
                     })
             };
-            let keys: Vec<(i32, i32)> = self
-                .protos
-                .iter()
-                .filter(|(k, p)| p.is_some() && wants(self, k.0, k.1))
-                .map(|(k, _)| *k)
-                .collect();
-            let mut wanted: Vec<(u64, i64, i32, i32)> = keys
-                .into_iter()
-                .map(|(x, z)| (0, self.distance(x, z), x, z))
-                .collect();
-            // Chunks no ticket reached (forced and extra areas) go last, nearest first.
-            wanted.sort_unstable_by_key(|w| w.1);
-            for w in &mut wanted {
-                w.0 = self.decoration_order.rank_or_append(w.2, w.3);
+            // Whether decoration of this column could start, or be given up:
+            // nothing else it goes through below has an effect.
+            let startable = |s: &Self, x: i32, z: i32| {
+                let around = |i: i32| (x + i % 3 - 1, z + i / 3 - 1);
+                matches!(s.protos.get(&(x, z)), Some(Some(_)))
+                    && wants(s, x, z)
+                    && ((0..9).any(|i| world.chunks.contains_key(&around(i)))
+                        || (0..9).all(|i| matches!(s.protos.get(&around(i)), Some(Some(_)))))
+            };
+            // Every wanted proto chunk gets a rank when it first comes up here,
+            // nearest first: chunks no ticket reached (forced and extra areas)
+            // go last.
+            let mut unranked = Vec::new();
+            for (x, z) in std::mem::take(&mut self.decorate_touched) {
+                if !matches!(self.protos.get(&(x, z)), Some(Some(_))) || !wants(self, x, z) {
+                    continue;
+                }
+                if self.decoration_order.rank(x, z).is_none() {
+                    unranked.push((self.distance(x, z), x, z));
+                }
+                if startable(self, x, z) {
+                    self.decorate_ready.insert((x, z));
+                }
             }
+            unranked.sort_unstable();
+            for (_, x, z) in unranked {
+                self.decoration_order.rank_or_append(x, z);
+            }
+            let mut ready = std::mem::take(&mut self.decorate_ready);
+            ready.retain(|&(x, z)| startable(self, x, z));
+            let mut wanted: Vec<(u64, i32, i32)> = ready
+                .iter()
+                .map(|&(x, z)| (self.decoration_order.rank_or_append(x, z), x, z))
+                .collect();
             wanted.sort_unstable();
-            for (_, _, x, z) in wanted {
+            debug_assert_eq!(wanted, {
+                let keys = self.protos.keys();
+                let mut all: Vec<_> = keys
+                    .filter(|k| startable(self, k.0, k.1))
+                    .map(|&(x, z)| (self.decoration_order.rank(x, z).unwrap_or(u64::MAX), x, z))
+                    .collect();
+                all.sort_unstable();
+                all
+            });
+            for (_, x, z) in wanted {
                 if self.decorating >= workers * 2 {
                     break;
                 }
@@ -1247,8 +1452,10 @@ impl Streaming {
                 // A final neighbour cannot receive writes: skip decoration. Only
                 // worlds saved before proto chunks were saved get here (their
                 // final chunks' neighbours are generated again).
+                ready.remove(&(x, z));
                 if keys.iter().any(|k| world.chunks.contains_key(k)) {
                     self.decorated.insert((x, z));
+                    self.touch_around((x, z));
                     continue;
                 }
                 if !keys
@@ -1273,6 +1480,7 @@ impl Streaming {
                 self.decorating += 1;
                 self.submit(Some((x, z)), 1, Job::Decorate(x, z, region));
             }
+            self.decorate_ready = ready;
         }
         drop(span);
         crate::spans::time("st_generate", || self.schedule_generation(world, workers));
@@ -1317,7 +1525,7 @@ impl Streaming {
                 radius: self.radius,
                 extra: &self.extra,
                 forced: &self.forced,
-                cover: ExtraCover::matching(&self.cover, &self.extra),
+                cover: self.cover.as_ref(),
                 band: self.band.as_ref(),
             };
             self.waiting.retain(|&(x, sy, z)| {
@@ -1395,7 +1603,7 @@ impl Streaming {
                 radius: self.radius,
                 extra: &self.extra,
                 forced: &self.forced,
-                cover: ExtraCover::matching(&self.cover, &self.extra),
+                cover: self.cover.as_ref(),
                 band: self.band.as_ref(),
             },
             world,
@@ -1405,7 +1613,7 @@ impl Streaming {
             decorates: self.decorates,
             remote: self.remote,
             loading: self.loading,
-            ahead: &self.ahead,
+            ahead: &self.ahead_tree,
         };
         if let Some(wanted) = self.generation_scan.candidates(input, workers * 3) {
             for (_, x, z) in wanted {
@@ -1493,7 +1701,11 @@ impl Streaming {
             radius: self.radius,
             extra: &self.extra,
             forced: &self.forced,
-            cover: ExtraCover::matching(&self.cover, &self.extra),
+            cover: if self.cover_current {
+                self.cover.as_ref()
+            } else {
+                ExtraCover::matching(&self.cover, &self.extra)
+            },
             band: self.band.as_ref(),
         }
     }
@@ -1731,31 +1943,28 @@ impl Band {
 }
 /// A generation priority lowered to the squared distance from the nearest
 /// point ahead of a moving player, outside the loading screen's ring order.
-fn ahead_priority(own: i64, ahead: &[(i32, i32)], loading: bool, x: i32, z: i32) -> i64 {
+fn ahead_priority(own: i64, ahead: &AreaTree, loading: bool, x: i32, z: i32) -> i64 {
     if loading {
         return own;
     }
-    ahead
-        .iter()
-        .map(|&(ax, az)| i64::from(x - ax).pow(2) + i64::from(z - az).pow(2))
-        .fold(own, i64::min)
+    ahead.nearest_squared(x, z, own)
 }
-/// For every column near the extra areas, how far it lies outside the
-/// nearest one's square (Chebyshev distance less its radius; 0 inside). A server has an area per player, and streaming asks of every
-/// loaded and wanted column whether one reaches it, several times a tick:
-/// with fifty players, a scan of fifty squares per question.
+/// `extra` made quick to ask about: a server has an area per player, and
+/// streaming asks about every column it looks at, several times a tick. One
+/// area or none is scanned as quickly.
 struct ExtraCover {
     extra: Vec<((i32, i32), i32)>,
-    x0: i32,
-    z0: i32,
-    width: u32,
-    depth: u32,
-    cells: Box<[i8]>,
+    tree: AreaTree,
+    /// None for areas too far apart to fit one, or of a radius past any
+    /// player's: the tree answers then.
+    grid: Option<CoverGrid>,
 }
 impl ExtraCover {
-    /// The largest margin the grid answers for; beyond it (and outside the
-    /// grid) a column is further than that from every square.
+    /// The largest margin asked about, which the grid answers for; beyond it
+    /// (and outside the grid) a column is further than that from every square.
     const REACH: i32 = 4;
+    /// The largest radius a grid is made for and that `changed_columns` walks.
+    const GRID_RADIUS: i32 = 64;
     /// The largest grid, in columns (a mebibyte).
     const CELLS: u64 = 1 << 20;
     fn matching<'a>(
@@ -1764,19 +1973,48 @@ impl ExtraCover {
     ) -> Option<&'a ExtraCover> {
         cover.as_ref().filter(|c| c.extra == extra)
     }
-    /// Make the grid again if `extra` changed; none for one area or none
-    /// (a scan is as quick), or areas too far apart.
+    /// Make it again if `extra` changed.
     fn refresh(cover: &mut Option<ExtraCover>, extra: &[((i32, i32), i32)]) {
-        if cover.as_ref().is_some_and(|c| c.extra == extra) {
-            return;
+        if extra.len() < 2 {
+            *cover = None;
+        } else if cover.as_ref().is_none_or(|c| c.extra != extra) {
+            *cover = Some(Self::new(extra));
         }
-        *cover = Self::new(extra);
     }
+    fn new(extra: &[((i32, i32), i32)]) -> Self {
+        Self {
+            extra: extra.to_vec(),
+            tree: AreaTree::new(extra.iter().copied()),
+            grid: CoverGrid::new(extra),
+        }
+    }
+    /// Whether (x, z) is within `margin` of an area's square.
+    fn within(&self, x: i32, z: i32, margin: i32) -> bool {
+        match &self.grid {
+            Some(grid) if (0..=Self::REACH).contains(&margin) => grid.within(x, z, margin),
+            _ => self.tree.within(x, z, margin),
+        }
+    }
+}
+/// For every column near the extra areas, how far it lies outside the
+/// nearest one's square (Chebyshev distance less its radius; 0 inside).
+struct CoverGrid {
+    x0: i32,
+    z0: i32,
+    width: u32,
+    depth: u32,
+    cells: Box<[i8]>,
+}
+impl CoverGrid {
     fn new(extra: &[((i32, i32), i32)]) -> Option<Self> {
-        if extra.len() < 2 || extra.iter().any(|&(_, r)| !(0..=64).contains(&r)) {
+        let reach = ExtraCover::REACH;
+        if extra
+            .iter()
+            .any(|&(_, r)| !(0..=ExtraCover::GRID_RADIUS).contains(&r))
+        {
             return None;
         }
-        let k = i64::from(Self::REACH);
+        let k = i64::from(reach);
         let (mut x0, mut z0, mut x1, mut z1) = (i64::MAX, i64::MAX, i64::MIN, i64::MIN);
         for &((x, z), r) in extra {
             let (x, z, r) = (i64::from(x), i64::from(z), i64::from(r) + k);
@@ -1784,26 +2022,26 @@ impl ExtraCover {
         }
         let (width, depth) = ((x1 - x0 + 1) as u64, (z1 - z0 + 1) as u64);
         let fits = |lo: i64, hi: i64| lo >= i64::from(i32::MIN) && hi <= i64::from(i32::MAX);
-        if width * depth > Self::CELLS || !fits(x0, x1) || !fits(z0, z1) {
+        if width.saturating_mul(depth) > ExtraCover::CELLS || !fits(x0, x1) || !fits(z0, z1) {
             return None;
         }
         let (x0, z0, width, depth) = (x0 as i32, z0 as i32, width as u32, depth as u32);
-        let mut cells = vec![(Self::REACH + 1) as i8; (width * depth) as usize].into_boxed_slice();
+        let mut cells = vec![(reach + 1) as i8; (width * depth) as usize].into_boxed_slice();
         // Inside a square counts as 0: no margin asked for is below it. Each
         // row of a square is a run of one value with a slope at either end.
         let lower = |run: &mut [i8], v: i8| run.iter_mut().for_each(|c| *c = (*c).min(v));
         for &((cx, cz), r) in extra {
-            let reach = r + Self::REACH;
-            for dz in -reach..=reach {
+            let area_reach = r + reach;
+            for dz in -area_reach..=area_reach {
                 let start = (cz + dz - z0) as usize * width as usize + (cx - x0) as usize;
-                let row = &mut cells[start - reach as usize..=start + reach as usize];
+                let row = &mut cells[start - area_reach as usize..=start + area_reach as usize];
                 let flat = dz.abs().max(r);
-                let centre = reach as usize;
+                let centre = area_reach as usize;
                 lower(
                     &mut row[centre - flat as usize..=centre + flat as usize],
                     (flat - r) as i8,
                 );
-                for d in flat + 1..=reach {
+                for d in flat + 1..=area_reach {
                     let v = (d - r) as i8;
                     lower(&mut row[centre - d as usize..=centre - d as usize], v);
                     lower(&mut row[centre + d as usize..=centre + d as usize], v);
@@ -1811,7 +2049,6 @@ impl ExtraCover {
             }
         }
         Some(Self {
-            extra: extra.to_vec(),
             x0,
             z0,
             width,
@@ -1820,7 +2057,7 @@ impl ExtraCover {
         })
     }
     /// Whether (x, z) is within `margin` of an area's square, for a
-    /// `margin` up to `REACH`.
+    /// `margin` up to `ExtraCover::REACH`.
     fn within(&self, x: i32, z: i32, margin: i32) -> bool {
         let (dx, dz) = (
             x.wrapping_sub(self.x0) as u32,
@@ -1864,6 +2101,9 @@ impl Ranges<'_> {
             let (dx, dz) = (i64::from(x - c.0), i64::from(z - c.1));
             dx * dx + dz * dz
         };
+        if let Some(cover) = self.cover {
+            return cover.tree.nearest_squared(x, z, d(self.center));
+        }
         self.extra
             .iter()
             .map(|(c, _)| d(*c))
@@ -1918,9 +2158,7 @@ impl Ranges<'_> {
     /// Within `margin` of an extra area's square (Chebyshev distance, as
     /// vanilla's ticket levels spread).
     fn in_extra(&self, x: i32, z: i32, margin: i32) -> bool {
-        if let Some(cover) = self.cover
-            && (0..=ExtraCover::REACH).contains(&margin)
-        {
+        if let Some(cover) = self.cover {
             return cover.within(x, z, margin);
         }
         self.extra
@@ -2086,6 +2324,7 @@ mod tests {
         finishing: FxHashSet<(i32, i32)>,
         decorates: bool,
         remote: bool,
+        ahead: AreaTree,
     }
     impl GenerationFixture {
         fn new(radius: i32, decorates: bool) -> Self {
@@ -2100,6 +2339,7 @@ mod tests {
                 finishing: Default::default(),
                 decorates,
                 remote: false,
+                ahead: AreaTree::default(),
             }
         }
         fn input(&self) -> GenerationInputs<'_> {
@@ -2119,7 +2359,7 @@ mod tests {
                 decorates: self.decorates,
                 remote: self.remote,
                 loading: false,
-                ahead: &[],
+                ahead: &self.ahead,
             }
         }
         fn fill(&mut self) {
@@ -2616,7 +2856,8 @@ mod cover_tests {
         let forced: HashSet<(i32, i32)> = [(40, -40)].into();
         for case in 0..60 {
             let extra = areas(&mut seed, 2 + case % 20, [4, 30, 120][case % 3]);
-            let cover = ExtraCover::new(&extra).expect("a grid");
+            let cover = ExtraCover::new(&extra);
+            assert!(cover.grid.is_some());
             let ranges = |cover| Ranges {
                 center: (3, -2),
                 radius: 10,
@@ -2642,6 +2883,7 @@ mod cover_tests {
                         assert_eq!(scan.requested(x, z, d), grid.requested(x, z, d));
                         assert_eq!(scan.chunk_kept(x, z, d), grid.chunk_kept(x, z, d));
                     }
+                    assert_eq!(scan.distance(x, z), grid.distance(x, z));
                 }
             }
         }
@@ -2653,12 +2895,46 @@ mod cover_tests {
         ExtraCover::refresh(&mut cover, &[((0, 0), 11), ((5, 5), 11)]);
         assert!(ExtraCover::matching(&cover, &[((0, 0), 11), ((5, 5), 11)]).is_some());
         assert!(ExtraCover::matching(&cover, &[((0, 0), 11), ((5, 6), 11)]).is_none());
-        // Too far apart for a mebibyte of grid, and one area alone: scans.
-        assert!(ExtraCover::new(&[((0, 0), 11), ((100_000, 0), 11)]).is_none());
-        assert!(ExtraCover::new(&[((0, 0), 11)]).is_none());
-        assert!(ExtraCover::new(&[((i32::MAX - 1, 0), 11), ((i32::MAX - 3, 0), 11)]).is_none());
-        assert!(ExtraCover::new(&[((0, i32::MAX - 1), 11), ((0, i32::MAX - 3), 11)]).is_none());
-        assert!(ExtraCover::new(&[((0, i32::MIN + 1), 11), ((0, i32::MIN + 3), 11)]).is_none());
+        // One area alone is scanned.
+        ExtraCover::refresh(&mut cover, &[((0, 0), 11)]);
+        assert!(cover.is_none());
+        // Too far apart for a mebibyte of grid: the tree answers.
+        for extra in [
+            [((0, 0), 11), ((100_000, 0), 11)],
+            [((i32::MAX - 1, 0), 11), ((i32::MAX - 3, 0), 11)],
+            [((0, i32::MAX - 1), 11), ((0, i32::MAX - 3), 11)],
+            [((0, i32::MIN + 1), 11), ((0, i32::MIN + 3), 11)],
+        ] {
+            let cover = ExtraCover::new(&extra);
+            assert!(cover.grid.is_none());
+            let (x, z) = extra[1].0;
+            assert!(cover.within(x, z, 0));
+            assert!(!cover.within(x.wrapping_add(14), z, 1));
+        }
+    }
+
+    /// Top-k selection takes what the full sort's first k would be, order
+    /// included, with duplicates from forced chunks' overlapping squares.
+    #[test]
+    fn a_generation_batch_is_the_start_of_the_full_sort() {
+        let mut f = GenerationFixture::new(6, true);
+        f.extra.extend([((30, 0), 5), ((32, 3), 5), ((-20, 14), 3)]);
+        f.ahead = AreaTree::new([((40, 2), 0), ((-25, 20), 0), ((9, 9), 0)]);
+        for forced in [false, true] {
+            if forced {
+                f.forced.extend([(60, 60), (61, 60), (60, 62)]);
+            }
+            let all = GenerationScan::default()
+                .candidates(f.input(), usize::MAX)
+                .unwrap();
+            assert!(all.len() > 500);
+            for batch in [1, 7, 24, all.len() - 1, all.len(), all.len() + 5] {
+                let got = GenerationScan::default()
+                    .candidates(f.input(), batch)
+                    .unwrap();
+                assert_eq!(got, all[..batch.min(all.len())], "batch {batch}");
+            }
+        }
     }
 
     /// cargo test --release -p horizon-client --lib cover_tests::cover_cost -- --ignored --nocapture
@@ -2675,7 +2951,7 @@ mod cover_tests {
                     (((a.cos() * d) as i32, (a.sin() * d) as i32), 11)
                 })
                 .collect();
-            let cover = ExtraCover::new(&extra).unwrap();
+            let cover = ExtraCover::new(&extra);
             let ranges = |cover| Ranges {
                 center: (0, 0),
                 radius: 10,
