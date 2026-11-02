@@ -133,8 +133,8 @@ impl Game<'_> {
                 self.world.chunks.insert((cx, cz), Arc::new(chunk));
             }
         }
-        self.block_ticks = Ticks::new(0);
-        self.tick_chunks.clear();
+        self.server_level.block_ticks = Ticks::new(0);
+        self.server_level.tick_chunks.clear();
         self.sync_tick_chunks();
         self.mobs.clear();
         self.dropped.clear();

@@ -79,10 +79,10 @@ impl Game<'_> {
         // A chunk the scheduler hasn't registered yet (one loaded and
         // unloaded again before the next tick) still holds its saved ticks:
         // `register_chunk_ticks` empties that list once it takes them.
-        if let Some(t) = self.block_ticks.blocks.chunk(pos) {
+        if let Some(t) = self.server_level.block_ticks.blocks.chunk(pos) {
             extras.block_ticks = t.pack(time);
         }
-        if let Some(t) = self.block_ticks.fluids.chunk(pos) {
+        if let Some(t) = self.server_level.block_ticks.fluids.chunk(pos) {
             extras.fluid_ticks = t.pack(time);
         }
         extras.last_update = time;
@@ -122,6 +122,7 @@ impl Game<'_> {
         });
         let loaded = !blocks.is_empty() || !fluids.is_empty();
         if self
+            .server_level
             .block_ticks
             .add_chunk(
                 pos,
@@ -131,7 +132,7 @@ impl Game<'_> {
             .is_ok()
             && loaded
         {
-            self.tick_chunks.wait(key);
+            self.server_level.tick_chunks.wait(key);
         }
         // The saved list is consumed: later saves take the scheduler's ticks.
         if loaded && let Some(c) = self.world.chunks.get_mut(&key) {

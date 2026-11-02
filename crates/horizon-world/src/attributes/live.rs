@@ -9,7 +9,88 @@ use crate::{
     object_open_set::{ObjectKey, ObjectOpenSet},
     stored_effect_attributes::{self as stored, AttributeAccess},
 };
-use std::{convert::Infallible, sync::Arc};
+use std::{
+    convert::Infallible,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+};
+
+/// Supplies instance hashes without requiring a callback in canonical entities.
+/// Existing differential bindings may still supply a closure.
+pub trait IdentitySource {
+    fn next_identity(&mut self) -> i32;
+}
+impl<F: FnMut() -> i32> IdentitySource for F {
+    fn next_identity(&mut self) -> i32 {
+        self()
+    }
+}
+
+/// The resident player's wrapping identity counter, or an exact oracle replay.
+/// Both forms own their sequence and can move with the player to a worker.
+pub struct IdentityCounter(CounterState);
+enum CounterState {
+    Wrapping(i32),
+    Recorded {
+        values: std::vec::IntoIter<i32>,
+        consumed: Arc<AtomicUsize>,
+    },
+}
+impl Default for IdentityCounter {
+    fn default() -> Self {
+        Self(CounterState::Wrapping(0))
+    }
+}
+impl IdentityCounter {
+    /// Preserve the oracle's values and expose its consumed-count assertion.
+    pub fn recorded(values: Vec<i32>) -> (Self, Arc<AtomicUsize>) {
+        let consumed = Arc::new(AtomicUsize::new(0));
+        (
+            Self(CounterState::Recorded {
+                values: values.into_iter(),
+                consumed: Arc::clone(&consumed),
+            }),
+            consumed,
+        )
+    }
+}
+impl IdentitySource for IdentityCounter {
+    fn next_identity(&mut self) -> i32 {
+        match &mut self.0 {
+            CounterState::Wrapping(last) => {
+                *last = last.wrapping_add(1);
+                *last
+            }
+            CounterState::Recorded { values, consumed } => {
+                consumed.fetch_add(1, Ordering::Relaxed);
+                values.next().expect("unexpected instance allocation")
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::*;
+
+    #[test]
+    fn counter_keeps_the_wrapping_sequence_and_exact_replay() {
+        let mut counter = IdentityCounter::default();
+        assert_eq!([counter.next_identity(), counter.next_identity()], [1, 2]);
+        let mut wrapping = IdentityCounter(CounterState::Wrapping(i32::MAX));
+        assert_eq!(wrapping.next_identity(), i32::MIN);
+        assert_eq!(wrapping.next_identity(), i32::MIN + 1);
+
+        let (mut recorded, consumed) = IdentityCounter::recorded(vec![42, -7, 42]);
+        assert_eq!(
+            std::array::from_fn::<_, 3, _>(|_| recorded.next_identity()),
+            [42, -7, 42]
+        );
+        assert_eq!(consumed.load(Ordering::Relaxed), 3);
+    }
+}
 
 #[derive(Clone)]
 pub struct Key {
@@ -96,7 +177,7 @@ struct Data<G> {
     nodes: Vec<Node>,
     next_identity: G,
 }
-impl<G: FnMut() -> i32> Data<G> {
+impl<G: IdentitySource> Data<G> {
     fn base(&self, key: &Key) -> Option<f64> {
         Arc::ptr_eq(&self.catalog, &key.catalog)
             .then(|| self.bases[key.id.index()])
@@ -134,7 +215,7 @@ impl<G: FnMut() -> i32> Data<G> {
         let handle = Handle {
             owner: self.owner.clone(),
             index: self.nodes.len(),
-            hash: (self.next_identity)(),
+            hash: self.next_identity.next_identity(),
         };
         let mut observer = Dirty {
             map,
@@ -173,7 +254,7 @@ fn convert_error(error: AttributeError<Infallible>) -> Error {
         AttributeError::Observer(e) => match e {},
     }
 }
-impl<G: FnMut() -> i32> QueryWorld<Key, Handle> for Data<G> {
+impl<G: IdentitySource> QueryWorld<Key, Handle> for Data<G> {
     type Error = Error;
     fn supplier_has_attribute(
         &mut self,
@@ -242,7 +323,7 @@ impl<G: FnMut() -> i32> QueryWorld<Key, Handle> for Data<G> {
         self.edit(map, &h, |a, o| a.set_base_value(value, o))
     }
 }
-impl<G: FnMut() -> i32> AttributeAccess<Key, Handle> for Data<G> {
+impl<G: IdentitySource> AttributeAccess<Key, Handle> for Data<G> {
     type Error = Error;
     fn create_instance(
         &mut self,
@@ -278,7 +359,7 @@ pub struct LiveAttributes<G> {
     map: AttributeMap<Key, Handle>,
     data: Data<G>,
 }
-impl<G: FnMut() -> i32> LiveAttributes<G> {
+impl<G: IdentitySource> LiveAttributes<G> {
     pub fn new(
         catalog: Arc<Catalog>,
         entity: &str,

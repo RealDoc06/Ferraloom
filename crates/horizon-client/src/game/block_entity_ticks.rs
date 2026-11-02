@@ -117,7 +117,7 @@ impl Game<'_> {
     /// (`LevelChunk.isTicking`, block coordinates), from every player's
     /// tickets (`update_chunk_tickets`).
     fn block_ticking_area(&self) -> impl Fn(i32, i32) -> bool + use<> {
-        let levels = self.tickets.levels();
+        let levels = self.server_level.tickets.levels();
         move |x, z| levels.block_ticking_at(x, z)
     }
     /// `DaylightDetectorBlock.tickEntity` of the detector at `pos`.

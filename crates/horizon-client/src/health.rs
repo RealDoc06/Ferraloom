@@ -6,7 +6,7 @@ use crate::{
     motion::{MotionEvent, PlayerMotion},
 };
 use horizon_world::{
-    attributes::live::LiveAttributes,
+    attributes::live::{IdentityCounter, LiveAttributes},
     block_landing::LandingDamage,
     combat_rules::ArmorWorld,
     damage_immunity::{self, DamageRule, ImmunityTag, ImmunityWorld},
@@ -22,7 +22,7 @@ use horizon_world::{
     synced_floats::{FloatValue, Observer, SyncedFloats},
 };
 use std::{fs, io, path::Path};
-pub(crate) type Attributes = LiveAttributes<Box<dyn FnMut() -> i32>>;
+pub(crate) type Attributes = LiveAttributes<IdentityCounter>;
 pub(crate) type State = HurtState<DamageTypeId>;
 
 pub use crate::world::HealthRules;

@@ -3,7 +3,7 @@ use crate::{
     attribute_map::ValueKind,
     attributes::{
         entity::{AttributeId, EntityAttributes, LookupError},
-        live::{self, Key, LiveAttributes},
+        live::{self, IdentitySource, Key, LiveAttributes},
     },
     living_health::{self, HealthWorld, SyncedFloat},
 };
@@ -42,7 +42,7 @@ impl HealthAttributes for EntityAttributes {
         self.value(key)
     }
 }
-impl<G: FnMut() -> i32> HealthAttributes for LiveAttributes<G> {
+impl<G: IdentitySource> HealthAttributes for LiveAttributes<G> {
     type Key = Key;
     type Error = live::Error;
     fn health_attribute_key(&self, name: &str) -> Option<Key> {

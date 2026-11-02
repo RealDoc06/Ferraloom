@@ -63,6 +63,47 @@ Horizon reexports those old paths too; ticket propagation, map representation
 and iteration are unchanged. The crate depends only on `horizon-core` and
 `horizon-world`.
 
+Scheduled-tick registration membership and its waiting-for-eligibility state
+also live in `ferraloom-game`. A borrowed `LoadedTickChunks` view supplies the
+resident key token, membership lookup and original key traversal without owning
+chunk payloads. The client adapter retains integration tests against real
+resident chunks and saved block/fluid queues. The actual queues and behavior
+machinery already live in `horizon-core::ticks` and `horizon-world::level::Ticks`;
+this extraction preserves their admission, callback boundaries and unpack time.
+
+The first canonical `ServerLevel` unit owns those block/fluid queues, scheduled
+membership and tickets together. `Game` holds the active value; `Parked` holds
+each inactive value. Dimension changes transfer that owner intact instead of
+swapping its individual fields. Gameplay borrows its existing queues directly;
+there is no second scheduler, copied state or changed callback boundary. The
+resident world, random-section cache and entities join this owner in subsequent
+units. Player access is a separate extraction; guest swaps are still present.
+
+Random-section eligibility and its weak-reference invalidation cache now live
+in `ferraloom-game` too. The resident section owner and the random-tick block
+predicate are borrowed inputs; the client wrapper only supplies its existing
+`Chunk` and `BlockFacts`. The scan, weak-reference identity checks, section
+order and live rechecks between lower and higher sections are unchanged. The
+real-chunk COW/reload and evolving random-tick trace tests stay at the adapter.
+
+Player ownership preparation removes `PlayerMotion`'s boxed identity callback.
+Its concrete `IdentityCounter` keeps the same per-player wrapping `i32` sequence;
+native replay retains the exact recorded values and allocation-count check.
+The only shared replay state is an atomic count, not a gameplay lock. Existing
+closure-based world harnesses keep their binding through `IdentitySource`.
+The player body's `Send` bound is checked in its unit tests. This does not yet
+remove guest swaps or move network-owned state; that access migration follows
+the LAN branches' merge and retains immediate reentrant visibility.
+
+That bound also exposed `ObjectOpenMap`'s `Rc<RefCell<Table>>`. Its current table
+is now owned directly. Active `for_each` frames follow its live key array until
+rehash, then pin that generation's retired keys with an immutable `Arc`; values
+still come from the current array. Nested frames share a generation, and a
+borrowed guard releases pins on return, error or unwind. Ordinary lookups use
+the owned table directly, without a lock or generation lookup. The collection
+ownership change has a separate reentrant-rehash/parity gate and a before/after
+attribute-lookup benchmark; a slowdown above about 2% blocks it.
+
 `Chunk` and `World` remain in Horizon for now: their block-entity types have
 inherent implementations across containers, sculk, spawners and other gameplay
 modules. Move those types with their methods in later units, rather than adding
@@ -149,6 +190,55 @@ point. Teleports and multi-target commands cannot become next-tick messages.
 Implement and test this continuation protocol before enabling parallel regions;
 a mutex around the world is not its substitute.
 
+### Stack carriers and live adapters
+
+Use blocking Rust stacks on OS threads for the first continuation driver.
+The normal pool has `worker-count` runnable threads; each runs region jobs in
+sequence on its own stack. Do not pin one thread to each region or wake a
+thread for each job. When a job parks, its carrier remains blocked with that
+call stack, returns canonical ownership and releases its runnable slot. An idle
+spare, or one grown lazily from the bounded spare pool, takes over the slot.
+Thread demand is the worker count plus currently parked stacks. With no parks,
+only the normal workers wake for the phase. Pool synchronization lives in the
+runtime, outside simulation state.
+
+The coordinator waits until all phase jobs finish or park, then serves exclusive
+requests in stable phase/region/operation order and resumes the original call.
+It never chooses a winner by arrival time. Bound region count and therefore
+parked-stack/spare demand through deterministic conservative coalescing.
+Coalescing and tie-breaking use only simulation state and stable region
+ordinals, never worker count, measured cost or completion timing. The carrier
+and phase contracts must also serve block entities, scheduled ticks and mobs.
+
+The concrete adapter may keep one private `RefCell<Option<Region>>`, owned by
+the active job on its worker and never shared between workers. Small helpers
+return owned answers/handles and end their state borrows before invoking a
+callback or parking. No borrow guard or reference into canonical region state
+may escape a helper. A reentrant borrow panic is a bug, not a serial-fallback
+signal. Resident chunk reads return owned `Arc` handles through
+`RandomTickChunk::get_owned`, retaining the existing weak-cache fast path.
+
+Resolve the separate canonical `Ticks` borrow before enabling workers. A
+`TickAccess` facade performs short scoped borrows of the same live tick state;
+legacy `Ticks` can implement the facade while existing callers migrate. Active
+behaviour frames retain the facade and handles/scalars, not `&mut Ticks` or a
+queue borrow across a world callback. Reentrant callback/handoff tests must
+observe mutations of that same canonical tick state after resumption.
+
+Gate the adapter cell with a paired block-read hot-path benchmark, using the
+same compiler/profile/input and alternating before/after trials as the
+attribute lookup gate. Reject a regression above about 2%; use the wider
+`&mut` read-API conversion only if the cell fails this bar. Include a focused
+reentrant callback test. Neither this design nor a passing type assertion
+claims that the adapter or continuation driver has been implemented yet.
+
+With worker coverage, report wakeup overhead, parked-thread high water, RSS and
+the share of regions coalesced by the cap. Include a two-core serial control:
+regional execution must not lose to serial there. Keep a serial-slot fallback
+when dispatch is slower, chosen before phase work and preserving the mode's
+RNG, ordering and callback semantics. Execution policy must not change the
+simulation-driven coalescing decisions or worker-count determinism.
+
 ## Work outside the tick
 
 Capture chunk-send/save inputs at their original visibility points. Existing
@@ -230,17 +320,72 @@ retaining Horizon's world logic and serial execution order.
 
 Each row is a sequence of small commits/PRs, not permission for a broad rewrite.
 Keep the dedicated server playable through the existing entry point until its
-replacement passes the same end-to-end tests.
+replacement passes the same end-to-end tests. The revised M2–M4 path reaches a
+first regional phase before completing the executable/runtime split or every
+player adapter. The driver borrows actual owned simulation state; regions are
+not miniature `Game` shells. Extract only the state and adapters required by
+the next worker phase, retaining all other phases in their existing serial slots.
 
 | Step | Deliverable | Required gate |
 | --- | --- | --- |
 | 1 | Bound chunk publication per tick and keep workers off the tick core | Budget/topology tests, both-mode generation/save invariants, affected parity and pinned explorer/normal-play bench |
-| 2 | Extract shared chunk/resource leaves and one server adapter at a time; re-export old paths | Existing affected block/chunk/save harnesses still pass; no new client dependency |
-| 3 | Move dimension state from `Parked` into `ServerLevel` and player state from guest swaps into explicit handles, one subsystem at a time | Dedicated server, server-level/portal, player-action and entity harnesses; same serial trace |
-| 4 | Move the serial tick driver to runtime and make server-only startup use it | All selected existing harnesses and playable login/exploration/save/reload; build without renderer/audio/input dependencies |
-| 5 | Introduce one-region phase driver and exclusive continuations, then closure ownership with parallelism disabled | Exact reference trace; reentrant mutation, removal/replacement, teleport and command tests |
-| 6 | Enable parallel regional phases individually | Both-mode parity, schedule/deadlock tests and measured useful parallelism; explicit assertions for approved cross-region differences |
+| 2 | Extract the minimal block-phase kernel, real state ownership and its live adapters; retain the existing executable and tick loop | Focused affected parity, standalone game tests and client compilation; unchanged serial trace and immediate effects |
+| 3 | Introduce the reusable one-region phase driver, exclusive continuations and dependency closures with parallelism disabled | Exact reference trace; reentrant mutation, removal/replacement, teleport, commands and ownership-boundary tests |
+| 4 | Enable regional random block ticks behind a flag, joining at their original phase boundary; other phases remain serial | Flag-off exact reference; flag-on worker-count determinism, split/merge/movement and both-mode parity; measured worker coverage on all three workloads |
+| 5 | Reuse the kernel/driver for block entities, scheduled ticks, then mobs and spawning, extracting their dependencies as needed | Per-phase parity and ordering gates, immediate callbacks, dimension-wide budgets and measured useful parallelism |
+| 6 | Finish canonical player access and server-only runtime/startup as their dependencies require, without delaying the first independent worker phase for unrelated client cleanup | Player-action/portal/entity parity and playable login/exploration/save/reload; eventual build without renderer/audio/input dependencies |
 | 7 | Add parallel sensing/navigation and nonoverlapping decoration behind the same job contract | Apply in vanilla order, preserve synchronous answers and FEATURES visit dependencies; differential cases and explorer/farm bench |
+
+### Phase rollout and useful coverage
+
+Random ticks prove ownership and the driver, not the performance payoff. The
+500-player whole-server profile assigns at most 9% to all block work together;
+random ticks are only part of that bucket. Amdahl's limit prevents this first
+phase alone from delivering a substantial TPS gain. Keep phase dispatch,
+ownership closures, exclusive requests, stable ordinals and barriers reusable
+by the following phases; do not build a crop-specific scheduler.
+
+| Order | Regional phase | Measured tick share at 500 players |
+| --- | --- | --- |
+| Proof | Random block ticks | Unseparated portion of the 9% block-work bucket |
+| Next | Block entities and their tickers | About 8% |
+| Then | Scheduled block and fluid ticks | Unseparated portion of the same 9% block-work bucket; do not count it again as another 9% |
+| Then | Mobs and natural spawning | About 26% combined |
+
+Each phase retains vanilla order and joins before the next. Keep scheduled
+block/fluid budgets dimension-wide, spawning counts/quotas at their barrier,
+and effects visible at their original callback points. A worker cannot defer
+an immediate spawn, drop, neighbor update or actor mutation to the phase join
+merely because the caller lives outside the kernel. Supply that dependency or
+serve it through the exclusive continuation before resuming the call.
+
+If initial dispatch uses an allowlist, its eligibility proof must cover reachable
+callbacks and mutations, not only the initial block states. Unsupported regions
+stay serial before dispatch. Never partially mutate a region, abandon its work
+and replay it serially. Missing ownership is never air; synchronous reads and
+loads must obtain the live owner through closure merging or exclusive access.
+
+For explore 100, explore 200 and the 300-normal/200-explore mix, report both
+worker/total random-position draws and worker/total actual random-tick callbacks,
+including serial fallback regions in the totals. Also report CPU time spent
+executing that phase on workers divided by total simulation-tick CPU time
+(coordinator plus regional workers), separately from elapsed MSPT. Attribute
+worker CPU to real simulation work, excluding background generation/encoding.
+Report ready/merged region counts and worker utilization with those figures.
+If the allowlist leaves coverage low, report it immediately; a flag or two busy
+threads is not evidence that explorers scale across cores.
+
+With the flag off, preserve the exact serial reference trace, RNG and callback
+visibility. With it on, run the same fixtures repeatedly at worker counts 1, 2,
+4 and 8 and compare simulation traces and ordered effects, including exclusive
+requests and different completion orders. Only the already approved regional
+differences may remain; worker count/completion order adds none.
+
+LAN remains separately owned and outside this migration scope. Its measured
+34% serial share at 500 players, reported as about 60 ms, already exceeds the
+entire 50 ms tick budget. Regional simulation gains therefore cannot alone
+establish the complete 500-player/20-TPS target. This document makes no LAN
+parallelization plan.
 
 Research speculative execution for touching regions separately after these gates;
 it needs validated dependency tracking and rollback before it can execute live
