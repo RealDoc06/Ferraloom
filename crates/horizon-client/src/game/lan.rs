@@ -2056,12 +2056,15 @@ impl Game<'_> {
                 );
                 // Still, or a teleport rather than a move (over 4 blocks a tick).
                 let moving = (1e-4..16.0).contains(&(dx * dx + dz * dz));
-                [40.0, 80.0, 120.0].into_iter().filter(move |_| moving).map(move |ticks| {
-                    (
-                        ((g.position[0] + dx * ticks).floor() as i32) >> 4,
-                        ((g.position[2] + dz * ticks).floor() as i32) >> 4,
-                    )
-                })
+                [40.0, 80.0, 120.0]
+                    .into_iter()
+                    .filter(move |_| moving)
+                    .map(move |ticks| {
+                        (
+                            ((g.position[0] + dx * ticks).floor() as i32) >> 4,
+                            ((g.position[2] + dz * ticks).floor() as i32) >> 4,
+                        )
+                    })
             })
             .collect();
     }
