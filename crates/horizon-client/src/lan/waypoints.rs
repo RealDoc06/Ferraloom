@@ -838,7 +838,14 @@ impl<'a> Tick<'a> {
             }
         };
         if let Some(conn) = r.conn {
-            self.emit(r.slot, conn, s.slot, waypoint_operation::UPDATE, &c.icon, target);
+            self.emit(
+                r.slot,
+                conn,
+                s.slot,
+                waypoint_operation::UPDATE,
+                &c.icon,
+                target,
+            );
         }
     }
 }
@@ -1555,14 +1562,7 @@ mod tests {
             let packets = conns.entry(conn).or_default();
             match delivery {
                 Delivery::Local(w) => packets.push(C::TrackedWaypoint(w).encode()),
-                Delivery::Encoded(PacketBody::Run { bytes, ends }) => {
-                    let mut start = 0;
-                    for end in ends {
-                        packets.push(bytes[start..end as usize].to_vec());
-                        start = end as usize;
-                    }
-                }
-                Delivery::Encoded(body) => packets.push(body.to_vec()),
+                Delivery::Encoded(body) => packets.extend(body.packets().map(<[u8]>::to_vec)),
             }
         }
         conns
@@ -1589,7 +1589,11 @@ mod tests {
             };
             let mut players: Vec<_> = (1..=40u128)
                 .map(|id| {
-                    let x = if id % 4 == 0 { id as f64 * 400.0 } else { id as f64 };
+                    let x = if id % 4 == 0 {
+                        id as f64 * 400.0
+                    } else {
+                        id as f64
+                    };
                     let mut p = player(id, id as u32, [x, 64.0, 0.5]);
                     p.view_distance = if id % 3 == 0 { 32 } else { 4 };
                     p.receive_range = if id == 9 { 0.0 } else { PLAYER_RANGE };

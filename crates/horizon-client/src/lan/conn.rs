@@ -233,7 +233,27 @@ pub enum PacketBody {
     Shared(Arc<[u8]>),
     /// Several packets end to end, each ending at one of `ends`: a player's
     /// many small ones of a tick for one allocation. Sent one by one.
-    Run { bytes: Vec<u8>, ends: Vec<u32> },
+    Run {
+        bytes: Vec<u8>,
+        ends: Vec<u32>,
+    },
+}
+
+impl PacketBody {
+    /// The packets of the body, in order.
+    pub fn packets(&self) -> impl Iterator<Item = &[u8]> {
+        let (bytes, ends): (&[u8], &[u32]) = match self {
+            Self::Run { bytes, ends } => (bytes, ends),
+            one => (one, &[]),
+        };
+        let single = matches!(self, Self::Owned(_) | Self::Shared(_)).then_some(bytes);
+        let mut start = 0;
+        single.into_iter().chain(ends.iter().map(move |&end| {
+            let packet = &bytes[start..end as usize];
+            start = end as usize;
+            packet
+        }))
+    }
 }
 
 impl std::ops::Deref for PacketBody {
@@ -270,6 +290,10 @@ impl PlayerSender {
     }
     pub fn send(&self, body: Vec<u8>) {
         self.send_body(PacketBody::Owned(body));
+    }
+    /// Send bytes other players get too, without a copy for each.
+    pub fn send_shared(&self, body: &Arc<[u8]>) {
+        self.send_body(PacketBody::Shared(body.clone()));
     }
     fn send_body(&self, body: PacketBody) {
         self.pending.fetch_add(body.len(), Ordering::Relaxed);
@@ -1170,17 +1194,7 @@ fn write_loop(
             pending.fetch_sub(body.len(), Ordering::Relaxed);
             send_body(&mut writer, body).is_ok() && pending.load(Ordering::Relaxed) <= MAX_PENDING
         };
-        let mut write = |body: PacketBody| match &body {
-            PacketBody::Run { bytes, ends } => {
-                let mut start = 0;
-                ends.iter().all(|&end| {
-                    let packet = &bytes[start..end as usize];
-                    start = end as usize;
-                    write_one(packet)
-                })
-            }
-            body => write_one(body),
-        };
+        let mut write = |body: PacketBody| body.packets().all(&mut write_one);
         match rx.recv_timeout(Duration::from_millis(200)) {
             Ok(Out::Packet(body)) => {
                 if !write(PacketBody::Owned(body)) {
