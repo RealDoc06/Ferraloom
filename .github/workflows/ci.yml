@@ -140,9 +140,11 @@ jobs:
             echo "run=false" >> "$GITHUB_OUTPUT"
             echo "No harness, oracle, probe or runner change: parity-main checks this on main"
           fi
+  # Needs a self-hosted horizon-game runner. Set the repository variable PARITY_RUNNER=true once one is registered;
+  # until then the harnesses run on the Ferraloom builder (tools/parity.py) and this job is skipped, not left queued.
   parity:
     needs: parity-scope
-    if: needs.parity-scope.outputs.run == 'true'
+    if: needs.parity-scope.outputs.run == 'true' && vars.PARITY_RUNNER == 'true'
     uses: ./.github/workflows/parity.yml
     with:
       base: ${{ github.event.pull_request.base.sha }}
