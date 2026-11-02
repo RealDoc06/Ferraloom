@@ -4,6 +4,7 @@
 //! list), keeps their views up to date as blocks and entities change, and
 //! turns what they send into events for the gameplay code. It runs on the
 //! game thread inside the tick, only when the world is open to the network.
+use super::conn::PacketBody;
 use super::{
     Lan, NetEvent,
     chunks::ChunkEncoder,
@@ -261,7 +262,7 @@ pub struct Hub {
     /// Each level's tracked entities, by dimension.
     entities: std::collections::HashMap<String, Entities>,
     /// What one tick of entity tracking sends each guest, kept between ticks.
-    entity_out: Vec<Vec<super::conn::PacketBody>>,
+    entity_out: Vec<Vec<PacketBody>>,
     /// Player snapshots reused after each tracking tick.
     entity_players: Vec<EntityState>,
     /// Server mods' commands, a root in the commands report's format, sent
@@ -1424,9 +1425,9 @@ impl Hub {
 
     /// Every player's chunks here: their views, then the next batch of each
     /// (PlayerChunkSender.sendNextChunks). The batches are chosen first, the
-    /// columns in them encoded once each, their new sections on the warm-up
-    /// threads too (`ChunkEncoder::warm`), then sent: nothing changes the
-    /// level in between, and each player's packets keep their order.
+    /// columns in them encoded once each on the pool's threads
+    /// (`ChunkEncoder::bodies_in`), then sent: nothing changes the level in
+    /// between, and each player's packets keep their order.
     fn update_chunks(&mut self, ctx: &TickCtx) {
         let world = &*ctx.world;
         let mut batches = Vec::new();
@@ -1463,20 +1464,29 @@ impl Hub {
                 (i, taken, bodies)
             })
             .collect();
-        self.encoder.warm(&columns);
-        let mut bodies: Vec<Vec<u8>> = columns
-            .iter()
-            .map(|c| self.encoder.body_in(c, world))
+        // A column several players take is shared by them rather than copied.
+        let mut bodies: Vec<PacketBody> = self
+            .encoder
+            .bodies_in(&columns, world)
+            .into_iter()
+            .zip(&uses)
+            .map(|(body, &uses)| {
+                if uses > 1 {
+                    PacketBody::Shared(body.into())
+                } else {
+                    PacketBody::Owned(body)
+                }
+            })
             .collect();
         for (i, taken, batch) in batches {
             let g = &mut self.guests[i];
             let size = batch.len();
             g.batch_quota -= size as f32;
             g.send(&C::ChunkBatchStart(horizon_protocol::packets::Empty));
-            g.sender.send_many(batch.into_iter().map(|j| {
+            g.sender.send_bodies(batch.into_iter().map(|j| {
                 uses[j] -= 1;
                 if uses[j] == 0 {
-                    std::mem::take(&mut bodies[j])
+                    std::mem::replace(&mut bodies[j], PacketBody::Owned(Vec::new()))
                 } else {
                     bodies[j].clone()
                 }
@@ -1574,9 +1584,9 @@ impl Hub {
             let Some(chunk) = world.chunks.get(&(x, z)) else {
                 continue;
             };
-            let body = self.encoder.light_update(chunk, sections);
+            let body: Arc<[u8]> = self.encoder.light_update(chunk, sections).into();
             for &i in &viewers {
-                self.guests[i].sender.send(body.clone());
+                self.guests[i].sender.send_shared(&body);
             }
         }
     }
@@ -1630,9 +1640,9 @@ impl Hub {
                         .collect(),
                 })
             };
-            let body = packet.encode();
+            let body: Arc<[u8]> = packet.encode().into();
             for &i in &viewers {
-                self.guests[i].sender.send(body.clone());
+                self.guests[i].sender.send_shared(&body);
             }
             // Block entities with data the client shows.
             for &(x, y, z) in &positions {
@@ -1646,14 +1656,15 @@ impl Hub {
                 let Some(kind) = self.encoder.entity_type(state) else {
                     continue;
                 };
-                let body = C::BlockEntityData(play::BlockEntityData {
+                let body: Arc<[u8]> = C::BlockEntityData(play::BlockEntityData {
                     pos: [x, y, z],
                     kind,
                     tag,
                 })
-                .encode();
+                .encode()
+                .into();
                 for &i in &viewers {
-                    self.guests[i].sender.send(body.clone());
+                    self.guests[i].sender.send_shared(&body);
                 }
             }
         }
