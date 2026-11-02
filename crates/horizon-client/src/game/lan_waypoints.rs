@@ -29,11 +29,7 @@ pub(super) struct WaypointTick {
     levels: std::collections::BTreeMap<String, LevelPlayers>,
     connections: std::sync::Arc<Vec<(u128, u32)>>,
     respawned: std::sync::Arc<Vec<u128>>,
-    deliveries: std::collections::HashMap<u32, Vec<Vec<u8>>>,
-    live_connections: std::collections::HashSet<u32>,
     out: Vec<(u32, waypoints::Delivery)>,
-    #[cfg(feature = "profiler")]
-    profile_ticks: u64,
 }
 
 #[derive(Default)]
@@ -171,63 +167,12 @@ impl Game<'_> {
             match delivery {
                 waypoints::Delivery::Local(waypoint) => self.handle_waypoint(&waypoint),
                 waypoints::Delivery::Encoded(body) => {
-                    scratch.deliveries.entry(conn).or_default().push(body)
+                    if let Some(g) = host.hub.guest(conn) {
+                        g.sender.send_bodies([body]);
+                    }
                 }
             }
         }
-        scratch.live_connections.clear();
-        for g in &host.hub.guests {
-            scratch.live_connections.insert(g.conn);
-            if let Some(bodies) = scratch.deliveries.get_mut(&g.conn) {
-                g.sender.send_many(bodies.drain(..));
-            }
-        }
-        scratch
-            .deliveries
-            .retain(|conn, _| scratch.live_connections.contains(conn));
-        #[cfg(feature = "profiler")]
-        self.profile_waypoint_memory(&mut scratch, host);
         host.waypoint_tick = scratch;
-    }
-
-    /// Correlate retained waypoint headers with resident terrain and queued
-    /// network bytes; RSS also includes world data and allocator free lists.
-    #[cfg(feature = "profiler")]
-    fn profile_waypoint_memory(&self, scratch: &mut WaypointTick, host: &LanHost) {
-        scratch.profile_ticks += 1;
-        if !scratch.profile_ticks.is_multiple_of(64) || scratch.connections.len() < 128 {
-            return;
-        }
-        let output_headers =
-            scratch.out.capacity() * std::mem::size_of::<(u32, waypoints::Delivery)>();
-        let delivery_headers: usize = scratch
-            .deliveries
-            .values()
-            .map(|b| b.capacity() * std::mem::size_of::<Vec<u8>>())
-            .sum();
-        let (pending_total, pending_max) = host
-            .hub
-            .guests
-            .iter()
-            .map(|g| g.sender.pending.load(std::sync::atomic::Ordering::Relaxed))
-            .fold((0usize, 0usize), |(total, max), bytes| {
-                (total + bytes, max.max(bytes))
-            });
-        let rss_kib = std::fs::read_to_string("/proc/self/status")
-            .ok()
-            .and_then(|text| {
-                text.lines().find_map(|line| {
-                    line.strip_prefix("VmRSS:")
-                        .and_then(|v| v.split_whitespace().next())
-                        .and_then(|v| v.parse::<usize>().ok())
-                })
-            })
-            .unwrap_or(0);
-        eprintln!(
-            "waypoint_host_memory tick={} players={} resident_chunks={} output_headers={output_headers} delivery_headers={delivery_headers} sender_pending_total={pending_total} sender_pending_max={pending_max} rss_kib={rss_kib}",
-            scratch.profile_ticks,
-            scratch.connections.len(),
-            self.world.chunks.len()
-        );
     }
 }

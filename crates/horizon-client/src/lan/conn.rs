@@ -231,6 +231,9 @@ impl Drop for Holding {
 pub enum PacketBody {
     Owned(Vec<u8>),
     Shared(Arc<[u8]>),
+    /// Several packets end to end, each ending at one of `ends`: a player's
+    /// many small ones of a tick for one allocation. Sent one by one.
+    Run { bytes: Vec<u8>, ends: Vec<u32> },
 }
 
 impl std::ops::Deref for PacketBody {
@@ -239,6 +242,7 @@ impl std::ops::Deref for PacketBody {
         match self {
             Self::Owned(body) => body,
             Self::Shared(body) => body,
+            Self::Run { bytes, .. } => bytes,
         }
     }
 }
@@ -1162,9 +1166,20 @@ fn write_loop(
     let mut sent_at: Option<(i64, Instant)> = None;
     let mut next = Instant::now() + KEEP_ALIVE_EVERY;
     loop {
-        let mut write = |body: PacketBody| {
+        let mut write_one = |body: &[u8]| {
             pending.fetch_sub(body.len(), Ordering::Relaxed);
-            send_body(&mut writer, &body).is_ok() && pending.load(Ordering::Relaxed) <= MAX_PENDING
+            send_body(&mut writer, body).is_ok() && pending.load(Ordering::Relaxed) <= MAX_PENDING
+        };
+        let mut write = |body: PacketBody| match &body {
+            PacketBody::Run { bytes, ends } => {
+                let mut start = 0;
+                ends.iter().all(|&end| {
+                    let packet = &bytes[start..end as usize];
+                    start = end as usize;
+                    write_one(packet)
+                })
+            }
+            body => write_one(body),
         };
         match rx.recv_timeout(Duration::from_millis(200)) {
             Ok(Out::Packet(body)) => {
