@@ -113,6 +113,22 @@ impl RandomTickSections {
     pub fn remove(&mut self, key: &(i32, i32)) {
         self.chunks.remove(key);
     }
+    /// The sections of `chunk` holding a randomly ticking block or fluid.
+    pub fn get(
+        &mut self,
+        key: (i32, i32),
+        chunk: &Arc<Chunk>,
+        facts: &BlockFacts,
+        behaviours: &Behaviours,
+    ) -> Sections {
+        let cached = self.chunks.entry(key).or_default();
+        cached.refresh(
+            chunk,
+            |id| facts.get(BlockStateId(id)).random_ticks,
+            |id| behaviours.acts_on_random_tick(BlockStateId(id)),
+        );
+        cached.sections
+    }
     /// The [`RandomTickSource`] for the chunk at `key`, for one chunk's turn.
     pub fn visit<'a>(
         &'a mut self,

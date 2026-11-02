@@ -6,7 +6,7 @@ use horizon_client::{
     fast_hash::FxHashMap,
     random_tick_sections::RandomTickSections,
 };
-use horizon_world::registry::BlockStateId;
+use horizon_world::{level::Behaviours, registry::BlockStateId};
 use std::{hint::black_box, path::Path, sync::Arc, time::Instant};
 
 fn select_baseline(chunks: &FxHashMap<(i32, i32), Arc<Chunk>>, facts: &BlockFacts) -> usize {
@@ -33,6 +33,7 @@ fn select_baseline(chunks: &FxHashMap<(i32, i32), Arc<Chunk>>, facts: &BlockFact
 fn select_cached(
     chunks: &FxHashMap<(i32, i32), Arc<Chunk>>,
     facts: &BlockFacts,
+    behaviours: &Behaviours,
     cache: &mut RandomTickSections,
 ) -> usize {
     let mut ticking = Vec::new();
@@ -40,7 +41,7 @@ fn select_cached(
         if x.abs() > 8 || z.abs() > 8 || !chunk.lit {
             continue;
         }
-        ticking.push((x, z, cache.get((x, z), chunk, facts)));
+        ticking.push((x, z, cache.get((x, z), chunk, facts, behaviours)));
     }
     black_box(ticking).iter().map(|(_, _, s)| s.len()).sum()
 }
@@ -51,7 +52,7 @@ fn main() -> horizon_client::Result<()> {
         .ok_or("expected prepared client resource directory")?;
     let start = Instant::now();
     let registry = horizon_world::level::data::load_registry(Path::new(&root))?;
-    let facts = BlockFacts::load(Path::new(&root), &registry)?;
+    let (facts, behaviours) = BlockFacts::load_pair(Path::new(&root), &registry)?;
     println!(
         "resource_load_ms={:.3}",
         start.elapsed().as_secs_f64() * 1000.0
@@ -122,7 +123,7 @@ fn main() -> horizon_client::Result<()> {
                             );
                         }
                         black_box(if cached {
-                            select_cached(&chunks, &facts, &mut cache)
+                            select_cached(&chunks, &facts, &behaviours, &mut cache)
                         } else {
                             select_baseline(&chunks, &facts)
                         });
