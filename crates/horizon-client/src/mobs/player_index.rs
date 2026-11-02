@@ -21,7 +21,7 @@ pub struct Point {
     label: u8,
 }
 impl Point {
-    fn distance_sqr(&self, [x, y, z]: [f64; 3]) -> f64 {
+    pub fn distance_sqr(&self, [x, y, z]: [f64; 3]) -> f64 {
         let p = self.position;
         (p[0] - x).powi(2) + (p[1] - y).powi(2) + (p[2] - z).powi(2)
     }

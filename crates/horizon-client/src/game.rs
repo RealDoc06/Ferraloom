@@ -1797,6 +1797,9 @@ struct Game<'a> {
     hoppers: HashMap<(i32, i32, i32), machines::HopperState>,
     /// Where item entities are, while the block entities tick (hoppers).
     item_columns: Option<machines::ItemColumns>,
+    /// The alive non-spectators while the block entities tick, none of which
+    /// moves, kills or revives a player. Spawners ask for them every tick.
+    block_entity_players: Option<horizon_client::mobs::player_index::PlayerIndex>,
     creative_screen: Creative,
     control: Option<horizon_client::control::Server>,
     /// The Agent Control setting the socket was last opened or closed for (`agent_settings`).
@@ -13967,6 +13970,7 @@ impl<'a> Game<'a> {
             tnts: Vec::new(),
             hoppers: HashMap::new(),
             item_columns: None,
+            block_entity_players: None,
             creative_screen: prepared.creative_screen,
             control: None,
             agent_control_on: false,

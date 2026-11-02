@@ -23,7 +23,7 @@ use horizon_core::{
     random::{LegacyRandom, RandomSource, WorldgenRandom},
 };
 use horizon_world::registry::BlockStateId;
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::ControlFlow};
 
 /// A player in the level in place, as spawning and despawning see it.
 #[derive(Clone, Copy)]
@@ -355,6 +355,21 @@ impl NaturalLevel for GameLevel<'_, '_> {
 impl horizon_client::mobs::spawner::SpawnerLevel for GameLevel<'_, '_> {
     /// `Level.hasNearbyAlivePlayer`, over every player.
     fn alive_player_near(&self, x: f64, y: f64, z: f64, range: f64) -> bool {
+        if let Some(players) = &self.game.block_entity_players {
+            if range < 0.0 {
+                return !players.is_empty();
+            }
+            let reach = range * range;
+            return players
+                .visit_within(x, z, reach, &mut |p| {
+                    if p.distance_sqr([x, y, z]) < reach {
+                        ControlFlow::Break(())
+                    } else {
+                        ControlFlow::Continue(())
+                    }
+                })
+                .is_break();
+        }
         self.players().any(|p| {
             p.alive && !p.spectator && (range < 0.0 || p.distance_sqr(x, y, z) < range * range)
         })
