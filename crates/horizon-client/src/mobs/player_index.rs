@@ -64,6 +64,13 @@ pub struct NearestPlayer {
     pub distance_sqr: f64,
 }
 
+/// [`PlayerIndex::nearest_against`]'s search: the best so far, and how close a
+/// player must be to change what it answers.
+struct Against {
+    distance_sqr: f64,
+    limit: f64,
+}
+
 /// Built once per pass from a list of player positions; see the module docs.
 #[derive(Clone, Debug, Default)]
 pub struct PlayerIndex {
@@ -165,6 +172,57 @@ impl PlayerIndex {
         }
         if second.1 <= best.0 {
             self.nearest_in(second.0, q, best);
+        }
+    }
+    /// The squared distance of a player on the same side of each of `cutoffs`
+    /// (ascending) as the nearest one, or infinity past the last: for callers
+    /// that only compare it with them, which needs far fewer players measured.
+    pub fn nearest_against(&self, at: [f64; 3], cutoffs: &[f64; 3]) -> f64 {
+        if self.linear || !at.iter().all(|v| v.is_finite()) {
+            return self.nearest(at).map_or(f64::INFINITY, |n| n.distance_sqr);
+        }
+        if self.points.is_empty() {
+            return f64::INFINITY;
+        }
+        let mut found = Against {
+            distance_sqr: f64::INFINITY,
+            limit: cutoffs[2],
+        };
+        self.against_in(0, at, cutoffs, &mut found);
+        found.distance_sqr
+    }
+    fn against_in(&self, at: usize, q: [f64; 3], cutoffs: &[f64; 3], found: &mut Against) {
+        let n = &self.nodes[at];
+        if n.right == 0 {
+            for p in &self.points[n.start as usize..n.end as usize] {
+                let d = p.distance_sqr(q);
+                if d <= found.limit {
+                    found.distance_sqr = d;
+                    // Only a player past the next cutoff down can change an answer.
+                    found.limit = cutoffs
+                        .iter()
+                        .rev()
+                        .find(|&&c| c < d)
+                        .map_or(f64::NEG_INFINITY, |&c| c);
+                }
+            }
+            return;
+        }
+        let (left, right) = (at + 1, n.right as usize);
+        let (dl, dr) = (
+            self.nodes[left].distance_sqr(q),
+            self.nodes[right].distance_sqr(q),
+        );
+        let (first, second) = if dl <= dr {
+            ((left, dl), (right, dr))
+        } else {
+            ((right, dr), (left, dl))
+        };
+        if first.1 <= found.limit {
+            self.against_in(first.0, q, cutoffs, found);
+        }
+        if second.1 <= found.limit {
+            self.against_in(second.0, q, cutoffs, found);
         }
     }
     /// Calls `f` on the players less than `radius_sqr` away horizontally (in
@@ -395,6 +453,15 @@ mod tests {
                     );
                     if let Some(n) = nearest {
                         assert_eq!(n.position, players[n.slot as usize]);
+                        let cutoffs = [
+                            f64::from(spacing * spacing),
+                            f64::from(spacing * spacing * 9),
+                            f64::from(spacing * spacing * 100),
+                        ];
+                        let d = index.nearest_against(at, &cutoffs);
+                        for cutoff in cutoffs {
+                            assert_eq!(d <= cutoff, n.distance_sqr <= cutoff, "{at:?} {cutoff}");
+                        }
                     }
 
                     let chunk = (at[0] as i32 >> 4, at[2] as i32 >> 4);

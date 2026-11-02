@@ -1199,11 +1199,11 @@ pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
 }
 /// `getNearestPlayer(x, y, z, -1, false)`'s squared distance for the
 /// attempts in one chunk, which come in their thousands a tick. The spawn
-/// checks only compare it with 24² and the despawn distances (128² at most),
-/// so the few players that can be within 128 blocks of an attempt near the
-/// chunk are kept and measured: when none is, the nearest reads as infinitely
-/// far, which every check answers as it answers the real distance. An attempt
-/// that wanders farther, or a crowd too big to keep, asks the index.
+/// checks only compare it with [`Nearest::CHECKS`], so the few players that can
+/// be within 128 blocks of an attempt near the chunk are kept and measured:
+/// when none is, the nearest reads as infinitely far, which every check answers
+/// as it answers the real distance. An attempt that wanders farther, or a crowd
+/// too big to keep, asks the index for an answer good enough for the checks.
 #[derive(Clone, Debug, Default)]
 struct Nearest {
     chunk: Option<(i32, i32)>,
@@ -1213,6 +1213,8 @@ struct Nearest {
     crowded: bool,
 }
 impl Nearest {
+    /// `right_distance`'s 24² and the despawn distances, 64² and 128².
+    const CHECKS: [f64; 3] = [576.0, 4096.0, 16384.0];
     const KEPT: usize = 16;
     /// An attempt this far from the chunk's centre on both axes uses `nearby`.
     const MARGIN: f64 = 48.0;
@@ -1232,7 +1234,7 @@ impl Nearest {
         }
         let (cx, cz) = self.centre;
         if self.crowded || (at[0] - cx).abs() > Self::MARGIN || (at[2] - cz).abs() > Self::MARGIN {
-            return players.nearest(at).map(|n| n.distance_sqr);
+            return Some(players.nearest_against(at, &Self::CHECKS));
         }
         Some(
             self.nearby[..self.kept]
@@ -1519,9 +1521,6 @@ mod tests {
         assert!(filled > 1000, "the caps must fill: {filled}");
     }
 
-    /// The checks' thresholds: `right_distance` and the despawn distances.
-    const CUTOFFS: [f64; 3] = [576.0, 4096.0, 16384.0];
-
     #[test]
     fn nearest_answers_every_check_as_the_exact_distance() {
         use super::{Nearest, PlayerIndex};
@@ -1560,7 +1559,7 @@ mod tests {
                             (p[0] - at[0]).powi(2) + (p[1] - at[1]).powi(2) + (p[2] - at[2]).powi(2)
                         })
                         .fold(f64::INFINITY, f64::min);
-                    for cutoff in CUTOFFS {
+                    for cutoff in Nearest::CHECKS {
                         assert_eq!(actual <= cutoff, exact <= cutoff, "{chunk:?} {at:?}");
                     }
                 }
