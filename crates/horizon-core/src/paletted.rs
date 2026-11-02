@@ -717,6 +717,29 @@ impl PalettedContainer {
         }
         (0..entries).any(|i| matching[self.raw(i)])
     }
+    /// Sets bit `i % 64` of `out[i / 64]` to whether entry `i` satisfies
+    /// `predicate`, asking it once per palette entry where there is a palette.
+    /// Returns whether any entry does.
+    pub fn fill_matching(&self, mut predicate: impl FnMut(u32) -> bool, out: &mut [u64]) -> bool {
+        let entries = self.strategy.entries();
+        assert_eq!(out.len(), entries.div_ceil(64));
+        out.fill(0);
+        let mut mark = |i: usize, matches: bool| out[i / 64] |= u64::from(matches) << (i % 64);
+        match &self.palette {
+            Palette::Single(value) => {
+                let matches = predicate(*value);
+                (0..entries).for_each(|i| mark(i, matches));
+            }
+            Palette::List(list) => {
+                let matching: Vec<bool> = list.iter().map(|&v| predicate(v)).collect();
+                if matching.iter().any(|&m| m) {
+                    (0..entries).for_each(|i| mark(i, matching[self.raw(i)]));
+                }
+            }
+            Palette::Global => (0..entries).for_each(|i| mark(i, predicate(self.raw(i) as u32))),
+        }
+        out.iter().any(|&word| word != 0)
+    }
     /// Heap bytes held by the palette and the storage.
     pub fn heap_bytes(&self) -> usize {
         self.words.capacity() * 8
@@ -737,6 +760,43 @@ impl PartialEq for PalettedContainer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fill_matching_agrees_with_get_in_every_storage() {
+        let strategy = Strategy::blocks(16);
+        let wanted = |v: u32| v % 7 == 3;
+        for distinct in [1u32, 2, 16, 40, 300, 5000] {
+            let values: Vec<u32> = (0..4096u32).map(|i| i * 31 % distinct).collect();
+            let mut container = PalettedContainer::from_values(strategy, &values);
+            for edit in [false, true] {
+                if edit {
+                    // A palette entry no block uses any more doesn't match.
+                    for i in 0..4096 {
+                        if wanted(container.get(i)) {
+                            container.set(i, 0);
+                        }
+                    }
+                }
+                let mut bits = [u64::MAX; 64];
+                let any = container.fill_matching(wanted, &mut bits);
+                let mut found = false;
+                for i in 0..4096 {
+                    let expected = wanted(container.get(i));
+                    assert_eq!(
+                        bits[i / 64] >> (i % 64) & 1 == 1,
+                        expected,
+                        "{distinct} {i}"
+                    );
+                    found |= expected;
+                }
+                assert_eq!(any, found);
+            }
+        }
+        let mut bits = [0; 64];
+        assert!(PalettedContainer::new(strategy, 3).fill_matching(wanted, &mut bits));
+        assert_eq!(bits, [u64::MAX; 64]);
+    }
+
     const BLOCKS: Strategy = Strategy::blocks(16);
     const BIOMES: Strategy = Strategy::biomes(7);
 
