@@ -9,11 +9,12 @@ use horizon_client::{
     mobs::{
         Mob, MobWorld, Species,
         data::{self, MobData},
+        player_index::PlayerIndex,
         seen_grid::SeenGrid,
         spawn_rules::{Dimension, SpawnLevel},
         spawn_selection::{
-            self, Category, Counted, Heightmap, NaturalLevel, SpawnCost, SpawnPlayer, SpawnRequest,
-            SpawnState, Spawned, StructureAt, StructureSpawns,
+            self, Category, Counted, Heightmap, NaturalLevel, SpawnCost, SpawnRequest, SpawnState,
+            Spawned, StructureAt, StructureSpawns,
         },
     },
 };
@@ -40,33 +41,48 @@ impl LevelPlayer {
             + (self.position.z - z).powi(2)
     }
 }
-/// `ChunkMap.euclideanDistanceSquared` below 128 blocks
-/// (`playerIsCloseEnoughForSpawning`).
-fn close_enough_for_spawning(p: &LevelPlayer, (cx, cz): (i32, i32)) -> bool {
-    let (x, z) = (
-        f64::from(cx * 16 + 8) - p.position.x,
-        f64::from(cz * 16 + 8) - p.position.z,
-    );
-    !p.spectator && x * x + z * z < 16384.0
+/// The non-spectators, in level order: who `EntityGetter.getNearestPlayer(x,
+/// y, z, -1, false)` (alive or not) and `ChunkMap.getPlayersCloseForSpawning`
+/// read.
+pub(super) fn non_spectators(players: &[LevelPlayer]) -> PlayerIndex {
+    PlayerIndex::new(
+        players
+            .iter()
+            .filter(|p| !p.spectator)
+            .map(|p| [p.position.x, p.position.y, p.position.z]),
+    )
 }
-/// `EntityGetter.getNearestPlayer(x, y, z, -1, false)`: the nearest
-/// non-spectator, alive or not.
-pub(super) fn nearest_player(
-    players: &[LevelPlayer],
-    x: f64,
-    y: f64,
-    z: f64,
-) -> Option<&LevelPlayer> {
-    let mut best = None;
-    let mut distance = -1.0;
-    for p in players.iter().filter(|p| !p.spectator) {
-        let d = p.distance_sqr(x, y, z);
-        if distance == -1.0 || d < distance {
-            best = Some(p);
-            distance = d;
+
+/// The chunks collected so far by `spawning_chunks`, as a row of bits per
+/// chunk column in regions of 64 by 64. A player's window is 17 rows, most of
+/// them already marked by the players around them.
+#[derive(Default)]
+struct ChunkBits {
+    regions: horizon_client::fast_hash::FxHashMap<(i32, i32), Box<[u64; 64]>>,
+}
+impl ChunkBits {
+    /// Marks 17 chunks of column `x` from `z` up, and adds those new to the
+    /// set to `out` in that order.
+    fn mark_column(&mut self, x: i32, z: i32, out: &mut Vec<(i32, i32)>) {
+        let (mut z, end) = (z, z + 17);
+        while z < end {
+            let bit = z & 63;
+            let len = (end - z).min(64 - bit);
+            let mask = ((1u64 << len) - 1) << bit;
+            let region = self
+                .regions
+                .entry((x >> 6, z >> 6))
+                .or_insert_with(|| Box::new([0; 64]));
+            let word = &mut region[(x & 63) as usize];
+            let mut new = mask & !*word;
+            *word |= mask;
+            while new != 0 {
+                out.push((x, (z & !63) + new.trailing_zeros() as i32));
+                new &= new - 1;
+            }
+            z += len;
         }
     }
-    best
 }
 
 /// The game level as natural spawning reads it.
@@ -76,8 +92,6 @@ pub(super) struct GameLevel<'g, 'a> {
     /// Natural spawning snapshots players once for its pass. Other spawning
     /// checks read the immutably borrowed level without collecting a list.
     players: Option<Vec<LevelPlayer>>,
-    /// Built only when a natural spawn attempt asks for nearest positions.
-    nearest: std::cell::OnceCell<Vec<[f64; 3]>>,
     /// Boxes of the mobs this pass created, not yet in the game's list.
     pub(super) pending: std::cell::RefCell<Vec<Aabb>>,
     /// The types and boxes of what a spawner created this tick.
@@ -269,14 +283,6 @@ impl NaturalLevel for GameLevel<'_, '_> {
     fn structure_spawns(&self) -> &StructureSpawns {
         StructureSpawns::shared(&self.game.options.resources)
     }
-    fn nearest_player_positions(&self) -> &[[f64; 3]] {
-        self.nearest.get_or_init(|| {
-            self.players()
-                .filter(|p| !p.spectator)
-                .map(|p| [p.position.x, p.position.y, p.position.z])
-                .collect()
-        })
-    }
     fn respawn(&self) -> Option<[i32; 3]> {
         // The world spawn point lives in the overworld.
         if self.game.dim != Dim::Overworld {
@@ -382,7 +388,6 @@ impl<'a> Game<'a> {
             game: self,
             w: self.mob_world_base(&[]),
             players,
-            nearest: Default::default(),
             pending: Default::default(),
             pending_ids: Default::default(),
             boxes: Default::default(),
@@ -462,21 +467,21 @@ impl<'a> Game<'a> {
     /// chunks (within 8 chunks of a player, `getSpawnCandidateChunks`) that
     /// are ticking and within 128 blocks of a non-spectator. Also returns how
     /// many chunks the tracker holds (`getNaturalSpawnChunkCount`).
-    pub(super) fn spawning_chunks(&self, players: &[LevelPlayer]) -> (i32, Vec<(i32, i32)>) {
-        let mut candidates: Vec<(i32, i32)> = Vec::with_capacity(289 * players.len());
-        let mut seen = horizon_client::fast_hash::FxHashSet::default();
+    /// `close` is [`non_spectators`] of `players`.
+    pub(super) fn spawning_chunks(
+        &self,
+        players: &[LevelPlayer],
+        close: &PlayerIndex,
+    ) -> (i32, Vec<(i32, i32)>) {
+        let mut candidates: Vec<(i32, i32)> = Vec::new();
+        let mut seen = ChunkBits::default();
         for p in players {
             let (pcx, pcz) = (
                 p.position.x.floor() as i32 >> 4,
                 p.position.z.floor() as i32 >> 4,
             );
-            for dx in -8..=8 {
-                for dz in -8..=8 {
-                    let key = (pcx + dx, pcz + dz);
-                    if seen.insert(key) {
-                        candidates.push(key);
-                    }
-                }
+            for x in pcx - 8..=pcx + 8 {
+                seen.mark_column(x, pcz - 8, &mut candidates);
             }
         }
         let count = candidates.len() as i32;
@@ -484,9 +489,7 @@ impl<'a> Game<'a> {
         candidates.retain(|&(cx, cz)| {
             levels.loaded_ticking(cx, cz)
                 && super::ticking_chunk(&self.world, cx, cz)
-                && players
-                    .iter()
-                    .any(|p| close_enough_for_spawning(p, (cx, cz)))
+                && close.any_close_for_spawning((cx, cz))
         });
         (count, candidates)
     }
@@ -499,7 +502,8 @@ impl<'a> Game<'a> {
         if players.is_empty() {
             return;
         }
-        let (spawnable, mut chunks) = self.spawning_chunks(&players);
+        let close = non_spectators(&players);
+        let (spawnable, mut chunks) = self.spawning_chunks(&players, &close);
         for &key in &chunks {
             *self.world.inhabited.entry(key).or_insert(0) += 1;
         }
@@ -525,14 +529,7 @@ impl<'a> Game<'a> {
                         || horizon_client::mobs::ai::requires_custom_persistence(m),
                 })
                 .collect();
-            let players = level
-                .players()
-                .map(|p| SpawnPlayer {
-                    position: [p.position.x, p.position.y, p.position.z],
-                    spectator: p.spectator,
-                })
-                .collect();
-            let mut state = SpawnState::new(&level, spawnable, players, &counted, |cx, cz| {
+            let mut state = SpawnState::new(&level, spawnable, close, &counted, |cx, cz| {
                 self.world.chunks.contains_key(&(cx, cz))
             });
             let categories = if spawn_mobs {
@@ -621,64 +618,36 @@ mod tests {
     }
 
     #[test]
-    fn nearest_player_keeps_first_tie_and_includes_dead_creative_players() {
+    fn non_spectators_keep_first_tie_and_dead_creative_players() {
         let players = [player(0.0, true), player(-24.0, false), player(24.0, false)];
-        assert!(std::ptr::eq(
-            nearest_player(&players, 0.0, 64.0, 0.0).unwrap(),
-            &players[1]
-        ));
-        assert!(nearest_player(&players[..1], 0.0, 64.0, 0.0).is_none());
-        assert!(nearest_player(&[], 0.0, 64.0, 0.0).is_none());
+        let nearest = non_spectators(&players).nearest([0.0, 64.0, 0.0]).unwrap();
+        assert_eq!(nearest.position[0], -24.0);
+        assert!(non_spectators(&players[..1]).nearest([0.0; 3]).is_none());
+        assert!(non_spectators(&[]).nearest([0.0; 3]).is_none());
     }
 
+    /// The set's order is what `Util.shuffle` starts from: the chunks in the
+    /// order a set of pairs would first meet them.
     #[test]
-    #[ignore = "release micro-benchmark; run with --release --ignored --nocapture"]
-    fn bench_level_player_queries() {
-        use std::{hint::black_box, time::Instant};
-        let players: Vec<_> = (0..100)
-            .map(|i| player(f64::from(i * 16), i % 10 == 0))
-            .collect();
-        // The old mob_world_base collected a filtered player list for its first entry.
-        // These kernels isolate that collection and selection from unrelated Game setup.
-        for _ in 0..3 {
-            for collect in [true, false] {
-                let started = Instant::now();
-                for _ in 0..200_000 {
-                    let mut iter = black_box(&players)
-                        .iter()
-                        .filter(|p| !black_box(p.spectator));
-                    let position = if collect {
-                        let list: Vec<_> =
-                            iter.map(|p| player(p.position.x, p.spectator)).collect();
-                        black_box(&list).first().map(|p| p.position)
-                    } else {
-                        iter.next()
-                            .map(|p| player(p.position.x, p.spectator).position)
-                    };
-                    black_box(position);
+    fn chunk_bits_keep_the_first_seen_order_across_regions() {
+        let mut seed = 0x2545_f491_u64;
+        let mut draw = |range: i32| {
+            seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+            ((seed >> 33) as i32).rem_euclid(range)
+        };
+        let (mut bits, mut actual) = (ChunkBits::default(), Vec::new());
+        let (mut set, mut expected) = (std::collections::HashSet::new(), Vec::new());
+        for _ in 0..200 {
+            let (pcx, pcz) = (draw(300) - 150, draw(300) - 150);
+            for x in pcx - 8..=pcx + 8 {
+                bits.mark_column(x, pcz - 8, &mut actual);
+                for z in pcz - 8..=pcz + 8 {
+                    if set.insert((x, z)) {
+                        expected.push((x, z));
+                    }
                 }
-                eprintln!("first player collect={collect}: {:?}", started.elapsed());
-            }
-            for old in [true, false] {
-                let started = Instant::now();
-                for i in 0..200_000 {
-                    let x = black_box(f64::from(i % 1600));
-                    let selected = if old {
-                        let mut best: Option<(&LevelPlayer, f64)> = None;
-                        for p in black_box(&players).iter().filter(|p| !p.spectator) {
-                            let d = p.distance_sqr(x, 64.0, 0.0);
-                            if best.is_none_or(|(_, b)| d < b) {
-                                best = Some((p, d));
-                            }
-                        }
-                        best.map(|(p, _)| p)
-                    } else {
-                        nearest_player(black_box(&players), x, 64.0, 0.0)
-                    };
-                    black_box(selected);
-                }
-                eprintln!("nearest player old={old}: {:?}", started.elapsed());
             }
         }
+        assert_eq!(actual, expected);
     }
 }

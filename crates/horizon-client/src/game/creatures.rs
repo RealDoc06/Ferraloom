@@ -557,7 +557,8 @@ impl Game<'_> {
         let ticking = self.entity_ticking_area();
         // With guests on, each mob sees its nearest player (game/lan_mobs.rs).
         let guests = self.lan_guest_views();
-        let players = self.level_players();
+        // getNearestPlayer's players, for every mob's despawn check.
+        let nearest_players = super::natural_spawning::non_spectators(&self.level_players());
         let mut bindings = match self.lan.as_mut() {
             Some(host) if !guests.is_empty() => std::mem::take(&mut host.mob_players),
             _ => Default::default(),
@@ -605,13 +606,9 @@ impl Game<'_> {
                 // getCurrentDifficultyAt(blockPosition()): the mob's own chunk,
                 // not the local player's (a server thread has no player).
                 w.difficulty = self.local_difficulty([m.position.x, m.position.y, m.position.z]);
-                w.nearest_player = super::natural_spawning::nearest_player(
-                    &players,
-                    m.position.x,
-                    m.position.y,
-                    m.position.z,
-                )
-                .map(|p| p.position);
+                w.nearest_player = nearest_players
+                    .nearest([m.position.x, m.position.y, m.position.z])
+                    .map(|p| Vec3::new(p.position[0], p.position[1], p.position[2]));
                 let seen_guest = if guests.is_empty() {
                     None
                 } else {
