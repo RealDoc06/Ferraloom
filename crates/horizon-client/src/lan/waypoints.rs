@@ -76,6 +76,12 @@ impl Default for Icon {
     }
 }
 
+/// The icon of a player `/waypoint modify` hasn't touched, shared by them.
+pub fn default_icon() -> std::sync::Arc<Icon> {
+    static DEFAULT: std::sync::OnceLock<std::sync::Arc<Icon>> = std::sync::OnceLock::new();
+    DEFAULT.get_or_init(Default::default).clone()
+}
+
 /// A player as the waypoint manager sees them this tick.
 #[derive(Clone, Debug)]
 pub struct Player {
@@ -95,7 +101,7 @@ pub struct Player {
     /// The player's team and its colour (`TeamColor.rgb`).
     pub team: Option<(String, Option<i32>)>,
     /// The icon `/waypoint modify` set.
-    pub icon: Icon,
+    pub icon: std::sync::Arc<Icon>,
 }
 
 impl Player {
@@ -125,7 +131,7 @@ enum Kind {
 #[derive(Clone, Debug)]
 struct Connection {
     kind: Kind,
-    icon: Box<Icon>,
+    icon: std::sync::Arc<Icon>,
     /// Last tick (0: none) and receiver view for which this connection was
     /// evaluated. Rows are walked for every pair every tick: keep this small.
     checked: (u32, [i32; 2]),
@@ -719,7 +725,7 @@ impl<'a> Tick<'a> {
             receiver,
             source,
             waypoint_operation::UNTRACK,
-            &Icon::default(),
+            &default_icon(),
             WaypointTarget::Empty,
         );
     }
@@ -772,10 +778,13 @@ impl<'a> Tick<'a> {
             return None;
         }
         // Waypoint.Icon.cloneAndAssignStyle: the icon's colour, else the team's.
-        let mut icon = Box::new(s.icon.clone());
-        if icon.color.is_none() {
-            icon.color = s.team.as_ref().and_then(|t| t.1);
-        }
+        let icon = match s.team.as_ref().and_then(|t| t.1) {
+            Some(color) if s.icon.color.is_none() => std::sync::Arc::new(Icon {
+                style: s.icon.style.clone(),
+                color: Some(color),
+            }),
+            _ => s.icon.clone(),
+        };
         let kind = if Self::really_far(&s, &r) {
             Kind::Azimuth(Self::azimuth(&s, &r))
         } else if !self.chunk_visible(s.chunk(), r.slot) {
@@ -1798,7 +1807,7 @@ mod tests {
         let mut row = Connections::default();
         let connection = |x| Connection {
             kind: Kind::Block([x, 0, 0]),
-            icon: Box::default(),
+            icon: default_icon(),
             checked: (0, [0; 2]),
         };
         for id in 0..4 {
@@ -1833,7 +1842,7 @@ mod tests {
             first_tick: false,
             view_distance: 4,
             team: None,
-            icon: Icon::default(),
+            icon: default_icon(),
         }
     }
 

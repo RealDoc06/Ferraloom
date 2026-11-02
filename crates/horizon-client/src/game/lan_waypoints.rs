@@ -87,11 +87,12 @@ impl Game<'_> {
                 .cmds
                 .waypoint_icons
                 .get(&super::commands::Target::Player)
-                .map(|i| Icon {
-                    style: i.style.clone(),
-                    color: i.color,
-                })
-                .unwrap_or_default();
+                .map_or_else(waypoints::default_icon, |i| {
+                    std::sync::Arc::new(Icon {
+                        style: i.style.clone(),
+                        color: i.color,
+                    })
+                });
             scratch.push(
                 self.dim.id(),
                 waypoints::Player {
@@ -140,7 +141,7 @@ impl Game<'_> {
                     first_tick: g.ticks == 0,
                     view_distance: g.view_distance,
                     team: self.waypoint_team(&g.name),
-                    icon: Icon::default(),
+                    icon: waypoints::default_icon(),
                 },
             );
         }
