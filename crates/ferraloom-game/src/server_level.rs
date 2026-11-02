@@ -1,5 +1,8 @@
 //! Canonical dimension state extracted from the active/parked client shell.
-use crate::{tick_chunk_membership::TickChunkMembership, ticket_levels::ChunkTickets};
+use crate::{
+    ownership::OwnershipSlot, tick_chunk_membership::TickChunkMembership,
+    ticket_levels::ChunkTickets,
+};
 use horizon_world::level::Ticks;
 
 /// The server-owned part of a level, transferred intact on a dimension change.
@@ -7,7 +10,7 @@ use horizon_world::level::Ticks;
 /// The serial shell borrows these fields directly; it keeps no duplicate queues
 /// or ticket state. No tick order or phase budget is introduced by this owner.
 pub struct ServerLevel {
-    pub block_ticks: Ticks,
+    pub block_ticks: OwnershipSlot<Ticks>,
     pub tick_chunks: TickChunkMembership,
     pub tickets: ChunkTickets,
 }
@@ -15,7 +18,7 @@ pub struct ServerLevel {
 impl ServerLevel {
     pub fn new(random_tick_seed: i32) -> Self {
         Self {
-            block_ticks: Ticks::new(random_tick_seed),
+            block_ticks: Ticks::new(random_tick_seed).into(),
             tick_chunks: TickChunkMembership::default(),
             tickets: ChunkTickets::default(),
         }

@@ -109,7 +109,7 @@ mod tests {
                 }
                 4 => {
                     // Reset only the scheduler: resident token is unchanged.
-                    level.block_ticks = Ticks::default();
+                    level.block_ticks = Ticks::default().into();
                     old_ticks = Ticks::default();
                     level.tick_chunks.clear();
                     old_keys.clear();
@@ -120,7 +120,7 @@ mod tests {
                 6 => {
                     map = ChunkMap::default();
                     map.insert(keys[0], chunk.clone());
-                    level.block_ticks = Ticks::default();
+                    level.block_ticks = Ticks::default().into();
                     old_ticks = Ticks::default();
                     level.tick_chunks.clear();
                     old_keys.clear();

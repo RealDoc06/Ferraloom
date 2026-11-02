@@ -25,7 +25,7 @@ pub(crate) fn box_scan_order(min: BlockPos, max: BlockPos) -> Vec<BlockPos> {
     out
 }
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn day_ticks(&self) -> Option<i64> {
         (self.level.dimension() == Dimension::Overworld)
             .then(|| self.level.day_time().rem_euclid(24000))
@@ -227,7 +227,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             .map_or(0, |k| b.table.int(state, k));
         let block = b.block(state);
         if (b.table.bool(state, b.props.waterlogged) || hydration > 0)
-            && !self.ticks.has_block_tick(pos, block)
+            && !self.has_block_tick(pos, block)
         {
             self.schedule_tick(pos, block, 5000);
         }

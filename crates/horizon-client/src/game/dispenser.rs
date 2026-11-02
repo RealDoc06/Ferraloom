@@ -1355,7 +1355,8 @@ impl Game<'_> {
                 || b.grow_water_plant(level, ticks, target_pos, None)
         });
         if grown {
-            self.level_events
+            self.world
+                .level_events
                 .push(horizon_world::level::LevelEvent::LevelEvent {
                     id: 1505,
                     pos: target_pos,
@@ -2073,7 +2074,8 @@ impl Game<'_> {
         };
         set_success("honeycomb", true);
         self.level_set([target.0, target.1, target.2], waxed)?;
-        self.level_events
+        self.world
+            .level_events
             .push(horizon_world::level::LevelEvent::LevelEvent {
                 id: 3003,
                 pos: Self::pos_of(target),

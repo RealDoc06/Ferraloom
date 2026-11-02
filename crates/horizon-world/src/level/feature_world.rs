@@ -17,8 +17,8 @@ use crate::{
 };
 use horizon_core::{geometry::Direction, position::BlockPos, random::RandomSource};
 
-pub(crate) struct LevelFeatureWorld<'s, 'a, L: LevelAccess + ?Sized> {
-    pub sim: &'s mut Sim<'a, L>,
+pub(crate) struct LevelFeatureWorld<'s, 'a, C: super::tick_access::TickContext> {
+    pub sim: &'s mut Sim<'a, C>,
     pub features: &'s LiveFeatures,
 }
 
@@ -26,7 +26,7 @@ fn pos([x, y, z]: [i32; 3]) -> BlockPos {
     BlockPos::new(x, y, z)
 }
 
-impl<L: LevelAccess + ?Sized> LevelFeatureWorld<'_, '_, L> {
+impl<C: super::tick_access::TickContext> LevelFeatureWorld<'_, '_, C> {
     fn sea(&self) -> i32 {
         match self.sim.level.dimension() {
             super::Dimension::Nether => 32,
@@ -43,7 +43,7 @@ impl<L: LevelAccess + ?Sized> LevelFeatureWorld<'_, '_, L> {
     }
 }
 
-impl<L: LevelAccess + ?Sized> FeatureWorld for LevelFeatureWorld<'_, '_, L> {
+impl<C: super::tick_access::TickContext> FeatureWorld for LevelFeatureWorld<'_, '_, C> {
     type Error = PlacementQueryError;
     fn block(&mut self, position: [i32; 3]) -> Result<BlockStateId, Self::Error> {
         Ok(self.sim.state(pos(position)))
@@ -58,7 +58,7 @@ impl<L: LevelAccess + ?Sized> FeatureWorld for LevelFeatureWorld<'_, '_, L> {
     }
 }
 
-impl<L: LevelAccess + ?Sized> PlacementContext for LevelFeatureWorld<'_, '_, L> {
+impl<C: super::tick_access::TickContext> PlacementContext for LevelFeatureWorld<'_, '_, C> {
     /// `StructureTemplate.updateShapeAtEdge` for one face.
     fn update_shape_at_face(
         &mut self,

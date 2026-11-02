@@ -25,7 +25,7 @@ pub enum BucketContent {
     Nothing,
 }
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     /// `BucketPickup.pickupBlock(null, level, pos, state)`: the filled bucket
     /// that results, None when the block gives nothing.
     pub(crate) fn bucket_pickup(&mut self, pos: BlockPos) -> Option<&'static str> {

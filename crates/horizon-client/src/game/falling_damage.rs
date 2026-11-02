@@ -59,7 +59,7 @@ impl Game<'_> {
         }
         if block.damage.cancel_drop {
             if anvil {
-                self.level_events.push(LevelEvent::LevelEvent {
+                self.world.level_events.push(LevelEvent::LevelEvent {
                     id: 1029,
                     pos: BlockPos::new(pos[0], pos[1], pos[2]),
                     data: 0,
@@ -73,12 +73,12 @@ impl Game<'_> {
             {
                 // BrushableBlock.onBrokenAfterFall.
                 let at = BlockPos::new(pos[0], pos[1], pos[2]);
-                self.level_events.push(LevelEvent::LevelEvent {
+                self.world.level_events.push(LevelEvent::LevelEvent {
                     id: 2001,
                     pos: at,
                     data: block.state.0 as i32,
                 });
-                self.level_events.push(LevelEvent::GameEvent {
+                self.world.level_events.push(LevelEvent::GameEvent {
                     pos: at,
                     event: "minecraft:block_destroy",
                     state: None,

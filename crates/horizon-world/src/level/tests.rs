@@ -72,18 +72,19 @@ impl LevelAccess for TestLevel {
     fn is_client_side(&self) -> bool {
         self.client_side
     }
-    fn block_state(&self, pos: BlockPos) -> BlockStateId {
+    fn block_state(&mut self, pos: BlockPos) -> BlockStateId {
         self.blocks.get(&pos).copied().unwrap_or(self.air)
     }
     fn set_raw(&mut self, pos: BlockPos, state: BlockStateId) -> Option<BlockStateId> {
         self.revision += 1;
         Some(self.blocks.insert(pos, state).unwrap_or(self.air))
     }
-    fn is_loaded(&self, _pos: BlockPos) -> bool {
+    fn is_loaded(&mut self, _pos: BlockPos) -> bool {
         true
     }
-    fn random(&mut self) -> &mut LegacyRandom {
-        &mut self.random
+    #[inline]
+    fn with_random<R>(&mut self, draw: impl FnOnce(&mut LegacyRandom) -> R) -> R {
+        draw(&mut self.random)
     }
     fn game_time(&self) -> i64 {
         self.time
@@ -91,7 +92,7 @@ impl LevelAccess for TestLevel {
     fn day_time(&self) -> i64 {
         self.day_time
     }
-    fn block_light(&self, pos: BlockPos) -> i32 {
+    fn block_light(&mut self, pos: BlockPos) -> i32 {
         self.block_light.get(&pos).copied().unwrap_or(0)
     }
     fn emit(&mut self, event: LevelEvent) {
@@ -147,10 +148,10 @@ impl<'f> World<'f> {
     fn put(&mut self, pos: BlockPos, state: BlockStateId) {
         self.level.blocks.insert(pos, state);
     }
-    fn get(&self, pos: BlockPos) -> BlockStateId {
+    fn get(&mut self, pos: BlockPos) -> BlockStateId {
         self.level.block_state(pos)
     }
-    fn name(&self, pos: BlockPos) -> String {
+    fn name(&mut self, pos: BlockPos) -> String {
         let state = self.f.registry.state(self.get(pos)).unwrap();
         let props: Vec<String> = state
             .properties
@@ -163,7 +164,7 @@ impl<'f> World<'f> {
             props.join(",")
         )
     }
-    fn prop(&self, pos: BlockPos, key: &str) -> String {
+    fn prop(&mut self, pos: BlockPos, key: &str) -> String {
         self.f
             .registry
             .state(self.get(pos))

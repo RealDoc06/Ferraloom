@@ -505,7 +505,7 @@ impl GameLevel<'_> {
         // a beacon plays its deactivation.
         match kind {
             PreRemove::Jukebox => self.jukebox_stopped(pos, old),
-            PreRemove::Beacon => self.events.push(LevelEvent::Sound {
+            PreRemove::Beacon => self.world.level_events.push(LevelEvent::Sound {
                 pos,
                 sound: "minecraft:block.beacon.deactivate".into(),
                 volume: 1.0,
@@ -520,12 +520,12 @@ impl GameLevel<'_> {
     }
     /// The jukebox's `JUKEBOX_STOP_PLAY` game event and level event 1011.
     fn jukebox_stopped(&mut self, pos: BlockPos, state: BlockStateId) {
-        self.events.push(LevelEvent::GameEvent {
+        self.world.level_events.push(LevelEvent::GameEvent {
             pos,
             event: "minecraft:jukebox_stop_play",
             state: Some(state),
         });
-        self.events.push(LevelEvent::LevelEvent {
+        self.world.level_events.push(LevelEvent::LevelEvent {
             id: 1011,
             pos,
             data: 0,

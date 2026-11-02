@@ -23,22 +23,23 @@ struct Cells {
     obstructed: bool,
 }
 impl LevelAccess for Cells {
-    fn block_state(&self, pos: BlockPos) -> BlockStateId {
+    fn block_state(&mut self, pos: BlockPos) -> BlockStateId {
         self.cells.get(&pos).copied().unwrap_or(self.air)
     }
     fn set_raw(&mut self, _pos: BlockPos, _state: BlockStateId) -> Option<BlockStateId> {
         None
     }
-    fn is_loaded(&self, _pos: BlockPos) -> bool {
+    fn is_loaded(&mut self, _pos: BlockPos) -> bool {
         true
     }
-    fn random(&mut self) -> &mut LegacyRandom {
-        &mut self.random
+    #[inline]
+    fn with_random<R>(&mut self, draw: impl FnOnce(&mut LegacyRandom) -> R) -> R {
+        draw(&mut self.random)
     }
     fn game_time(&self) -> i64 {
         0
     }
-    fn is_unobstructed(&self, _pos: BlockPos, _state: BlockStateId) -> bool {
+    fn is_unobstructed(&mut self, _pos: BlockPos, _state: BlockStateId) -> bool {
         !self.obstructed
     }
 }

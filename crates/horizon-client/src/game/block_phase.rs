@@ -19,7 +19,8 @@ impl BlockPhaseLevel for GameLevel<'_> {
             .chunks
             .get(&(chunk.x, chunk.z))
             .map_or_else(Sections::default, |column| {
-                self.random_tick_sections
+                self.world
+                    .random_tick_sections
                     .get((chunk.x, chunk.z), column, self.facts)
             })
     }

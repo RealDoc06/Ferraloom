@@ -57,7 +57,7 @@ impl SpreadContext {
     }
 }
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn fast_lava(&self) -> bool {
         self.level.dimension() == Dimension::Nether
     }
@@ -97,7 +97,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             rules.lava_source_conversion
         }
     }
-    fn fluid_height(&self, fluid: FluidState, pos: BlockPos) -> f32 {
+    fn fluid_height(&mut self, fluid: FluidState, pos: BlockPos) -> f32 {
         if fluid.kind() == FluidKind::Empty {
             return 0.0;
         }
@@ -109,7 +109,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
     /// `FluidState.canBeReplacedWith(level, pos, other, direction)`.
     fn can_be_replaced_with(
-        &self,
+        &mut self,
         fluid: FluidState,
         pos: BlockPos,
         other: FluidKind,
@@ -292,7 +292,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         fluid.kind().same_family(kind) && fluid.is_source()
     }
     /// `FlowingFluid.getNewLiquid`.
-    fn new_liquid(&self, kind: FluidKind, pos: BlockPos, state: BlockStateId) -> FluidState {
+    fn new_liquid(&mut self, kind: FluidKind, pos: BlockPos, state: BlockStateId) -> FluidState {
         let b = self.b;
         let mut highest = 0;
         let mut sources = 0;
@@ -362,7 +362,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         self.can_maybe_pass_through(kind, source, direction, test, test_fluid)
             && self.can_hold_specific_fluid(test, flowing_of(kind))
     }
-    fn context_state(&self, context: &mut SpreadContext, pos: BlockPos) -> BlockStateId {
+    fn context_state(&mut self, context: &mut SpreadContext, pos: BlockPos) -> BlockStateId {
         let key = context.key(pos);
         if let Some(state) = context.states.get(&key) {
             return *state;
@@ -371,7 +371,12 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         context.states.insert(key, state);
         state
     }
-    fn context_is_hole(&self, kind: FluidKind, context: &mut SpreadContext, pos: BlockPos) -> bool {
+    fn context_is_hole(
+        &mut self,
+        kind: FluidKind,
+        context: &mut SpreadContext,
+        pos: BlockPos,
+    ) -> bool {
         let key = context.key(pos);
         if let Some(hole) = context.holes.get(&key) {
             return *hole;
@@ -383,7 +388,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         hole
     }
     fn slope_distance(
-        &self,
+        &mut self,
         kind: FluidKind,
         pos: BlockPos,
         pass: i32,
@@ -420,7 +425,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
     /// `FlowingFluid.getSpread` (EnumMap: iteration in Direction order).
     fn spread_targets(
-        &self,
+        &mut self,
         kind: FluidKind,
         pos: BlockPos,
         state: BlockStateId,
@@ -462,10 +467,14 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         result.sort_by_key(|(direction, _)| *direction as u8);
         result
     }
-    fn source_neighbour_count(&self, kind: FluidKind, pos: BlockPos) -> i32 {
+    fn source_neighbour_count(&mut self, kind: FluidKind, pos: BlockPos) -> i32 {
         HORIZONTAL
             .into_iter()
-            .filter(|d| self.is_source_of(kind, self.fluid_at(rel(pos, *d))))
+            .filter(|d| {
+                let queried_argument_0 = kind;
+                let queried_argument_1 = self.fluid_at(rel(pos, *d));
+                self.is_source_of(queried_argument_0, queried_argument_1)
+            })
             .count() as i32
     }
     /// `FlowingFluid.spreadTo` (with LavaFluid's water-to-stone override).
@@ -684,7 +693,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             }
         }
     }
-    fn lava_flammable(&self, pos: BlockPos) -> bool {
+    fn lava_flammable(&mut self, pos: BlockPos) -> bool {
         if self.is_inside_build_height(pos.y) && !self.level.is_loaded(pos) {
             return false;
         }

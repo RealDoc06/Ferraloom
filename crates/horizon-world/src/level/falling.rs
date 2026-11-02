@@ -18,7 +18,7 @@ pub enum Landing {
     Continue,
 }
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     /// `FallingBlockEntity.fall`.
     pub(crate) fn falling_block_fall(&mut self, pos: BlockPos, state: BlockStateId) {
         let b = self.b;
@@ -35,7 +35,11 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
     /// `FallingBlock.tick` (and `SpeleothemBlock`'s falling stalactites).
     pub(crate) fn falling_block_tick(&mut self, pos: BlockPos, state: BlockStateId) {
-        if self.is_free(self.below_state(pos)) && pos.y >= self.level.min_y() {
+        if {
+            let queried_argument_0 = self.below_state(pos);
+            self.is_free(queried_argument_0)
+        } && pos.y >= self.level.min_y()
+        {
             self.falling_block_fall(pos, state);
         }
     }
@@ -98,7 +102,10 @@ impl Behaviours {
             replace_clicked: true,
         };
         let may_replace = sim.can_be_replaced(current, &ctx);
-        let would_continue = sim.is_free(sim.below_state(pos)) && (!concrete || !stuck_in_water);
+        let would_continue = {
+            let queried_argument_0 = sim.below_state(pos);
+            sim.is_free(queried_argument_0)
+        } && (!concrete || !stuck_in_water);
         let would_survive = sim.can_survive(state, pos) && !would_continue;
         if !(may_replace && would_survive) {
             if self.instance_of(state, Class::Anvil) {

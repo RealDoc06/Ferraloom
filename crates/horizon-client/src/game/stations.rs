@@ -684,7 +684,8 @@ impl Game<'_> {
                     let _ = self.set_state_named(pos, "minecraft:damaged_anvil", &["facing"]);
                 }
                 _ => {
-                    let _ = self.world.set(pos[0], pos[1], pos[2], self.world.air);
+                    let air = self.world.air;
+                    let _ = self.world.set(pos[0], pos[1], pos[2], air);
                     self.world.modified.insert((pos[0] >> 4, pos[2] >> 4));
                     self.level_event_at(1029, pos, 0);
                     return true;

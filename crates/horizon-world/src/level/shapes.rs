@@ -4,7 +4,7 @@
 //! to the next class (the Java `super` call), the end of the chain returns the
 //! state unchanged (`BlockBehaviour.updateShape`).
 use super::{
-    LevelAccess, Sim,
+    Sim,
     classes::Class,
     query::{axis_of, clockwise, counter_clockwise, is_horizontal},
     states::BlockId,
@@ -17,7 +17,7 @@ use horizon_core::{
     random::RandomSource,
 };
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     /// `BlockState.updateShape(level, ticks, pos, direction, neighbourPos, neighbourState, random)`.
     pub fn update_shape(
         &mut self,
@@ -519,7 +519,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             Class::GrowingPlantHead => {
                 let growth = b.data(state).growth_direction;
                 let (_, body) = self.growing_plant_pair(block);
-                let to_body = |sim: &Self| {
+                let to_body = |sim: &mut Self| {
                     let body_state = b.default_of(body);
                     if class_is(b, block, Class::CaveVines) {
                         sim.b
@@ -711,7 +711,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                 let tip = table
                     .dir(state, p.vertical_direction)
                     .unwrap_or(Direction::Up);
-                if tip == Direction::Down && self.ticks.has_block_tick(pos, block) {
+                if tip == Direction::Down && self.has_block_tick(pos, block) {
                     return Some(state);
                 }
                 if dir == tip.opposite() && !self.can_survive(state, pos) {
@@ -817,7 +817,11 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
 
     /// `PotentSulfurBlock.validBlockState` (the geyser block-entity countdown
     /// reset is the caller's).
-    pub(crate) fn potent_sulfur_state(&self, state: BlockStateId, pos: BlockPos) -> BlockStateId {
+    pub(crate) fn potent_sulfur_state(
+        &mut self,
+        state: BlockStateId,
+        pos: BlockPos,
+    ) -> BlockStateId {
         let b = self.b;
         let key = b.props.potent_sulfur_state;
         if self.fluid_at(above(pos)).kind() != FluidKind::Water {
@@ -962,7 +966,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         table.set_bool(result, b.props.up, raise)
     }
     /// `StairBlock.getStairsShape`.
-    pub(crate) fn stairs_shape(&self, state: BlockStateId, pos: BlockPos) -> &'static str {
+    pub(crate) fn stairs_shape(&mut self, state: BlockStateId, pos: BlockPos) -> &'static str {
         let b = self.b;
         let p = b.props;
         let table = &b.table;
@@ -997,7 +1001,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         "straight"
     }
     fn stairs_can_take_shape(
-        &self,
+        &mut self,
         state: BlockStateId,
         pos: BlockPos,
         direction: Direction,
@@ -1033,7 +1037,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         }
     }
     /// `ConcretePowderBlock.touchesLiquid`.
-    pub(crate) fn concrete_touches_liquid(&self, pos: BlockPos) -> bool {
+    pub(crate) fn concrete_touches_liquid(&mut self, pos: BlockPos) -> bool {
         let b = self.b;
         let solidifies = |state: BlockStateId| b.is_water_fluid(b.fluid(state).kind());
         let mut test = pos;
@@ -1049,13 +1053,17 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         }
         false
     }
-    pub(crate) fn coral_scan_for_water(&self, pos: BlockPos) -> bool {
+    pub(crate) fn coral_scan_for_water(&mut self, pos: BlockPos) -> bool {
         Direction::ALL
             .into_iter()
             .any(|d| self.b.is_water_fluid(self.fluid_at(rel(pos, d)).kind()))
     }
     /// `BaseCoralPlantTypeBlock.scanForWater(state, level, pos)`.
-    pub(crate) fn coral_plant_scan_for_water(&self, state: BlockStateId, pos: BlockPos) -> bool {
+    pub(crate) fn coral_plant_scan_for_water(
+        &mut self,
+        state: BlockStateId,
+        pos: BlockPos,
+    ) -> bool {
         if self.b.is_waterlogged(state) {
             return true;
         }
@@ -1102,7 +1110,11 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         }
     }
     /// `NoteBlock.setInstrument`.
-    pub(crate) fn note_block_instrument(&self, pos: BlockPos, state: BlockStateId) -> BlockStateId {
+    pub(crate) fn note_block_instrument(
+        &mut self,
+        pos: BlockPos,
+        state: BlockStateId,
+    ) -> BlockStateId {
         let b = self.b;
         let above = b.facts(self.above_state(pos)).instrument;
         let name = if super::data::instrument_works_above(above) {
@@ -1123,7 +1135,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
     /// `SpeleothemBlock.calculateSpeleothemThickness`.
     pub(crate) fn speleothem_thickness(
-        &self,
+        &mut self,
         pos: BlockPos,
         tip: Direction,
         merge: bool,
@@ -1161,7 +1173,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         }
     }
     /// `FireBlock.getStateWithAge` via `BaseFireBlock.getState`.
-    pub(crate) fn fire_state_with_age(&self, pos: BlockPos, age: i32) -> BlockStateId {
+    pub(crate) fn fire_state_with_age(&mut self, pos: BlockPos, age: i32) -> BlockStateId {
         let b = self.b;
         let placement = self.fire_state_for(pos);
         if b.is_block(placement, b.named.fire) {
@@ -1171,7 +1183,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         }
     }
     /// `BaseFireBlock.getState(level, pos)`.
-    pub(crate) fn fire_state_for(&self, pos: BlockPos) -> BlockStateId {
+    pub(crate) fn fire_state_for(&mut self, pos: BlockPos) -> BlockStateId {
         let b = self.b;
         let below_pos = below(pos);
         let below_state = self.state(below_pos);
@@ -1185,7 +1197,10 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                 if direction == Direction::Down {
                     continue;
                 }
-                let burn = self.can_burn(self.rel_state(pos, direction));
+                let burn = {
+                    let queried_argument_0 = self.rel_state(pos, direction);
+                    self.can_burn(queried_argument_0)
+                };
                 result = b
                     .table
                     .set_bool(result, self.direction_prop(direction), burn);
@@ -1197,7 +1212,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
     /// `MossyCarpetBlock.getUpdatedState`.
     pub(crate) fn mossy_carpet_updated_state(
-        &self,
+        &mut self,
         mut state: BlockStateId,
         pos: BlockPos,
         create_sides: bool,

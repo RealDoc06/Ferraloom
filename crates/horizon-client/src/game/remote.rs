@@ -393,7 +393,8 @@ impl Game<'_> {
         streaming.remote = true;
         streaming.radius = self.settings.render_distance;
         self.streaming = streaming;
-        self.world = World::new(self.res.facts().air, 0);
+        self.world
+            .replace_storage(World::new(self.res.facts().air, 0));
         self.save = Arc::new(SaveDir::new(
             std::env::temp_dir().join("horizon-remote-unused"),
         ));
@@ -565,7 +566,8 @@ impl Game<'_> {
         self.score.board = Default::default();
         self.streaming = Streaming::new(Arc::new(NoTerrain), self.pack.context.clone(), 1);
         self.streaming.paused = true;
-        self.world = World::new(self.res.facts().air, 0);
+        self.world
+            .replace_storage(World::new(self.res.facts().air, 0));
         self.player = None;
         self.mobs.clear();
         self.clear_remote_objects();
@@ -1063,7 +1065,8 @@ impl Game<'_> {
             let old = std::mem::take(&mut self.world.chunks);
             let count = old.len();
             horizon_client::chunk::free_columns(old, count);
-            self.world = World::new(self.res.facts().air, spawn.seed);
+            self.world
+                .replace_storage(World::new(self.res.facts().air, spawn.seed));
             self.world.game_time = time;
             self.world.day_time = day;
             self.world.weather = weather;
@@ -6133,8 +6136,8 @@ pub(super) fn input_ordinal(input: Input) -> i32 {
 
 /// The client's world for a guess at what a click does: reads go to the
 /// world, writes stay here and are dropped.
-struct DryLevel<'w> {
-    base: &'w dyn horizon_world::level::LevelAccess,
+struct DryLevel<'w, L: horizon_world::level::LevelAccess + ?Sized> {
+    base: &'w mut L,
     changed: HashMap<horizon_core::position::BlockPos, BlockStateId>,
     random: horizon_core::random::LegacyRandom,
     /// The sounds the use plays (a door's creak).
@@ -6165,8 +6168,8 @@ pub(super) fn hand_operated(name: &str) -> bool {
         || name == "lever"
 }
 
-impl<'w> DryLevel<'w> {
-    fn new(base: &'w dyn horizon_world::level::LevelAccess) -> Self {
+impl<'w, L: horizon_world::level::LevelAccess + ?Sized> DryLevel<'w, L> {
+    fn new(base: &'w mut L) -> Self {
         Self {
             base,
             changed: HashMap::new(),
@@ -6176,7 +6179,9 @@ impl<'w> DryLevel<'w> {
     }
 }
 
-impl horizon_world::level::LevelAccess for DryLevel<'_> {
+impl<L: horizon_world::level::LevelAccess + ?Sized> horizon_world::level::LevelAccess
+    for DryLevel<'_, L>
+{
     fn emit(&mut self, event: horizon_world::level::LevelEvent) {
         if let horizon_world::level::LevelEvent::Sound {
             pos,
@@ -6188,7 +6193,7 @@ impl horizon_world::level::LevelAccess for DryLevel<'_> {
             self.sounds.push((pos, sound, volume, pitch));
         }
     }
-    fn block_state(&self, pos: horizon_core::position::BlockPos) -> BlockStateId {
+    fn block_state(&mut self, pos: horizon_core::position::BlockPos) -> BlockStateId {
         self.changed
             .get(&pos)
             .copied()
@@ -6203,7 +6208,7 @@ impl horizon_world::level::LevelAccess for DryLevel<'_> {
         self.changed.insert(pos, state);
         Some(previous)
     }
-    fn is_loaded(&self, pos: horizon_core::position::BlockPos) -> bool {
+    fn is_loaded(&mut self, pos: horizon_core::position::BlockPos) -> bool {
         self.base.is_loaded(pos)
     }
     fn min_y(&self) -> i32 {
@@ -6212,20 +6217,28 @@ impl horizon_world::level::LevelAccess for DryLevel<'_> {
     fn max_y(&self) -> i32 {
         self.base.max_y()
     }
-    fn block_light(&self, pos: horizon_core::position::BlockPos) -> i32 {
+    fn block_light(&mut self, pos: horizon_core::position::BlockPos) -> i32 {
         self.base.block_light(pos)
     }
-    fn sky_light(&self, pos: horizon_core::position::BlockPos) -> i32 {
+    fn sky_light(&mut self, pos: horizon_core::position::BlockPos) -> i32 {
         self.base.sky_light(pos)
     }
     fn sky_darken(&self) -> i32 {
         self.base.sky_darken()
     }
-    fn is_unobstructed(&self, pos: horizon_core::position::BlockPos, state: BlockStateId) -> bool {
+    fn is_unobstructed(
+        &mut self,
+        pos: horizon_core::position::BlockPos,
+        state: BlockStateId,
+    ) -> bool {
         self.base.is_unobstructed(pos, state)
     }
-    fn random(&mut self) -> &mut horizon_core::random::LegacyRandom {
-        &mut self.random
+    #[inline]
+    fn with_random<R>(
+        &mut self,
+        draw: impl FnOnce(&mut horizon_core::random::LegacyRandom) -> R,
+    ) -> R {
+        draw(&mut self.random)
     }
     fn game_time(&self) -> i64 {
         self.base.game_time()
@@ -6402,7 +6415,7 @@ mod tests {
             ceiling: i32,
         }
         impl LevelAccess for Level {
-            fn block_state(&self, pos: BlockPos) -> BlockStateId {
+            fn block_state(&mut self, pos: BlockPos) -> BlockStateId {
                 if pos == BlockPos::new(0, 0, 0) {
                     self.stone
                 } else {
@@ -6412,17 +6425,17 @@ mod tests {
             fn set_raw(&mut self, _: BlockPos, _: BlockStateId) -> Option<BlockStateId> {
                 panic!("preview must not write to the live level");
             }
-            fn is_loaded(&self, _: BlockPos) -> bool {
+            fn is_loaded(&mut self, _: BlockPos) -> bool {
                 self.loaded
             }
             fn max_y(&self) -> i32 {
                 self.ceiling
             }
-            fn is_unobstructed(&self, pos: BlockPos, _: BlockStateId) -> bool {
+            fn is_unobstructed(&mut self, pos: BlockPos, _: BlockStateId) -> bool {
                 assert_eq!(pos, BlockPos::new(0, 1, 0));
                 !self.obstructed
             }
-            fn random(&mut self) -> &mut LegacyRandom {
+            fn with_random<R>(&mut self, _: impl FnOnce(&mut LegacyRandom) -> R) -> R {
                 panic!("preview must not advance the live level's random source");
             }
             fn game_time(&self) -> i64 {
@@ -6474,7 +6487,7 @@ mod tests {
                 base.loaded = loaded;
                 base.ceiling = ceiling;
                 let valid = !obstructed && loaded && ceiling > 1;
-                let mut preview = DryLevel::new(&base);
+                let mut preview = DryLevel::new(&mut base);
                 let outcome = behaviours.place_block(&mut preview, &mut Ticks::default(), &ctx);
                 assert_eq!(
                     matches!(outcome, PlaceOutcome::Placed { .. }),

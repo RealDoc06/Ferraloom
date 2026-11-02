@@ -307,7 +307,8 @@ impl Game<'_> {
     }
 
     fn sculk_fixture_reset(&mut self, s: &Scenario) -> Result<()> {
-        self.world = World::new(self.res.facts().air, 0);
+        self.world
+            .replace_storage(World::new(self.res.facts().air, 0));
         let plains = u32::from(self.res.biomes().id("minecraft:plains"));
         let layers = [
             self.fixture_state("minecraft:bedrock")?,
@@ -337,13 +338,13 @@ impl Game<'_> {
                 }
             }
         }
-        self.server_level.block_ticks = Ticks::new(0);
+        self.server_level.block_ticks = Ticks::new(0).into();
         self.server_level.tick_chunks.clear();
         self.sync_tick_chunks();
         self.mobs.clear();
         self.dropped.clear();
         self.orbs.clear();
-        self.level_events.clear();
+        self.world.level_events.clear();
         self.ui.rules = Default::default();
         for (rule, value) in [
             ("spawn_mobs", false),
@@ -435,7 +436,7 @@ impl Game<'_> {
                 b.set_block(level, ticks, pos, state, 2 | 16);
             }
         });
-        self.level_events.clear();
+        self.world.level_events.clear();
         self.sculk.known = self.world.chunks.keys().copied().collect();
         self.sculk.known_revision = Some(self.world.chunks.membership_revision());
         self.sculk_sync_index();

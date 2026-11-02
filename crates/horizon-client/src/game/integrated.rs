@@ -733,6 +733,7 @@ fn serve(
 pub(super) enum ComponentHarness {
     Dispenser(String),
     Sculk(String),
+    Region(String),
 }
 
 impl Game<'_> {
@@ -750,6 +751,7 @@ impl Game<'_> {
                     match fixture {
                         ComponentHarness::Dispenser(spec) => server.dispense_fixture(&spec),
                         ComponentHarness::Sculk(spec) => server.sculk_fixture(&spec),
+                        ComponentHarness::Region(spec) => server.region_fixture(&spec),
                     }
                 };
                 run().map_err(|e| e.to_string())

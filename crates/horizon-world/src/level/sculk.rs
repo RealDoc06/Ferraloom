@@ -96,7 +96,7 @@ pub fn unpack_faces(data: i32) -> Vec<Direction> {
         .collect()
 }
 
-impl<L: LevelAccess + ?Sized> Sim<'_, L> {
+impl<C: super::tick_access::TickContext> Sim<'_, C> {
     fn sculk_rand(&mut self, bound: i32) -> i32 {
         self.random().next_int_bound(bound).unwrap_or(0)
     }
@@ -458,7 +458,12 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         }
         count
     }
-    fn sculk_valid_for_placement(&self, old: BlockStateId, pos: BlockPos, face: Direction) -> bool {
+    fn sculk_valid_for_placement(
+        &mut self,
+        old: BlockStateId,
+        pos: BlockPos,
+        face: Direction,
+    ) -> bool {
         if self.vein_has_face(old, face) {
             return false;
         }
@@ -467,7 +472,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
     /// `MultifaceBlock.getStateForPlacement` for the sculk vein.
     fn sculk_state_for_placement(
-        &self,
+        &mut self,
         old: BlockStateId,
         pos: BlockPos,
         face: Direction,
@@ -487,7 +492,12 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         Some(self.vein_with_face(base, face, true))
     }
     /// `SculkVeinSpreaderConfig.canSpreadInto` (with the default config).
-    fn sculk_can_spread_into(&self, source: BlockPos, target: BlockPos, face: Direction) -> bool {
+    fn sculk_can_spread_into(
+        &mut self,
+        source: BlockPos,
+        target: BlockPos,
+        face: Direction,
+    ) -> bool {
         let b = self.b;
         let existing = self.state(target);
         let against = self.state(rel(target, face));
@@ -604,7 +614,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         }
     }
     /// `SculkBlock.canPlaceGrowth`.
-    fn sculk_can_place_growth(&self, pos: BlockPos) -> bool {
+    fn sculk_can_place_growth(&mut self, pos: BlockPos) -> bool {
         let b = self.b;
         let state_above = self.state(above(pos));
         let open = b.is_air(state_above)
@@ -720,11 +730,11 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             // SculkVeinBlock.hasSubstrateAccess
             if self.is_vein(transferee)
                 && Direction::ALL.into_iter().any(|d| {
-                    self.multiface_has_face(transferee, d)
-                        && self.sculk_in_tag(
-                            self.state(rel(neighbour, d)),
-                            "minecraft:sculk_replaceable",
-                        )
+                    self.multiface_has_face(transferee, d) && {
+                        let queried_argument_0 = self.state(rel(neighbour, d));
+                        let queried_argument_1 = "minecraft:sculk_replaceable";
+                        self.sculk_in_tag(queried_argument_0, queried_argument_1)
+                    }
                 })
             {
                 break;
@@ -733,7 +743,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         let _ = b;
         (best != pos).then_some(best)
     }
-    fn sculk_unobstructed_move(&self, from: BlockPos, to: BlockPos) -> bool {
+    fn sculk_unobstructed_move(&mut self, from: BlockPos, to: BlockPos) -> bool {
         let manhattan = (from.x - to.x).abs() + (from.y - to.y).abs() + (from.z - to.z).abs();
         if manhattan == 1 {
             return true;
@@ -761,7 +771,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         } else {
             (dir_x, dir_y)
         };
-        let free = |direction: Direction| {
+        let mut free = |direction: Direction| {
             let test = rel(from, direction);
             !self
                 .b
@@ -816,7 +826,7 @@ impl Behaviours {
         ticks: &mut Ticks,
         pos: BlockPos,
     ) -> i32 {
-        let sim = self.sim(level, ticks);
+        let mut sim = self.sim(level, ticks);
         let state = sim.state(pos);
         let direction = self.facing(state).opposite();
         sim.signal(rel(pos, direction), direction)
