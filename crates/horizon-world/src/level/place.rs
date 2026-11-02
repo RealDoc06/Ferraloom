@@ -313,11 +313,8 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         Some(match class {
             Class::AbstractBed => {
                 let relative = rel(pos, horizontal);
-                if {
-                    let queried_argument_0 = self.state(relative);
-                    let queried_argument_1 = ctx;
-                    self.can_be_replaced(queried_argument_0, queried_argument_1)
-                } {
+                let relative_state = self.state(relative);
+                if self.can_be_replaced(relative_state, ctx) {
                     Some(table.set_dir(default, p.facing, horizontal))
                 } else {
                     None

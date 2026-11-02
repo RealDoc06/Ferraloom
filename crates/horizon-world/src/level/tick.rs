@@ -304,11 +304,8 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
                         && self.random().next_double() < data.grow_probability
                     {
                         let growth = rel(pos, data.growth_direction);
-                        if {
-                            let queried_argument_0 = state;
-                            let queried_argument_1 = self.state(growth);
-                            self.growing_plant_can_grow_into(queried_argument_0, queried_argument_1)
-                        } {
+                        let growth_state = self.state(growth);
+                        if self.growing_plant_can_grow_into(state, growth_state) {
                             let next = self.growing_plant_grow_into_state(state);
                             self.set_block_and_update(growth, next);
                         }

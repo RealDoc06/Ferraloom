@@ -490,11 +490,8 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         }
         for direction in HORIZONTAL {
             let target = rel(pos, direction);
-            if {
-                let queried_argument_0 = self.state(target);
-                let queried_argument_1 = target;
-                self.is_redstone_conductor(queried_argument_0, queried_argument_1)
-            } {
+            let target_state = self.state(target);
+            if self.is_redstone_conductor(target_state, target) {
                 self.wire_check_corner(above(target));
             } else {
                 self.wire_check_corner(below(target));

@@ -169,11 +169,8 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
         if !self.b.is_air(self.state(pos)) {
             return false;
         }
-        if {
-            let queried_argument_0 = self.fire_state_for(pos);
-            let queried_argument_1 = pos;
-            self.can_survive(queried_argument_0, queried_argument_1)
-        } {
+        let fire = self.fire_state_for(pos);
+        if self.can_survive(fire, pos) {
             return true;
         }
         // isPortal
@@ -184,10 +181,8 @@ impl<C: super::tick_access::TickContext> Sim<'_, C> {
             return false;
         }
         for face in Direction::ALL {
-            if {
-                let queried_argument_0 = self.state(rel(pos, face));
-                self.portal_frame(queried_argument_0)
-            } {
+            let neighbor = self.state(rel(pos, face));
+            if self.portal_frame(neighbor) {
                 // getCounterClockWise().getAxis(): north/south turn to X.
                 let x_axis = match forward {
                     Direction::North | Direction::South => true,
