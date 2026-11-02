@@ -199,7 +199,8 @@ mod tests {
         const REACH: i32 = 4;
         let mut seed = 11;
         for _ in 0..200 {
-            let old = areas(&mut seed, 1 + lcg(&mut seed, 6).unsigned_abs() as usize, 12);
+            let count = 1 + lcg(&mut seed, 6).unsigned_abs() as usize;
+            let old = areas(&mut seed, count, 12);
             let mut new = old.clone();
             // A few of: a player crossing a chunk, teleporting, leaving, joining.
             for _ in 0..=lcg(&mut seed, 2).abs() {

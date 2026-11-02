@@ -2539,6 +2539,30 @@ mod tests {
         }
     }
 
+    /// Top-k selection takes what the full sort's first k would be, order
+    /// included, with duplicates from forced chunks' overlapping squares.
+    #[test]
+    fn a_generation_batch_is_the_start_of_the_full_sort() {
+        let mut f = GenerationFixture::new(6, true);
+        f.extra.extend([((30, 0), 5), ((32, 3), 5), ((-20, 14), 3)]);
+        f.ahead = AreaTree::new([((40, 2), 0), ((-25, 20), 0), ((9, 9), 0)]);
+        for forced in [false, true] {
+            if forced {
+                f.forced.extend([(60, 60), (61, 60), (60, 62)]);
+            }
+            let all = GenerationScan::default()
+                .candidates(f.input(), usize::MAX)
+                .unwrap();
+            assert!(all.len() > 500);
+            for batch in [1, 7, 24, all.len() - 1, all.len(), all.len() + 5] {
+                let got = GenerationScan::default()
+                    .candidates(f.input(), batch)
+                    .unwrap();
+                assert_eq!(got, all[..batch.min(all.len())], "batch {batch}");
+            }
+        }
+    }
+
     #[test]
     fn generation_scan_looks_at_overlapping_areas_once() {
         // A server's players: many areas around one spot, some apart, one
@@ -2910,30 +2934,6 @@ mod cover_tests {
             let (x, z) = extra[1].0;
             assert!(cover.within(x, z, 0));
             assert!(!cover.within(x.wrapping_add(14), z, 1));
-        }
-    }
-
-    /// Top-k selection takes what the full sort's first k would be, order
-    /// included, with duplicates from forced chunks' overlapping squares.
-    #[test]
-    fn a_generation_batch_is_the_start_of_the_full_sort() {
-        let mut f = GenerationFixture::new(6, true);
-        f.extra.extend([((30, 0), 5), ((32, 3), 5), ((-20, 14), 3)]);
-        f.ahead = AreaTree::new([((40, 2), 0), ((-25, 20), 0), ((9, 9), 0)]);
-        for forced in [false, true] {
-            if forced {
-                f.forced.extend([(60, 60), (61, 60), (60, 62)]);
-            }
-            let all = GenerationScan::default()
-                .candidates(f.input(), usize::MAX)
-                .unwrap();
-            assert!(all.len() > 500);
-            for batch in [1, 7, 24, all.len() - 1, all.len(), all.len() + 5] {
-                let got = GenerationScan::default()
-                    .candidates(f.input(), batch)
-                    .unwrap();
-                assert_eq!(got, all[..batch.min(all.len())], "batch {batch}");
-            }
         }
     }
 
