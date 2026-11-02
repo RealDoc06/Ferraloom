@@ -4,6 +4,7 @@
 //! list), keeps their views up to date as blocks and entities change, and
 //! turns what they send into events for the gameplay code. It runs on the
 //! game thread inside the tick, only when the world is open to the network.
+use super::conn::PacketBody;
 use super::{
     Lan, NetEvent,
     chunks::ChunkEncoder,
@@ -216,7 +217,7 @@ pub struct Hub {
     pub encoder: ChunkEncoder,
     pub guests: Vec<Guest>,
     /// Rebuilt at the network polling boundary; guest storage can change between ticks.
-    inbox_index: crate::fast_hash::FxHashMap<u32, usize>,
+    guest_index: crate::fast_hash::FxHashMap<u32, usize>,
     #[cfg(feature = "profiler")]
     corrections: CorrectionCounts,
     pub(super) sync: Arc<SyncData>,
@@ -261,7 +262,7 @@ pub struct Hub {
     /// Each level's tracked entities, by dimension.
     entities: std::collections::HashMap<String, Entities>,
     /// What one tick of entity tracking sends each guest, kept between ticks.
-    entity_out: Vec<Vec<super::conn::PacketBody>>,
+    entity_out: Vec<Vec<PacketBody>>,
     /// Player snapshots reused after each tracking tick.
     entity_players: Vec<EntityState>,
     /// Server mods' commands, a root in the commands report's format, sent
@@ -412,7 +413,7 @@ impl Hub {
             config,
             encoder,
             guests: Vec::new(),
-            inbox_index: Default::default(),
+            guest_index: Default::default(),
             #[cfg(feature = "profiler")]
             corrections: Default::default(),
             sync,
@@ -444,11 +445,16 @@ impl Hub {
         }
     }
 
+    /// Where a connection's guest is in `guests`.
+    pub fn guest_index(&self, conn: u32) -> Option<usize> {
+        self.guest_index.get(&conn).copied()
+    }
     pub fn guest(&self, conn: u32) -> Option<&Guest> {
-        self.guests.iter().find(|g| g.conn == conn)
+        self.guests.get(self.guest_index(conn)?)
     }
     pub fn guest_mut(&mut self, conn: u32) -> Option<&mut Guest> {
-        self.guests.iter_mut().find(|g| g.conn == conn)
+        let i = self.guest_index(conn)?;
+        self.guests.get_mut(i)
     }
 
     /// The network id of a name in a built-in or synchronized registry.
@@ -711,6 +717,7 @@ impl Hub {
         guest.position = ctx.spawn;
         guest.previous_position = ctx.spawn;
         guest.dimension = self.config.dimension.clone();
+        self.guest_index.insert(conn, self.guests.len());
         self.guests.push(guest);
         conn
     }
@@ -742,7 +749,7 @@ impl Hub {
 
     /// PlayerList.placeNewPlayer for a guest whose saved state is loaded.
     pub fn place_new_player(&mut self, conn: u32, ctx: &mut TickCtx) {
-        let Some(i) = self.guests.iter().position(|g| g.conn == conn) else {
+        let Some(i) = self.guest_index(conn) else {
             return;
         };
         let (name, uuid, entity_id, mode) = {
@@ -1194,24 +1201,21 @@ impl Hub {
     /// packets queued for its own level's pass.
     pub fn poll(&mut self, ctx: &mut TickCtx) -> Vec<HostEvent> {
         self.ticks += 1;
-        self.reindex_inboxes();
         let mut events = Vec::new();
         for event in self.lan.poll() {
             match event {
                 NetEvent::Joined(j) => {
                     let conn = self.admit(*j, ctx);
-                    self.reindex_inboxes();
                     events.push(HostEvent::Joined(conn));
                 }
                 NetEvent::Left(conn, reason) => {
-                    if let Some(i) = self.guests.iter().position(|g| g.conn == conn) {
+                    if let Some(i) = self.guest_index(conn) {
                         let g = self.remove_guest(i, &reason);
-                        self.reindex_inboxes();
                         events.push(HostEvent::Left(Box::new(g)));
                     }
                 }
                 NetEvent::Packet(conn, packet) => {
-                    if let Some(&i) = self.inbox_index.get(&conn) {
+                    if let Some(i) = self.guest_index(conn) {
                         self.guests[i].inbox.push_back(*packet);
                     }
                 }
@@ -1232,12 +1236,6 @@ impl Hub {
             }
         }
         events
-    }
-
-    fn reindex_inboxes(&mut self) {
-        self.inbox_index.clear();
-        self.inbox_index
-            .extend(self.guests.iter().enumerate().map(|(i, g)| (g.conn, i)));
     }
 
     /// The level in place's part of the tick (`ServerLevel.tick`'s chunk
@@ -1325,6 +1323,10 @@ impl Hub {
 
     fn remove_guest(&mut self, i: usize, reason: &str) -> Guest {
         let mut g = self.guests.remove(i);
+        self.guest_index.remove(&g.conn);
+        for (k, later) in self.guests.iter().enumerate().skip(i) {
+            self.guest_index.insert(later.conn, k);
+        }
         if g.left_reason.is_empty() {
             g.left_reason = reason.to_owned();
         }
@@ -1423,9 +1425,9 @@ impl Hub {
 
     /// Every player's chunks here: their views, then the next batch of each
     /// (PlayerChunkSender.sendNextChunks). The batches are chosen first, the
-    /// columns in them encoded once each, their new sections on the warm-up
-    /// threads too (`ChunkEncoder::warm`), then sent: nothing changes the
-    /// level in between, and each player's packets keep their order.
+    /// columns in them encoded once each on the pool's threads
+    /// (`ChunkEncoder::bodies_in`), then sent: nothing changes the level in
+    /// between, and each player's packets keep their order.
     fn update_chunks(&mut self, ctx: &TickCtx) {
         let world = &*ctx.world;
         let mut batches = Vec::new();
@@ -1462,20 +1464,29 @@ impl Hub {
                 (i, taken, bodies)
             })
             .collect();
-        self.encoder.warm(&columns);
-        let mut bodies: Vec<Vec<u8>> = columns
-            .iter()
-            .map(|c| self.encoder.body_in(c, world))
+        // A column several players take is shared by them rather than copied.
+        let mut bodies: Vec<PacketBody> = self
+            .encoder
+            .bodies_in(&columns, world)
+            .into_iter()
+            .zip(&uses)
+            .map(|(body, &uses)| {
+                if uses > 1 {
+                    PacketBody::Shared(body.into())
+                } else {
+                    PacketBody::Owned(body)
+                }
+            })
             .collect();
         for (i, taken, batch) in batches {
             let g = &mut self.guests[i];
             let size = batch.len();
             g.batch_quota -= size as f32;
             g.send(&C::ChunkBatchStart(horizon_protocol::packets::Empty));
-            g.sender.send_many(batch.into_iter().map(|j| {
+            g.sender.send_bodies(batch.into_iter().map(|j| {
                 uses[j] -= 1;
                 if uses[j] == 0 {
-                    std::mem::take(&mut bodies[j])
+                    std::mem::replace(&mut bodies[j], PacketBody::Owned(Vec::new()))
                 } else {
                     bodies[j].clone()
                 }
@@ -1573,9 +1584,9 @@ impl Hub {
             let Some(chunk) = world.chunks.get(&(x, z)) else {
                 continue;
             };
-            let body = self.encoder.light_update(chunk, sections);
+            let body: Arc<[u8]> = self.encoder.light_update(chunk, sections).into();
             for &i in &viewers {
-                self.guests[i].sender.send(body.clone());
+                self.guests[i].sender.send_shared(&body);
             }
         }
     }
@@ -1629,9 +1640,9 @@ impl Hub {
                         .collect(),
                 })
             };
-            let body = packet.encode();
+            let body: Arc<[u8]> = packet.encode().into();
             for &i in &viewers {
-                self.guests[i].sender.send(body.clone());
+                self.guests[i].sender.send_shared(&body);
             }
             // Block entities with data the client shows.
             for &(x, y, z) in &positions {
@@ -1645,14 +1656,15 @@ impl Hub {
                 let Some(kind) = self.encoder.entity_type(state) else {
                     continue;
                 };
-                let body = C::BlockEntityData(play::BlockEntityData {
+                let body: Arc<[u8]> = C::BlockEntityData(play::BlockEntityData {
                     pos: [x, y, z],
                     kind,
                     tag,
                 })
-                .encode();
+                .encode()
+                .into();
                 for &i in &viewers {
-                    self.guests[i].sender.send(body.clone());
+                    self.guests[i].sender.send_shared(&body);
                 }
             }
         }
@@ -2085,7 +2097,7 @@ impl Hub {
     /// since (`ServerRecipeBook.addRecipes`), once the player's first tick
     /// has sent their advancements.
     pub fn flush_progress(&mut self, conn: u32) {
-        if let Some(i) = self.guests.iter().position(|g| g.conn == conn)
+        if let Some(i) = self.guest_index(conn)
             && self.guests[i].sent_health.is_some()
         {
             self.flush_advancements(i, true);

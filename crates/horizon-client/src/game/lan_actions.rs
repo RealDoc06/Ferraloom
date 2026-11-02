@@ -246,7 +246,7 @@ impl Game<'_> {
         if self.lan_acting == Some(conn) {
             return None;
         }
-        let i = host.hub.guests.iter().position(|g| g.conn == conn)?;
+        let i = host.hub.guest_index(conn)?;
         let fresh = host.hub.guests[i].motion.is_none();
         if fresh {
             let p = Vec3::new(
@@ -940,7 +940,7 @@ impl Game<'_> {
         for conn in far {
             self.guest_container_closed(host, conn);
             host.hub.close_container(conn);
-            if let Some(gi) = host.hub.guests.iter().position(|g| g.conn == conn) {
+            if let Some(gi) = host.hub.guest_index(conn) {
                 self.guest_carried_back(host, gi);
             }
         }
@@ -1016,7 +1016,7 @@ impl Game<'_> {
 
     /// A packet from a guest that the hub does not handle itself.
     pub(super) fn lan_guest_packet(&mut self, host: &mut LanHost, conn: u32, packet: S) {
-        let Some(gi) = host.hub.guests.iter().position(|g| g.conn == conn) else {
+        let Some(gi) = host.hub.guest_index(conn) else {
             return;
         };
         // A dead player acts no more, but the death screen still respawns and chats: its
@@ -1545,7 +1545,7 @@ impl Game<'_> {
             Some(())
         });
         if picked.flatten().is_some()
-            && let Some(g) = host.hub.guests.iter().find(|g| g.conn == conn)
+            && let Some(g) = host.hub.guest(conn)
         {
             host.hub.send_to(
                 conn,
@@ -1760,7 +1760,7 @@ impl Game<'_> {
     }
 
     fn guest_attack(&mut self, host: &mut LanHost, conn: u32, id: i32) {
-        let Some(gi) = host.hub.guests.iter().position(|g| g.conn == conn) else {
+        let Some(gi) = host.hub.guest_index(conn) else {
             return;
         };
         if host.hub.guests[gi].spectator() {
@@ -2018,7 +2018,7 @@ impl Game<'_> {
     }
 
     fn guest_respawn(&mut self, host: &mut LanHost, conn: u32) {
-        let Some(i) = host.hub.guests.iter().position(|g| g.conn == conn) else {
+        let Some(i) = host.hub.guest_index(conn) else {
             return;
         };
         // The guest's own bed, else the world spawn: never the host's bed.
@@ -2169,7 +2169,7 @@ impl Game<'_> {
             self.refresh_hook_targets(host);
         }
         for conn in conns {
-            let Some(gi) = host.hub.guests.iter().position(|g| g.conn == conn) else {
+            let Some(gi) = host.hub.guest_index(conn) else {
                 continue;
             };
             self.guest_sleep_tick(host, gi);
@@ -2915,7 +2915,7 @@ impl Game<'_> {
 
     /// The crack animation other players see.
     fn guest_dig_feedback(&mut self, host: &mut LanHost, conn: u32) {
-        let Some(gi) = host.hub.guests.iter().position(|g| g.conn == conn) else {
+        let Some(gi) = host.hub.guest_index(conn) else {
             return;
         };
         let play = host.play.entry(conn).or_default();
@@ -3247,7 +3247,7 @@ impl Game<'_> {
     pub(super) fn lan_swings(&mut self, host: &mut LanHost) {
         let conns: Vec<u32> = host.play.keys().copied().collect();
         for conn in conns {
-            let Some(g) = host.hub.guests.iter().find(|g| g.conn == conn) else {
+            let Some(g) = host.hub.guest(conn) else {
                 continue;
             };
             let (id, at, here) = (g.entity_id, g.position, host.hub.here(g));

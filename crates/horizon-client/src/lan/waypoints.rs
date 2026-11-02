@@ -10,6 +10,7 @@
 //! `waypoint_transmit_range` and tracks or untracks the waypoint, as
 //! `LivingEntity.onAttributeUpdated` does; joining or leaving a team remakes the
 //! connections with the team's colour (`ServerScoreboard.updatePlayerWaypoint`).
+use super::conn::PacketBody;
 use crate::fast_hash::FxHashMap as HashMap;
 use horizon_protocol::packets::play::{
     Clientbound as C, TrackedWaypoint, WaypointId, WaypointTarget, waypoint_operation,
@@ -75,6 +76,12 @@ impl Default for Icon {
     }
 }
 
+/// The icon of a player `/waypoint modify` hasn't touched, shared by them.
+pub fn default_icon() -> std::sync::Arc<Icon> {
+    static DEFAULT: std::sync::OnceLock<std::sync::Arc<Icon>> = std::sync::OnceLock::new();
+    DEFAULT.get_or_init(Default::default).clone()
+}
+
 /// A player as the waypoint manager sees them this tick.
 #[derive(Clone, Debug)]
 pub struct Player {
@@ -94,7 +101,7 @@ pub struct Player {
     /// The player's team and its colour (`TeamColor.rgb`).
     pub team: Option<(String, Option<i32>)>,
     /// The icon `/waypoint modify` set.
-    pub icon: Icon,
+    pub icon: std::sync::Arc<Icon>,
 }
 
 impl Player {
@@ -124,9 +131,10 @@ enum Kind {
 #[derive(Clone, Debug)]
 struct Connection {
     kind: Kind,
-    icon: Icon,
-    /// Last tick and receiver view for which this connection was evaluated.
-    checked: Option<(u64, [i32; 2])>,
+    icon: std::sync::Arc<Icon>,
+    /// Last tick (0: none) and receiver view for which this connection was
+    /// evaluated. Rows are walked for every pair every tick: keep this small.
+    checked: (u32, [i32; 2]),
 }
 
 /// What the manager remembers of a player between ticks.
@@ -183,7 +191,11 @@ pub struct Waypoints {
     enabled: Option<bool>,
     tick: u64,
     shard: Shard,
-    orders: Vec<Order>,
+    /// This tick's `updateWaypoint` calls, for [`Self::tick_rows`].
+    moved: Vec<(usize, usize)>,
+    is_waypoint: Vec<bool>,
+    /// Each input player's slot this tick.
+    input_slots: Vec<usize>,
     /// UUID lookup occurs at the tick boundary; pair traversal uses stable slots.
     slots: HashMap<u128, usize>,
     uuids: Vec<Option<u128>>,
@@ -195,10 +207,9 @@ pub struct Waypoints {
     count_only: bool,
     #[cfg(test)]
     emitted: usize,
+    #[cfg(test)]
+    row_ticks: usize,
 }
-
-/// A packet's position in the serial manager's traversal, independent of shard.
-type Order = (u64, usize, usize);
 
 #[derive(Clone, Copy)]
 struct Shard {
@@ -224,31 +235,24 @@ impl Shard {
     }
 }
 
-/// A local locator update or an already encoded network packet body.
+/// A local locator update, or all of one receiver's packets of the tick.
 pub enum Delivery {
     Local(TrackedWaypoint),
-    Encoded(Vec<u8>),
-}
-
-#[cfg(test)]
-fn encode_delivery(conn: u32, packet: C, local: Option<u32>) -> (u32, Delivery) {
-    let delivery = if local == Some(conn) {
-        let C::TrackedWaypoint(waypoint) = packet else {
-            unreachable!("the waypoint manager emits only locator updates")
-        };
-        Delivery::Local(waypoint)
-    } else {
-        Delivery::Encoded(packet.encode())
-    };
-    (conn, delivery)
+    Encoded(PacketBody),
 }
 
 /// Borrow the icon until bytes are written, avoiding a cloned style and the
 /// large Clientbound staging vector. Wire layout: TrackedWaypoint::write.
-fn encode_waypoint(source: u128, operation: i32, icon: &Icon, target: WaypointTarget) -> Vec<u8> {
+fn write_waypoint(
+    data: &mut Vec<u8>,
+    source: u128,
+    operation: i32,
+    icon: &Icon,
+    target: WaypointTarget,
+) {
     use horizon_protocol::{buf::Writer, ids::play::clientbound::WAYPOINT};
     let mut w = Writer {
-        data: Vec::with_capacity(48 + icon.style.len()),
+        data: std::mem::take(data),
     };
     w.varint(WAYPOINT);
     w.varint(operation);
@@ -279,46 +283,68 @@ fn encode_waypoint(source: u128, operation: i32, icon: &Icon, target: WaypointTa
             w.f32(angle);
         }
     }
-    w.data
+    *data = w.data;
+}
+
+/// One receiver's packets so far this tick, end to end.
+#[derive(Default)]
+struct Run {
+    conn: u32,
+    bytes: Vec<u8>,
+    ends: Vec<u32>,
+}
+
+/// A shard's packets by receiver: only a receiver's owner writes to it, so
+/// each connection's packets are in the serial manager's order without any
+/// merge across shards.
+#[derive(Default)]
+struct Ready {
+    runs: Vec<Run>,
+    touched: Vec<usize>,
+    out: Vec<(u32, Delivery)>,
+}
+
+impl Ready {
+    fn run(&mut self, receiver: usize, conn: u32) -> &mut Run {
+        if self.runs.len() <= receiver {
+            self.runs.resize_with(receiver + 1, Run::default);
+        }
+        let run = &mut self.runs[receiver];
+        if run.ends.is_empty() {
+            self.touched.push(receiver);
+            run.conn = conn;
+        }
+        run
+    }
+
+    /// Each receiver's packets as one body, sized for the next tick's like them.
+    fn finish(&mut self) {
+        for receiver in self.touched.drain(..) {
+            let run = &mut self.runs[receiver];
+            let (bytes, ends) = (run.bytes.len(), run.ends.len());
+            self.out.push((
+                run.conn,
+                Delivery::Encoded(PacketBody::Run {
+                    bytes: std::mem::replace(&mut run.bytes, Vec::with_capacity(bytes)),
+                    ends: std::mem::replace(&mut run.ends, Vec::with_capacity(ends)),
+                }),
+            ));
+        }
+    }
 }
 
 enum Output<'a> {
     Typed(&'a mut Vec<(u32, C)>),
     Encoded {
-        ready: &'a mut Vec<(u32, Delivery)>,
+        ready: &'a mut Ready,
         local: Option<u32>,
     },
-}
-
-#[cfg(any(test, feature = "profiler"))]
-#[derive(Clone, Copy, Debug, Default)]
-struct ShardTime {
-    started: std::time::Duration,
-    finished: std::time::Duration,
-    update: std::time::Duration,
-    encode: std::time::Duration,
-    packets: usize,
-    encoded_bytes: usize,
-}
-
-#[cfg(any(test, feature = "profiler"))]
-#[derive(Clone, Copy, Debug, Default)]
-struct PassTime {
-    scope: std::time::Duration,
-    wait: std::time::Duration,
-    merge: std::time::Duration,
 }
 
 #[derive(Default)]
 struct ReceiverShard {
     manager: Waypoints,
-    #[cfg(test)]
-    out: Vec<(u32, C)>,
-    #[cfg(test)]
-    staged: bool,
-    ready: Vec<(u32, Delivery)>,
-    #[cfg(any(test, feature = "profiler"))]
-    time: ShardTime,
+    ready: Ready,
 }
 
 /// Owned only while a pass runs; the original player buffer returns to the caller.
@@ -329,29 +355,11 @@ struct Snapshot {
     respawned: std::sync::Arc<Vec<u128>>,
     enabled: bool,
     local: Option<u32>,
-    #[cfg(any(test, feature = "profiler"))]
-    started: std::time::Instant,
-}
-
-impl Snapshot {
-    fn frame(&self) -> Frame<'_> {
-        Frame {
-            players: &self.players,
-            geometry: &self.geometry,
-            away: &self.away,
-            respawned: &self.respawned,
-            enabled: self.enabled,
-            local: self.local,
-            #[cfg(any(test, feature = "profiler"))]
-            started: self.started,
-        }
-    }
 }
 
 struct Work {
     shard: ReceiverShard,
     snapshot: std::sync::Arc<Snapshot>,
-    encode: bool,
 }
 
 /// A persistent helper parked on a mailbox between passes. Only its owned
@@ -373,10 +381,9 @@ impl Helper {
                 while let Ok(Work {
                     mut shard,
                     snapshot,
-                    encode,
                 }) = work.recv()
                 {
-                    shard.tick(snapshot.frame(), encode);
+                    shard.tick(&snapshot);
                     // Release the input before publishing completion, so the caller
                     // can recover its original vector without cloning any players.
                     drop(snapshot);
@@ -415,159 +422,32 @@ impl Drop for Helper {
     }
 }
 
-struct RunTime {
-    #[cfg(any(test, feature = "profiler"))]
-    main_done: std::time::Duration,
-}
-
-#[derive(Clone, Copy)]
-struct Frame<'a> {
-    players: &'a [Player],
-    geometry: &'a [Geometry],
-    away: &'a [(u128, u32)],
-    respawned: &'a [u128],
-    enabled: bool,
-    local: Option<u32>,
-    #[cfg(any(test, feature = "profiler"))]
-    started: std::time::Instant,
-}
-
 impl ReceiverShard {
-    fn tick(&mut self, frame: Frame<'_>, encode: bool) {
-        #[cfg(any(test, feature = "profiler"))]
-        let start = std::time::Instant::now();
-        #[cfg(test)]
-        let fused = encode && !self.staged;
-        #[cfg(not(test))]
-        let _ = encode;
-        #[cfg(test)]
-        let out = if fused {
+    fn tick(&mut self, s: &Snapshot) {
+        self.manager.tick_level_cached(
+            (&s.players, &s.geometry),
+            &s.away,
+            &s.respawned,
+            s.enabled,
             Output::Encoded {
                 ready: &mut self.ready,
-                local: frame.local,
-            }
-        } else {
-            Output::Typed(&mut self.out)
-        };
-        #[cfg(not(test))]
-        let out = Output::Encoded {
-            ready: &mut self.ready,
-            local: frame.local,
-        };
-        self.manager.tick_level_cached(
-            (frame.players, frame.geometry),
-            frame.away,
-            frame.respawned,
-            frame.enabled,
-            out,
+                local: s.local,
+            },
         );
-        #[cfg(test)]
-        if encode && !fused {
-            self.ready.extend(
-                self.out
-                    .drain(..)
-                    .map(|(conn, packet)| encode_delivery(conn, packet, frame.local)),
-            );
-        }
-        #[cfg(any(test, feature = "profiler"))]
-        {
-            self.time = ShardTime {
-                started: start.duration_since(frame.started),
-                update: start.elapsed(),
-                packets: {
-                    #[cfg(test)]
-                    {
-                        if encode {
-                            self.ready.len()
-                        } else {
-                            self.out.len()
-                        }
-                    }
-                    #[cfg(not(test))]
-                    {
-                        self.ready.len()
-                    }
-                },
-                encoded_bytes: self
-                    .ready
-                    .iter()
-                    .map(|(_, d)| match d {
-                        Delivery::Encoded(b) => b.len(),
-                        Delivery::Local(_) => 0,
-                    })
-                    .sum(),
-                ..ShardTime::default()
-            };
-        }
-        #[cfg(any(test, feature = "profiler"))]
-        {
-            self.time.finished = frame.started.elapsed();
-        }
-    }
-}
-
-/// Every stream follows the serial traversal. Merge its order tags without
-/// sorting or cloning bodies; encoded frames are much smaller than Clientbound.
-fn merge_ordered<T>(mut streams: Vec<impl Iterator<Item = (Order, T)>>, out: &mut Vec<T>) {
-    let mut heap = std::collections::BinaryHeap::new();
-    let mut heads: Vec<_> = streams.iter_mut().map(Iterator::next).collect();
-    for (index, head) in heads.iter().enumerate() {
-        if let Some((order, _)) = head {
-            heap.push(std::cmp::Reverse((*order, index)));
-        }
-    }
-    while let Some(std::cmp::Reverse((_, index))) = heap.pop() {
-        out.push(heads[index].take().unwrap().1);
-        heads[index] = streams[index].next();
-        if let Some((order, _)) = &heads[index] {
-            heap.push(std::cmp::Reverse((*order, index)));
-        }
-    }
-}
-
-#[cfg(feature = "profiler")]
-#[derive(Default)]
-struct WaypointProfile {
-    ticks: u64,
-    peak_headers: usize,
-    peak_rows: usize,
-}
-
-#[cfg(feature = "profiler")]
-impl Drop for WaypointProfile {
-    fn drop(&mut self) {
-        eprintln!(
-            "waypoint_memory ticks={} peak_vector_bytes={} peak_connection_rows={}",
-            self.ticks, self.peak_headers, self.peak_rows
-        );
+        self.ready.finish();
     }
 }
 
 /// Receiver rows of ServerWaypointManager evaluated on the server's helper lane.
 /// Each shard replays the same lifecycle and view phases over immutable inputs;
-/// only its connection rows mutate. The merge restores the serial packet order.
+/// only its connection rows mutate. A receiver's row and packets live on one
+/// shard, so every connection gets its packets in the serial order.
 pub struct ParallelWaypoints {
     geometry: Vec<Geometry>,
     shards: Vec<ReceiverShard>,
     helpers: Vec<Helper>,
     #[cfg(test)]
-    transient_helpers: bool,
-    #[cfg(test)]
     threads: Option<usize>,
-    #[cfg(test)]
-    encode_after_join: bool,
-    #[cfg(test)]
-    staged: bool,
-    #[cfg(test)]
-    spawn_on_helpers: bool,
-    #[cfg(test)]
-    yield_to_helpers: bool,
-    #[cfg(test)]
-    legacy_out: Vec<(u32, C)>,
-    #[cfg(any(test, feature = "profiler"))]
-    time: PassTime,
-    #[cfg(feature = "profiler")]
-    profile: WaypointProfile,
 }
 
 impl Default for ParallelWaypoints {
@@ -577,23 +457,7 @@ impl Default for ParallelWaypoints {
             shards: vec![ReceiverShard::default()],
             helpers: Vec::new(),
             #[cfg(test)]
-            transient_helpers: false,
-            #[cfg(test)]
             threads: None,
-            #[cfg(test)]
-            encode_after_join: false,
-            #[cfg(test)]
-            staged: false,
-            #[cfg(test)]
-            spawn_on_helpers: false,
-            #[cfg(test)]
-            yield_to_helpers: false,
-            #[cfg(test)]
-            legacy_out: Vec::new(),
-            #[cfg(any(test, feature = "profiler"))]
-            time: PassTime::default(),
-            #[cfg(feature = "profiler")]
-            profile: WaypointProfile::default(),
         }
     }
 }
@@ -639,7 +503,7 @@ impl ParallelWaypoints {
         }
     }
 
-    fn run_persistent(&mut self, snapshot: &std::sync::Arc<Snapshot>, encode: bool) -> RunTime {
+    fn run_persistent(&mut self, snapshot: &std::sync::Arc<Snapshot>) {
         while self.helpers.len() < self.shards.len() - 1 {
             self.helpers.push(Helper::new());
         }
@@ -647,55 +511,18 @@ impl ParallelWaypoints {
             helper.send(Work {
                 shard: std::mem::take(shard),
                 snapshot: snapshot.clone(),
-                encode,
             });
         }
-        self.shards[0].tick(snapshot.frame(), encode);
-        #[cfg(any(test, feature = "profiler"))]
-        let main_done = snapshot.started.elapsed();
+        self.shards[0].tick(snapshot);
         for (helper, shard) in self.helpers.iter().zip(&mut self.shards[1..]) {
             *shard = helper.receive();
         }
-        RunTime {
-            #[cfg(any(test, feature = "profiler"))]
-            main_done,
-        }
     }
 
-    #[cfg(test)]
-    fn run_scoped(&mut self, snapshot: &Snapshot, encode: bool) -> RunTime {
-        let frame = snapshot.frame();
-        let spawn_on_helpers = self.spawn_on_helpers;
-        let yield_to_helpers = self.yield_to_helpers;
-        let (tick_shard, helpers) = self.shards.split_first_mut().unwrap();
-        let mut main_done = std::time::Duration::ZERO;
-        if spawn_on_helpers {
-            horizon_threads::worker_affinity();
-        }
-        std::thread::scope(|scope| {
-            for shard in helpers {
-                std::thread::Builder::new()
-                    .name("waypoint-worker".into())
-                    .spawn_scoped(scope, move || {
-                        horizon_threads::worker_affinity();
-                        shard.tick(frame, encode);
-                    })
-                    .expect("start waypoint worker");
-            }
-            if spawn_on_helpers {
-                horizon_threads::tick_affinity();
-            }
-            if yield_to_helpers {
-                std::thread::yield_now();
-            }
-            tick_shard.tick(frame, encode);
-            main_done = snapshot.started.elapsed();
-        });
-        RunTime { main_done }
-    }
-
-    /// Join encoded output in the original global order. The local receiver's
-    /// typed updates are applied by the caller only after the complete pass.
+    /// One pass over a level's players. `out` gets each connection's packets
+    /// in the serial order; different connections come in no particular
+    /// order. The local receiver's typed updates are applied by the caller
+    /// only after the complete pass.
     pub fn tick_level_into(
         &mut self,
         players: &mut Vec<Player>,
@@ -716,16 +543,6 @@ impl ParallelWaypoints {
         if self.shards.len() == 1 && threads > 1 {
             self.split(threads);
         }
-        #[cfg(test)]
-        let encode_after_join = self.encode_after_join;
-        #[cfg(test)]
-        for shard in &mut self.shards {
-            shard.staged = self.staged;
-        }
-        #[cfg(not(test))]
-        let encode_after_join = false;
-        #[cfg(any(test, feature = "profiler"))]
-        let start = std::time::Instant::now();
         let mut geometry = std::mem::take(&mut self.geometry);
         geometry.clear();
         geometry.extend(players.iter().map(Geometry::new));
@@ -736,144 +553,20 @@ impl ParallelWaypoints {
             respawned: respawned.clone(),
             enabled: locator_bar,
             local,
-            #[cfg(any(test, feature = "profiler"))]
-            started: start,
         });
-        let _run = if self.shards.len() == 1 {
-            self.shards[0].tick(snapshot.frame(), !encode_after_join);
-            RunTime {
-                #[cfg(any(test, feature = "profiler"))]
-                main_done: start.elapsed(),
-            }
+        if self.shards.len() == 1 {
+            self.shards[0].tick(&snapshot);
         } else {
-            #[cfg(test)]
-            {
-                if self.transient_helpers {
-                    self.run_scoped(&snapshot, !encode_after_join)
-                } else {
-                    self.run_persistent(&snapshot, !encode_after_join)
-                }
-            }
-            #[cfg(not(test))]
-            {
-                self.run_persistent(&snapshot, !encode_after_join)
-            }
-        };
-        #[cfg(any(test, feature = "profiler"))]
-        let merge_start = std::time::Instant::now();
-        #[cfg(test)]
-        if encode_after_join {
-            if self.shards.len() == 1 {
-                self.legacy_out.append(&mut self.shards[0].out);
-            } else {
-                let streams = self
-                    .shards
-                    .iter_mut()
-                    .map(|s| s.manager.orders.drain(..).zip(s.out.drain(..)))
-                    .collect();
-                merge_ordered(streams, &mut self.legacy_out);
-            }
-            out.extend(
-                self.legacy_out
-                    .drain(..)
-                    .map(|(c, p)| encode_delivery(c, p, local)),
-            );
+            self.run_persistent(&snapshot);
         }
-        if !encode_after_join {
-            if self.shards.len() == 1 {
-                out.append(&mut self.shards[0].ready);
-            } else {
-                let streams = self
-                    .shards
-                    .iter_mut()
-                    .map(|s| s.manager.orders.drain(..).zip(s.ready.drain(..)))
-                    .collect();
-                merge_ordered(streams, out);
-            }
-        }
-        #[cfg(any(test, feature = "profiler"))]
-        {
-            self.time = PassTime {
-                scope: merge_start.duration_since(start),
-                wait: merge_start
-                    .duration_since(start)
-                    .saturating_sub(_run.main_done),
-                merge: merge_start.elapsed(),
-            };
+        for shard in &mut self.shards {
+            out.append(&mut shard.ready.out);
         }
         let snapshot = std::sync::Arc::try_unwrap(snapshot)
             .ok()
             .expect("waypoint helpers released their snapshot");
         *players = snapshot.players;
         self.geometry = snapshot.geometry;
-        #[cfg(feature = "profiler")]
-        self.record_profile(players.len(), out.capacity());
-    }
-
-    #[cfg(any(test, feature = "profiler"))]
-    fn retained_vectors(&self, output_capacity: usize) -> (usize, usize, usize) {
-        fn vector_bytes<T>(vector: &Vec<T>) -> usize {
-            vector.capacity() * std::mem::size_of::<T>()
-        }
-        let mut bytes =
-            output_capacity * std::mem::size_of::<(u32, Delivery)>() + vector_bytes(&self.geometry);
-        #[cfg(test)]
-        {
-            bytes += vector_bytes(&self.legacy_out);
-        }
-        let (mut rows, mut row_capacity) = (0, 0);
-        for shard in &self.shards {
-            #[cfg(test)]
-            {
-                bytes += vector_bytes(&shard.out);
-            }
-            bytes += vector_bytes(&shard.ready)
-                + vector_bytes(&shard.manager.orders)
-                + vector_bytes(&shard.manager.connections)
-                + vector_bytes(&shard.manager.memo)
-                + vector_bytes(&shard.manager.frame)
-                + vector_bytes(&shard.manager.geometry)
-                + vector_bytes(&shard.manager.view)
-                + vector_bytes(&shard.manager.uuids)
-                + vector_bytes(&shard.manager.free);
-            for row in &shard.manager.connections {
-                rows += row.ordered.len();
-                row_capacity += row.ordered.capacity();
-                bytes += vector_bytes(&row.index) + vector_bytes(&row.ordered);
-            }
-        }
-        (bytes, rows, row_capacity)
-    }
-
-    #[cfg(feature = "profiler")]
-    fn record_profile(&mut self, players: usize, output_capacity: usize) {
-        let (bytes, rows, row_capacity) = self.retained_vectors(output_capacity);
-        self.profile.ticks += 1;
-        self.profile.peak_headers = self.profile.peak_headers.max(bytes);
-        self.profile.peak_rows = self.profile.peak_rows.max(rows);
-        if players >= 128 && self.profile.ticks.is_multiple_of(64) {
-            let work: Vec<_> = self
-                .shards
-                .iter()
-                .map(|s| {
-                    [
-                        s.time.started.as_secs_f64() * 1000.0,
-                        s.time.update.as_secs_f64() * 1000.0,
-                        s.time.encode.as_secs_f64() * 1000.0,
-                        s.time.finished.as_secs_f64() * 1000.0,
-                        s.time.packets as f64,
-                    ]
-                })
-                .collect();
-            let encoded_bytes: usize = self.shards.iter().map(|s| s.time.encoded_bytes).sum();
-            eprintln!(
-                "waypoint_pass players={players} tick={} scope_ms={:.3} join_wait_ms={:.3} merge_ms={:.3} shard_start_update_encode_finish_packets={work:?} vector_bytes={bytes} rows={rows} row_capacity={row_capacity} encoded_bytes={encoded_bytes}",
-                self.profile.ticks,
-                self.time.scope.as_secs_f64() * 1000.0,
-                self.time.wait.as_secs_f64() * 1000.0,
-                self.time.merge.as_secs_f64() * 1000.0
-            );
-        }
     }
 }
 
@@ -948,9 +641,6 @@ struct Tick<'a> {
     fresh: &'a [u128],
     enabled: bool,
     out: Output<'a>,
-    orders: &'a mut Vec<Order>,
-    order: Order,
-    sharded: bool,
     #[cfg(test)]
     count_only: bool,
     #[cfg(test)]
@@ -958,10 +648,6 @@ struct Tick<'a> {
 }
 
 impl<'a> Tick<'a> {
-    fn phase(&mut self) {
-        self.order = (self.order.0 + 1, 0, 0);
-    }
-
     fn player(&self, slot: &usize) -> Option<PlayerRef<'a>> {
         let f = self.frame[*slot];
         Some(PlayerRef {
@@ -990,10 +676,11 @@ impl<'a> Tick<'a> {
         }) else {
             return;
         };
-        self.emit(conn, source, operation, icon, target);
+        self.emit(receiver, conn, source, operation, icon, target);
     }
     fn emit(
         &mut self,
+        receiver: usize,
         conn: u32,
         source: usize,
         operation: i32,
@@ -1007,22 +694,20 @@ impl<'a> Tick<'a> {
                 return;
             }
         }
-        if self.sharded {
-            self.orders.push(self.order);
-        }
         let source = self.uuids[source].expect("live waypoint slot");
         match &mut self.out {
             Output::Typed(out) => out.push((conn, waypoint(source, operation, icon, target))),
             Output::Encoded { ready, local } => {
-                let delivery = if *local == Some(conn) {
+                if *local == Some(conn) {
                     let C::TrackedWaypoint(w) = waypoint(source, operation, icon, target) else {
                         unreachable!()
                     };
-                    Delivery::Local(w)
+                    ready.out.push((conn, Delivery::Local(w)));
                 } else {
-                    Delivery::Encoded(encode_waypoint(source, operation, icon, target))
-                };
-                ready.push((conn, delivery));
+                    let run = ready.run(receiver, conn);
+                    write_waypoint(&mut run.bytes, source, operation, icon, target);
+                    run.ends.push(run.bytes.len() as u32);
+                }
             }
         }
     }
@@ -1040,7 +725,7 @@ impl<'a> Tick<'a> {
             receiver,
             source,
             waypoint_operation::UNTRACK,
-            &Icon::default(),
+            &default_icon(),
             WaypointTarget::Empty,
         );
     }
@@ -1093,10 +778,13 @@ impl<'a> Tick<'a> {
             return None;
         }
         // Waypoint.Icon.cloneAndAssignStyle: the icon's colour, else the team's.
-        let mut icon = s.icon.clone();
-        if icon.color.is_none() {
-            icon.color = s.team.as_ref().and_then(|t| t.1);
-        }
+        let icon = match s.team.as_ref().and_then(|t| t.1) {
+            Some(color) if s.icon.color.is_none() => std::sync::Arc::new(Icon {
+                style: s.icon.style.clone(),
+                color: Some(color),
+            }),
+            _ => s.icon.clone(),
+        };
         let kind = if Self::really_far(&s, &r) {
             Kind::Azimuth(Self::azimuth(&s, &r))
         } else if !self.chunk_visible(s.chunk(), r.slot) {
@@ -1107,7 +795,7 @@ impl<'a> Tick<'a> {
         Some(Connection {
             kind,
             icon,
-            checked: None,
+            checked: (0, [0; 2]),
         })
     }
     /// `Connection.isBroken` for each kind.
@@ -1159,7 +847,14 @@ impl<'a> Tick<'a> {
             }
         };
         if let Some(conn) = r.conn {
-            self.emit(conn, s.slot, waypoint_operation::UPDATE, &c.icon, target);
+            self.emit(
+                r.slot,
+                conn,
+                s.slot,
+                waypoint_operation::UPDATE,
+                &c.icon,
+                target,
+            );
         }
     }
 }
@@ -1212,14 +907,14 @@ impl Waypoints {
         }
         if let Some(i) = row.index.get(source).copied().flatten() {
             let c = &mut row.ordered[i.get() - 1].1;
-            let stamp = (t.serial, t.view[receiver].map_or([0; 2], |v| v.0));
+            let stamp = (t.serial as u32, t.view[receiver].map_or([0; 2], |v| v.0));
             // Entity.setPosRaw and ServerChunkCache.move can visit this pair
             // repeatedly with identical inputs. The first call already emitted
             // its packets; a changed receiver view must still be checked.
-            if c.checked == Some(stamp) {
+            if c.checked == stamp {
                 return;
             }
-            c.checked = Some(stamp);
+            c.checked = stamp;
             // A connection to a player who isn't in the level is broken.
             if let Some(pair) = pair
                 && !t.broken(c, pair)
@@ -1242,18 +937,15 @@ impl Waypoints {
     }
     /// `trackWaypoint`.
     fn track(&mut self, t: &mut Tick, source: usize) {
-        t.phase();
         if !self.waypoints.contains(&source) {
             self.waypoints.push(source);
         }
         for k in 0..self.players.len() {
-            t.order.1 = k;
             self.create_connection(t, self.players[k], source);
         }
     }
     /// `updateWaypoint`.
     fn update_waypoint(&mut self, t: &mut Tick, source: usize) {
-        t.phase();
         if !t.enabled || !self.waypoints.contains(&source) {
             return;
         }
@@ -1265,7 +957,6 @@ impl Waypoints {
             if !t.owns(receiver) {
                 continue;
             }
-            t.order.1 = k;
             let pair = source_player.zip(t.player(&receiver));
             let row = &mut self.connections[receiver];
             Self::update_connection(row, t, receiver, source, pair);
@@ -1273,9 +964,7 @@ impl Waypoints {
     }
     /// `untrackWaypoint`.
     fn untrack(&mut self, t: &mut Tick, source: usize) {
-        t.phase();
         for k in 0..self.players.len() {
-            t.order.1 = k;
             let receiver = self.players[k];
             if self.take(receiver, source).is_some() {
                 t.disconnect(receiver, source);
@@ -1285,12 +974,10 @@ impl Waypoints {
     }
     /// `addPlayer`.
     fn add_player(&mut self, t: &mut Tick, player: usize, transmitting: bool) {
-        t.phase();
         if !self.players.contains(&player) {
             self.players.push(player);
         }
         for k in 0..self.waypoints.len() {
-            t.order.1 = k;
             self.create_connection(t, player, self.waypoints[k]);
         }
         if transmitting {
@@ -1299,28 +986,20 @@ impl Waypoints {
     }
     /// `updatePlayer`.
     fn update_player(&mut self, t: &mut Tick, player: usize) {
-        t.phase();
         if !t.owns(player) || !t.enabled {
             return;
         }
         // Keep the receiver row and player lookup outside the source loop.
         let receiver = t.player(&player);
         let row = &mut self.connections[player];
-        for (k, &source) in self.waypoints.iter().enumerate() {
-            t.order.1 = k;
+        for &source in &self.waypoints {
             let pair = t.player(&source).zip(receiver);
             Self::update_connection(row, t, player, source, pair);
         }
     }
     /// `removePlayer`.
     fn remove_player(&mut self, t: &mut Tick, player: usize) {
-        t.phase();
-        for (k, (source, _)) in std::mem::take(&mut self.connections[player])
-            .ordered
-            .into_iter()
-            .enumerate()
-        {
-            t.order.1 = k;
+        for (source, _) in std::mem::take(&mut self.connections[player]).ordered {
             t.disconnect(player, source);
         }
         self.untrack(t, player);
@@ -1328,15 +1007,8 @@ impl Waypoints {
     }
     /// `breakAllConnections`.
     fn break_all(&mut self, t: &mut Tick) {
-        t.phase();
-        for (k, &receiver) in self.players.iter().enumerate() {
-            t.order.1 = k;
-            for (j, (source, _)) in std::mem::take(&mut self.connections[receiver])
-                .ordered
-                .into_iter()
-                .enumerate()
-            {
-                t.order.2 = j;
+        for &receiver in &self.players {
+            for (source, _) in std::mem::take(&mut self.connections[receiver]).ordered {
                 t.disconnect(receiver, source);
             }
         }
@@ -1411,6 +1083,7 @@ impl Waypoints {
         for f in &mut self.frame {
             f.input = None;
         }
+        self.input_slots.clear();
         for (input, p) in players.iter().enumerate() {
             let slot = if let Some(&slot) = self.slots.get(&p.uuid) {
                 slot
@@ -1432,11 +1105,10 @@ impl Waypoints {
                 input: Some(input),
                 owned: self.shard.owns(p.uuid),
             };
+            self.input_slots.push(slot);
         }
         // Departed receivers still own their row until all disconnects have run.
         self.view.fill(None);
-        self.orders.clear();
-        let mut orders = std::mem::take(&mut self.orders);
         let mut t = Tick {
             serial: self.tick,
             players,
@@ -1448,9 +1120,6 @@ impl Waypoints {
             fresh: respawned,
             enabled: locator_bar,
             out,
-            orders: &mut orders,
-            order: (0, 0, 0),
-            sharded: self.shard.count > 1,
             #[cfg(test)]
             count_only: self.count_only,
             #[cfg(test)]
@@ -1473,6 +1142,21 @@ impl Waypoints {
                 t.frame[*uuid].input.is_none() || respawned.contains(&t.uuids[*uuid].unwrap())
             })
             .collect();
+        let quiet = matches!(t.out, Output::Encoded { .. })
+            && locator_bar
+            && was == Some(true)
+            && gone.is_empty()
+            && respawned.is_empty()
+            && players.iter().zip(&self.input_slots).all(|(p, &slot)| {
+                self.memo[slot].as_ref().is_some_and(|memo| {
+                    memo.transmitting == (p.transmit_range > 0.0) && memo.team == p.team
+                })
+            });
+        if quiet {
+            self.tick_rows(&mut t);
+            self.finish_tick(t);
+            return;
+        }
         for uuid in gone {
             self.remove_player(&mut t, uuid);
             self.memo[uuid] = None;
@@ -1543,13 +1227,90 @@ impl Waypoints {
             // ServerScoreboard: a team joined, left or recoloured remakes the connections.
             if p.team != self.memo[p.slot].as_ref().unwrap().team {
                 self.memo[p.slot].as_mut().unwrap().team = p.team.clone();
-                t.phase();
                 for k in 0..self.players.len() {
-                    t.order.1 = k;
                     self.create_connection(&mut t, self.players[k], p.slot);
                 }
             }
         }
+        self.finish_tick(t);
+    }
+
+    /// The moves of a tick where nobody joined, left, hid or changed team:
+    /// the phases of `tick_level_cached` by receiver rather than by source,
+    /// walking one row at a time. A pair's visits are ordered only within its
+    /// receiver's row, which is what its connection sees: the sources that
+    /// moved before this player (`updateWaypoint`), its own move
+    /// (`updatePlayer`, again with its new view), then those after it.
+    fn tick_rows(&mut self, t: &mut Tick) {
+        self.is_waypoint.clear();
+        self.is_waypoint.resize(t.uuids.len(), false);
+        for &source in &self.waypoints {
+            self.is_waypoint[source] = true;
+        }
+        self.moved.clear();
+        for (input, &slot) in self.input_slots.iter().enumerate() {
+            let p = &t.players[input];
+            let memo = self.memo[slot].as_ref().unwrap();
+            if memo.position != p.position
+                && !p.first_tick
+                && memo.transmitting
+                && self.is_waypoint[slot]
+            {
+                self.moved.push((input, slot));
+            }
+        }
+        for &receiver in &self.players {
+            if !t.owns(receiver) {
+                continue;
+            }
+            let Some(r) = t.player(&receiver) else {
+                continue;
+            };
+            let input = t.frame[receiver].input.unwrap_or(0);
+            let split = self.moved.partition_point(|&(i, _)| i < input);
+            let row = &mut self.connections[receiver];
+            for &(_, source) in &self.moved[..split] {
+                let pair = t.player(&source).zip(Some(r));
+                Self::update_connection(row, t, receiver, source, pair);
+            }
+            let memo = self.memo[receiver].as_ref().unwrap();
+            if memo.position != r.position {
+                if !r.first_tick && r.receive_range > 0.0 {
+                    for &source in &self.waypoints {
+                        let pair = t.player(&source).zip(Some(r));
+                        Self::update_connection(row, t, receiver, source, pair);
+                    }
+                }
+                if memo.view_center != r.chunk() {
+                    t.view[receiver] = Some((r.chunk(), r.view_distance));
+                }
+                if r.receive_range > 0.0 {
+                    for &source in &self.waypoints {
+                        let pair = t.player(&source).zip(Some(r));
+                        Self::update_connection(row, t, receiver, source, pair);
+                    }
+                }
+            }
+            for &(_, source) in &self.moved[split..] {
+                let pair = t.player(&source).zip(Some(r));
+                Self::update_connection(row, t, receiver, source, pair);
+            }
+        }
+        for (input, &slot) in self.input_slots.iter().enumerate() {
+            let p = t.player(&slot).expect("in this tick's input");
+            debug_assert_eq!(t.frame[slot].input, Some(input));
+            let memo = self.memo[slot].as_mut().unwrap();
+            memo.position = p.position;
+            memo.view_center = p.chunk();
+        }
+        #[cfg(test)]
+        {
+            self.row_ticks += 1;
+        }
+    }
+
+    /// The end of a tick's two ways: back to the manager what the tick took.
+    fn finish_tick(&mut self, t: Tick) {
         #[cfg(test)]
         {
             self.emitted = t.emitted;
@@ -1575,13 +1336,13 @@ impl Waypoints {
             }
         }
         self.view = t.view;
-        self.orders = orders;
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
 
     /// Run explicitly in release mode to measure the moving 100-player locator workload.
     #[test]
@@ -1803,8 +1564,81 @@ mod tests {
         }
     }
 
+    /// Each connection's packets as its writer thread would send them.
+    fn by_connection(out: Vec<(u32, Delivery)>) -> BTreeMap<u32, Vec<Vec<u8>>> {
+        let mut conns: BTreeMap<u32, Vec<Vec<u8>>> = BTreeMap::new();
+        for (conn, delivery) in out {
+            let packets = conns.entry(conn).or_default();
+            match delivery {
+                Delivery::Local(w) => packets.push(C::TrackedWaypoint(w).encode()),
+                Delivery::Encoded(body) => packets.extend(body.packets().map(<[u8]>::to_vec)),
+            }
+        }
+        conns
+    }
+
+    fn serial_by_connection(out: Vec<(u32, C)>) -> BTreeMap<u32, Vec<Vec<u8>>> {
+        let mut conns: BTreeMap<u32, Vec<Vec<u8>>> = BTreeMap::new();
+        for (conn, packet) in out {
+            conns.entry(conn).or_default().push(packet.encode());
+        }
+        conns
+    }
+
+    /// The row pass against the serial phases: moves over all three connection
+    /// kinds and a view change, with a player on its first tick and one who
+    /// only transmits, and the odd tick that takes the phases again.
     #[test]
-    fn receiver_shards_preserve_global_order_through_lifecycle_and_view_changes() {
+    fn row_pass_matches_the_serial_phases_for_every_connection() {
+        for threads in [1, 2, 4, 8] {
+            let mut reference = Waypoints::default();
+            let mut parallel = ParallelWaypoints {
+                threads: Some(threads),
+                ..ParallelWaypoints::default()
+            };
+            let mut players: Vec<_> = (1..=40u128)
+                .map(|id| {
+                    let x = if id % 4 == 0 {
+                        id as f64 * 400.0
+                    } else {
+                        id as f64
+                    };
+                    let mut p = player(id, id as u32, [x, 64.0, 0.5]);
+                    p.view_distance = if id % 3 == 0 { 32 } else { 4 };
+                    p.receive_range = if id == 9 { 0.0 } else { PLAYER_RANGE };
+                    p
+                })
+                .collect();
+            let away = std::sync::Arc::new(Vec::new());
+            let none = std::sync::Arc::new(Vec::new());
+            for frame in 0..60u128 {
+                for p in &mut players {
+                    // Standing still every so often, and a few moving fast.
+                    if (p.uuid + frame) % 7 != 0 {
+                        p.position[0] += if p.uuid % 5 == 0 { 11.0 } else { 0.6 };
+                        p.position[2] += if p.uuid % 2 == 0 { 1.3 } else { -0.7 };
+                    }
+                    p.first_tick = frame == 20 && p.uuid == 2;
+                }
+                if frame == 30 {
+                    players[5].transmit_range = 0.0;
+                }
+                let expected = reference.tick_level(&players, &away, &[], true);
+                let mut actual = Vec::new();
+                parallel.tick_level_into(&mut players, &away, &none, true, Some(3), &mut actual);
+                assert_eq!(
+                    by_connection(actual),
+                    serial_by_connection(expected),
+                    "threads={threads} frame={frame}"
+                );
+            }
+            let rows: usize = parallel.shards.iter().map(|s| s.manager.row_ticks).sum();
+            assert_eq!(rows, threads * 58, "all but the first tick and the hiding");
+        }
+    }
+
+    #[test]
+    fn receiver_shards_preserve_each_connections_order_through_lifecycle_and_view_changes() {
         for threads in [2, 4, 8] {
             let mut reference = Waypoints::default();
             let mut parallel = ParallelWaypoints {
@@ -1873,201 +1707,10 @@ mod tests {
                 assert_eq!(players.as_ptr(), buffer);
                 assert_eq!(std::sync::Arc::strong_count(&away), 1);
                 assert_eq!(std::sync::Arc::strong_count(&respawned), 1);
-                let encode_actual = actual
-                    .into_iter()
-                    .map(|(c, d)| {
-                        (
-                            c,
-                            match d {
-                                Delivery::Encoded(b) => b,
-                                Delivery::Local(w) => C::TrackedWaypoint(w).encode(),
-                            },
-                        )
-                    })
-                    .collect::<Vec<_>>();
-                let encode_expected = expected
-                    .into_iter()
-                    .map(|(c, p)| (c, p.encode()))
-                    .collect::<Vec<_>>();
                 assert_eq!(
-                    encode_actual, encode_expected,
+                    by_connection(actual),
+                    serial_by_connection(expected),
                     "threads={threads} frame={frame}"
-                );
-            }
-        }
-    }
-
-    /// Run under a CPU taskset: this uses the production tick/helper affinity
-    /// plan, including dispatch and the globally ordered join.
-    #[test]
-    #[ignore]
-    fn parallel_waypoints_benchmark() {
-        use std::{
-            hash::{Hash, Hasher},
-            time::{Duration, Instant},
-        };
-        let cpus = std::thread::available_parallelism().map_or(1, |n| n.get());
-        horizon_threads::configure_server_affinity();
-        let helpers = horizon_threads::worker_threads().unwrap_or(0);
-        horizon_threads::tick_affinity();
-        println!("waypoint_layout allocated_cpus={cpus} helpers={helpers} tick_shards=1");
-        for population in [150, 500] {
-            let mut expected = None;
-            for mode in [
-                "serial",
-                "after-join",
-                "worker-encode",
-                "helper-spawn",
-                "yield-start",
-                "persistent-staged",
-                "persistent",
-            ] {
-                if std::env::var_os("WAYPOINT_PERSISTENT_ONLY").is_some()
-                    && !matches!(mode, "serial" | "persistent-staged" | "persistent")
-                {
-                    continue;
-                }
-                let mut samples = Vec::new();
-                for _ in 0..5 {
-                    let normal = if population == 500 { 300 } else { 100 };
-                    let mut players: Vec<_> = (0..population)
-                        .map(|i| {
-                            player(
-                                i + 1,
-                                i as u32,
-                                [
-                                    if i < normal {
-                                        (i % 40) as f64
-                                    } else {
-                                        i as f64 * 32.0
-                                    },
-                                    64.0,
-                                    0.0,
-                                ],
-                            )
-                        })
-                        .collect();
-                    let mut manager = ParallelWaypoints {
-                        threads: (mode == "serial").then_some(1),
-                        transient_helpers: !matches!(mode, "persistent" | "persistent-staged"),
-                        staged: mode == "persistent-staged",
-                        encode_after_join: matches!(mode, "serial" | "after-join"),
-                        spawn_on_helpers: mode == "helper-spawn",
-                        yield_to_helpers: mode == "yield-start",
-                        ..ParallelWaypoints::default()
-                    };
-                    let mut out = Vec::new();
-                    let away = std::sync::Arc::new(Vec::new());
-                    let respawned = std::sync::Arc::new(Vec::new());
-                    manager.tick_level_into(&mut players, &away, &respawned, true, None, &mut out);
-                    out.clear();
-                    let mut elapsed = Duration::ZERO;
-                    let mut packets = 0;
-                    let mut scope_time = Duration::ZERO;
-                    let mut wait_time = Duration::ZERO;
-                    let mut merge_time = Duration::ZERO;
-                    let mut shard_start = vec![Duration::ZERO; manager.shards.len()];
-                    let mut shard_finish = vec![Duration::ZERO; manager.shards.len()];
-                    let mut shard_work = vec![Duration::ZERO; manager.shards.len()];
-                    let mut shard_encode = vec![Duration::ZERO; manager.shards.len()];
-                    let mut shard_packets = vec![0usize; manager.shards.len()];
-                    let mut global = std::collections::hash_map::DefaultHasher::new();
-                    let mut receivers: Vec<_> = (0..population)
-                        .map(|_| std::collections::hash_map::DefaultHasher::new())
-                        .collect();
-                    for tick in 0..40 {
-                        for p in &mut players {
-                            p.position[0] += 0.2;
-                            p.position[2] = (tick as f64 * 0.03 + p.uuid as f64).sin() * 8.0;
-                        }
-                        let start = Instant::now();
-                        manager.tick_level_into(
-                            std::hint::black_box(&mut players),
-                            &away,
-                            &respawned,
-                            true,
-                            None,
-                            &mut out,
-                        );
-                        elapsed += start.elapsed();
-                        scope_time += manager.time.scope;
-                        wait_time += manager.time.wait;
-                        merge_time += manager.time.merge;
-                        for (i, shard) in manager.shards.iter().enumerate() {
-                            shard_start[i] += shard.time.started;
-                            shard_finish[i] += shard.time.finished;
-                            shard_work[i] += shard.time.update;
-                            shard_encode[i] += shard.time.encode;
-                            shard_packets[i] += shard.time.packets;
-                        }
-                        packets += out.len();
-                        for (conn, packet) in out.drain(..) {
-                            let bytes = match packet {
-                                Delivery::Encoded(b) => b,
-                                Delivery::Local(w) => C::TrackedWaypoint(w).encode(),
-                            };
-                            conn.hash(&mut global);
-                            bytes.hash(&mut global);
-                            bytes.hash(&mut receivers[conn as usize]);
-                        }
-                    }
-                    let fingerprint = (
-                        packets,
-                        global.finish(),
-                        receivers
-                            .into_iter()
-                            .map(|h| h.finish())
-                            .collect::<Vec<_>>(),
-                    );
-                    assert_eq!(*expected.get_or_insert(fingerprint.clone()), fingerprint);
-                    if samples.is_empty()
-                        && mode == "persistent"
-                        && std::env::var_os("WAYPOINT_RECEIVER_FINGERPRINTS").is_some()
-                    {
-                        println!(
-                            "waypoint_receivers population={population} hashes={:?}",
-                            fingerprint.2
-                        );
-                    }
-                    let ms = elapsed.as_secs_f64() * 1e3 / 40.0;
-                    samples.push(ms);
-                    let per_tick = |d: Duration| d.as_secs_f64() * 1000.0 / 40.0;
-                    let started: Vec<_> = shard_start.into_iter().map(per_tick).collect();
-                    let finished: Vec<_> = shard_finish.into_iter().map(per_tick).collect();
-                    let update: Vec<_> = shard_work.into_iter().map(per_tick).collect();
-                    let encode: Vec<_> = shard_encode.into_iter().map(per_tick).collect();
-                    let packet_counts: Vec<_> =
-                        shard_packets.into_iter().map(|n| n as f64 / 40.0).collect();
-                    let receivers: Vec<_> = manager
-                        .shards
-                        .iter()
-                        .map(|s| {
-                            s.manager
-                                .connections
-                                .iter()
-                                .filter(|r| !r.ordered.is_empty())
-                                .count()
-                        })
-                        .collect();
-                    let last_encoded_bytes: usize =
-                        manager.shards.iter().map(|s| s.time.encoded_bytes).sum();
-                    println!(
-                        "waypoint_stages population={population} mode={mode} scope_ms={:.3} wait_ms={:.3} merge_encode_ms={:.3} started={started:?} update={update:?} encode={encode:?} finished={finished:?} packets={packet_counts:?} receivers={receivers:?} last_encoded_bytes={last_encoded_bytes} retained={:?}",
-                        per_tick(scope_time),
-                        per_tick(wait_time),
-                        per_tick(merge_time),
-                        manager.retained_vectors(out.capacity())
-                    );
-                    println!(
-                        "waypoint_parallel population={population} mode={mode} shards={} ms={ms:.3} packets={packets} global_hash={}",
-                        manager.shards.len(),
-                        fingerprint.1
-                    );
-                }
-                samples.sort_by(f64::total_cmp);
-                println!(
-                    "waypoint_parallel population={population} mode={mode} median_ms={:.3} samples={samples:?}",
-                    samples[2]
                 );
             }
         }
@@ -2149,10 +1792,9 @@ mod tests {
                             WaypointTarget::Azimuth(f32::from_bits(0x80000000)),
                             WaypointTarget::Azimuth(f32::from_bits(0x7fc00001)),
                         ] {
-                            assert_eq!(
-                                encode_waypoint(source, operation, &icon, target),
-                                waypoint(source, operation, &icon, target).encode()
-                            );
+                            let mut bytes = Vec::new();
+                            write_waypoint(&mut bytes, source, operation, &icon, target);
+                            assert_eq!(bytes, waypoint(source, operation, &icon, target).encode());
                         }
                     }
                 }
@@ -2165,8 +1807,8 @@ mod tests {
         let mut row = Connections::default();
         let connection = |x| Connection {
             kind: Kind::Block([x, 0, 0]),
-            icon: Icon::default(),
-            checked: None,
+            icon: default_icon(),
+            checked: (0, [0; 2]),
         };
         for id in 0..4 {
             row.put(id, connection(id as i32));
@@ -2200,7 +1842,7 @@ mod tests {
             first_tick: false,
             view_distance: 4,
             team: None,
-            icon: Icon::default(),
+            icon: default_icon(),
         }
     }
 
