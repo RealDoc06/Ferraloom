@@ -216,7 +216,7 @@ pub struct Hub {
     pub encoder: ChunkEncoder,
     pub guests: Vec<Guest>,
     /// Rebuilt at the network polling boundary; guest storage can change between ticks.
-    inbox_index: crate::fast_hash::FxHashMap<u32, usize>,
+    guest_index: crate::fast_hash::FxHashMap<u32, usize>,
     #[cfg(feature = "profiler")]
     corrections: CorrectionCounts,
     pub(super) sync: Arc<SyncData>,
@@ -412,7 +412,7 @@ impl Hub {
             config,
             encoder,
             guests: Vec::new(),
-            inbox_index: Default::default(),
+            guest_index: Default::default(),
             #[cfg(feature = "profiler")]
             corrections: Default::default(),
             sync,
@@ -444,11 +444,16 @@ impl Hub {
         }
     }
 
+    /// Where a connection's guest is in `guests`.
+    pub fn guest_index(&self, conn: u32) -> Option<usize> {
+        self.guest_index.get(&conn).copied()
+    }
     pub fn guest(&self, conn: u32) -> Option<&Guest> {
-        self.guests.iter().find(|g| g.conn == conn)
+        self.guests.get(self.guest_index(conn)?)
     }
     pub fn guest_mut(&mut self, conn: u32) -> Option<&mut Guest> {
-        self.guests.iter_mut().find(|g| g.conn == conn)
+        let i = self.guest_index(conn)?;
+        self.guests.get_mut(i)
     }
 
     /// The network id of a name in a built-in or synchronized registry.
@@ -711,6 +716,7 @@ impl Hub {
         guest.position = ctx.spawn;
         guest.previous_position = ctx.spawn;
         guest.dimension = self.config.dimension.clone();
+        self.guest_index.insert(conn, self.guests.len());
         self.guests.push(guest);
         conn
     }
@@ -742,7 +748,7 @@ impl Hub {
 
     /// PlayerList.placeNewPlayer for a guest whose saved state is loaded.
     pub fn place_new_player(&mut self, conn: u32, ctx: &mut TickCtx) {
-        let Some(i) = self.guests.iter().position(|g| g.conn == conn) else {
+        let Some(i) = self.guest_index(conn) else {
             return;
         };
         let (name, uuid, entity_id, mode) = {
@@ -1194,24 +1200,21 @@ impl Hub {
     /// packets queued for its own level's pass.
     pub fn poll(&mut self, ctx: &mut TickCtx) -> Vec<HostEvent> {
         self.ticks += 1;
-        self.reindex_inboxes();
         let mut events = Vec::new();
         for event in self.lan.poll() {
             match event {
                 NetEvent::Joined(j) => {
                     let conn = self.admit(*j, ctx);
-                    self.reindex_inboxes();
                     events.push(HostEvent::Joined(conn));
                 }
                 NetEvent::Left(conn, reason) => {
-                    if let Some(i) = self.guests.iter().position(|g| g.conn == conn) {
+                    if let Some(i) = self.guest_index(conn) {
                         let g = self.remove_guest(i, &reason);
-                        self.reindex_inboxes();
                         events.push(HostEvent::Left(Box::new(g)));
                     }
                 }
                 NetEvent::Packet(conn, packet) => {
-                    if let Some(&i) = self.inbox_index.get(&conn) {
+                    if let Some(i) = self.guest_index(conn) {
                         self.guests[i].inbox.push_back(*packet);
                     }
                 }
@@ -1232,12 +1235,6 @@ impl Hub {
             }
         }
         events
-    }
-
-    fn reindex_inboxes(&mut self) {
-        self.inbox_index.clear();
-        self.inbox_index
-            .extend(self.guests.iter().enumerate().map(|(i, g)| (g.conn, i)));
     }
 
     /// The level in place's part of the tick (`ServerLevel.tick`'s chunk
@@ -1325,6 +1322,10 @@ impl Hub {
 
     fn remove_guest(&mut self, i: usize, reason: &str) -> Guest {
         let mut g = self.guests.remove(i);
+        self.guest_index.remove(&g.conn);
+        for (k, later) in self.guests.iter().enumerate().skip(i) {
+            self.guest_index.insert(later.conn, k);
+        }
         if g.left_reason.is_empty() {
             g.left_reason = reason.to_owned();
         }
@@ -2085,7 +2086,7 @@ impl Hub {
     /// since (`ServerRecipeBook.addRecipes`), once the player's first tick
     /// has sent their advancements.
     pub fn flush_progress(&mut self, conn: u32) {
-        if let Some(i) = self.guests.iter().position(|g| g.conn == conn)
+        if let Some(i) = self.guest_index(conn)
             && self.guests[i].sent_health.is_some()
         {
             self.flush_advancements(i, true);
