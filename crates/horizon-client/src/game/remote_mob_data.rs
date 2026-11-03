@@ -288,7 +288,7 @@ fn apply(m: &mut Mob, values: &[(u8, i32, Value)], builtin: &Builtin, local_enti
             // Mannequin.DATA_PROFILE (after Avatar's two): whose skin it
             // wears; update_remote_skins resolves it like a tab player's.
             (Species::Mannequin, 17, Value::Profile(profile)) => {
-                m.profile = Some(profile.clone());
+                m.profile = Some((**profile).clone());
             }
             _ => {}
         }
@@ -735,7 +735,7 @@ mod tests {
         };
         apply(
             &mut m,
-            &[(17, s::RESOLVABLE_PROFILE, Value::Profile(profile.clone()))],
+            &[(17, s::RESOLVABLE_PROFILE, Value::Profile(Box::new(profile.clone())))],
         );
         assert_eq!(m.profile, Some(profile));
     }

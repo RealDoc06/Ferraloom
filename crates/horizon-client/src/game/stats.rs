@@ -32,7 +32,7 @@ pub(super) struct Stats {
 /// `minecraft:` and `name`, given to `f` from the stack when short: some
 /// counters go up every tick for every player, and they are found without
 /// a string made for each.
-fn namespaced<T>(name: &str, f: impl FnOnce(&str) -> T) -> T {
+pub(super) fn namespaced<T>(name: &str, f: impl FnOnce(&str) -> T) -> T {
     const NAMESPACE: &str = "minecraft:";
     let mut buf = [0u8; 96];
     let len = NAMESPACE.len() + name.len();

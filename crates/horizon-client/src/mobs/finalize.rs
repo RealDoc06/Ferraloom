@@ -418,6 +418,20 @@ impl Attr {
         Self::Armor,
         Self::BurningTime,
     ];
+    /// The registry id, `minecraft:` and the name.
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::MaxHealth => "minecraft:max_health",
+            Self::MovementSpeed => "minecraft:movement_speed",
+            Self::FollowRange => "minecraft:follow_range",
+            Self::AttackDamage => "minecraft:attack_damage",
+            Self::KnockbackResistance => "minecraft:knockback_resistance",
+            Self::SpawnReinforcements => "minecraft:spawn_reinforcements",
+            Self::JumpStrength => "minecraft:jump_strength",
+            Self::Armor => "minecraft:armor",
+            Self::BurningTime => "minecraft:burning_time",
+        }
+    }
     pub fn name(self) -> &'static str {
         match self {
             Self::MaxHealth => "max_health",
@@ -469,10 +483,7 @@ pub struct Attributes {
 }
 /// The type's default value of an attribute, if the mob has it.
 pub fn default_value(m: &Mob, a: Attr) -> Option<f64> {
-    m.kind
-        .attributes
-        .get(&format!("minecraft:{}", a.name()))
-        .copied()
+    m.kind.attributes.get(a.id()).copied()
 }
 pub fn base_value(m: &Mob, a: Attr) -> f64 {
     m.extra
@@ -2086,6 +2097,13 @@ pub fn villager_type(biome: &str) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn attribute_ids_are_their_names_in_the_minecraft_namespace() {
+        for a in Attr::ALL {
+            assert_eq!(a.id(), format!("minecraft:{}", a.name()));
+        }
+    }
 
     #[test]
     fn panda_genes_follow_the_vanilla_table() {

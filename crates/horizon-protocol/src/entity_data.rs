@@ -34,8 +34,10 @@ pub enum Value {
     Particle(Particle),
     /// A particle list (PARTICLES: a VarInt count, then each particle).
     Particles(Vec<Particle>),
-    /// A `ResolvableProfile` (a mannequin's DATA_PROFILE).
-    Profile(Profile),
+    /// A `ResolvableProfile` (a mannequin's DATA_PROFILE), boxed: entries
+    /// are made and dropped for every tracked entity each tick, and the
+    /// profile is several times the size of every other value.
+    Profile(Box<Profile>),
 }
 /// `ResolvableProfile.STREAM_CODEC`: the GameProfile a mannequin or player
 /// head resolves — either a full profile (id, name and properties on the
@@ -350,7 +352,7 @@ fn read_value(kind: i32, r: &mut Reader) -> Result<Option<Value>> {
         | HUMANOID_ARM
         | DYE_COLOR => Value::Id(r.varint()?),
         PARTICLE => Value::Particle(Particle::read(r)?),
-        RESOLVABLE_PROFILE => Value::Profile(read_profile(r)?),
+        RESOLVABLE_PROFILE => Value::Profile(Box::new(read_profile(r)?)),
         PARTICLES => {
             let n = r.count(65536)?;
             let mut list = Vec::with_capacity(n.min(64));
@@ -578,12 +580,12 @@ mod tests {
                 (
                     17,
                     serializer::RESOLVABLE_PROFILE,
-                    Value::Profile(full.clone()),
+                    Value::Profile(Box::new(full.clone())),
                 ),
                 (
                     17,
                     serializer::RESOLVABLE_PROFILE,
-                    Value::Profile(partial.clone()),
+                    Value::Profile(Box::new(partial.clone())),
                 ),
                 (18, serializer::BOOLEAN, Value::Bool(true)),
             ],
@@ -592,8 +594,8 @@ mod tests {
         assert_eq!(
             EntityData::read(&mut Reader::new(&w.data)).unwrap(),
             vec![
-                (17, serializer::RESOLVABLE_PROFILE, Value::Profile(full)),
-                (17, serializer::RESOLVABLE_PROFILE, Value::Profile(partial)),
+                (17, serializer::RESOLVABLE_PROFILE, Value::Profile(Box::new(full))),
+                (17, serializer::RESOLVABLE_PROFILE, Value::Profile(Box::new(partial))),
                 (18, serializer::BOOLEAN, Value::Bool(true)),
             ]
         );

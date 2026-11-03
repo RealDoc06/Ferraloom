@@ -121,15 +121,18 @@ impl Game<'_> {
         }
         if let Some(s) = m.extra.attributes.as_deref() {
             for (attr, v) in &s.bases {
-                if let Some(a) = self.synced_attribute(kind, &format!("minecraft:{}", attr.name()))
-                {
+                let synced = super::stats::namespaced(attr.name(), |name| {
+                    self.synced_attribute(kind, name)
+                });
+                if let Some(a) = synced {
                     instance(out, a, *v).base = *v;
                 }
             }
             for x in &s.modifiers {
-                if let Some(a) =
-                    self.synced_attribute(kind, &format!("minecraft:{}", x.attr.name()))
-                {
+                let synced = super::stats::namespaced(x.attr.name(), |name| {
+                    self.synced_attribute(kind, name)
+                });
+                if let Some(a) = synced {
                     add_modifier(
                         out,
                         a,
