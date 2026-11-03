@@ -57,8 +57,14 @@ fn entry<'a, V: Default>(map: &'a mut BTreeMap<String, V>, key: &str) -> &'a mut
 impl Stats {
     pub(super) fn add(&mut self, ty: &str, key: &str, n: i32) {
         namespaced(ty, |ty| {
-            let v = entry(entry(&mut self.values, ty), key);
-            *v = v.saturating_add(n);
+            // A counter already there (most of those that go up every tick)
+            // is found in one look at each map.
+            if let Some(v) = self.values.get_mut(ty).and_then(|m| m.get_mut(key)) {
+                *v = v.saturating_add(n);
+            } else {
+                let v = entry(entry(&mut self.values, ty), key);
+                *v = v.saturating_add(n);
+            }
             if !self.unheard {
                 self.events.push((ty.to_owned(), key.to_owned(), Some(n)));
             }
@@ -66,6 +72,9 @@ impl Stats {
         });
     }
     fn mark_dirty(&mut self, ty: &str, key: &str) {
+        if self.dirty.get(ty).is_some_and(|keys| keys.contains(key)) {
+            return;
+        }
         let keys = entry(&mut self.dirty, ty);
         if !keys.contains(key) {
             keys.insert(key.to_owned());
