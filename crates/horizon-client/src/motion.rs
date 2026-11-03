@@ -2922,17 +2922,32 @@ mod tests {
             }])
         };
         // High above the floor and away from the rose.
-        assert!(along(Vec3::new(20.5, 60.0, 20.5), Vec3::new(21.5, 60.5, 20.5)));
+        assert!(along(
+            Vec3::new(20.5, 60.0, 20.5),
+            Vec3::new(21.5, 60.5, 20.5)
+        ));
         // Moving past it, or anywhere in its section: the palettes say
         // what may be there.
-        assert!(!along(Vec3::new(18.5, 40.0, 20.5), Vec3::new(22.5, 40.0, 20.5)));
-        assert!(!along(Vec3::new(28.5, 33.0, 28.5), Vec3::new(28.6, 33.0, 28.5)));
+        assert!(!along(
+            Vec3::new(18.5, 40.0, 20.5),
+            Vec3::new(22.5, 40.0, 20.5)
+        ));
+        assert!(!along(
+            Vec3::new(28.5, 33.0, 28.5),
+            Vec3::new(28.6, 33.0, 28.5)
+        ));
         // A block above the section's top reaches into it.
-        assert!(!along(Vec3::new(28.5, 48.0, 28.5), Vec3::new(28.6, 48.0, 28.5)));
+        assert!(!along(
+            Vec3::new(28.5, 48.0, 28.5),
+            Vec3::new(28.6, 48.0, 28.5)
+        ));
         // On the floor.
         assert!(!along(Vec3::new(5.5, 4.0, 5.5), Vec3::new(5.6, 4.0, 5.5)));
         // A long move goes the long way.
-        assert!(!along(Vec3::new(0.5, 80.0, 0.5), Vec3::new(60.5, 80.0, 0.5)));
+        assert!(!along(
+            Vec3::new(0.5, 80.0, 0.5),
+            Vec3::new(60.5, 80.0, 0.5)
+        ));
     }
 
     #[test]

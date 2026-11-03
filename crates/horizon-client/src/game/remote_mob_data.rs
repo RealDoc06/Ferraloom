@@ -735,7 +735,11 @@ mod tests {
         };
         apply(
             &mut m,
-            &[(17, s::RESOLVABLE_PROFILE, Value::Profile(Box::new(profile.clone())))],
+            &[(
+                17,
+                s::RESOLVABLE_PROFILE,
+                Value::Profile(Box::new(profile.clone())),
+            )],
         );
         assert_eq!(m.profile, Some(profile));
     }

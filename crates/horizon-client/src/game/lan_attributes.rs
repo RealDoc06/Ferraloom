@@ -121,9 +121,8 @@ impl Game<'_> {
         }
         if let Some(s) = m.extra.attributes.as_deref() {
             for (attr, v) in &s.bases {
-                let synced = super::stats::namespaced(attr.name(), |name| {
-                    self.synced_attribute(kind, name)
-                });
+                let synced =
+                    super::stats::namespaced(attr.name(), |name| self.synced_attribute(kind, name));
                 if let Some(a) = synced {
                     instance(out, a, *v).base = *v;
                 }

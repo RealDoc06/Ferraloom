@@ -146,7 +146,10 @@ impl SyncData {
                     };
                     let alpha = if ambient { 38 } else { 255 };
                     let argb = (alpha << 24) | def.color as i32;
-                    ("entity_effect", Some(entity_data::ParticleData::Color(argb)))
+                    (
+                        "entity_effect",
+                        Some(entity_data::ParticleData::Color(argb)),
+                    )
                 }
             };
             let Some(id) = self.id("minecraft:particle_type", &format!("minecraft:{name}")) else {

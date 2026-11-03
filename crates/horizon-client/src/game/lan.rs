@@ -193,9 +193,8 @@ fn mob_variant_meta(
     defaults: &mut Vec<(u8, i32, Value)>,
 ) {
     let (kind, e) = (m.kind.id.as_str(), &m.extra);
-    let id = |registry: &str, name: &str| {
-        super::stats::namespaced(name, |name| sync.id(registry, name))
-    };
+    let id =
+        |registry: &str, name: &str| super::stats::namespaced(name, |name| sync.id(registry, name));
     match kind {
         // Axolotl.DATA_VARIANT (after AgeableMob's two).
         "minecraft:axolotl" => {
@@ -404,9 +403,8 @@ fn mob_meta(
         defaults.push((index, serializer::BOOLEAN, Value::Bool(false)));
     }
     let e = &m.extra;
-    let id = |registry: &str, name: &str| {
-        super::stats::namespaced(name, |name| sync.id(registry, name))
-    };
+    let id =
+        |registry: &str, name: &str| super::stats::namespaced(name, |name| sync.id(registry, name));
     mob_variant_meta(m, sync, meta, defaults);
     match kind {
         "minecraft:guardian" | "minecraft:elder_guardian" => {

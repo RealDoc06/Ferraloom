@@ -3041,7 +3041,10 @@ mod tests {
         world.chunks.insert((0, 0), Arc::new(chunk));
         world.chunks.insert((1, 0), Arc::new(Chunk::empty(1, 0)));
         let body = |x: f64, y: f64, z: f64| {
-            Aabb::new(Vec3::new(x - 0.3, y, z - 0.3), Vec3::new(x + 0.3, y + 1.8, z + 0.3))
+            Aabb::new(
+                Vec3::new(x - 0.3, y, z - 0.3),
+                Vec3::new(x + 0.3, y + 1.8, z + 0.3),
+            )
         };
         assert!(only_air_around(&world, body(8.5, 100.0, 8.5)));
         // The section with the block, and the one below it a block away.

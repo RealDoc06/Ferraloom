@@ -594,8 +594,16 @@ mod tests {
         assert_eq!(
             EntityData::read(&mut Reader::new(&w.data)).unwrap(),
             vec![
-                (17, serializer::RESOLVABLE_PROFILE, Value::Profile(Box::new(full))),
-                (17, serializer::RESOLVABLE_PROFILE, Value::Profile(Box::new(partial))),
+                (
+                    17,
+                    serializer::RESOLVABLE_PROFILE,
+                    Value::Profile(Box::new(full))
+                ),
+                (
+                    17,
+                    serializer::RESOLVABLE_PROFILE,
+                    Value::Profile(Box::new(partial))
+                ),
                 (18, serializer::BOOLEAN, Value::Bool(true)),
             ]
         );
