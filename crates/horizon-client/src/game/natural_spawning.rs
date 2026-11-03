@@ -5,7 +5,10 @@ use super::{Dim, Game};
 use horizon_client::{
     biome::{BiomeInfo, SpawnEntry},
     blocks::BlockFacts,
+    chunk::Chunk,
+    chunk_map::ChunkMap,
     collisions::{SceneCollisions, no_collision_empty},
+    fast_hash::FxHashMap,
     mobs::{
         Mob, MobWorld, Species,
         data::{self, MobData},
@@ -13,8 +16,8 @@ use horizon_client::{
         seen_grid::SeenGrid,
         spawn_rules::{Dimension, SpawnLevel},
         spawn_selection::{
-            self, Category, Counted, Heightmap, NaturalLevel, SpawnCost, SpawnRequest, SpawnState,
-            Spawned, StructureAt, StructureSpawns,
+            self, Category, CountedCharge, Heightmap, MobType, NaturalLevel, SpawnCost,
+            SpawnRequest, SpawnState, Spawned, StructureAt, StructureSpawns, counted_by_state,
         },
     },
 };
@@ -23,7 +26,7 @@ use horizon_core::{
     random::{LegacyRandom, RandomSource, WorldgenRandom},
 };
 use horizon_world::registry::BlockStateId;
-use std::{collections::HashMap, ops::ControlFlow};
+use std::{cell::Cell, collections::HashMap, ops::ControlFlow};
 
 /// A player in the level in place, as spawning and despawning see it.
 #[derive(Clone, Copy)]
@@ -85,10 +88,85 @@ impl ChunkBits {
     }
 }
 
+/// The column the last read landed in: a spawn attempt reads one column many
+/// times, and the map only changes when the level's borrow of the game ends.
+#[derive(Clone, Copy)]
+struct LastColumn<'g> {
+    key: (i32, i32),
+    chunk: Option<&'g Chunk>,
+    /// The categories the structures reaching it may change the lists of
+    /// ([`StructureSpawns::category_bits`]), once asked for.
+    override_bits: Option<u8>,
+}
+#[derive(Default)]
+struct ColumnMemo<'g>(Cell<Option<LastColumn<'g>>>);
+impl<'g> ColumnMemo<'g> {
+    /// What `chunks.get` gives for the column holding block `x`, `z`.
+    fn get(&self, chunks: &'g ChunkMap, x: i32, z: i32) -> LastColumn<'g> {
+        let key = (x >> 4, z >> 4);
+        match self.0.get() {
+            Some(last) if last.key == key => last,
+            _ => {
+                let last = LastColumn {
+                    key,
+                    chunk: chunks.get(&key).map(|c| &**c),
+                    override_bits: None,
+                };
+                self.0.set(Some(last));
+                last
+            }
+        }
+    }
+    /// The categories whose lists the structures reaching the column may change.
+    fn override_bits(&self, chunks: &'g ChunkMap, spawns: &StructureSpawns, x: i32, z: i32) -> u8 {
+        let mut last = self.get(chunks, x, z);
+        if let Some(bits) = last.override_bits {
+            return bits;
+        }
+        let bits = last.chunk.map_or(0, |chunk| {
+            chunk
+                .structure_refs
+                .iter()
+                .fold(0, |bits, (id, _)| bits | spawns.category_bits(id))
+        });
+        last.override_bits = Some(bits);
+        self.0.set(Some(last));
+        bits
+    }
+}
+
+/// A biome's answers to the questions every attempt asks, by category index.
+struct BiomeRow<'g> {
+    mobs: [&'g [SpawnEntry]; Category::ALL.len()],
+    reduces_water_ambient: bool,
+}
+/// A biome's list for every category, by category index.
+fn mobs_by_category(
+    spawns: &HashMap<String, Vec<SpawnEntry>>,
+) -> [&[SpawnEntry]; Category::ALL.len()] {
+    Category::ALL.map(|c| spawns.get(c.name()).map_or(&[][..], Vec::as_slice))
+}
+impl<'g> BiomeRow<'g> {
+    fn new(biome: &'g BiomeInfo, data: &MobData) -> Self {
+        Self {
+            mobs: mobs_by_category(&biome.spawns),
+            reduces_water_ambient: data
+                .biome_tags
+                .get("minecraft:reduce_water_ambient_spawns")
+                .is_some_and(|members| members.contains(&biome.name)),
+        }
+    }
+}
+
 /// The game level as natural spawning reads it.
 pub(super) struct GameLevel<'g, 'a> {
     pub(super) game: &'g Game<'a>,
     pub(super) w: MobWorld<'g>,
+    column: ColumnMemo<'g>,
+    /// Every biome's [`BiomeRow`], in the biome list's order, for this pass.
+    biome_rows: std::cell::OnceCell<Vec<BiomeRow<'g>>>,
+    /// Entity types as [`NaturalLevel::mob_type`] answers, for this pass.
+    mob_types: std::cell::RefCell<FxHashMap<String, Option<MobType>>>,
     /// Natural spawning snapshots players once for its pass. Other spawning
     /// checks read the immutably borrowed level without collecting a list.
     players: Option<Vec<LevelPlayer>>,
@@ -103,6 +181,8 @@ pub(super) struct GameLevel<'g, 'a> {
     pub(super) box_queries: std::cell::Cell<u32>,
 }
 const SCANNED_QUERIES: u32 = 8;
+/// How many chunks or mobs a pool thread takes at a time in this pass's reads.
+const PASS_GRAIN: usize = 512;
 /// A mob not removed: its index in `Game::mobs`, box, alive, and whether
 /// it is a living shulker.
 type MobBox = (usize, Aabb, bool, bool);
@@ -141,7 +221,7 @@ impl MobBoxes {
             .chain(all.into_iter().flatten().copied())
     }
 }
-impl GameLevel<'_, '_> {
+impl<'g> GameLevel<'g, '_> {
     pub(super) fn players(&self) -> impl Iterator<Item = LevelPlayer> + '_ {
         let snapshot = self.players.iter().flatten().copied();
         let live = self
@@ -170,14 +250,36 @@ impl GameLevel<'_, '_> {
                 .near(area),
         )
     }
+    fn chunk(&self, x: i32, z: i32) -> Option<&'g Chunk> {
+        self.column.get(&self.w.world.chunks, x, z).chunk
+    }
     fn biome(&self, x: i32, y: i32, z: i32) -> Option<&BiomeInfo> {
-        let chunk = self.game.world.chunks.get(&(x >> 4, z >> 4))?;
+        let chunk = self.chunk(x, z)?;
         Some(self.game.res.biomes().get(chunk.biome(x, y, z)))
+    }
+    /// `Level.getRawBrightness`'s packed sky and block light at a block.
+    fn light(&self, x: i32, y: i32, z: i32) -> u8 {
+        self.chunk(x, z)
+            .map_or(0xF0, |chunk| chunk.light(x & 15, y, z & 15))
+    }
+    fn biome_row(&self, x: i32, y: i32, z: i32) -> Option<&BiomeRow<'g>> {
+        let chunk = self.chunk(x, z)?;
+        let rows = self.biome_rows.get_or_init(|| {
+            let biomes: &'g _ = self.w.biomes;
+            biomes
+                .list
+                .iter()
+                .map(|b| BiomeRow::new(b, self.w.data))
+                .collect()
+        });
+        // Biomes::get's clamp.
+        rows.get(usize::from(chunk.biome(x, y, z)).min(rows.len() - 1))
     }
 }
 impl SpawnLevel for GameLevel<'_, '_> {
     fn state(&self, x: i32, y: i32, z: i32) -> BlockStateId {
-        self.w.state(x, y, z)
+        self.chunk(x, z)
+            .map_or(self.w.world.air, |chunk| chunk.block(x & 15, y, z & 15))
     }
     fn facts(&self) -> &BlockFacts {
         self.w.facts
@@ -192,10 +294,13 @@ impl SpawnLevel for GameLevel<'_, '_> {
         self.w.biome_tag(tag, x, y, z)
     }
     fn sky_light(&self, x: i32, y: i32, z: i32) -> i32 {
-        self.w.sky_light(x, y, z)
+        if self.w.nether || self.w.end {
+            return 0;
+        }
+        i32::from(self.light(x, y, z) >> 4)
     }
     fn block_light(&self, x: i32, y: i32, z: i32) -> i32 {
-        self.w.block_light(x, y, z)
+        i32::from(self.light(x, y, z) & 15)
     }
     fn sky_darken(&self) -> i32 {
         SpawnLevel::sky_darken(&self.w)
@@ -207,7 +312,10 @@ impl SpawnLevel for GameLevel<'_, '_> {
         self.w.sea_level()
     }
     fn world_surface(&self, x: i32, z: i32) -> i32 {
-        self.w.world_surface(x, z)
+        self.chunk(x, z)
+            .map_or(horizon_client::chunk::MIN_Y, |chunk| {
+                chunk.world_surface(x, z, |v| self.w.facts.is_air(BlockStateId(v)))
+            })
     }
     fn peaceful(&self) -> bool {
         self.w.peaceful()
@@ -245,14 +353,35 @@ impl NaturalLevel for GameLevel<'_, '_> {
     fn has_ceiling(&self) -> bool {
         self.game.dim == Dim::Nether
     }
-    fn mob_type(&self, entity: &str) -> Option<(Species, f32, f32, Category)> {
-        let t = self.game.res.mob_types().get(entity)?;
-        Some((
-            t.species,
-            t.width as f32,
-            t.height as f32,
-            Category::from_name(&t.category),
-        ))
+    fn mob_type(&self, entity: &str) -> Option<MobType> {
+        if let Some(known) = self.mob_types.borrow().get(entity) {
+            return *known;
+        }
+        let kind = self.game.res.mob_types().get(entity).map(|t| {
+            (
+                t.species,
+                t.width as f32,
+                t.height as f32,
+                Category::from_name(&t.category),
+            )
+        });
+        self.mob_types.borrow_mut().insert(entity.to_owned(), kind);
+        kind
+    }
+    fn natural_mobs(&self, category: Category, x: i32, y: i32, z: i32) -> &[SpawnEntry] {
+        self.biome_row(x, y, z)
+            .map_or(&[], |row| row.mobs[category as usize])
+    }
+    fn reduces_water_ambient(&self, x: i32, y: i32, z: i32) -> bool {
+        self.biome_row(x, y, z)
+            .is_some_and(|row| row.reduces_water_ambient)
+    }
+    fn structures_may_override(&self, category: Category, x: i32, z: i32) -> bool {
+        let spawns = self.structure_spawns();
+        self.column
+            .override_bits(&self.w.world.chunks, spawns, x, z)
+            & category.bit()
+            != 0
     }
     fn biome_spawns(&self, x: i32, y: i32, z: i32) -> Option<&HashMap<String, Vec<SpawnEntry>>> {
         self.biome(x, y, z).map(|b| &b.spawns)
@@ -297,7 +426,7 @@ impl NaturalLevel for GameLevel<'_, '_> {
         })
     }
     fn can_spawn_in_chunk(&self, cx: i32, cz: i32) -> bool {
-        self.game.world.chunks.contains_key(&(cx, cz))
+        self.chunk(cx * 16, cz * 16).is_some()
     }
     fn no_collision(&self, bounds: Aabb) -> bool {
         let mut scene = SceneCollisions {
@@ -336,11 +465,9 @@ impl NaturalLevel for GameLevel<'_, '_> {
     fn heightmap(&self, kind: Heightmap, x: i32, z: i32) -> i32 {
         let world = self.w.world;
         if kind == Heightmap::WorldSurface {
-            return self.w.world_surface(x, z);
+            return self.world_surface(x, z);
         }
-        world
-            .chunks
-            .get(&(x >> 4, z >> 4))
+        self.chunk(x, z)
             .and_then(|chunk| {
                 chunk.highest(world.air.0, |y| {
                     spawn_selection::heightmap_blocks(self, kind, x, y, z)
@@ -402,6 +529,9 @@ impl<'a> Game<'a> {
         GameLevel {
             game: self,
             w: self.mob_world_base(&[]),
+            column: ColumnMemo::default(),
+            biome_rows: Default::default(),
+            mob_types: Default::default(),
             players,
             pending: Default::default(),
             pending_ids: Default::default(),
@@ -501,17 +631,68 @@ impl<'a> Game<'a> {
         }
         let count = candidates.len() as i32;
         let levels = self.tickets.levels();
-        candidates.retain(|&(cx, cz)| {
-            levels.loaded_ticking(cx, cz)
-                && super::ticking_chunk(&self.world, cx, cz)
-                && close.any_close_for_spawning((cx, cz))
+        let chunks = &self.world.chunks;
+        let mut kept: Vec<((i32, i32), bool)> = candidates.iter().map(|&c| (c, false)).collect();
+        horizon_threads::pool::for_each_mut(&mut kept, PASS_GRAIN, |((cx, cz), keep)| {
+            *keep = levels.loaded_ticking(*cx, *cz)
+                && super::ticking_column(chunks, *cx, *cz)
+                && close.any_close_for_spawning((*cx, *cz));
         });
+        candidates.clear();
+        candidates.extend(kept.iter().filter(|(_, keep)| *keep).map(|(c, _)| *c));
         (count, candidates)
+    }
+    /// `tickSpawningChunk`'s inhabited time.
+    #[inline(never)]
+    fn tick_inhabited(&mut self, chunks: &[(i32, i32)]) {
+        for &key in chunks {
+            *self.world.inhabited.entry(key).or_insert(0) += 1;
+        }
+    }
+    /// What `createState` counts of the loaded mobs, in their order. Mobs are
+    /// read here (they cannot be shared with the pool); the columns and biomes
+    /// each of them needs are read on the pool, whichever thread takes which.
+    fn counted_mobs(&self) -> impl Iterator<Item = CountedCharge> {
+        let (chunks, biomes) = (&self.world.chunks, self.res.biomes());
+        let mut rows: Vec<(&str, Category, [i32; 3], Option<CountedCharge>)> = self
+            .mobs
+            .iter()
+            .filter_map(|m| {
+                let category = Category::from_name(&m.kind.category);
+                let persistent =
+                    m.persistent || horizon_client::mobs::ai::requires_custom_persistence(m);
+                counted_by_state(category, true, persistent).then(|| {
+                    let block = [
+                        m.position.x.floor() as i32,
+                        m.position.y.floor() as i32,
+                        m.position.z.floor() as i32,
+                    ];
+                    (m.kind.id.as_str(), category, block, None)
+                })
+            })
+            .collect();
+        horizon_threads::pool::for_each_mut(&mut rows, PASS_GRAIN, |(id, category, block, out)| {
+            let [x, y, z] = *block;
+            if let Some(chunk) = chunks.get(&(x >> 4, z >> 4)) {
+                *out = Some(CountedCharge {
+                    block: *block,
+                    category: *category,
+                    is_mob: true,
+                    charge: biomes
+                        .get(chunk.biome(x, y, z))
+                        .spawn_costs
+                        .get(*id)
+                        .map(|c| c.charge),
+                });
+            }
+        });
+        rows.into_iter().filter_map(|row| row.3)
     }
     /// `ServerChunkCache.tickChunks`: the spawn state over the loaded mobs,
     /// the categories under their global caps (creatures every 400 ticks),
     /// then `tickSpawningChunk` in the shuffled spawning chunks of every
     /// player: inhabited time, then `spawnForChunk`.
+    #[inline(never)]
     pub(super) fn spawn_natural(&mut self) {
         let players = self.level_players();
         if players.is_empty() {
@@ -519,34 +700,14 @@ impl<'a> Game<'a> {
         }
         let close = non_spectators(&players);
         let (spawnable, mut chunks) = self.spawning_chunks(&players, &close);
-        for &key in &chunks {
-            *self.world.inhabited.entry(key).or_insert(0) += 1;
-        }
+        self.tick_inhabited(&chunks);
         let spawn_mobs = self.ui.rules.bool("spawn_mobs");
         let spawn_enemies = self.ui.rules.bool("spawn_monsters");
         let mut random = std::mem::replace(&mut self.world.random, LegacyRandom::new(0));
         let mut pending = Vec::new();
         {
             let level = self.natural_level_with_players(Some(players));
-            let counted: Vec<Counted> = self
-                .mobs
-                .iter()
-                .map(|m| Counted {
-                    entity: &m.kind.id,
-                    category: Category::from_name(&m.kind.category),
-                    block: [
-                        m.position.x.floor() as i32,
-                        m.position.y.floor() as i32,
-                        m.position.z.floor() as i32,
-                    ],
-                    is_mob: true,
-                    persistent: m.persistent
-                        || horizon_client::mobs::ai::requires_custom_persistence(m),
-                })
-                .collect();
-            let mut state = SpawnState::new(&level, spawnable, close, &counted, |cx, cz| {
-                self.world.chunks.contains_key(&(cx, cz))
-            });
+            let mut state = SpawnState::from_counted(spawnable, close, self.counted_mobs());
             let categories = if spawn_mobs {
                 state.filtered_categories(spawn_enemies, self.world.game_time % 400 == 0)
             } else {
@@ -558,6 +719,7 @@ impl<'a> Game<'a> {
                 chunks.swap(i, j);
             }
             if !categories.is_empty() {
+                state.prepare_local(&chunks, &categories);
                 for chunk in chunks {
                     let mut spawn = |l: &GameLevel, r: &SpawnRequest| {
                         let spawned = l.game.finalize_spawned(r, &mut pending);
@@ -621,6 +783,82 @@ impl<'a> Game<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The memo answers as the map does, across column changes, with no
+    /// structure's bits carried over from the column before.
+    #[test]
+    fn column_memo_answers_as_the_map_does() {
+        let mut spawns = StructureSpawns::default();
+        spawns.overrides.insert(
+            "minecraft:monument".to_owned(),
+            [(
+                Category::Monster.name().to_owned(),
+                horizon_client::mobs::spawn_selection::Override {
+                    piece: true,
+                    spawns: Vec::new(),
+                },
+            )]
+            .into_iter()
+            .collect(),
+        );
+        let mut chunks = ChunkMap::default();
+        for x in 0..4 {
+            let mut chunk = Chunk::empty(x, 0);
+            if x % 2 == 0 {
+                chunk
+                    .structure_refs
+                    .push(("minecraft:monument".into(), (x, 0)));
+                chunk
+                    .structure_refs
+                    .push(("minecraft:mineshaft".into(), (x, 0)));
+            }
+            chunks.insert((x, 0), std::sync::Arc::new(chunk));
+        }
+        let memo = ColumnMemo::default();
+        for block_x in [0, 15, 16, 17, 31, 32, 48, 64, 64, -1, -1, 3] {
+            let key = (block_x >> 4, 0);
+            let expected = chunks.get(&key).map(|c| &**c as *const Chunk);
+            let bits = chunks.get(&key).map_or(0, |c| {
+                c.structure_refs
+                    .iter()
+                    .fold(0, |b, (id, _)| b | spawns.category_bits(id))
+            });
+            // Bits first, or chunk first: both orders see the column's own.
+            if block_x % 2 == 0 {
+                assert_eq!(memo.override_bits(&chunks, &spawns, block_x, 5), bits);
+            }
+            let got = memo
+                .get(&chunks, block_x, 5)
+                .chunk
+                .map(|c| c as *const Chunk);
+            assert_eq!(got, expected, "{block_x}");
+            assert_eq!(memo.override_bits(&chunks, &spawns, block_x, 5), bits);
+        }
+    }
+
+    #[test]
+    fn biome_rows_hold_each_categorys_list() {
+        let entry = |entity: &str| SpawnEntry {
+            entity: entity.to_owned(),
+            weight: 1,
+            min: 1,
+            max: 1,
+            constant: true,
+        };
+        let spawns: HashMap<String, Vec<SpawnEntry>> = [
+            ("monster".to_owned(), vec![entry("minecraft:zombie")]),
+            ("water_ambient".to_owned(), vec![entry("minecraft:cod")]),
+            ("not_a_category".to_owned(), vec![entry("minecraft:pig")]),
+        ]
+        .into_iter()
+        .collect();
+        let row = mobs_by_category(&spawns);
+        for c in Category::ALL {
+            let expected = spawns.get(c.name()).map_or(&[][..], Vec::as_slice);
+            assert_eq!(row[c as usize].len(), expected.len(), "{c:?}");
+            assert!(std::ptr::eq(row[c as usize], expected), "{c:?}");
+        }
+    }
 
     fn player(x: f64, spectator: bool) -> LevelPlayer {
         LevelPlayer {
