@@ -184,11 +184,11 @@ pub(super) struct GameLevel<'g, 'a> {
     pub(super) pending_ids: std::cell::RefCell<Vec<(String, Aabb)>>,
     /// The game's mobs by box, built once a pass has asked more than
     /// [`SCANNED_QUERIES`] box queries (the mobs do not change while it
-    /// holds the game); the first ones scan, as the build costs a few scans.
+    /// holds the game); the first scans, as the build costs about a scan.
     pub(super) boxes: std::cell::OnceCell<MobBoxes>,
     pub(super) box_queries: std::cell::Cell<u32>,
 }
-const SCANNED_QUERIES: u32 = 8;
+const SCANNED_QUERIES: u32 = 1;
 /// How many chunks or mobs a pool thread takes at a time in this pass's reads.
 const PASS_GRAIN: usize = 512;
 /// A mob not removed: its index in `Game::mobs`, box, alive, and whether
