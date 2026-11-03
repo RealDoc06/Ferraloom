@@ -9,6 +9,7 @@ use horizon_client::{
     blocks::Fluid,
     collisions::SceneCollisions,
     containers::BlockEntity,
+    fast_hash::FxHashMap,
     items::{ItemStack, Items},
     mesher::Vertex,
     mobs::{Part, anim::Poses},
@@ -89,7 +90,7 @@ pub(super) struct Minecart {
     pub enabled: bool,
     /// Chest minecarts: the loot table rolled into `items` on load, saved
     /// again while the items are still that roll.
-    pub loot: Option<horizon_client::save::RolledLoot>,
+    pub loot: Option<Arc<horizon_client::save::RolledLoot>>,
     /// `Entity.firstTick`: not ticked yet (saved as `HasTicked`).
     pub first_tick: bool,
 }
@@ -692,8 +693,32 @@ impl Game<'_> {
                 pushers.push((Vec3::new(x, y, z), g.bounds()));
             }
         }
+        // A level's carts by chunk: a server's many pushers each touch few.
+        // Nothing here moves them, and each pusher goes through its carts in
+        // their order.
+        let mut by_chunk: FxHashMap<(i32, i32), Vec<u32>> = FxHashMap::default();
+        for (i, c) in self.carts.iter().enumerate() {
+            let at = (
+                c.position.x.floor() as i32 >> 4,
+                c.position.z.floor() as i32 >> 4,
+            );
+            by_chunk.entry(at).or_default().push(i as u32);
+        }
+        let mut near = Vec::new();
         for (feet, bb) in pushers {
-            for c in &mut self.carts {
+            let (lo, hi) = (bb.min_position(), bb.max_position());
+            let chunk = |v: f64| (v.floor() as i32) >> 4;
+            near.clear();
+            for cx in chunk(lo.x - WIDTH)..=chunk(hi.x + WIDTH) {
+                for cz in chunk(lo.z - WIDTH)..=chunk(hi.z + WIDTH) {
+                    if let Some(carts) = by_chunk.get(&(cx, cz)) {
+                        near.extend_from_slice(carts);
+                    }
+                }
+            }
+            near.sort_unstable();
+            for &i in &near {
+                let c = &mut self.carts[i as usize];
                 if !bb.intersects(c.bounds()) {
                     continue;
                 }
@@ -785,8 +810,8 @@ impl Game<'_> {
         let ridden = self.guest_vehicles();
         // By id: an exploding cart can destroy or prime others mid-loop.
         let ids: Vec<u32> = self.carts.iter().map(|c| c.id).collect();
-        for &id in &ids {
-            let Some(i) = self.carts.iter().position(|c| c.id == id) else {
+        for (at, &id) in ids.iter().enumerate() {
+            let Some(i) = self.cart_index(id, at) else {
                 continue;
             };
             let p = self.carts[i].position;
@@ -801,7 +826,7 @@ impl Game<'_> {
             if c.kind == CartKind::Hopper && c.enabled {
                 self.hopper_cart_suck(&mut c);
             }
-            let Some(i) = self.carts.iter().position(|c| c.id == id) else {
+            let Some(i) = self.cart_index(id, at) else {
                 continue;
             };
             if alive {
@@ -812,23 +837,30 @@ impl Game<'_> {
             }
         }
         // On the server for every cart, the ridden ones too.
-        for id in ids {
-            if let Some(i) = self.carts.iter().position(|c| c.id == id) {
+        for (at, id) in ids.into_iter().enumerate() {
+            if let Some(i) = self.cart_index(id, at) {
                 let p = self.carts[i].position;
                 if ticking(p.x.floor() as i32, p.z.floor() as i32) {
-                    self.cart_lava_tick(id);
+                    self.cart_lava_tick(id, i);
                 }
             }
         }
+    }
+    /// Where the cart `id` is: at `hint` unless the carts before it changed.
+    fn cart_index(&self, id: u32, hint: usize) -> Option<usize> {
+        if self.carts.get(hint).is_some_and(|c| c.id == id) {
+            return Some(hint);
+        }
+        self.carts.iter().position(|c| c.id == id)
     }
     /// `lavaHurt` twice a tick in lava: from `LavaFluid.entityInside` in the
     /// behaviour's `applyEffectsFromBlocks`, then from `AbstractMinecart.tick`'s
     /// own `isInLava`. The second breaks the cart, or primes a TNT minecart
     /// (`MinecartTNT.destroy` for a fire source). A cart has no `baseTick`,
     /// so the fire `lavaIgnite` lights never burns it.
-    fn cart_lava_tick(&mut self, id: u32) {
+    fn cart_lava_tick(&mut self, id: u32, hint: usize) {
         for _ in 0..2 {
-            let Some(i) = self.carts.iter().position(|c| c.id == id) else {
+            let Some(i) = self.cart_index(id, hint) else {
                 return;
             };
             if !self.in_lava(self.carts[i].bounds()) {
