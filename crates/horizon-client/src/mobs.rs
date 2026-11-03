@@ -1747,8 +1747,9 @@ pub struct PlayerView {
     pub riding: bool,
     /// The Hero of the Village effect.
     pub hero: bool,
-    /// The active effects, without namespace (`slowness`, `poison`...).
-    pub effects: Vec<&'static str>,
+    /// The active effects, without namespace (`slowness`, `poison`...),
+    /// shared: every mob near the player clones its view each tick.
+    pub effects: Arc<[&'static str]>,
     /// The player's UUID (villagers' gossip is keyed by it).
     pub uuid: [i32; 4],
     /// The mobs on the player's team (`isAlliedTo`): combat targeting

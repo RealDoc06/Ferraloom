@@ -536,7 +536,7 @@ mod tests {
             sprinting: false,
             riding: false,
             hero: false,
-            effects: Vec::new(),
+            effects: std::sync::Arc::from([]),
             uuid: [0; 4],
             allies: Default::default(),
             remote: false,
