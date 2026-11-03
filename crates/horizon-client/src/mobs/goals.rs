@@ -18,7 +18,10 @@ pub struct Cx<'a, 'w> {
     pub w: &'a MobWorld<'w>,
     pub events: &'a mut Vec<MobEvent>,
 }
-pub trait Goal: std::fmt::Debug {
+/// Goals live in their mob, which the mob ticks read from the tick's
+/// workers ahead of the serial pass: they hold plain data, so they are
+/// `Send + Sync`.
+pub trait Goal: std::fmt::Debug + Send + Sync {
     fn flags(&self) -> u8;
     fn can_use(&mut self, m: &mut Mob, cx: &mut Cx) -> bool;
     fn can_continue(&mut self, m: &mut Mob, cx: &mut Cx) -> bool {

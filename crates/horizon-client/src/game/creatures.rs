@@ -540,7 +540,30 @@ impl Game<'_> {
         // Their victims have been looted: no charged creeper is waiting any more.
         self.combat.charged_exploders.clear();
         let uuid = self.level.player_uuid;
-        let mut snapshot: Vec<Seen> = self.mobs.iter().map(|m| seen(m, uuid)).collect();
+        // getNearestPlayer's players, for every mob's despawn check.
+        let nearest_players = super::natural_spawning::non_spectators(&self.level_players());
+        let nearest_to = |at: Vec3| {
+            nearest_players
+                .nearest([at.x, at.y, at.z])
+                .map(|p| Vec3::new(p.position[0], p.position[1], p.position[2]))
+        };
+        // Read ahead on the pool, from the mobs as they stand before any
+        // ticks: each one's snapshot entry, and the nearest player to where
+        // it stands. A mob moved before its own tick asks again then.
+        let mut ahead: Vec<(&Mob, Option<Seen>, Option<Vec3>)> =
+            self.mobs.iter().map(|m| (m, None, None)).collect();
+        horizon_threads::pool::for_each_mut(&mut ahead, 256, |(m, entry, near)| {
+            *entry = Some(seen(m, uuid));
+            *near = nearest_to(m.position);
+        });
+        let mut nearest_ahead = Vec::with_capacity(ahead.len());
+        let mut snapshot: Vec<Seen> = ahead
+            .into_iter()
+            .map(|(m, entry, near)| {
+                nearest_ahead.push((m.position, near));
+                entry.unwrap_or_else(|| seen(m, uuid))
+            })
+            .collect();
         let mut events = Vec::new();
         let mut mobs = std::mem::take(&mut self.mobs);
         let mut dead = Vec::new();
@@ -550,8 +573,6 @@ impl Game<'_> {
         // With guests on, each mob sees its nearest player (game/lan_mobs.rs).
         let guest_views = self.lan_guest_views();
         let guests = super::lan_mobs::GuestLookup::new(&guest_views);
-        // getNearestPlayer's players, for every mob's despawn check.
-        let nearest_players = super::natural_spawning::non_spectators(&self.level_players());
         let mut bindings = match self.lan.as_mut() {
             Some(host) if !guest_views.is_empty() => std::mem::take(&mut host.mob_players),
             _ => Default::default(),
@@ -601,9 +622,15 @@ impl Game<'_> {
                 // getCurrentDifficultyAt(blockPosition()): the mob's own chunk,
                 // not the local player's (a server thread has no player).
                 w.difficulty = self.local_difficulty([m.position.x, m.position.y, m.position.z]);
-                w.nearest_player = nearest_players
-                    .nearest([m.position.x, m.position.y, m.position.z])
-                    .map(|p| Vec3::new(p.position[0], p.position[1], p.position[2]));
+                let (stood, near) = nearest_ahead[i];
+                let same = |a: Vec3, b: Vec3| {
+                    [a.x, a.y, a.z].map(f64::to_bits) == [b.x, b.y, b.z].map(f64::to_bits)
+                };
+                w.nearest_player = if same(stood, m.position) {
+                    near
+                } else {
+                    nearest_to(m.position)
+                };
                 let seen_guest = if guest_views.is_empty() {
                     None
                 } else {
