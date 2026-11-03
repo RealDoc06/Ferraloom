@@ -20,6 +20,10 @@ pub(super) struct Stats {
     /// Statistic changes (type, key, amount; `None` = reset) for the
     /// scoreboard criteria to follow.
     pub(super) events: Vec<(String, String, Option<i32>)>,
+    /// No scoreboard objective was there to follow the changes when the
+    /// player's turn began (`enter_guest`): none are kept in `events`, as
+    /// `ServerStatsCounter.setValue` finds no objective for them.
+    pub(super) unheard: bool,
     /// Changed since the client was last sent them (`StatsCounter`'s dirty
     /// set), by type.
     dirty: BTreeMap<String, BTreeSet<String>>,
@@ -55,7 +59,9 @@ impl Stats {
         namespaced(ty, |ty| {
             let v = entry(entry(&mut self.values, ty), key);
             *v = v.saturating_add(n);
-            self.events.push((ty.to_owned(), key.to_owned(), Some(n)));
+            if !self.unheard {
+                self.events.push((ty.to_owned(), key.to_owned(), Some(n)));
+            }
             self.mark_dirty(ty, key);
         });
     }
@@ -77,8 +83,10 @@ impl Stats {
             m.insert(key.to_owned(), 0);
         }
         self.mark_dirty(&format!("minecraft:{ty}"), key);
-        self.events
-            .push((format!("minecraft:{ty}"), key.to_owned(), None));
+        if !self.unheard {
+            self.events
+                .push((format!("minecraft:{ty}"), key.to_owned(), None));
+        }
     }
     pub(super) fn custom(&mut self, key: &str, n: i32) {
         namespaced(key, |key| self.add("custom", key, n));

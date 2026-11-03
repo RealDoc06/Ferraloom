@@ -444,6 +444,7 @@ impl Game<'_> {
         std::mem::swap(&mut self.level.recipe_book, &mut g.recipe_book);
         std::mem::swap(&mut self.level.player_extra, &mut g.saved);
         std::mem::swap(&mut self.stats, &mut play.stats);
+        self.stats.unheard = self.score.board.objectives.is_empty();
         std::mem::swap(&mut self.hook, &mut play.hook);
         let adv_loaded = std::mem::replace(&mut self.adv.loaded, true);
         let last_inventory = std::mem::replace(&mut self.adv.last_inventory, play.last_inventory);
