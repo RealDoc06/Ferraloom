@@ -18,7 +18,8 @@ pub struct Cx<'a, 'w> {
     pub w: &'a MobWorld<'w>,
     pub events: &'a mut Vec<MobEvent>,
 }
-pub trait Goal: std::fmt::Debug {
+/// Send and Sync: the pool's threads read mobs, goals and all (`lan_entities`).
+pub trait Goal: std::fmt::Debug + Send + Sync {
     fn flags(&self) -> u8;
     fn can_use(&mut self, m: &mut Mob, cx: &mut Cx) -> bool;
     fn can_continue(&mut self, m: &mut Mob, cx: &mut Cx) -> bool {
