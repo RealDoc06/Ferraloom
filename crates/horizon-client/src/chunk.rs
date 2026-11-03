@@ -301,6 +301,18 @@ impl Chunk {
             }
         }
     }
+    /// Prefetch hint: the block headers of the sections a spawn start can
+    /// land in, up to one above the kept surface's highest column.
+    pub fn prefetch_sections(&self) {
+        let Some(heights) = self.surface.get() else {
+            return;
+        };
+        let top = i32::from(heights.iter().copied().max().unwrap_or(MIN_Y as i16));
+        let last = ((top + 1 - MIN_Y) >> 4).clamp(0, SECTIONS as i32 - 1) as usize;
+        for section in &self.sections[..=last] {
+            horizon_threads::prefetch(&section.blocks);
+        }
+    }
     /// Prefetch hint: the storage the block at `x`, `y`, `z` is read from.
     /// Reads the section's header, which may miss itself.
     pub fn prefetch_block(&self, x: i32, y: i32, z: i32) {
