@@ -117,6 +117,14 @@ impl<'g> ColumnMemo<'g> {
             }
         }
     }
+    /// Makes `chunk` (what `chunks.get` gives for `key`) the last column.
+    fn enter(&self, key: (i32, i32), chunk: Option<&'g Chunk>) {
+        self.0.set(Some(LastColumn {
+            key,
+            chunk,
+            override_bits: None,
+        }));
+    }
     /// The categories whose lists the structures reaching the column may change.
     fn override_bits(&self, chunks: &'g ChunkMap, spawns: &StructureSpawns, x: i32, z: i32) -> u8 {
         let mut last = self.get(chunks, x, z);
@@ -163,8 +171,16 @@ pub(super) struct GameLevel<'g, 'a> {
     pub(super) game: &'g Game<'a>,
     pub(super) w: MobWorld<'g>,
     column: ColumnMemo<'g>,
+    /// The column the pass spawns in next, read without leaving the last
+    /// column for it (what `chunks.get` gives for the key).
+    ahead: Cell<Option<((i32, i32), Option<&'g Chunk>)>>,
     /// Every biome's [`BiomeRow`], in the biome list's order, for this pass.
     biome_rows: std::cell::OnceCell<Vec<BiomeRow<'g>>>,
+    /// The generator's structure starts by owning chunk, once asked, for
+    /// this pass (each look-up takes two locks and the generator's cache).
+    starts: std::cell::RefCell<FxHashMap<(i32, i32), Starts>>,
+    locator:
+        std::cell::OnceCell<Option<std::sync::Arc<horizon_client::vanillagen::VanillaTerrain>>>,
     /// Entity types as [`NaturalLevel::mob_type`] answers, for this pass.
     mob_types: std::cell::RefCell<FxHashMap<String, Option<MobType>>>,
     /// Natural spawning snapshots players once for its pass. Other spawning
@@ -176,11 +192,13 @@ pub(super) struct GameLevel<'g, 'a> {
     pub(super) pending_ids: std::cell::RefCell<Vec<(String, Aabb)>>,
     /// The game's mobs by box, built once a pass has asked more than
     /// [`SCANNED_QUERIES`] box queries (the mobs do not change while it
-    /// holds the game); the first ones scan, as the build costs a few scans.
+    /// holds the game); the first scans, as the build costs about a scan.
     pub(super) boxes: std::cell::OnceCell<MobBoxes>,
     pub(super) box_queries: std::cell::Cell<u32>,
 }
-const SCANNED_QUERIES: u32 = 8;
+const SCANNED_QUERIES: u32 = 1;
+type Starts =
+    std::rc::Rc<[std::sync::Arc<horizon_world::worldgen::structure::start::StructureStart>]>;
 /// How many chunks or mobs a pool thread takes at a time in this pass's reads.
 const PASS_GRAIN: usize = 512;
 /// A mob not removed: its index in `Game::mobs`, box, alive, and whether
@@ -251,7 +269,12 @@ impl<'g> GameLevel<'g, '_> {
         )
     }
     fn chunk(&self, x: i32, z: i32) -> Option<&'g Chunk> {
-        self.column.get(&self.w.world.chunks, x, z).chunk
+        let key = (x >> 4, z >> 4);
+        match (self.column.0.get(), self.ahead.get()) {
+            (Some(last), _) if last.key == key => last.chunk,
+            (_, Some((at, chunk))) if at == key => chunk,
+            _ => self.column.get(&self.w.world.chunks, x, z).chunk,
+        }
     }
     fn biome(&self, x: i32, y: i32, z: i32) -> Option<&BiomeInfo> {
         let chunk = self.chunk(x, z)?;
@@ -399,15 +422,26 @@ impl NaturalLevel for GameLevel<'_, '_> {
         z: i32,
         wanted: &dyn Fn(&str) -> bool,
     ) -> Vec<StructureAt> {
-        self.game
-            .structures_reaching_where([x, y, z], wanted)
-            .into_iter()
-            .map(|(id, in_piece)| StructureAt {
-                id,
-                in_piece,
-                in_bounds: true,
-            })
-            .collect()
+        let Some(chunk) = self.chunk(x, z).filter(|c| !c.structure_refs.is_empty()) else {
+            return Vec::new();
+        };
+        let Some(locator) = self.locator.get_or_init(|| self.game.end.locator()) else {
+            return Vec::new();
+        };
+        super::structures::structures_reaching_in(chunk, [x, y, z], wanted, |sx, sz| {
+            let mut starts = self.starts.borrow_mut();
+            let owned = starts
+                .entry((sx, sz))
+                .or_insert_with(|| locator.starts_at(sx, sz).into());
+            Starts::clone(owned)
+        })
+        .into_iter()
+        .map(|(id, in_piece)| StructureAt {
+            id,
+            in_piece,
+            in_bounds: true,
+        })
+        .collect()
     }
     fn structure_spawns(&self) -> &StructureSpawns {
         StructureSpawns::shared(&self.game.options.resources)
@@ -478,6 +512,11 @@ impl NaturalLevel for GameLevel<'_, '_> {
     fn pathfindable_land(&self, x: i32, y: i32, z: i32) -> bool {
         self.w.data.state(self.state(x, y, z)).flags & data::LAND != 0
     }
+    fn prefetch_block(&self, x: i32, y: i32, z: i32) {
+        if let Some(chunk) = self.chunk(x, z) {
+            chunk.prefetch_block(x, y, z);
+        }
+    }
 }
 impl horizon_client::mobs::spawner::SpawnerLevel for GameLevel<'_, '_> {
     /// `Level.hasNearbyAlivePlayer`, over every player.
@@ -530,7 +569,10 @@ impl<'a> Game<'a> {
             game: self,
             w: self.mob_world_base(&[]),
             column: ColumnMemo::default(),
+            ahead: Cell::new(None),
             biome_rows: Default::default(),
+            starts: Default::default(),
+            locator: Default::default(),
             mob_types: Default::default(),
             players,
             pending: Default::default(),
@@ -699,7 +741,9 @@ impl<'a> Game<'a> {
             return;
         }
         let close = non_spectators(&players);
-        let (spawnable, mut chunks) = self.spawning_chunks(&players, &close);
+        let (spawnable, mut chunks) = horizon_client::spans::time("spawning_chunks", || {
+            self.spawning_chunks(&players, &close)
+        });
         self.tick_inhabited(&chunks);
         let spawn_mobs = self.ui.rules.bool("spawn_mobs");
         let spawn_enemies = self.ui.rules.bool("spawn_monsters");
@@ -719,8 +763,26 @@ impl<'a> Game<'a> {
                 chunks.swap(i, j);
             }
             if !categories.is_empty() {
+                let _span = horizon_client::spans::scope("spawn_chunks");
                 state.prepare_local(&chunks, &categories);
-                for chunk in chunks {
+                let columns = self.spawning_columns(&chunks);
+                for (i, &chunk) in chunks.iter().enumerate() {
+                    // Hints only: the coming columns' headers, surfaces and
+                    // section headers load while this one spawns, ready for
+                    // the next column's foreseen starts.
+                    if let Some(Some(next)) = columns.get(i + 4) {
+                        next.prefetch_header();
+                    }
+                    if let Some(Some(next)) = columns.get(i + 3) {
+                        next.prefetch_surface();
+                    }
+                    if let Some(Some(next)) = columns.get(i + 2) {
+                        next.prefetch_sections();
+                    }
+                    level.column.enter(chunk, columns[i]);
+                    level
+                        .ahead
+                        .set(columns.get(i + 1).map(|&next| (chunks[i + 1], next)));
                     let mut spawn = |l: &GameLevel, r: &SpawnRequest| {
                         let spawned = l.game.finalize_spawned(r, &mut pending);
                         if let Some(s) = &spawned {
@@ -742,6 +804,20 @@ impl<'a> Game<'a> {
         }
         self.world.random = random;
         self.add_spawned(pending, false);
+    }
+    /// The columns of `chunks`, in their order, looked up on the pool with
+    /// their WORLD_SURFACE heightmaps built (the map and the blocks do not
+    /// change while a pass holds the game, and the heightmap is a cache).
+    fn spawning_columns(&self, chunks: &[(i32, i32)]) -> Vec<Option<&Chunk>> {
+        let (map, facts) = (&self.world.chunks, self.res.facts());
+        let mut columns: Vec<_> = chunks.iter().map(|&key| (key, None)).collect();
+        horizon_threads::pool::for_each_mut(&mut columns, PASS_GRAIN, |(key, column)| {
+            *column = map.get(key).map(|c| &**c);
+            if let Some(chunk) = column {
+                chunk.world_surface(0, 0, |v| facts.is_air(BlockStateId(v)));
+            }
+        });
+        columns.into_iter().map(|(_, column)| column).collect()
     }
     /// `NoiseBasedChunkGenerator.spawnOriginalMobs`: creature packs for a
     /// freshly generated chunk, from the biome at its corner column's top,

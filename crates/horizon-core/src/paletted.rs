@@ -299,6 +299,17 @@ impl PalettedContainer {
     pub fn is_global(&self) -> bool {
         matches!(self.palette, Palette::Global)
     }
+    /// What [`Self::get`] of entry `i` reads past the container itself: the
+    /// storage word holding it, and the palette's first entries (for prefetch
+    /// hints). `None` for a single value.
+    pub fn entry_storage(&self, i: usize) -> Option<(&u64, Option<&u32>)> {
+        let list = match &self.palette {
+            Palette::Single(_) => return None,
+            Palette::List(list) => list.first(),
+            Palette::Global => None,
+        };
+        Some((self.words.get(locate(self.bits, i).0)?, list))
+    }
     #[inline(always)]
     fn raw(&self, i: usize) -> usize {
         // Constant widths let LLVM fold the divisor, mask and slot stride.
@@ -978,6 +989,18 @@ mod tests {
                     "{name} raw={raw}: old {:.3} new {:.3} ns/op",
                     times[0][5], times[1][5]
                 );
+            }
+        }
+    }
+    #[test]
+    fn entry_storage_is_the_word_get_reads() {
+        for distinct in [1u32, 2, 16, 40, 300, 5000] {
+            let values: Vec<u32> = (0..4096u32).map(|i| i * 31 % distinct).collect();
+            let c = PalettedContainer::from_values(BLOCKS, &values);
+            for i in [0, 1, 63, 64, 1000, 4095] {
+                let got = c.entry_storage(i).map(|(w, _)| w as *const u64);
+                let expected = (c.bits != 0).then(|| &c.words[locate(c.bits, i).0] as *const u64);
+                assert_eq!(got, expected, "{distinct} {i}");
             }
         }
     }
