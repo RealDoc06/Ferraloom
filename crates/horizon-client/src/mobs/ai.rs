@@ -539,6 +539,9 @@ pub fn tick(
 /// or Z this tick). The blocks are those the mob's box touches anywhere along
 /// its move this tick, from where it started to where it ended.
 fn effects_from_blocks(m: &mut Mob, w: &MobWorld) {
+    if !may_touch(m, w, &["minecraft:cactus", "minecraft:sweet_berry_bush"]) {
+        return;
+    }
     let mut visited: Vec<[i32; 3]> = Vec::new();
     let travel = m.position.subtract(m.previous);
     let longest = travel.x.abs().max(travel.y.abs()).max(travel.z.abs());
@@ -584,6 +587,30 @@ fn effects_from_blocks(m: &mut Mob, w: &MobWorld) {
             }
         }
     }
+}
+/// Whether a block named in `names` may stand in the cells around the mob's
+/// boxes at `previous` and `position` (a superset, read from the section
+/// palettes). False lets a contact check that only reacts to those blocks
+/// stop before reading a cell.
+fn may_touch(m: &Mob, w: &MobWorld, names: &[&str]) -> bool {
+    let (a, b) = (m.previous, m.position);
+    let reach = f64::from(m.width()) / 2.0 + 1.0;
+    let lo = [
+        (a.x.min(b.x) - reach).floor() as i32,
+        (a.y.min(b.y) - 1.0).floor() as i32,
+        (a.z.min(b.z) - reach).floor() as i32,
+    ];
+    let hi = [
+        (a.x.max(b.x) + reach).floor() as i32,
+        (a.y.max(b.y) + f64::from(m.height()) + 1.0).floor() as i32,
+        (a.z.max(b.z) + reach).floor() as i32,
+    ];
+    // A long move (a teleport) reads its cells instead of many palettes.
+    if hi[0].saturating_sub(lo[0]) > 64 || hi[2].saturating_sub(lo[2]) > 64 {
+        return true;
+    }
+    w.world
+        .may_hold(lo, hi, |s| names.contains(&&*w.facts.get(s).name))
 }
 /// LivingEntity.updateSwingTime.
 pub fn tick_swing(m: &mut Mob) {
@@ -780,6 +807,9 @@ fn freeze_tick(m: &mut Mob, w: &MobWorld) {
 /// Whether the mob's box (shrunk by `1.0E-5`, as in `Entity.checkInsideBlocks`)
 /// touches powder snow.
 fn in_powder_snow(m: &Mob, w: &MobWorld) -> bool {
+    if !may_touch(m, w, &["minecraft:powder_snow"]) {
+        return false;
+    }
     let b = m.bounds().deflate(Vec3::new(1e-5, 1e-5, 1e-5));
     let (min, max) = (b.min_position(), b.max_position());
     for x in min.x.floor() as i32..=max.x.floor() as i32 {
@@ -1890,6 +1920,13 @@ pub fn custom_travel(m: &mut Mob, w: &MobWorld, input: Vec3, events: &mut Vec<Mo
 /// ended.
 fn flower_contact_effects(m: &mut Mob, w: &MobWorld) {
     if !m.alive() || w.difficulty.effective == 0.0 {
+        return;
+    }
+    if !may_touch(
+        m,
+        w,
+        &["minecraft:wither_rose", "minecraft:open_eyeblossom"],
+    ) {
         return;
     }
     let half = f64::from(m.width()) / 2.0 - 1.0e-5;
