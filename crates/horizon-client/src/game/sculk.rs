@@ -197,9 +197,15 @@ impl Index {
     /// The positions within `radius` (block distance squared) of `at`, with
     /// their sequence numbers, in insertion order.
     fn near(&self, at: [i32; 3], radius: i32) -> Vec<(u64, Pos)> {
-        let mut found = Vec::new();
-        let (x0, x1) = (at[0].saturating_sub(radius) >> 4, at[0].saturating_add(radius) >> 4);
-        let (z0, z1) = (at[2].saturating_sub(radius) >> 4, at[2].saturating_add(radius) >> 4);
+        let mut found: Vec<(u64, Pos)> = Vec::new();
+        let (x0, x1) = (
+            at[0].saturating_sub(radius) >> 4,
+            at[0].saturating_add(radius) >> 4,
+        );
+        let (z0, z1) = (
+            at[2].saturating_sub(radius) >> 4,
+            at[2].saturating_add(radius) >> 4,
+        );
         let reach = i64::from(radius) * i64::from(radius);
         for cx in x0..=x1 {
             for cz in z0..=z1 {

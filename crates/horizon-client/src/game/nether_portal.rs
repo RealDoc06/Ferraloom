@@ -620,7 +620,9 @@ impl Game<'_> {
             self.portals.before.insert(c.id, c.position);
         }
         let before = &self.portals.before;
-        self.portals.entities.retain(|id, _| before.contains_key(id));
+        self.portals
+            .entities
+            .retain(|id, _| before.contains_key(id));
         if self.portals.entities.is_empty() {
             return;
         }

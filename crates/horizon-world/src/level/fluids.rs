@@ -806,7 +806,10 @@ mod tests {
         let mut cache = SpreadCache::<u32>::default();
         let near = context.key(BlockPos::new(103, 64, -102));
         let far = context.key(BlockPos::new(103 + 16, 64, -102 - 32));
-        assert_eq!(SpreadCache::<u32>::slot(near), SpreadCache::<u32>::slot(far));
+        assert_eq!(
+            SpreadCache::<u32>::slot(near),
+            SpreadCache::<u32>::slot(far)
+        );
         assert_eq!(cache.get(near), None);
         cache.insert(near, 1);
         assert_eq!(cache.get(far), None);

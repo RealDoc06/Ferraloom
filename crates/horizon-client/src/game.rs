@@ -3243,8 +3243,9 @@ impl Game<'_> {
                     continue;
                 }
                 let any_hot = (x0 >> 4..=x1 >> 4).any(|sx| {
-                    (y0 >> 4..=y1 >> 4)
-                        .any(|sy| (z0 >> 4..=z1 >> 4).any(|sz| hot(&mut contact, level, (sx, sy, sz))))
+                    (y0 >> 4..=y1 >> 4).any(|sy| {
+                        (z0 >> 4..=z1 >> 4).any(|sz| hot(&mut contact, level, (sx, sy, sz)))
+                    })
                 });
                 let list = if any_hot { &mut touched } else { &mut cold };
                 for x in x0..=x1 {
@@ -15655,10 +15656,15 @@ mod tests {
             let cold: Vec<i32> = (0..v(30)).map(|_| v(50)).collect();
             let change = if case % 4 == 0 { None } else { Some(v(50)) };
             let mut visited = Vec::new();
-            walk_set_aside(hot.clone(), cold.clone(), |p| *p, |p| {
-                visited.push(p);
-                change.is_some_and(|c| visited.iter().any(|&q| q >= c && hot.contains(&q)))
-            });
+            walk_set_aside(
+                hot.clone(),
+                cold.clone(),
+                |p| *p,
+                |p| {
+                    visited.push(p);
+                    change.is_some_and(|c| visited.iter().any(|&q| q >= c && hot.contains(&q)))
+                },
+            );
             let mut hot_sorted = hot.clone();
             hot_sorted.sort_unstable();
             hot_sorted.dedup();
@@ -15669,7 +15675,12 @@ mod tests {
                 .filter(|&q| first.is_none_or(|f| q <= f))
                 .collect();
             if let Some(f) = first {
-                let mut all: Vec<i32> = hot.iter().chain(&cold).copied().filter(|&q| q > f).collect();
+                let mut all: Vec<i32> = hot
+                    .iter()
+                    .chain(&cold)
+                    .copied()
+                    .filter(|&q| q > f)
+                    .collect();
                 all.sort_unstable();
                 all.dedup();
                 expected.extend(all);
