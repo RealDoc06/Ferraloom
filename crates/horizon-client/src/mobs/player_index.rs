@@ -70,6 +70,17 @@ struct Against {
     distance_sqr: f64,
     limit: f64,
 }
+impl Against {
+    /// How close a player must be to change the answer for one `d` away: past
+    /// the next cutoff down, or past the last cutoff when `d` is beyond it.
+    fn limit_below(d: f64, cutoffs: &[f64; 3]) -> f64 {
+        cutoffs
+            .iter()
+            .rev()
+            .find(|&&c| c < d)
+            .map_or(f64::NEG_INFINITY, |&c| c)
+    }
+}
 
 /// Built once per pass from a list of player positions; see the module docs.
 #[derive(Clone, Debug, Default)]
@@ -191,21 +202,34 @@ impl PlayerIndex {
         self.against_in(0, at, cutoffs, &mut found);
         found.distance_sqr
     }
+    /// [`Self::nearest_against`] given the squared distance of some player
+    /// already measured, which is what its search then has to beat.
+    pub fn nearest_against_from(&self, seen: f64, at: [f64; 3], cutoffs: &[f64; 3]) -> f64 {
+        if self.linear {
+            return self.nearest_against(at, cutoffs);
+        }
+        let mut found = Against {
+            distance_sqr: seen,
+            limit: Against::limit_below(seen, cutoffs),
+        };
+        if found.limit != f64::NEG_INFINITY {
+            self.against_in(0, at, cutoffs, &mut found);
+        }
+        found.distance_sqr
+    }
+    fn against_leaf(&self, n: &Node, q: [f64; 3], cutoffs: &[f64; 3], found: &mut Against) {
+        for p in &self.points[n.start as usize..n.end as usize] {
+            let d = p.distance_sqr(q);
+            if d <= found.limit {
+                found.distance_sqr = d;
+                found.limit = Against::limit_below(d, cutoffs);
+            }
+        }
+    }
     fn against_in(&self, at: usize, q: [f64; 3], cutoffs: &[f64; 3], found: &mut Against) {
         let n = &self.nodes[at];
         if n.right == 0 {
-            for p in &self.points[n.start as usize..n.end as usize] {
-                let d = p.distance_sqr(q);
-                if d <= found.limit {
-                    found.distance_sqr = d;
-                    // Only a player past the next cutoff down can change an answer.
-                    found.limit = cutoffs
-                        .iter()
-                        .rev()
-                        .find(|&&c| c < d)
-                        .map_or(f64::NEG_INFINITY, |&c| c);
-                }
-            }
+            self.against_leaf(n, q, cutoffs, found);
             return;
         }
         let (left, right) = (at + 1, n.right as usize);

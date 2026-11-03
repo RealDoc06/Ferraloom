@@ -201,7 +201,8 @@ fn immune_tag(s: Species) -> Option<&'static str> {
 }
 /// `BlockState.isValidSpawn(level, pos, type)` for the block at a position.
 pub fn is_valid_spawn<L: SpawnLevel>(s: Species, l: &L, x: i32, y: i32, z: i32) -> bool {
-    if name(l, x, y, z) == "minecraft:magma_block" {
+    let state = l.state(x, y, z);
+    if &*l.facts().get(state).name == "minecraft:magma_block" {
         return fire_immune(s);
     }
     let bit = match s {
@@ -209,16 +210,17 @@ pub fn is_valid_spawn<L: SpawnLevel>(s: Species, l: &L, x: i32, y: i32, z: i32) 
         Species::PolarBear => data::VALID_SPAWN_ICE,
         _ => data::VALID_SPAWN,
     };
-    flags(l, x, y, z) & bit != 0
+    l.mob_data().state(state).flags & bit != 0
 }
 /// `NaturalSpawner.isValidEmptySpawnBlock` for an entity type.
 pub fn is_valid_empty_spawn<L: SpawnLevel>(s: Species, l: &L, x: i32, y: i32, z: i32) -> bool {
     // The exported flag is the zombie's answer; only blocks a zombie finds
     // dangerous can answer differently for another type.
-    if flags(l, x, y, z) & data::VALID_EMPTY_SPAWN != 0 {
+    let state = l.state(x, y, z);
+    if l.mob_data().state(state).flags & data::VALID_EMPTY_SPAWN != 0 {
         return true;
     }
-    let f = l.facts().get(l.state(x, y, z));
+    let f = l.facts().get(state);
     let block = &*f.name;
     let burning = l.block_tag("minecraft:fire", block)
         || block == "minecraft:lava"
@@ -244,8 +246,7 @@ pub fn is_valid_empty_spawn<L: SpawnLevel>(s: Species, l: &L, x: i32, y: i32, z:
 }
 /// `SpawnPlacements.isSpawnPositionOk`.
 pub fn is_spawn_position_ok<L: SpawnLevel>(s: Species, l: &L, x: i32, y: i32, z: i32) -> bool {
-    let id = format!("minecraft:{}", super::species::def(s).name);
-    match l.mob_data().placement(&id) {
+    match l.mob_data().species_placement(s) {
         data::Placement::OnGround => {
             is_valid_spawn(s, l, x, y - 1, z)
                 && is_valid_empty_spawn(s, l, x, y, z)

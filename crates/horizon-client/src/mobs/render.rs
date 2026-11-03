@@ -1562,6 +1562,7 @@ mod tests {
         let data = MobData {
             states: Vec::new(),
             placements: Default::default(),
+            species_placements: Default::default(),
             heightmaps: Default::default(),
             animations: Default::default(),
             biome_tags: Default::default(),
@@ -1650,6 +1651,7 @@ mod tests {
         let data = MobData {
             states: Vec::new(),
             placements: Default::default(),
+            species_placements: Default::default(),
             heightmaps: Default::default(),
             animations: Default::default(),
             biome_tags: Default::default(),
