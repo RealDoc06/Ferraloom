@@ -57,6 +57,8 @@ pub struct Ai {
     pub swing_duration: i32,
     /// Walked distance and the next footstep.
     pub steps: super::living::Steps,
+    /// The last straight up or down move `do_move` resolved.
+    pub move_memo: super::living::MoveMemo,
 }
 impl Mob {
     /// `LivingEntity.getCurrentSwingDuration`: 6 ticks unless a swing set its own.

@@ -460,6 +460,116 @@ impl PowderSnowWorld for SceneCollisions<'_, '_> {
     }
 }
 
+/// The sections over a box of cells as they are now, held so a later look
+/// can tell whether any was written since: a block write replaces the
+/// section it writes (`Arc::make_mut` copies a section held elsewhere), so
+/// the same `Arc`s hold the same blocks. Sections that may hold a moving
+/// piston (whose shape moves without a write) or use the global palette are
+/// never held. Collision answers kept with them stay exact while unchanged.
+#[derive(Clone, Default)]
+pub struct SectionsSeen {
+    /// Chunk by chunk, bottom up; None where no chunk is resident.
+    sections: Vec<Option<Arc<crate::chunk::Section>>>,
+}
+impl std::fmt::Debug for SectionsSeen {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SectionsSeen({})", self.sections.len())
+    }
+}
+impl SectionsSeen {
+    /// Cells a block collision scan of `bounds` (or a search beside it)
+    /// may read, with a margin: two past each face, as a scan reads one
+    /// around the box and a liquid's shape looks at the block above.
+    pub fn cells_around(bounds: Aabb) -> ([i32; 3], [i32; 3]) {
+        let (lo, hi) = (bounds.min_position(), bounds.max_position());
+        let cell = |v: f64, d: i32| (v.floor() as i32).saturating_add(d);
+        (
+            [
+                cell(lo.x - 1.0e-5, -2),
+                cell(lo.y - 1.0e-5, -2),
+                cell(lo.z - 1.0e-5, -2),
+            ],
+            [
+                cell(hi.x + 1.0e-5, 2),
+                cell(hi.y + 1.0e-5, 2),
+                cell(hi.z + 1.0e-5, 2),
+            ],
+        )
+    }
+    /// Visit every section of the cells, stopping when `f` says so.
+    fn visit(
+        world: &World,
+        (lo, hi): ([i32; 3], [i32; 3]),
+        mut f: impl FnMut(Option<&Arc<crate::chunk::Section>>) -> bool,
+    ) -> bool {
+        use crate::chunk::{MIN_Y, SECTIONS};
+        // A box this wide is no box a mob or an item reads.
+        if hi[0].saturating_sub(lo[0]) > 64 || hi[2].saturating_sub(lo[2]) > 64 {
+            return false;
+        }
+        let top = SECTIONS as i32 - 1;
+        let (s0, s1) = (
+            (lo[1].saturating_sub(MIN_Y) >> 4).clamp(0, top),
+            (hi[1].saturating_sub(MIN_Y) >> 4).clamp(0, top),
+        );
+        for cx in lo[0] >> 4..=hi[0] >> 4 {
+            for cz in lo[2] >> 4..=hi[2] >> 4 {
+                let chunk = world.chunks.get(&(cx, cz));
+                for s in s0..=s1 {
+                    if !f(chunk.map(|c| &c.sections[s as usize])) {
+                        return false;
+                    }
+                }
+            }
+        }
+        true
+    }
+    /// Hold the sections of the cells now; false (and nothing held) when
+    /// one of them cannot be held.
+    pub fn capture(
+        &mut self,
+        world: &World,
+        binding: &BlockCollisionRegistry<'_>,
+        cells: ([i32; 3], [i32; 3]),
+    ) -> bool {
+        self.sections.clear();
+        let sections = &mut self.sections;
+        let held = Self::visit(world, cells, |section| {
+            if let Some(section) = section {
+                let blocks = &section.blocks;
+                if blocks.is_global()
+                    || blocks.maybe_has(|v| {
+                        !binding
+                            .collision_block(horizon_world::registry::BlockStateId(v))
+                            .is_ok_and(|b| !b.moving_piston)
+                    })
+                {
+                    return false;
+                }
+            }
+            sections.push(section.cloned());
+            true
+        });
+        if !held {
+            self.sections.clear();
+        }
+        held
+    }
+    /// Whether the cells' sections are those held (none written since).
+    /// Call with the cells they were captured for.
+    pub fn unchanged(&self, world: &World, cells: ([i32; 3], [i32; 3])) -> bool {
+        if self.sections.is_empty() {
+            return false;
+        }
+        let mut held = self.sections.iter();
+        Self::visit(world, cells, |now| match (held.next(), now) {
+            (Some(Some(a)), Some(b)) => Arc::ptr_eq(a, b),
+            (Some(None), None) => true,
+            _ => false,
+        }) && held.next().is_none()
+    }
+}
+
 /// A collision world without blocks: no chunk is resident, so only the
 /// world border stops a body.
 pub struct EmptyCollisions;
