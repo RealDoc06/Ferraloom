@@ -268,14 +268,19 @@ impl MobWorld<'_> {
     /// The other mobs whose boxes may meet `area` (callers test the boxes),
     /// in snapshot order: through the grid when there is one, else all.
     pub fn others_near(&self, area: Aabb) -> impl Iterator<Item = &Seen> {
-        let mut near = Vec::new();
+        let mut near = NEAR.take();
         let indexed = self
             .others_grid
             .is_some_and(|grid| grid.candidates(area, &mut near));
-        let all = (!indexed).then(|| self.others.iter());
-        near.into_iter()
-            .map(|i| &self.others[i as usize])
-            .chain(all.into_iter().flatten())
+        if !indexed {
+            near.clear();
+        }
+        Near {
+            list: near,
+            at: 0,
+            others: self.others,
+            all: (!indexed).then(|| self.others.iter()),
+        }
     }
     pub fn seen(&self, id: u32) -> Option<&Seen> {
         match self.others_index {
@@ -323,6 +328,35 @@ impl MobWorld<'_> {
     }
 }
 
+thread_local! {
+    /// The candidate list of the thread's last `others_near`, kept for its
+    /// capacity: queries run for most mobs every tick.
+    static NEAR: std::cell::Cell<Vec<u32>> = const { std::cell::Cell::new(Vec::new()) };
+}
+/// `others_near`'s answer: the grid's candidates, else every entry.
+struct Near<'a> {
+    list: Vec<u32>,
+    at: usize,
+    others: &'a [Seen],
+    all: Option<std::slice::Iter<'a, Seen>>,
+}
+impl<'a> Iterator for Near<'a> {
+    type Item = &'a Seen;
+    fn next(&mut self) -> Option<&'a Seen> {
+        if let Some(&i) = self.list.get(self.at) {
+            self.at += 1;
+            return Some(&self.others[i as usize]);
+        }
+        self.all.as_mut()?.next()
+    }
+}
+impl Drop for Near<'_> {
+    fn drop(&mut self) {
+        let mut list = std::mem::take(&mut self.list);
+        list.clear();
+        NEAR.set(list);
+    }
+}
 /// Level.clip with VISUAL shapes and no fluids: the block the segment first
 /// hits, None inside when it hits nothing and outside when the segment is
 /// too long to walk. Glass and copper grates (`TransparentBlock`) and bars and panes
