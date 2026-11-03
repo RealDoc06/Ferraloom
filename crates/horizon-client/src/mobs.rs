@@ -1645,6 +1645,10 @@ pub struct PendingPushes {
 }
 impl PendingPushes {
     const LIST_MAX: usize = 64;
+    /// No push is waiting for any mob.
+    pub fn is_empty(&self) -> bool {
+        self.list.is_empty() && self.by_mob.is_empty()
+    }
     pub fn push(&mut self, id: u32, v: Vec3) {
         if self.by_mob.is_empty() && self.list.len() < Self::LIST_MAX {
             self.list.push((id, v));

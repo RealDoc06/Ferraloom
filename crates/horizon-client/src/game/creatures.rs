@@ -524,6 +524,7 @@ impl Game<'_> {
     /// The entity phase of `tick_creatures`: every mob's tick, deaths, and the
     /// projectiles and effects that follow from them.
     pub(super) fn tick_creature_entities(&mut self) -> Result<()> {
+        let prep = horizon_client::spans::scope("creature_prep");
         // LivingEntity.die runs when the killing blow lands: mobs killed
         // since the last tick (by the player, explosions...) die first.
         let killed: Vec<Mob> = self
@@ -587,6 +588,8 @@ impl Game<'_> {
             for (i, s) in snapshot.iter().enumerate() {
                 index.entry(s.id).or_insert(i as u32);
             }
+            drop(prep);
+            let each = horizon_client::spans::scope("creature_loop");
             for i in 0..mobs.len() {
                 let mut w = MobWorld {
                     others: &snapshot,
@@ -688,14 +691,20 @@ impl Game<'_> {
                 grid.update(i, snapshot[i].bounds);
                 horizon_client::mobs::apply_brain_events(&mut mobs, &mut events, from);
             }
+            drop(each);
             let mut flags = keep.into_iter();
             mobs.retain(|_| flags.next().unwrap_or(true));
-            for m in &mut mobs {
-                horizon_client::mobs::apply_mob_pushes(m, &mut pushes);
+            // Pushes aimed at mobs that did not tick (or after them).
+            if !pushes.is_empty() {
+                for m in &mut mobs {
+                    horizon_client::mobs::apply_mob_pushes(m, &mut pushes);
+                }
             }
             level_random = scratch;
         }
         self.world.random = level_random;
+        // Deaths, events and the projectiles' ticks that follow the mobs'.
+        let _after = horizon_client::spans::scope("creature_after");
         if let Some(host) = self.lan.as_mut()
             && !guest_views.is_empty()
         {
