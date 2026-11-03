@@ -19,35 +19,73 @@ use horizon_world::{
 };
 type Error = std::convert::Infallible;
 struct ItemFluidWorld<'a> {
-    item: &'a mut ItemEntity,
+    position: Vec3,
+    velocity: &'a mut Vec3,
     world: &'a World,
     fluids: &'a FluidResources,
 }
+/// What `ItemEntity::update_fluids` makes of an item at a position moving
+/// at a velocity: the water and lava heights and the velocity after the
+/// currents. It reads only those and the blocks.
+#[derive(Clone, Copy, Debug)]
+pub struct ItemFluids {
+    pub position: Vec3,
+    pub velocity: Vec3,
+    pub heights: (f64, f64),
+    pub pushed: Vec3,
+}
+impl ItemFluids {
+    /// The update of an item at `position` moving at `velocity`.
+    pub fn at(position: Vec3, velocity: Vec3, world: &World, fluids: &FluidResources) -> Self {
+        let mut pushed = velocity;
+        let heights = update_fluids_at(position, &mut pushed, world, fluids);
+        Self {
+            position,
+            velocity,
+            heights,
+            pushed,
+        }
+    }
+    /// Whether this is the update of `item` as it stands and moves now.
+    pub fn of(&self, item: &ItemEntity) -> bool {
+        let bits = |v: Vec3| [v.x, v.y, v.z].map(f64::to_bits);
+        bits(self.position) == bits(item.position) && bits(self.velocity) == bits(item.velocity)
+    }
+}
 impl ItemEntity {
     pub(super) fn update_fluids(&mut self, world: &World, fluids: &FluidResources) -> (f64, f64) {
-        let mut interaction = EntityFluidInteraction::new([WATER, LAVA]);
-        let mut scene = ItemFluidWorld {
-            item: self,
-            world,
-            fluids,
-        };
-        if interaction.update(&mut scene, false, 4096).is_err() {
-            return (0.0, 0.0);
-        }
-        let water_height = interaction.fluid_height(&scene, WATER);
-        let lava_height = interaction.fluid_height(&scene, LAVA);
-        let _ = interaction.apply_current(&mut scene, WATER, 0.014);
-        let _ = interaction.apply_current(
-            &mut scene,
-            LAVA,
-            if world.fast_lava {
-                0.007
-            } else {
-                0.0023333333333333335
-            },
-        );
-        (water_height, lava_height)
+        update_fluids_at(self.position, &mut self.velocity, world, fluids)
     }
+}
+fn update_fluids_at(
+    position: Vec3,
+    velocity: &mut Vec3,
+    world: &World,
+    fluids: &FluidResources,
+) -> (f64, f64) {
+    let mut interaction = EntityFluidInteraction::new([WATER, LAVA]);
+    let mut scene = ItemFluidWorld {
+        position,
+        velocity,
+        world,
+        fluids,
+    };
+    if interaction.update(&mut scene, false, 4096).is_err() {
+        return (0.0, 0.0);
+    }
+    let water_height = interaction.fluid_height(&scene, WATER);
+    let lava_height = interaction.fluid_height(&scene, LAVA);
+    let _ = interaction.apply_current(&mut scene, WATER, 0.014);
+    let _ = interaction.apply_current(
+        &mut scene,
+        LAVA,
+        if world.fast_lava {
+            0.007
+        } else {
+            0.0023333333333333335
+        },
+    );
+    (water_height, lava_height)
 }
 impl FluidMembership for ItemFluidWorld<'_> {
     fn fluid_in_tag(&self, kind: FluidKind, tag: FluidTagId) -> bool {
@@ -60,13 +98,13 @@ impl CurrentTarget for ItemFluidWorld<'_> {
         false
     }
     fn velocity(&mut self) -> Result<Vec3, Error> {
-        Ok(self.item.velocity)
+        Ok(*self.velocity)
     }
     fn add_delta_movement(&mut self, delta: Vec3) -> Result<(), Error> {
-        let v = self.item.velocity;
+        let v = *self.velocity;
         let sum = Vec3::new(v.x + delta.x, v.y + delta.y, v.z + delta.z);
         if delta.is_finite() && sum.is_finite() {
-            self.item.velocity = sum;
+            *self.velocity = sum;
         }
         Ok(())
     }
@@ -76,7 +114,7 @@ impl FluidInteractionWorld for ItemFluidWorld<'_> {
     type Chunk = ();
     fn interaction_box(&mut self) -> Result<Option<Aabb>, Error> {
         Ok(Some(
-            self.item.bounds().deflate(Vec3::new(0.001, 0.001, 0.001)),
+            ItemEntity::bounds_at(self.position).deflate(Vec3::new(0.001, 0.001, 0.001)),
         ))
     }
     fn loaded_chunk(&mut self, x: i32, z: i32) -> Result<Option<()>, Error> {
@@ -90,16 +128,16 @@ impl FluidInteractionWorld for ItemFluidWorld<'_> {
         })
     }
     fn bounding_box_min_y(&self) -> f64 {
-        self.item.position.y
+        self.position.y
     }
     fn block_x(&self) -> i32 {
-        self.item.position.x.floor() as i32
+        self.position.x.floor() as i32
     }
     fn eye_y(&mut self) -> Result<f64, Error> {
-        Ok(self.item.position.y + f64::from(0.2125f32))
+        Ok(self.position.y + f64::from(0.2125f32))
     }
     fn block_z(&self) -> i32 {
-        self.item.position.z.floor() as i32
+        self.position.z.floor() as i32
     }
     fn fluid_state(&mut self, p: BlockPos) -> Result<FluidState, Error> {
         Ok(self.fluids.fluid(self.world.block(p.x, p.y, p.z)))

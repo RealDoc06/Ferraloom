@@ -2705,6 +2705,34 @@ impl Game<'_> {
             |stack: &ItemStack| catalog.get(&stack.item).map_or(64, |i| i.max_stack).max(1);
         // A LAN or server guest only shows the host's items.
         let merging = self.remote.is_none();
+        // ItemEntity.tick's noPhysics test reads only the item's box and the
+        // blocks, which hold still through this pass, and nothing moves an
+        // item before its own tick: every item's answer is read ahead on the
+        // pool. An item that moved anyway asks again.
+        // Its first fluid update reads only its position, its velocity and
+        // the blocks too, and is read ahead the same way.
+        type Ahead = (
+            Vec3,
+            Vec3,
+            bool,
+            Option<horizon_client::entities::ItemFluids>,
+        );
+        let mut ahead: Vec<Ahead> = items
+            .iter()
+            .map(|i| (i.position, i.velocity, false, None))
+            .collect();
+        {
+            let (world, collision) = (&self.world, self.collision);
+            let fluids = &self.res.motion().fluids;
+            horizon_threads::pool::for_each_mut(&mut ahead, 64, |(at, velocity, inside, wet)| {
+                if merging {
+                    *inside = ItemEntity::inside_block_at(*at, world, collision);
+                }
+                *wet = Some(horizon_client::entities::ItemFluids::at(
+                    *at, *velocity, world, fluids,
+                ));
+            });
+        }
         for i in 0..items.len() {
             if removed[i] {
                 continue;
@@ -2718,17 +2746,27 @@ impl Game<'_> {
             }
             // ItemEntity.tick's noPhysics (servers only): out of a block
             // placed on it, towards the closest open side (#1252).
-            let no_physics = merging && item.inside_block(&self.world, self.collision);
+            let no_physics = merging && {
+                let (at, _, inside, _) = ahead[i];
+                let same = [at.x, at.y, at.z].map(f64::to_bits)
+                    == [item.position.x, item.position.y, item.position.z].map(f64::to_bits);
+                if same {
+                    inside
+                } else {
+                    item.inside_block(&self.world, self.collision)
+                }
+            };
             if no_physics {
                 let speed = self.world.random.next_float() * 0.2 + 0.1;
                 item.move_towards_closest_space(&self.world, self.res.facts(), speed);
             }
-            let alive = item.tick(
+            let alive = item.tick_with(
                 &self.world,
                 self.res.facts(),
                 self.collision,
                 no_physics,
                 &self.res.motion().fluids,
+                ahead[i].3,
             );
             // Entity.applyEffectsFromBlocks: bubble columns lift or drag the item.
             horizon_client::motion::bubble_column_push(

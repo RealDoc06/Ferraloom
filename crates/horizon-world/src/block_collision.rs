@@ -112,11 +112,15 @@ impl<'r> BlockCollisionRegistry<'r> {
             // No contextual rule and an empty cached shape: empty everywhere.
             let empty = !contextual.contains_key(&id)
                 && cached.cached_shape(id)?.is_some_and(VoxelShape::is_empty);
+            // The same with `Shapes.block()`: a full cube everywhere.
+            let block = !contextual.contains_key(&id)
+                && cached.cached_shape(id)?.is_some_and(VoxelShape::is_block);
             scan_flags.push(
                 u8::from(large)
                     | (u8::from(state.name == "minecraft:moving_piston") << 1)
                     | (u8::from(empty) << 2)
-                    | (u8::from(contextual.contains_key(&id)) << 3),
+                    | (u8::from(contextual.contains_key(&id)) << 3)
+                    | (u8::from(block) << 4),
             );
             if cached.cached_shape(id)?.is_none() {
                 if let Some(rule) =
@@ -156,6 +160,7 @@ impl<'r> BlockCollisionRegistry<'r> {
             large_collision_shape: flags & 1 != 0,
             moving_piston: flags & 2 != 0,
             empty_shape: flags & 4 != 0,
+            block_shape: flags & 16 != 0,
         })
     }
     /// Whether a scan passes `state` wherever it is (`CollisionBlock::empty_shape`).

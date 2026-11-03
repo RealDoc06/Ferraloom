@@ -21,6 +21,7 @@ pub mod block_entities;
 pub mod block_entity_anim;
 pub mod block_entity_item;
 pub mod block_entity_render;
+pub mod block_kinds;
 pub mod block_transform;
 pub mod border_render;
 pub mod boss_overlay;

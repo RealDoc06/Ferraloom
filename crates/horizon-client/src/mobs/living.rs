@@ -5,7 +5,7 @@
 use super::{Mob, MobEvent, MobWorld};
 use crate::{
     blocks::Fluid,
-    collisions::{PowderSnowSubject, SceneCollisions},
+    collisions::{PowderSnowSubject, SceneCollisions, SectionsSeen},
 };
 use horizon_core::{
     geometry::{Aabb, Vec3, trig},
@@ -96,6 +96,11 @@ pub fn wrap(a: f32) -> f32 {
         a += 360.0;
     }
     a
+}
+/// The box corners and eye height a fluid read is asked at, as bits.
+pub fn fluids_key(bounds: Aabb, eye: f64) -> [u64; 7] {
+    let (lo, hi) = (bounds.min_position(), bounds.max_position());
+    [lo.x, lo.y, lo.z, hi.x, hi.y, hi.z, eye].map(f64::to_bits)
 }
 impl MobWorld<'_> {
     /// FluidState.getHeight: a full block under the same fluid, else amount / 9.
@@ -242,6 +247,37 @@ impl MobWorld<'_> {
             .map(|shape| shape.boxes().iter().map(|b| b.move_by(offset)).collect())
             .unwrap_or_default()
     }
+    /// Whether a box of [`Self::block_collision_boxes`] meets `area`, without
+    /// collecting them: a unit cube's one box is the cell itself.
+    fn block_collision_meets(
+        &self,
+        block: horizon_world::block_collision_scan::CollisionBlock,
+        x: i32,
+        y: i32,
+        z: i32,
+        area: Aabb,
+    ) -> bool {
+        let offset = Vec3::new(f64::from(x), f64::from(y), f64::from(z));
+        if block.block_shape {
+            let cube = Aabb::new(Vec3::ZERO, Vec3::new(1.0, 1.0, 1.0));
+            return cube.move_by(offset).intersects(area);
+        }
+        let mut scene = SceneCollisions {
+            world: self.world,
+            binding: self.collision,
+            subject: None,
+        };
+        let at = horizon_core::position::BlockPos::new(x, y, z);
+        let context = horizon_world::collision_context::CollisionContext::empty(false);
+        self.collision
+            .collision_shape_with_context(&mut scene, block.state, at, &context)
+            .is_ok_and(|shape| {
+                shape
+                    .boxes()
+                    .iter()
+                    .any(|b| b.move_by(offset).intersects(area))
+            })
+    }
     /// `Level.findSupportingBlock`: of the blocks whose collision shape
     /// meets `area`, the one whose centre is nearest `from` (ties: the
     /// greatest by `Vec3i.compareTo`, y then z then x).
@@ -293,11 +329,7 @@ impl MobWorld<'_> {
                     {
                         continue;
                     }
-                    if !self
-                        .block_collision_boxes(x, y, z)
-                        .iter()
-                        .any(|b| b.intersects(area))
-                    {
+                    if !self.block_collision_meets(block, x, y, z, area) {
                         continue;
                     }
                     let d = (f64::from(x) + 0.5 - from.x).powi(2)
@@ -514,18 +546,45 @@ impl Mob {
             self.velocity = Vec3::ZERO;
         }
         let step = self.kind.step_height as f32;
-        let mut scene = SceneCollisions {
-            world: w.world,
-            binding: w.collision,
-            subject: self.kind.flags.lava_walker.then(|| PowderSnowSubject {
-                fall_distance: self.fall_distance,
-                lava_walker: true,
-                ..Default::default()
-            }),
+        let subject = self.kind.flags.lava_walker.then(|| PowderSnowSubject {
+            fall_distance: self.fall_distance,
+            lava_walker: true,
+            ..Default::default()
+        });
+        let bounds = self.bounds();
+        // A mob that only falls (an idle one onto the ground, every tick)
+        // resolves as it did while the sections around it are unchanged.
+        let memo_key = (wanted.x == 0.0 && wanted.z == 0.0 && wanted.y != 0.0).then(|| {
+            MoveMemo::key(
+                self.position,
+                bounds,
+                wanted,
+                step,
+                self.on_ground,
+                self.fall_distance,
+                subject.is_some(),
+            )
+        });
+        let remembered = memo_key
+            .as_ref()
+            .and_then(|key| self.ai.move_memo.recall(key, w, bounds, wanted.y));
+        let moved = match remembered {
+            Some(moved) => moved,
+            None => {
+                let mut scene = SceneCollisions {
+                    world: w.world,
+                    binding: w.collision,
+                    subject,
+                };
+                let moved = scene
+                    .resolve(bounds, wanted, step, self.on_ground)
+                    .unwrap_or(Vec3::ZERO);
+                if let Some(key) = memo_key {
+                    self.ai.move_memo.remember(key, w, bounds, wanted.y, moved);
+                }
+                moved
+            }
         };
-        let moved = scene
-            .resolve(self.bounds(), wanted, step, self.on_ground)
-            .unwrap_or(Vec3::ZERO);
         let length = moved.x * moved.x + moved.y * moved.y + moved.z * moved.z;
         let wanted_length = wanted.x * wanted.x + wanted.y * wanted.y + wanted.z * wanted.z;
         if length > 1.0e-7 || wanted_length - length < 1.0e-7 {
@@ -593,8 +652,22 @@ impl Mob {
             }
             self.velocity = after;
         }
-        // Entity.checkSupportingBlock
-        self.supporting = self.supporting_block(w, moved);
+        // Entity.checkSupportingBlock: the remembered support, when the
+        // move was and the mob stands where it stood then.
+        self.supporting = match self
+            .ai
+            .move_memo
+            .support(remembered.is_some(), self.position)
+        {
+            Some(supporting) => supporting,
+            None => {
+                let supporting = self.supporting_block(w, moved);
+                if memo_key.is_some() {
+                    self.ai.move_memo.set_support(self.position, supporting);
+                }
+                supporting
+            }
+        };
         self.movement_emission(w, moved, events);
         // Entity.applyEffectsFromBlocks: bubble columns push the mob.
         if crate::motion::bubble_column_push(
@@ -653,7 +726,19 @@ impl Mob {
     /// resets the fall and entering it (after the first tick) splashes.
     pub(super) fn update_fluids(&mut self, w: &MobWorld, events: &mut Vec<MobEvent>) {
         let was_touching_water = self.fluids.in_water;
-        self.fluids = w.fluids(self.bounds(), self.eye_y());
+        let (bounds, eye) = (self.bounds(), self.eye_y());
+        let asked = fluids_key(bounds, eye);
+        // Asked again in the same tick (the world is unchanged) at the same
+        // box, the answer is the same: dry, it pushes and splashes nothing.
+        if self.ai.fluids_asked == Some(asked) && !self.fluids.in_water && !self.fluids.in_lava {
+            return;
+        }
+        // Read ahead of the tick for this box (the world unchanged since).
+        self.fluids = match w.fluids_ahead {
+            Some((at, fluids)) if at == asked => fluids,
+            _ => w.fluids(bounds, eye),
+        };
+        self.ai.fluids_asked = Some(asked);
         // EntityFluidInteraction.applyCurrentTo: the flow pushes the mob.
         if (self.fluids.in_water || self.fluids.in_lava) && self.pushed_by_fluid() {
             let (water, lava) = w.fluid_currents(self.bounds());
@@ -1335,5 +1420,79 @@ impl horizon_world::water_splash::WaterSplashWorld for Splash<'_> {
             state: horizon_world::registry::BlockStateId(0),
         });
         Ok(())
+    }
+}
+
+/// `do_move`'s result for a move straight up or down (an idle mob falls
+/// onto the ground every tick) and the support it found, kept while the
+/// sections its block reads can reach are unchanged ([`SectionsSeen`]).
+#[derive(Clone, Debug, Default)]
+pub struct MoveMemo {
+    key: Option<[u64; 14]>,
+    sections: SectionsSeen,
+    moved: Vec3,
+    /// Where the mob stood when it looked for its support, and the support.
+    support: Option<([u64; 3], Option<[i32; 3]>)>,
+}
+impl MoveMemo {
+    /// Everything `do_move`'s collision and support reads of the mob.
+    #[allow(clippy::too_many_arguments)]
+    fn key(
+        position: Vec3,
+        bounds: Aabb,
+        wanted: Vec3,
+        step: f32,
+        on_ground: bool,
+        fall_distance: f64,
+        lava_walker: bool,
+    ) -> [u64; 14] {
+        let (lo, hi) = (bounds.min_position(), bounds.max_position());
+        [
+            position.x.to_bits(),
+            position.y.to_bits(),
+            position.z.to_bits(),
+            lo.x.to_bits(),
+            lo.y.to_bits(),
+            lo.z.to_bits(),
+            hi.x.to_bits(),
+            hi.y.to_bits(),
+            hi.z.to_bits(),
+            wanted.x.to_bits(),
+            wanted.y.to_bits(),
+            wanted.z.to_bits(),
+            fall_distance.to_bits(),
+            u64::from(step.to_bits()) | u64::from(on_ground) << 32 | u64::from(lava_walker) << 33,
+        ]
+    }
+    /// The cells the move's collision scan and support search may read.
+    fn cells(bounds: Aabb, dy: f64) -> ([i32; 3], [i32; 3]) {
+        SectionsSeen::cells_around(bounds.expand_towards(Vec3::new(0.0, dy, 0.0)))
+    }
+    /// The remembered move, if `key` is the remembered one and every
+    /// section is unchanged.
+    fn recall(&self, key: &[u64; 14], w: &MobWorld, bounds: Aabb, dy: f64) -> Option<Vec3> {
+        (self.key.as_ref() == Some(key)
+            && self.sections.unchanged(w.world, Self::cells(bounds, dy)))
+        .then_some(self.moved)
+    }
+    /// Keep a resolved move, if its sections can be kept.
+    fn remember(&mut self, key: [u64; 14], w: &MobWorld, bounds: Aabb, dy: f64, moved: Vec3) {
+        self.support = None;
+        let kept = self
+            .sections
+            .capture(w.world, w.collision, Self::cells(bounds, dy));
+        self.key = kept.then_some(key);
+        self.moved = moved;
+    }
+    /// The remembered support, when the move was recalled and the mob
+    /// stands where it stood when it looked.
+    fn support(&self, recalled: bool, at: Vec3) -> Option<Option<[i32; 3]>> {
+        let (from, support) = self.support.filter(|_| recalled)?;
+        (from == [at.x.to_bits(), at.y.to_bits(), at.z.to_bits()]).then_some(support)
+    }
+    fn set_support(&mut self, at: Vec3, support: Option<[i32; 3]>) {
+        if self.key.is_some() {
+            self.support = Some(([at.x.to_bits(), at.y.to_bits(), at.z.to_bits()], support));
+        }
     }
 }

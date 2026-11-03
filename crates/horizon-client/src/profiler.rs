@@ -55,6 +55,22 @@ pub fn start() {
 
 fn collect(settings: Settings) -> Result<(), Box<dyn std::error::Error>> {
     std::thread::sleep(Duration::from_secs(settings.warmup));
+    // A server holds a socket per player: with hundreds online the default
+    // soft limit of 1024 descriptors leaves none for the sampler's file.
+    #[cfg(unix)]
+    {
+        use rustix::process::{Resource, Rlimit, getrlimit, setrlimit};
+        let limit = getrlimit(Resource::Nofile);
+        if let Err(error) = setrlimit(
+            Resource::Nofile,
+            Rlimit {
+                current: limit.maximum,
+                maximum: limit.maximum,
+            },
+        ) {
+            log::warn!("CPU profile: open-file limit unchanged: {error}");
+        }
+    }
     let guard = pprof::ProfilerGuardBuilder::default()
         .frequency(settings.hz)
         .build()?;

@@ -130,6 +130,7 @@ impl BlockCollisionWorld for Recording {
             large_collision_shape: true,
             moving_piston: true,
             empty_shape: true,
+            block_shape: false,
         })
     }
     fn is_suffocating(&mut self, _: (), _: CollisionBlock, _: BlockPos) -> io::Result<bool> {

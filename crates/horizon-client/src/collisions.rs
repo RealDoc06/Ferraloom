@@ -460,6 +460,116 @@ impl PowderSnowWorld for SceneCollisions<'_, '_> {
     }
 }
 
+/// The sections over a box of cells as they are now, held so a later look
+/// can tell whether any was written since: a block write replaces the
+/// section it writes (`Arc::make_mut` copies a section held elsewhere), so
+/// the same `Arc`s hold the same blocks. Sections that may hold a moving
+/// piston (whose shape moves without a write) or use the global palette are
+/// never held. Collision answers kept with them stay exact while unchanged.
+#[derive(Clone, Default)]
+pub struct SectionsSeen {
+    /// Chunk by chunk, bottom up; None where no chunk is resident.
+    sections: Vec<Option<Arc<crate::chunk::Section>>>,
+}
+impl std::fmt::Debug for SectionsSeen {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SectionsSeen({})", self.sections.len())
+    }
+}
+impl SectionsSeen {
+    /// Cells a block collision scan of `bounds` (or a search beside it)
+    /// may read, with a margin: two past each face, as a scan reads one
+    /// around the box and a liquid's shape looks at the block above.
+    pub fn cells_around(bounds: Aabb) -> ([i32; 3], [i32; 3]) {
+        let (lo, hi) = (bounds.min_position(), bounds.max_position());
+        let cell = |v: f64, d: i32| (v.floor() as i32).saturating_add(d);
+        (
+            [
+                cell(lo.x - 1.0e-5, -2),
+                cell(lo.y - 1.0e-5, -2),
+                cell(lo.z - 1.0e-5, -2),
+            ],
+            [
+                cell(hi.x + 1.0e-5, 2),
+                cell(hi.y + 1.0e-5, 2),
+                cell(hi.z + 1.0e-5, 2),
+            ],
+        )
+    }
+    /// Visit every section of the cells, stopping when `f` says so.
+    fn visit(
+        world: &World,
+        (lo, hi): ([i32; 3], [i32; 3]),
+        mut f: impl FnMut(Option<&Arc<crate::chunk::Section>>) -> bool,
+    ) -> bool {
+        use crate::chunk::{MIN_Y, SECTIONS};
+        // A box this wide is no box a mob or an item reads.
+        if hi[0].saturating_sub(lo[0]) > 64 || hi[2].saturating_sub(lo[2]) > 64 {
+            return false;
+        }
+        let top = SECTIONS as i32 - 1;
+        let (s0, s1) = (
+            (lo[1].saturating_sub(MIN_Y) >> 4).clamp(0, top),
+            (hi[1].saturating_sub(MIN_Y) >> 4).clamp(0, top),
+        );
+        for cx in lo[0] >> 4..=hi[0] >> 4 {
+            for cz in lo[2] >> 4..=hi[2] >> 4 {
+                let chunk = world.chunks.get(&(cx, cz));
+                for s in s0..=s1 {
+                    if !f(chunk.map(|c| &c.sections[s as usize])) {
+                        return false;
+                    }
+                }
+            }
+        }
+        true
+    }
+    /// Hold the sections of the cells now; false (and nothing held) when
+    /// one of them cannot be held.
+    pub fn capture(
+        &mut self,
+        world: &World,
+        binding: &BlockCollisionRegistry<'_>,
+        cells: ([i32; 3], [i32; 3]),
+    ) -> bool {
+        self.sections.clear();
+        let sections = &mut self.sections;
+        let held = Self::visit(world, cells, |section| {
+            if let Some(section) = section {
+                let blocks = &section.blocks;
+                if blocks.is_global()
+                    || blocks.maybe_has(|v| {
+                        !binding
+                            .collision_block(horizon_world::registry::BlockStateId(v))
+                            .is_ok_and(|b| !b.moving_piston)
+                    })
+                {
+                    return false;
+                }
+            }
+            sections.push(section.cloned());
+            true
+        });
+        if !held {
+            self.sections.clear();
+        }
+        held
+    }
+    /// Whether the cells' sections are those held (none written since).
+    /// Call with the cells they were captured for.
+    pub fn unchanged(&self, world: &World, cells: ([i32; 3], [i32; 3])) -> bool {
+        if self.sections.is_empty() {
+            return false;
+        }
+        let mut held = self.sections.iter();
+        Self::visit(world, cells, |now| match (held.next(), now) {
+            (Some(Some(a)), Some(b)) => Arc::ptr_eq(a, b),
+            (Some(None), None) => true,
+            _ => false,
+        }) && held.next().is_none()
+    }
+}
+
 /// A collision world without blocks: no chunk is resident, so only the
 /// world border stops a body.
 pub struct EmptyCollisions;
@@ -648,5 +758,54 @@ mod border_movement_tests {
             (moved.x - 0.51).abs() < 1.0e-9,
             "the body did not move the whole way: {moved:?}"
         );
+    }
+}
+
+#[cfg(test)]
+mod sections_seen_tests {
+    use super::*;
+    use crate::chunk::Chunk;
+
+    /// Held sections tell a write inside the box from one elsewhere, and a
+    /// section that may hold a moving piston is never held.
+    #[test]
+    fn held_sections_notice_writes_inside_the_box_only() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../.local/horizon-client")
+            .join(horizon_core::VANILLA_VERSION);
+        if !root.join("cached-collision.nbt").exists() {
+            return;
+        }
+        let assets = crate::assets::Assets::load(&root).unwrap();
+        let binding = load(&root, assets.registry).unwrap();
+        let state = |name| assets.registry.default_state(name).unwrap();
+        let (air, stone) = (state("minecraft:air"), state("minecraft:stone"));
+        let mut world = World::new(air, 0);
+        for (x, z) in [(0, 0), (1, 0), (4, 4)] {
+            world.chunks.insert((x, z), Arc::new(Chunk::empty(x, z)));
+        }
+        world.set(5, 63, 5, stone).unwrap();
+        let bounds = Aabb::new(Vec3::new(5.2, 64.0, 5.2), Vec3::new(5.8, 65.8, 5.8));
+        let cells = SectionsSeen::cells_around(bounds);
+        let mut seen = SectionsSeen::default();
+        assert!(seen.capture(&world, &binding, cells));
+        assert!(seen.unchanged(&world, cells));
+        // A write two chunks away leaves the box's sections as they were.
+        world.set(70, 64, 70, stone).unwrap();
+        assert!(seen.unchanged(&world, cells));
+        // One under the box replaces its section.
+        world.set(6, 63, 6, stone).unwrap();
+        assert!(!seen.unchanged(&world, cells));
+        // So does a column arriving where none was resident.
+        let wide = SectionsSeen::cells_around(bounds.move_by(Vec3::new(10.0, 0.0, 10.0)));
+        assert!(seen.capture(&world, &binding, wide));
+        world.chunks.insert((0, 1), Arc::new(Chunk::empty(0, 1)));
+        assert!(!seen.unchanged(&world, wide));
+        // A moving piston's shape moves without a write: never held.
+        world
+            .set(5, 64, 6, state("minecraft:moving_piston"))
+            .unwrap();
+        assert!(!seen.capture(&world, &binding, cells));
+        assert!(!seen.unchanged(&world, cells));
     }
 }

@@ -57,6 +57,11 @@ pub struct Ai {
     pub swing_duration: i32,
     /// Walked distance and the next footstep.
     pub steps: super::living::Steps,
+    /// The last straight up or down move `do_move` resolved.
+    pub move_memo: super::living::MoveMemo,
+    /// The box and eye height `update_fluids` last read the fluids at,
+    /// during this tick only.
+    pub fluids_asked: Option<[u64; 7]>,
 }
 impl Mob {
     /// `LivingEntity.getCurrentSwingDuration`: 6 ticks unless a swing set its own.
@@ -447,6 +452,19 @@ pub fn tick(
     level_random: &mut LegacyRandom,
     events: &mut Vec<MobEvent>,
 ) -> bool {
+    // The world holds still for the length of one mob's tick, and only for
+    // that long: fluid answers are reused within it (`Mob::update_fluids`).
+    m.ai.fluids_asked = None;
+    let kept = tick_entity(m, w, level_random, events);
+    m.ai.fluids_asked = None;
+    kept
+}
+fn tick_entity(
+    m: &mut Mob,
+    w: &MobWorld,
+    level_random: &mut LegacyRandom,
+    events: &mut Vec<MobEvent>,
+) -> bool {
     if m.removed {
         return false;
     }
@@ -496,7 +514,9 @@ pub fn tick(
     } else {
         ai_step(m, w, level_random, events);
     }
-    effects_from_blocks(m, w);
+    // The kinds of block the contact checks after the move may meet.
+    let near = kinds_near(m, w);
+    effects_from_blocks(m, w, near);
     if m.species() == Species::Rabbit {
         super::rabbit::post_tick(m);
     }
@@ -513,7 +533,7 @@ pub fn tick(
     super::axolotl::tick_animation(m);
     m.anim.end_tick(m.ai.swinging);
     tick_swing(m);
-    flower_contact_effects(m, w);
+    flower_contact_effects(m, w, near);
     if m.species() == Species::CopperGolem {
         // CopperGolem.tick: updateWeathering after the living tick.
         super::copper_golem::update_weathering(m, w, level_random, events);
@@ -538,7 +558,11 @@ pub fn tick(
 /// 0.8, and a grown bush pricks for 1 when the mob moved at least 0.003 on X
 /// or Z this tick). The blocks are those the mob's box touches anywhere along
 /// its move this tick, from where it started to where it ended.
-fn effects_from_blocks(m: &mut Mob, w: &MobWorld) {
+fn effects_from_blocks(m: &mut Mob, w: &MobWorld, near: u16) {
+    use crate::block_kinds::{CACTUS, SWEET_BERRY_BUSH};
+    if near & (CACTUS | SWEET_BERRY_BUSH) == 0 {
+        return;
+    }
     let mut visited: Vec<[i32; 3]> = Vec::new();
     let travel = m.position.subtract(m.previous);
     let longest = travel.x.abs().max(travel.y.abs()).max(travel.z.abs());
@@ -584,6 +608,48 @@ fn effects_from_blocks(m: &mut Mob, w: &MobWorld) {
             }
         }
     }
+}
+/// The `block_kinds` the section palettes around the mob's boxes at
+/// `previous` and `position` may hold (a superset). A contact check that
+/// only reacts to kinds not among them finds nothing, so it stops before
+/// reading a cell. The cells cover the boxes the checks visit (the swept
+/// box of `effects_from_blocks`, both boxes of the flower contact).
+fn kinds_near(m: &Mob, w: &MobWorld) -> u16 {
+    kinds_between(m.previous, m.position, m.width(), m.height(), w)
+}
+/// [`kinds_near`] for a mob of `width` and `height` at `a` and `b`.
+pub fn kinds_between(a: Vec3, b: Vec3, width: f32, height: f32, w: &MobWorld) -> u16 {
+    let half = f64::from(width) / 2.0 + 0.01;
+    let lo = [
+        (a.x.min(b.x) - half).floor() as i32,
+        a.y.min(b.y).floor() as i32,
+        (a.z.min(b.z) - half).floor() as i32,
+    ];
+    let hi = [
+        (a.x.max(b.x) + half).floor() as i32,
+        (a.y.max(b.y) + f64::from(height) + 0.01).floor() as i32,
+        (a.z.max(b.z) + half).floor() as i32,
+    ];
+    // A long move (a teleport) reads its cells instead of many palettes.
+    if hi[0].saturating_sub(lo[0]) > 64 || hi[2].saturating_sub(lo[2]) > 64 {
+        return u16::MAX;
+    }
+    crate::block_kinds::BlockKinds::of(w.registry).near(w.world, lo, hi)
+}
+/// What [`MobWorld::kinds_ahead`] is keyed by: the mob's position, which
+/// must also be where it started the tick, and its size, as bits.
+pub fn start_key(m: &Mob) -> [u64; 4] {
+    let bits = |v: Vec3| [v.x, v.y, v.z].map(f64::to_bits);
+    // A mob moved since it started gets a key no read-ahead has.
+    if bits(m.position) != bits(m.previous) {
+        return [u64::MAX; 4];
+    }
+    key_at(m.position, m.width(), m.height())
+}
+/// [`start_key`] of a mob of `width` and `height` starting at `at`.
+pub fn key_at(at: Vec3, width: f32, height: f32) -> [u64; 4] {
+    let size = u64::from(width.to_bits()) << 32 | u64::from(height.to_bits());
+    [at.x.to_bits(), at.y.to_bits(), at.z.to_bits(), size]
 }
 /// LivingEntity.updateSwingTime.
 pub fn tick_swing(m: &mut Mob) {
@@ -638,7 +704,19 @@ fn base_tick(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
     if m.species() == Species::Drowned {
         super::undead::drowned_update_swimming(m, w);
     }
-    let fire = crate::motion::environment::fire_contact(w.world, w.registry, m.bounds());
+    // The kinds of block around the mob before its move, read ahead of the
+    // tick for a mob standing where it stood then: fire and powder snow
+    // checks with none of theirs around find nothing.
+    let near = match w.kinds_ahead {
+        Some((at, kinds)) if at == start_key(m) => kinds,
+        _ => kinds_near(m, w),
+    };
+    use crate::block_kinds::{FIRE, SOUL_FIRE};
+    let fire = if near & (FIRE | SOUL_FIRE) != 0 {
+        crate::motion::environment::fire_contact(w.world, w.registry, m.bounds())
+    } else {
+        0.0
+    };
     if fire > 0.0 {
         m.ticks_frozen = 0;
     }
@@ -728,7 +806,7 @@ fn base_tick(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
         if m.kind.flags.water_sensitive && (m.fluids.in_water || in_rain(m, w)) {
             m.damage(1.0, Damage::of(DamageKind::Drown));
         }
-        freeze_tick(m, w);
+        freeze_tick(m, w, near);
     }
     tick_effects(m);
     if m.species() == Species::Illusioner {
@@ -761,8 +839,8 @@ fn base_tick(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
 /// `LivingEntity.aiStep`'s "freezing" with `InsideBlockEffectType.FREEZE`:
 /// powder snow builds `ticks_frozen` up, anywhere else it melts twice as
 /// fast, and a fully frozen mob takes one freeze damage every 40 ticks.
-fn freeze_tick(m: &mut Mob, w: &MobWorld) {
-    let in_snow = in_powder_snow(m, w);
+fn freeze_tick(m: &mut Mob, w: &MobWorld, near: u16) {
+    let in_snow = in_powder_snow(m, w, near);
     if !in_snow && m.ticks_frozen == 0 {
         return;
     }
@@ -779,7 +857,10 @@ fn freeze_tick(m: &mut Mob, w: &MobWorld) {
 }
 /// Whether the mob's box (shrunk by `1.0E-5`, as in `Entity.checkInsideBlocks`)
 /// touches powder snow.
-fn in_powder_snow(m: &Mob, w: &MobWorld) -> bool {
+fn in_powder_snow(m: &Mob, w: &MobWorld, near: u16) -> bool {
+    if near & crate::block_kinds::POWDER_SNOW == 0 {
+        return false;
+    }
     let b = m.bounds().deflate(Vec3::new(1e-5, 1e-5, 1e-5));
     let (min, max) = (b.min_position(), b.max_position());
     for x in min.x.floor() as i32..=max.x.floor() as i32 {
@@ -1888,8 +1969,12 @@ pub fn custom_travel(m: &mut Mob, w: &MobWorld, input: Vec3, events: &mut Vec<Mo
 /// for 25 ticks on a bee, when the open flower attracts bees). The blocks
 /// are those the mob's box touches where it started the tick and where it
 /// ended.
-fn flower_contact_effects(m: &mut Mob, w: &MobWorld) {
+fn flower_contact_effects(m: &mut Mob, w: &MobWorld, near: u16) {
     if !m.alive() || w.difficulty.effective == 0.0 {
+        return;
+    }
+    use crate::block_kinds::{OPEN_EYEBLOSSOM, WITHER_ROSE};
+    if near & (WITHER_ROSE | OPEN_EYEBLOSSOM) == 0 {
         return;
     }
     let half = f64::from(m.width()) / 2.0 - 1.0e-5;
