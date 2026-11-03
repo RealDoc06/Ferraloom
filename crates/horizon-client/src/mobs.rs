@@ -1833,6 +1833,9 @@ pub struct MobWorld<'a> {
     pub items: Option<&'a crate::items::Items>,
     /// `ChestBlockEntity.getOpenCount`: the players with each chest open.
     pub lid_openers: &'a HashMap<(i32, i32, i32), i32>,
+    /// The ticking mob's [`MobWorld::fluids`] read ahead of its tick: the
+    /// box corners and eye height asked (as bits) and the answer.
+    pub fluids_ahead: Option<([u64; 7], living::Fluids)>,
 }
 /// `Entity.getTeam` of the player and of the mobs on a team.
 #[derive(Clone, Debug, Default)]

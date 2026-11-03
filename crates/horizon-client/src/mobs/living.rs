@@ -97,6 +97,11 @@ pub fn wrap(a: f32) -> f32 {
     }
     a
 }
+/// The box corners and eye height a fluid read is asked at, as bits.
+pub fn fluids_key(bounds: Aabb, eye: f64) -> [u64; 7] {
+    let (lo, hi) = (bounds.min_position(), bounds.max_position());
+    [lo.x, lo.y, lo.z, hi.x, hi.y, hi.z, eye].map(f64::to_bits)
+}
 impl MobWorld<'_> {
     /// FluidState.getHeight: a full block under the same fluid, else amount / 9.
     pub fn fluid_height(&self, x: i32, y: i32, z: i32) -> (Fluid, f64) {
@@ -722,14 +727,17 @@ impl Mob {
     pub(super) fn update_fluids(&mut self, w: &MobWorld, events: &mut Vec<MobEvent>) {
         let was_touching_water = self.fluids.in_water;
         let (bounds, eye) = (self.bounds(), self.eye_y());
-        let (lo, hi) = (bounds.min_position(), bounds.max_position());
-        let asked = [lo.x, lo.y, lo.z, hi.x, hi.y, hi.z, eye].map(f64::to_bits);
+        let asked = fluids_key(bounds, eye);
         // Asked again in the same tick (the world is unchanged) at the same
         // box, the answer is the same: dry, it pushes and splashes nothing.
         if self.ai.fluids_asked == Some(asked) && !self.fluids.in_water && !self.fluids.in_lava {
             return;
         }
-        self.fluids = w.fluids(bounds, eye);
+        // Read ahead of the tick for this box (the world unchanged since).
+        self.fluids = match w.fluids_ahead {
+            Some((at, fluids)) if at == asked => fluids,
+            _ => w.fluids(bounds, eye),
+        };
         self.ai.fluids_asked = Some(asked);
         // EntityFluidInteraction.applyCurrentTo: the flow pushes the mob.
         if (self.fluids.in_water || self.fluids.in_lava) && self.pushed_by_fluid() {
