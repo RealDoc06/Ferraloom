@@ -80,7 +80,7 @@ pub struct World {
     pub watched_writes: Vec<((i32, i32, i32), u32, u32)>,
     /// `ChunkAccess.inhabitedTime` of resident chunks: ticks a player spent
     /// within spawning range (local difficulty).
-    pub inhabited: HashMap<(i32, i32), i64>,
+    pub inhabited: crate::fast_hash::FxHashMap<(i32, i32), i64>,
     pub game_time: i64,
     pub day_time: i64,
     pub weather: Weather,
@@ -214,7 +214,7 @@ impl World {
             block_names: HashMap::new(),
             watched: Vec::new(),
             watched_writes: Vec::new(),
-            inhabited: HashMap::new(),
+            inhabited: Default::default(),
             game_time: 0,
             day_time: 1000,
             weather: Weather::default(),

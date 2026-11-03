@@ -33,7 +33,7 @@ pub struct StateData {
     /// Collision shape top (0 when the shape is empty).
     pub top: f32,
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Placement {
     OnGround,
     InWater,
@@ -43,6 +43,8 @@ pub enum Placement {
 pub struct MobData {
     pub states: Vec<StateData>,
     pub placements: HashMap<String, Placement>,
+    /// [`Self::placements`] by species, worked out on the first ask.
+    pub species_placements: std::sync::OnceLock<Vec<Placement>>,
     /// Each entity type's `SpawnPlacements.getHeightmapType`.
     pub heightmaps: HashMap<String, String>,
     pub animations: HashMap<String, Animation>,
@@ -132,6 +134,7 @@ impl MobData {
         Self {
             states,
             placements,
+            species_placements: Default::default(),
             heightmaps,
             animations,
             villager_hats: Default::default(),
@@ -188,6 +191,7 @@ impl MobData {
         Self {
             states,
             placements: HashMap::new(),
+            species_placements: Default::default(),
             heightmaps: HashMap::new(),
             animations: HashMap::new(),
             villager_hats: Default::default(),
@@ -215,7 +219,48 @@ impl MobData {
     pub fn placement(&self, entity: &str) -> Placement {
         self.placements
             .get(entity)
-            .cloned()
+            .copied()
             .unwrap_or(Placement::OnGround)
+    }
+    /// [`Self::placement`] of the species' entity type (`SpawnPlacements`'
+    /// lookup for each spawn attempt).
+    pub fn species_placement(&self, species: super::Species) -> Placement {
+        use super::species::{ALL, def};
+        let table = self.species_placements.get_or_init(|| {
+            let len = ALL.iter().map(|d| d.species as usize).max().unwrap_or(0) + 1;
+            let mut table = vec![Placement::OnGround; len];
+            for d in ALL {
+                table[d.species as usize] = self.placement(&format!("minecraft:{}", d.name));
+            }
+            table
+        });
+        table
+            .get(species as usize)
+            .copied()
+            .unwrap_or_else(|| self.placement(&format!("minecraft:{}", def(species).name)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn species_placement_matches_the_lookup_by_id() {
+        let data = MobData::from_json(&serde_json::json!({
+            "placements": {
+                "minecraft:cod": { "placement": "in_water" },
+                "minecraft:strider": { "placement": "in_lava" },
+                "minecraft:bee": { "placement": "no_restrictions" },
+            }
+        }));
+        let mut seen = Vec::new();
+        for def in crate::mobs::species::ALL {
+            let by_id = data.placement(&format!("minecraft:{}", def.name));
+            assert_eq!(data.species_placement(def.species), by_id, "{}", def.name);
+            seen.push(by_id);
+        }
+        assert!(seen.contains(&Placement::InWater));
+        assert!(seen.contains(&Placement::OnGround));
     }
 }
