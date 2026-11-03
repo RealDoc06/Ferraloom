@@ -188,13 +188,13 @@ pub(super) fn baby_index(kind: &str) -> Option<u8> {
 /// own: `mob_meta`'s arms hold these mobs' other entries.
 fn mob_variant_meta(
     m: &Mob,
-    hub: &Hub,
+    sync: &SyncData,
     meta: &mut Vec<(u8, i32, Value)>,
     defaults: &mut Vec<(u8, i32, Value)>,
 ) {
     let (kind, e) = (m.kind.id.as_str(), &m.extra);
     let id = |registry: &str, name: &str| {
-        super::stats::namespaced(name, |name| hub.registry_id(registry, name))
+        super::stats::namespaced(name, |name| sync.id(registry, name))
     };
     match kind {
         // Axolotl.DATA_VARIANT (after AgeableMob's two).
@@ -315,13 +315,16 @@ fn mob_variant_meta(
     }
 }
 
+/// Mobs per piece of `lan_entities`' pass on the pool.
+const MOB_STATE_GRAIN: usize = 128;
+
 /// A mob's synched data as ServerEntity sends it (only the values that differ
 /// from the defaults the client constructs), with vanilla's entry indices:
 /// Entity 0..=7, LivingEntity 8..=14, Mob 15, then the subclasses.
 /// `defaults` gets the defaults of the entries that can go back to theirs.
 fn mob_meta(
     m: &Mob,
-    hub: &Hub,
+    sync: &SyncData,
     player_entity: Option<i32>,
     game_time: i64,
     meta: &mut Vec<(u8, i32, Value)>,
@@ -376,7 +379,7 @@ fn mob_meta(
     // LivingEntity.DATA_EFFECT_PARTICLES and DATA_EFFECT_AMBIENCE_ID: the
     // swirls of its effects (the ones a mob has are visible, not ambient).
     meta.extend(
-        hub.effect_meta(
+        sync.effect_meta(
             (m.extra.effects.iter())
                 .filter(|e| !m.extra.hidden_effects.contains(&e.0))
                 .map(|e| (e.0, false)),
@@ -402,9 +405,9 @@ fn mob_meta(
     }
     let e = &m.extra;
     let id = |registry: &str, name: &str| {
-        super::stats::namespaced(name, |name| hub.registry_id(registry, name))
+        super::stats::namespaced(name, |name| sync.id(registry, name))
     };
-    mob_variant_meta(m, hub, meta, defaults);
+    mob_variant_meta(m, sync, meta, defaults);
     match kind {
         "minecraft:guardian" | "minecraft:elder_guardian" => {
             // Guardian.DATA_ID_MOVING and DATA_ID_ATTACK_TARGET.
@@ -1417,20 +1420,23 @@ impl Game<'_> {
         out: &mut States,
     ) {
         out.clear();
-        for m in self.mobs.iter().filter(|m| !m.removed) {
-            // The lead's holder: the player the mob sees (a guest, else the
-            // host), another mob or a fence knot (game/lan_entities.rs).
+        // The player each mob sees (a guest, else the host).
+        let mut mobs: Vec<(&Mob, Option<i32>, &mut EntityState)> = Vec::new();
+        let live = self.mobs.iter().filter(|m| !m.removed);
+        let slots = out.take(live.clone().count());
+        for (m, e) in live.zip(slots) {
             let player_entity = mob_players
                 .get(&m.id)
                 .and_then(|conn| hub.guest(*conn))
                 .map(|g| g.entity_id)
                 .or(host_entity);
-            let leash = m.extra.leash.and_then(|h| match h {
-                Holder::Player => player_entity,
-                Holder::Mob(id) => Some(id as i32),
-                Holder::Knot(p) => self.knot_ids.get(&p).map(|&id| id as i32),
-            });
-            let e = out.add(m.id as i32, entity_uuid(m.id), m.kind.id.as_str());
+            mobs.push((m, player_entity, e));
+        }
+        // What each state takes from its mob alone, on the pool's threads:
+        // every state is its own, so the list comes out as one thread makes it.
+        let (sync, game_time) = (hub.registries(), self.world.game_time);
+        horizon_threads::pool::for_each_mut(&mut mobs, MOB_STATE_GRAIN, |(m, player_entity, e)| {
+            e.reset(m.id as i32, entity_uuid(m.id), m.kind.id.as_str());
             e.position = [m.position.x, m.position.y, m.position.z];
             (e.yaw, e.pitch, e.head_yaw) = (m.yaw, m.head_pitch, m.head_yaw);
             e.on_ground = m.on_ground;
@@ -1438,9 +1444,9 @@ impl Game<'_> {
             e.needs_sync = m.needs_sync;
             mob_meta(
                 m,
-                hub,
-                player_entity,
-                self.world.game_time,
+                sync,
+                *player_entity,
+                game_time,
                 &mut e.meta,
                 &mut e.defaults,
             );
@@ -1448,6 +1454,15 @@ impl Game<'_> {
             e.precise = m.species() == horizon_client::mobs::Species::HappyGhast
                 && horizon_client::mobs::happy_ghast::on_still_timeout(m);
             mob_freeze_meta(m, &mut e.meta, &mut e.defaults);
+        });
+        for (m, player_entity, e) in mobs {
+            // The lead's holder: the player the mob sees, another mob or a
+            // fence knot (game/lan_entities.rs).
+            let leash = m.extra.leash.and_then(|h| match h {
+                Holder::Player => player_entity,
+                Holder::Mob(id) => Some(id as i32),
+                Holder::Knot(p) => self.knot_ids.get(&p).map(|&id| id as i32),
+            });
             mob_equipment(m, hub, &mut e.equipment);
             self.mob_attributes(m, &mut e.attributes);
             e.leash = leash;

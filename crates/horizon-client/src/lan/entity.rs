@@ -118,6 +118,16 @@ impl States {
         e.reset(id, uuid, kind);
         e
     }
+    /// The next `n` states, as they were left: each is `reset` before it
+    /// is written (`add`), which passes on other threads do for their own.
+    pub fn take(&mut self, n: usize) -> &mut [EntityState] {
+        let start = self.len;
+        self.len += n;
+        if self.list.len() < self.len {
+            self.list.resize_with(self.len, EntityState::default);
+        }
+        &mut self.list[start..self.len]
+    }
     pub fn push(&mut self, e: EntityState) {
         match self.list.get_mut(self.len) {
             Some(slot) => *slot = e,
