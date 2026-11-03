@@ -699,7 +699,9 @@ impl<'a> Game<'a> {
             return;
         }
         let close = non_spectators(&players);
-        let (spawnable, mut chunks) = self.spawning_chunks(&players, &close);
+        let (spawnable, mut chunks) = horizon_client::spans::time("spawning_chunks", || {
+            self.spawning_chunks(&players, &close)
+        });
         self.tick_inhabited(&chunks);
         let spawn_mobs = self.ui.rules.bool("spawn_mobs");
         let spawn_enemies = self.ui.rules.bool("spawn_monsters");
@@ -719,6 +721,7 @@ impl<'a> Game<'a> {
                 chunks.swap(i, j);
             }
             if !categories.is_empty() {
+                let _span = horizon_client::spans::scope("spawn_chunks");
                 state.prepare_local(&chunks, &categories);
                 for chunk in chunks {
                     let mut spawn = |l: &GameLevel, r: &SpawnRequest| {

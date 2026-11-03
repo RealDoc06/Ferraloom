@@ -504,7 +504,7 @@ impl Game<'_> {
             self.spawn_generation_creatures(key.0, key.1);
         }
         self.tick_leads();
-        self.spawn_natural();
+        horizon_client::spans::time("spawn_natural", || self.spawn_natural());
         // ServerChunkCache.tickChunks: the custom spawners tick only with spawn_mobs.
         if self.ui.rules.bool("spawn_mobs") {
             self.tick_wandering_trader();
