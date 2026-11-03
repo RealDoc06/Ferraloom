@@ -298,6 +298,10 @@ impl PacketBody {
             known => known.len(),
         }
     }
+    /// A slot not filled yet: [`Self::wait`] would block.
+    fn is_waiting(&self) -> bool {
+        matches!(self, Self::Slot(slot) if slot.bodies.get().is_none())
+    }
     /// The bodies this stands for, in order: itself, or what its slot is
     /// filled with, once it is.
     pub fn wait(&self) -> &[PacketBody] {
@@ -1283,6 +1287,12 @@ fn write_bodies(
 ) -> bool {
     writer.start_batch();
     let written = bodies.into_iter().all(|body| {
+        // What comes before a slot still being filled goes out meanwhile:
+        // the client acknowledges a chunk batch as soon as it has it.
+        if body.is_waiting() && writer.finish_batch().is_err() {
+            return false;
+        }
+        writer.start_batch();
         body.wait().iter().all(|body| {
             // A later body counted for a guess until now: its bytes from here.
             if matches!(body, PacketBody::Later(_)) {
