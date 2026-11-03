@@ -43,11 +43,56 @@ fn flowing_of(kind: FluidKind) -> FluidKind {
     }
 }
 
+/// `Shapes.empty()` without a clone: `VoxelShape::empty` hands out clones of
+/// one shape, so this shares its identity.
+fn empty_shape() -> &'static VoxelShape {
+    static EMPTY: std::sync::OnceLock<VoxelShape> = std::sync::OnceLock::new();
+    EMPTY.get_or_init(VoxelShape::empty)
+}
+
 /// `FlowingFluid.SpreadContext`: per-spread caches keyed by horizontal offset.
 struct SpreadContext {
     origin: BlockPos,
-    states: HashMap<i16, BlockStateId>,
-    holes: HashMap<i16, bool>,
+    states: SpreadCache<BlockStateId>,
+    holes: SpreadCache<bool>,
+}
+/// A `Short2ObjectMap` of a spread: a 16 by 16 table on the low bits of each
+/// offset holds every key a spread reaches (it looks at most five blocks
+/// out), and any key whose slot another key took goes to a map.
+struct SpreadCache<T> {
+    slots: [Option<(i16, T)>; 256],
+    spill: HashMap<i16, T>,
+}
+impl<T: Copy> Default for SpreadCache<T> {
+    fn default() -> Self {
+        Self {
+            slots: [None; 256],
+            spill: HashMap::new(),
+        }
+    }
+}
+impl<T: Copy> SpreadCache<T> {
+    fn slot(key: i16) -> usize {
+        let key = key as u16 as usize;
+        ((key >> 8) & 15) << 4 | (key & 15)
+    }
+    fn get(&self, key: i16) -> Option<T> {
+        match self.slots[Self::slot(key)] {
+            Some((k, value)) if k == key => Some(value),
+            Some(_) => self.spill.get(&key).copied(),
+            None => None,
+        }
+    }
+    fn insert(&mut self, key: i16, value: T) {
+        let slot = &mut self.slots[Self::slot(key)];
+        match slot {
+            Some((k, v)) if *k == key => *v = value,
+            Some(_) => {
+                self.spill.insert(key, value);
+            }
+            None => *slot = Some((key, value)),
+        }
+    }
 }
 impl SpreadContext {
     fn key(&self, pos: BlockPos) -> i16 {
@@ -126,11 +171,11 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
 
     // ---- shape occlusion ----
 
-    fn collision_or_empty(&self, state: BlockStateId) -> (i32, VoxelShape) {
+    fn collision_or_empty(&self, state: BlockStateId) -> (i32, &VoxelShape) {
         let index = self.b.facts(state).shape;
         match self.b.collision_shape(state) {
-            Some(shape) => (index, shape.clone()),
-            None => (-1, VoxelShape::empty()),
+            Some(shape) => (index, shape),
+            None => (-1, empty_shape()),
         }
     }
     /// `FlowingFluid.canPassThroughWall`.
@@ -141,16 +186,15 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         target: BlockStateId,
     ) -> bool {
         let (target_index, target_shape) = self.collision_or_empty(target);
-        let block = VoxelShape::block();
-        if target_shape.same_identity(&block) {
+        if target_shape.is_block() {
             return false;
         }
         let (source_index, source_shape) = self.collision_or_empty(source);
-        if source_shape.same_identity(&block) {
+        if source_shape.is_block() {
             return false;
         }
-        let empty = VoxelShape::empty();
-        if source_shape.same_identity(&empty) && target_shape.same_identity(&empty) {
+        let empty = empty_shape();
+        if source_shape.same_identity(empty) && target_shape.same_identity(empty) {
             return true;
         }
         let cacheable = source_index >= 0 && target_index >= 0;
@@ -166,7 +210,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                 return result;
             }
         }
-        let result = !merged_face_occludes(&source_shape, &target_shape, direction);
+        let result = !merged_face_occludes(source_shape, target_shape, direction);
         if cacheable {
             if let Ok(mut cache) = self.b.occlusion_cache.lock() {
                 cache.insert(key, result);
@@ -364,8 +408,8 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
     fn context_state(&self, context: &mut SpreadContext, pos: BlockPos) -> BlockStateId {
         let key = context.key(pos);
-        if let Some(state) = context.states.get(&key) {
-            return *state;
+        if let Some(state) = context.states.get(key) {
+            return state;
         }
         let state = self.state(pos);
         context.states.insert(key, state);
@@ -373,8 +417,8 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
     fn context_is_hole(&self, kind: FluidKind, context: &mut SpreadContext, pos: BlockPos) -> bool {
         let key = context.key(pos);
-        if let Some(hole) = context.holes.get(&key) {
-            return *hole;
+        if let Some(hole) = context.holes.get(key) {
+            return hole;
         }
         let state = self.context_state(context, pos);
         let below_state = self.below_state(pos);
@@ -441,8 +485,8 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             }
             let context = context.get_or_insert_with(|| SpreadContext {
                 origin: pos,
-                states: HashMap::new(),
-                holes: HashMap::new(),
+                states: SpreadCache::default(),
+                holes: SpreadCache::default(),
             });
             let distance = if self.context_is_hole(kind, context, test_pos) {
                 0
@@ -744,4 +788,30 @@ pub(crate) fn merged_face_occludes(
     !block
         .join_is_not_empty(&union, ShapeOp::ONLY_FIRST)
         .unwrap_or(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Keys sharing a slot keep their own values.
+    #[test]
+    fn spread_cache_keeps_keys_that_share_a_slot() {
+        let origin = BlockPos::new(100, 64, -100);
+        let context = SpreadContext {
+            origin,
+            states: SpreadCache::default(),
+            holes: SpreadCache::default(),
+        };
+        let mut cache = SpreadCache::<u32>::default();
+        let near = context.key(BlockPos::new(103, 64, -102));
+        let far = context.key(BlockPos::new(103 + 16, 64, -102 - 32));
+        assert_eq!(SpreadCache::<u32>::slot(near), SpreadCache::<u32>::slot(far));
+        assert_eq!(cache.get(near), None);
+        cache.insert(near, 1);
+        assert_eq!(cache.get(far), None);
+        cache.insert(far, 2);
+        cache.insert(near, 3);
+        assert_eq!((cache.get(near), cache.get(far)), (Some(3), Some(2)));
+    }
 }
