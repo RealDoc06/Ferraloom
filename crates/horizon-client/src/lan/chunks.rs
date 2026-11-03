@@ -153,7 +153,7 @@ impl<'a> From<&'a Chunk> for Column<'a> {
 /// A neighbouring column's sections when a later body was asked for, and
 /// their non-air bits once one of the bodies has looked.
 struct NearColumn {
-    sections: Vec<Arc<Section>>,
+    sections: [Arc<Section>; SECTIONS],
     occupied: std::sync::OnceLock<u64>,
 }
 
