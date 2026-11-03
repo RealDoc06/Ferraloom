@@ -66,7 +66,7 @@ pub(super) struct LanHost {
     /// The guests' models in the host's world.
     pub models: HashMap<u32, Mob>,
     host_mode: i32,
-    pub play: HashMap<u32, super::lan_actions::GuestPlay>,
+    pub play: HashMap<u32, Box<super::lan_actions::GuestPlay>>,
     /// Blocks broken this tick (their sound is a level event for the guests).
     pub broken: Vec<[f64; 3]>,
     /// Hurt time, death and swing time (while swinging) of the mobs guests see.

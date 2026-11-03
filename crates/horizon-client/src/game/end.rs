@@ -566,7 +566,7 @@ impl Game<'_> {
     /// Arrival after End portal or gateway travel, once the destination is loaded.
     pub(super) fn place_after_end_travel(
         &mut self,
-        mut player: PlayerMotion,
+        mut player: Box<PlayerMotion>,
         target: Vec3,
     ) -> Result<()> {
         self.end_travel = false;
@@ -574,7 +574,7 @@ impl Game<'_> {
         self.portals.player.cooldown = 10;
         if player.health.dead_or_dying() {
             // Respawning out of the End: a fresh player at the spawn.
-            player = PlayerMotion::new(self.motion, target)?;
+            player = Box::new(PlayerMotion::new(self.motion, target)?);
             self.eye = 1.62;
             self.previous_eye = 1.62;
             self.clock.reset();

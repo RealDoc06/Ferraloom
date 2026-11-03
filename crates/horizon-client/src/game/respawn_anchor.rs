@@ -626,7 +626,7 @@ impl Game<'_> {
                 self.previous_eye = 1.62;
                 self.clock.reset();
                 self.previous_position = position;
-                self.player = Some(player);
+                self.player = Some(Box::new(player));
                 self.sway = Default::default();
                 self.apply_equipment();
                 // ClientboundSoundPacket at the block's corner, seeded from the level random.
@@ -655,7 +655,7 @@ impl Game<'_> {
                     // A dead stand-in travels; the arrival makes a fresh player.
                     let mut dead = dead;
                     dead.set_health(0.0, false)?;
-                    self.player = Some(dead);
+                    self.player = Some(Box::new(dead));
                     self.end_portal_travel = true;
                     let result = self.enter_dimension(Dim::Overworld);
                     self.end_portal_travel = false;

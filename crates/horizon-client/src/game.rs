@@ -1426,7 +1426,7 @@ struct Game<'a> {
     /// The detail revision, centre and radius `Lod::update` last had covered for.
     lod_covered_at: Option<(u64, (i32, i32), i32)>,
     options: Options,
-    player: Option<PlayerMotion>,
+    player: Option<Box<PlayerMotion>>,
     spawn: Option<Vec3>,
     clock: FixedStep,
     previous_position: Vec3,
@@ -1675,7 +1675,7 @@ struct Game<'a> {
     /// The world is superflat (`ServerLevel.isFlat`, for every dimension).
     world_flat: bool,
     /// A player carried through a portal, re-placed once the destination loads.
-    travelling: Option<(PlayerMotion, Vec3)>,
+    travelling: Option<(Box<PlayerMotion>, Vec3)>,
     /// A server's players on their way to another level, each waiting for
     /// the destination to load around them.
     server_trips: Vec<server_travel::Trip>,
@@ -1908,6 +1908,9 @@ struct Game<'a> {
     lan_acting: Option<u32>,
     /// The name of the guest `lan_acting` acts for (`Player.getName`).
     lan_acting_name: Option<String>,
+    /// The buffers of the last guest's turn (`leave_guest`), for the next.
+    spare_acting_name: String,
+    spare_craft_grid: Vec<Option<ItemStack>>,
     /// Their UUID (`Player.getUUID`).
     lan_acting_uuid: Option<u128>,
     /// Command feedback to forward to a guest.
@@ -5061,7 +5064,7 @@ impl Game<'_> {
             self.capture(false);
         }
         self.previous_position = feet;
-        self.player = Some(player);
+        self.player = Some(Box::new(player));
         self.pad.player_replaced();
         self.sway = Default::default();
         self.apply_equipment();
@@ -9357,7 +9360,7 @@ impl Game<'_> {
         Ok(false)
     }
     /// Arrival through a nether portal, once the destination is loaded.
-    fn place_after_travel(&mut self, player: PlayerMotion, target: Vec3) -> Result<()> {
+    fn place_after_travel(&mut self, player: Box<PlayerMotion>, target: Vec3) -> Result<()> {
         self.arrive_through_nether_portal(player, target)
     }
     /// Leaving the game with a world open (window closed, Quit, `quit`):
@@ -14031,6 +14034,8 @@ impl<'a> Game<'a> {
             guest_cooldowns: Vec::new(),
             guest_entity_events: Vec::new(),
             lan_acting_name: None,
+            spare_acting_name: String::new(),
+            spare_craft_grid: Vec::new(),
             lan_acting_uuid: None,
             chat_capture: None,
             admin_feedback: Vec::new(),

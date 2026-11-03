@@ -947,7 +947,7 @@ impl Game<'_> {
     pub(super) fn lan_hook_states(
         &self,
         host_entity: Option<i32>,
-        play: &HashMap<u32, GuestPlay>,
+        play: &HashMap<u32, Box<GuestPlay>>,
         hub: &Hub,
         out: &mut States,
     ) {

@@ -402,7 +402,7 @@ impl Game<'_> {
         self.creative = self.mode == GameMode::Creative;
         let mut player = PlayerMotion::new(self.motion, Vec3::new(at[0], at[1], at[2]))?;
         player.spectator = self.mode == GameMode::Spectator;
-        self.player = Some(player);
+        self.player = Some(Box::new(player));
         self.keys.clear();
         if s.sneak {
             self.keys.insert(KeyCode::ShiftLeft);

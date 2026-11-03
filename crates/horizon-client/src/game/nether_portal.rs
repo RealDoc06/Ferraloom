@@ -525,7 +525,7 @@ impl Game<'_> {
     /// `TeleportTransition.PLAY_PORTAL_SOUND` (level event 1032).
     pub(super) fn arrive_through_nether_portal(
         &mut self,
-        mut player: horizon_client::motion::PlayerMotion,
+        mut player: Box<horizon_client::motion::PlayerMotion>,
         target: Vec3,
     ) -> Result<()> {
         self.resolve_arrivals();

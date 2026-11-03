@@ -5,7 +5,10 @@
 //! (hits, pushes, fire, its projectiles) runs with that guest swapped in.
 use super::{Game, lan::LanHost};
 use horizon_client::{
-    mobs::{Mob, MobEvent, PlayerView, Species, Who},
+    fast_hash::FxHashMap,
+    lan::guest::Guest,
+    mobs::{Mob, MobEvent, PlayerView, Species, Who, player_index::PlayerIndex},
+    motion::PlayerMotion,
     projectiles::{Hit, Projectile},
 };
 use horizon_core::geometry::{Aabb, Vec3};
@@ -13,6 +16,63 @@ use horizon_protocol::packets::play::{self, Clientbound as C};
 
 /// The guests mobs can see this tick, by connection.
 pub(super) type GuestViews = Vec<(u32, PlayerView)>;
+
+/// The views of one tick's guests, indexed for the per-mob queries of
+/// [`player_for`]: a level's mobs run into the thousands, its guests into the
+/// hundreds. The answers are those of a scan of `views` in order.
+pub(super) struct GuestLookup<'a> {
+    views: &'a GuestViews,
+    by_conn: FxHashMap<u32, u32>,
+    targetable: GuestSubset,
+    in_play: GuestSubset,
+}
+/// The views a predicate keeps, as an index and each index slot's view.
+struct GuestSubset {
+    index: PlayerIndex,
+    views: Vec<u32>,
+}
+impl GuestSubset {
+    fn new(all: &GuestViews, keep: impl Fn(&PlayerView) -> bool) -> Self {
+        let views: Vec<u32> = (0..all.len() as u32)
+            .filter(|&i| keep(&all[i as usize].1))
+            .collect();
+        Self {
+            index: PlayerIndex::new(views.iter().map(|&i| {
+                let p = all[i as usize].1.position;
+                [p.x, p.y, p.z]
+            })),
+            views,
+        }
+    }
+}
+impl<'a> GuestLookup<'a> {
+    pub(super) fn new(views: &'a GuestViews) -> Self {
+        Self {
+            views,
+            by_conn: views
+                .iter()
+                .enumerate()
+                .rev()
+                .map(|(i, (conn, _))| (*conn, i as u32))
+                .collect(),
+            targetable: GuestSubset::new(views, targetable),
+            in_play: GuestSubset::new(views, in_play),
+        }
+    }
+    /// The guest `conn`'s view.
+    pub(super) fn view(&self, conn: u32) -> Option<&'a PlayerView> {
+        let slot = *self.by_conn.get(&conn)?;
+        Some(&self.views[slot as usize].1)
+    }
+}
+
+/// `TargetingConditions`: alive, neither creative nor spectator.
+fn targetable(v: &PlayerView) -> bool {
+    v.alive && !v.creative && !v.spectator
+}
+fn in_play(v: &PlayerView) -> bool {
+    v.alive && !v.spectator
+}
 
 /// The player a mob sees this tick: `None` for the host, else a guest.
 /// A mob that targets a guest, or that a guest hurt in the last 100 ticks
@@ -23,7 +83,7 @@ pub(super) type GuestViews = Vec<(u32, PlayerView)>;
 pub(super) fn player_for(
     m: &Mob,
     host: Option<&PlayerView>,
-    guests: &GuestViews,
+    guests: &GuestLookup<'_>,
     bound: Option<u32>,
 ) -> Option<u32> {
     // A tame cat reads its owner wherever they are while they sleep, or just
@@ -36,7 +96,7 @@ pub(super) fn player_for(
         if host.is_some_and(asleep) {
             return None;
         }
-        if let Some((conn, _)) = guests.iter().find(|(_, v)| asleep(v)) {
+        if let Some((conn, _)) = guests.views.iter().find(|(_, v)| asleep(v)) {
             return Some(*conn);
         }
     }
@@ -54,7 +114,11 @@ pub(super) fn player_for(
         if host.is_some_and(|v| v.alive && v.uuid == owner) {
             return None;
         }
-        if let Some((conn, _)) = guests.iter().find(|(_, v)| v.alive && v.uuid == owner) {
+        if let Some((conn, _)) = guests
+            .views
+            .iter()
+            .find(|(_, v)| v.alive && v.uuid == owner)
+        {
             return Some(*conn);
         }
     }
@@ -65,28 +129,32 @@ fn choose(
     at: Vec3,
     targeting: bool,
     host: Option<&PlayerView>,
-    guests: &GuestViews,
+    guests: &GuestLookup<'_>,
     bound: Option<u32>,
 ) -> Option<u32> {
-    let targetable = |v: &PlayerView| v.alive && !v.creative && !v.spectator;
     if targeting
         && let Some(conn) = bound
-        && guests.iter().any(|(c, v)| *c == conn && targetable(v))
+        && guests.view(conn).is_some_and(targetable)
     {
         return Some(conn);
     }
-    let d = |v: &PlayerView| at.distance_squared(v.position);
-    let nearest = |ok: &dyn Fn(&PlayerView) -> bool| {
-        let mut best = host.filter(|v| ok(v)).map(|v| (None, d(v)));
-        for (conn, v) in guests.iter().filter(|(_, v)| ok(v)) {
-            if best.is_none_or(|(_, b)| d(v) < b) {
-                best = Some((Some(*conn), d(v)));
-            }
+    let query = [at.x, at.y, at.z];
+    // The nearest of a subset, the first on a tie, the host before any guest.
+    let nearest = |ok: fn(&PlayerView) -> bool, subset: &GuestSubset| {
+        let host = host
+            .filter(|v| ok(v))
+            .map(|v| (None, at.distance_squared(v.position)));
+        let guest = subset.index.nearest(query).map(|n| {
+            let conn = guests.views[subset.views[n.slot as usize] as usize].0;
+            (Some(conn), n.distance_sqr)
+        });
+        match (host, guest) {
+            (Some(h), Some(g)) => Some(if g.1 < h.1 { g } else { h }),
+            (h, g) => h.or(g),
         }
-        best
     };
-    nearest(&targetable)
-        .or_else(|| nearest(&|v: &PlayerView| v.alive && !v.spectator))
+    nearest(targetable, &guests.targetable)
+        .or_else(|| nearest(in_play, &guests.in_play))
         .and_then(|(conn, _)| conn)
 }
 
@@ -140,9 +208,21 @@ impl Game<'_> {
                 (g.conn, g.uuid, moved)
             })
             .collect();
-        let mut views = Vec::new();
+        let mut views = Vec::with_capacity(conns.len());
         for (conn, uuid, moved) in conns {
-            if let Some(Some(mut v)) = self.as_guest(&mut host, conn, |g| g.player_view()) {
+            // Swapped in only when that would itself change something.
+            let read = host.hub.guest(conn).and_then(|g| {
+                let m = g.motion.as_deref()?;
+                self.guest_swap_is_idle(&host, g, m)
+                    .then(|| self.guest_view(g, m))
+            });
+            let view = match read {
+                Some(view) => Some(view),
+                None => self
+                    .as_guest(&mut host, conn, |g| g.player_view())
+                    .flatten(),
+            };
+            if let Some(mut v) = view {
                 v.hurt_by = None;
                 v.last_hurt = None;
                 v.hero = false;
@@ -155,6 +235,53 @@ impl Game<'_> {
         }
         self.lan = Some(host);
         views
+    }
+
+    /// `player_view` as it reads with `g` swapped in, up to what
+    /// `lan_guest_views` overwrites (`hurt_by`, `last_hurt`, `hero`, `velocity`,
+    /// `uuid`, `allies`, `remote`): `enter_guest` puts these same fields of the
+    /// record in the game's place, or on the body `m`.
+    fn guest_view(&self, g: &Guest, m: &PlayerMotion) -> PlayerView {
+        let (at, dimensions) = (
+            Vec3::new(g.position[0], g.position[1], g.position[2]),
+            m.dimensions,
+        );
+        let w = f64::from(dimensions.width) / 2.0;
+        let item = |stack: Option<&horizon_client::items::ItemStack>| stack.map(|s| s.item.clone());
+        PlayerView {
+            position: at,
+            bounds: Aabb::new(
+                Vec3::new(at.x - w, at.y, at.z - w),
+                Vec3::new(at.x + w, at.y + f64::from(dimensions.height), at.z + w),
+            ),
+            eye: [at.x, at.y + f64::from(dimensions.eye_height), at.z],
+            alive: !m.health.dead_or_dying(),
+            creative: g.creative() || g.spectator(),
+            sneaking: g.sneaking,
+            swimming: m.swimming,
+            look: super::view_vector(g.yaw, g.pitch),
+            main_hand: item(g.inventory.get(g.selected).and_then(Option::as_ref)),
+            off_hand: None,
+            head: item(g.armor[0].as_ref()),
+            armor_cover: g.armor.iter().filter(|a| a.is_some()).count() as f32 / 4.0,
+            invisible: g.effects.get("invisibility").is_some(),
+            spectator: g.spectator(),
+            gold_armor: self.safe_from_piglins(&g.armor),
+            hurt_by: None,
+            last_hurt: None,
+            velocity: m.velocity,
+            yaw: g.yaw,
+            sprinting: g.sprinting,
+            riding: g.vehicle.is_some(),
+            hero: false,
+            effects: g.effects.list.iter().map(|e| e.id).collect(),
+            uuid: [0; 4],
+            allies: Default::default(),
+            remote: true,
+            sleeping: g.bed.is_some(),
+            sleep_timer: g.sleep_timer,
+            passenger: g.vehicle.is_some(),
+        }
     }
 
     /// Runs `f` as each guest in play here, for what strikes every player in
@@ -421,30 +548,100 @@ mod tests {
 
     const MOB: Vec3 = Vec3::new(0.0, 64.0, 0.0);
 
+    fn choose_in(
+        targeting: bool,
+        host: Option<&PlayerView>,
+        guests: &GuestViews,
+        bound: Option<u32>,
+    ) -> Option<u32> {
+        choose(MOB, targeting, host, &GuestLookup::new(guests), bound)
+    }
+
+    /// The scan the index stands in for: `getNearestPlayer`'s `d < distance`.
+    fn scanned(
+        at: Vec3,
+        targeting: bool,
+        host: Option<&PlayerView>,
+        guests: &GuestViews,
+        bound: Option<u32>,
+    ) -> Option<u32> {
+        if targeting
+            && let Some(conn) = bound
+            && guests.iter().any(|(c, v)| *c == conn && targetable(v))
+        {
+            return Some(conn);
+        }
+        let d = |v: &PlayerView| at.distance_squared(v.position);
+        let nearest = |ok: fn(&PlayerView) -> bool| {
+            let mut best = host.filter(|v| ok(v)).map(|v| (None, d(v)));
+            for (conn, v) in guests.iter().filter(|(_, v)| ok(v)) {
+                if best.is_none_or(|(_, b)| d(v) < b) {
+                    best = Some((Some(*conn), d(v)));
+                }
+            }
+            best
+        };
+        nearest(targetable)
+            .or_else(|| nearest(in_play))
+            .and_then(|(conn, _)| conn)
+    }
+
+    #[test]
+    fn the_index_answers_as_the_scan_does() {
+        let mut seed = 0x2545_f491_u64;
+        let mut draw = |range: i32| {
+            seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+            ((seed >> 33) as i32).rem_euclid(range)
+        };
+        for round in 0..200 {
+            // Few distinct coordinates, so ties are common.
+            let guests: GuestViews = (0..draw(40) as u32)
+                .map(|conn| {
+                    let mut v = view(f64::from(draw(9) * 8), draw(3) == 0);
+                    v.position.z = f64::from(draw(5) * 8);
+                    v.alive = draw(8) != 0;
+                    v.spectator = draw(8) == 0;
+                    (conn, v)
+                })
+                .collect();
+            let lookup = GuestLookup::new(&guests);
+            let host = (round % 3 == 0).then(|| view(f64::from(draw(9) * 8), draw(2) == 0));
+            for _ in 0..30 {
+                let at = Vec3::new(f64::from(draw(9) * 4), 64.0, f64::from(draw(5) * 4));
+                let targeting = draw(2) == 0;
+                let bound = (draw(2) == 0).then(|| draw(40) as u32);
+                assert_eq!(
+                    choose(at, targeting, host.as_ref(), &lookup, bound),
+                    scanned(at, targeting, host.as_ref(), &guests, bound),
+                );
+            }
+        }
+    }
+
     #[test]
     fn the_nearest_survival_player_is_seen() {
         let host = view(10.0, false);
         let guests = vec![(7, view(3.0, false)), (8, view(-5.0, false))];
-        assert_eq!(choose(MOB, false, Some(&host), &guests, None), Some(7));
+        assert_eq!(choose_in(false, Some(&host), &guests, None), Some(7));
         // A creative guest is passed over for the host further away.
         let guests = vec![(7, view(3.0, true))];
-        assert_eq!(choose(MOB, false, Some(&host), &guests, None), None);
+        assert_eq!(choose_in(false, Some(&host), &guests, None), None);
         // Nobody targetable: the nearest one is still seen.
         let host = view(10.0, true);
-        assert_eq!(choose(MOB, false, Some(&host), &guests, None), Some(7));
-        assert_eq!(choose(MOB, false, None, &Vec::new(), None), None);
+        assert_eq!(choose_in(false, Some(&host), &guests, None), Some(7));
+        assert_eq!(choose_in(false, None, &Vec::new(), None), None);
     }
 
     #[test]
     fn a_targeted_guest_stays_the_target() {
         let host = view(1.0, false);
         let guests = vec![(7, view(12.0, false))];
-        assert_eq!(choose(MOB, true, Some(&host), &guests, Some(7)), Some(7));
+        assert_eq!(choose_in(true, Some(&host), &guests, Some(7)), Some(7));
         // Gone creative: the mob looks again.
         let guests = vec![(7, view(12.0, true))];
-        assert_eq!(choose(MOB, true, Some(&host), &guests, Some(7)), None);
+        assert_eq!(choose_in(true, Some(&host), &guests, Some(7)), None);
         // Without a target the nearest player wins.
         let guests = vec![(7, view(12.0, false))];
-        assert_eq!(choose(MOB, false, Some(&host), &guests, Some(7)), None);
+        assert_eq!(choose_in(false, Some(&host), &guests, Some(7)), None);
     }
 }

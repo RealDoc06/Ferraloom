@@ -556,23 +556,24 @@ impl Game<'_> {
         let mut died = std::mem::take(&mut self.died);
         let ticking = self.entity_ticking_area();
         // With guests on, each mob sees its nearest player (game/lan_mobs.rs).
-        let guests = self.lan_guest_views();
+        let guest_views = self.lan_guest_views();
+        let guests = super::lan_mobs::GuestLookup::new(&guest_views);
         // getNearestPlayer's players, for every mob's despawn check.
         let nearest_players = super::natural_spawning::non_spectators(&self.level_players());
         let mut bindings = match self.lan.as_mut() {
-            Some(host) if !guests.is_empty() => std::mem::take(&mut host.mob_players),
+            Some(host) if !guest_views.is_empty() => std::mem::take(&mut host.mob_players),
             _ => Default::default(),
         };
         // The guests' entity ids by connection, for the shulker bullets fired
         // at the guest a mob sees.
-        let guest_ids: Vec<(u32, u32)> = match self.lan.as_ref() {
-            Some(host) if !guests.is_empty() => host
+        let guest_ids: horizon_client::fast_hash::FxHashMap<u32, u32> = match self.lan.as_ref() {
+            Some(host) if !guest_views.is_empty() => host
                 .hub
                 .guests
                 .iter()
                 .map(|g| (g.conn, g.entity_id as u32))
                 .collect(),
-            _ => Vec::new(),
+            _ => Default::default(),
         };
         let mut guest_events = Vec::new();
         // The mobs whose bodies go this tick: (id, feet, width, height).
@@ -609,7 +610,7 @@ impl Game<'_> {
                 w.nearest_player = nearest_players
                     .nearest([m.position.x, m.position.y, m.position.z])
                     .map(|p| Vec3::new(p.position[0], p.position[1], p.position[2]));
-                let seen_guest = if guests.is_empty() {
+                let seen_guest = if guest_views.is_empty() {
                     None
                 } else {
                     let bound = bindings.get(&m.id).copied();
@@ -617,7 +618,7 @@ impl Game<'_> {
                     match conn {
                         Some(conn) => {
                             bindings.insert(m.id, conn);
-                            w.player = guests.iter().find(|g| g.0 == conn).map(|g| g.1.clone());
+                            w.player = guests.view(conn).cloned();
                         }
                         None => {
                             bindings.remove(&m.id);
@@ -662,7 +663,7 @@ impl Game<'_> {
                     // ShulkerBullet.finalTarget is the guest's entity: the
                     // bullet homes on it while the projectiles tick, where
                     // `Who::Player` is the host's own player.
-                    if let Some(&(_, id)) = guest_ids.iter().find(|g| g.0 == conn) {
+                    if let Some(&id) = guest_ids.get(&conn) {
                         for e in &mut events[from..] {
                             if let MobEvent::Projectile(p) = e
                                 && let ProjectileKind::ShulkerBullet { target, .. } = &mut p.kind
@@ -705,7 +706,7 @@ impl Game<'_> {
         }
         self.world.random = level_random;
         if let Some(host) = self.lan.as_mut()
-            && !guests.is_empty()
+            && !guest_views.is_empty()
         {
             // A set: a scan of every mob for each binding is quadratic, and a
             // server's loaded mobs run into the thousands.
