@@ -165,11 +165,9 @@ pub(crate) fn fire_contact(
     bounds: Aabb,
 ) -> f32 {
     let b = bounds.deflate(Vec3::new(1e-5, 1e-5, 1e-5));
-    let fire = |s: horizon_world::registry::BlockStateId| {
-        registry
-            .state(s)
-            .is_some_and(|s| s.name == "minecraft:fire" || s.name == "minecraft:soul_fire")
-    };
+    use crate::block_kinds::{BlockKinds, FIRE, SOUL_FIRE};
+    let kinds = BlockKinds::of(registry);
+    let fire = |s| kinds.is(s, FIRE | SOUL_FIRE);
     // Most boxes are in sections without fire: no cell to read.
     if !world.may_hold(cells_of(b).0, cells_of(b).1, fire) {
         return 0.0;
@@ -202,11 +200,8 @@ pub(crate) fn cactus_contact(
     bounds: Aabb,
 ) -> bool {
     let b = bounds.deflate(Vec3::new(1e-5, 1e-5, 1e-5));
-    let cactus = |s| {
-        registry
-            .state(s)
-            .is_some_and(|s| s.name == "minecraft:cactus")
-    };
+    let kinds = crate::block_kinds::BlockKinds::of(registry);
+    let cactus = |s| kinds.is(s, crate::block_kinds::CACTUS);
     if !world.may_hold(cells_of(b).0, cells_of(b).1, cactus) {
         return false;
     }

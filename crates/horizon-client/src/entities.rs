@@ -74,7 +74,8 @@ impl ItemEntity {
         let fire_immune = std::cell::OnceCell::new();
         let fire_immune =
             || *fire_immune.get_or_init(|| items.resists_fire(&self.stack, "minecraft:in_fire"));
-        if fluid == Fluid::Water || fire_immune() {
+        // Zeroing a zero changes nothing: most items never ask.
+        if self.fire_ticks != 0 && (fluid == Fluid::Water || fire_immune()) {
             self.fire_ticks = 0;
         }
         if self.fire_ticks > 0 {

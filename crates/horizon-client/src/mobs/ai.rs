@@ -541,7 +541,8 @@ pub fn tick(
 /// or Z this tick). The blocks are those the mob's box touches anywhere along
 /// its move this tick, from where it started to where it ended.
 fn effects_from_blocks(m: &mut Mob, w: &MobWorld) {
-    if !may_touch(m, w, &["minecraft:cactus", "minecraft:sweet_berry_bush"]) {
+    use crate::block_kinds::{CACTUS, SWEET_BERRY_BUSH};
+    if !may_touch(m, w, CACTUS | SWEET_BERRY_BUSH) {
         return;
     }
     let mut visited: Vec<[i32; 3]> = Vec::new();
@@ -590,11 +591,11 @@ fn effects_from_blocks(m: &mut Mob, w: &MobWorld) {
         }
     }
 }
-/// Whether a block named in `names` may stand in the cells around the mob's
+/// Whether a block of the `kinds` may stand in the cells around the mob's
 /// boxes at `previous` and `position` (a superset, read from the section
 /// palettes). False lets a contact check that only reacts to those blocks
 /// stop before reading a cell.
-fn may_touch(m: &Mob, w: &MobWorld, names: &[&str]) -> bool {
+fn may_touch(m: &Mob, w: &MobWorld, kinds: u16) -> bool {
     let (a, b) = (m.previous, m.position);
     let reach = f64::from(m.width()) / 2.0 + 1.0;
     let lo = [
@@ -611,8 +612,8 @@ fn may_touch(m: &Mob, w: &MobWorld, names: &[&str]) -> bool {
     if hi[0].saturating_sub(lo[0]) > 64 || hi[2].saturating_sub(lo[2]) > 64 {
         return true;
     }
-    w.world
-        .may_hold(lo, hi, |s| names.contains(&&*w.facts.get(s).name))
+    let table = crate::block_kinds::BlockKinds::of(w.registry);
+    w.world.may_hold(lo, hi, |s| table.is(s, kinds))
 }
 /// LivingEntity.updateSwingTime.
 pub fn tick_swing(m: &mut Mob) {
@@ -809,7 +810,7 @@ fn freeze_tick(m: &mut Mob, w: &MobWorld) {
 /// Whether the mob's box (shrunk by `1.0E-5`, as in `Entity.checkInsideBlocks`)
 /// touches powder snow.
 fn in_powder_snow(m: &Mob, w: &MobWorld) -> bool {
-    if !may_touch(m, w, &["minecraft:powder_snow"]) {
+    if !may_touch(m, w, crate::block_kinds::POWDER_SNOW) {
         return false;
     }
     let b = m.bounds().deflate(Vec3::new(1e-5, 1e-5, 1e-5));
@@ -1924,11 +1925,8 @@ fn flower_contact_effects(m: &mut Mob, w: &MobWorld) {
     if !m.alive() || w.difficulty.effective == 0.0 {
         return;
     }
-    if !may_touch(
-        m,
-        w,
-        &["minecraft:wither_rose", "minecraft:open_eyeblossom"],
-    ) {
+    use crate::block_kinds::{OPEN_EYEBLOSSOM, WITHER_ROSE};
+    if !may_touch(m, w, WITHER_ROSE | OPEN_EYEBLOSSOM) {
         return;
     }
     let half = f64::from(m.width()) / 2.0 - 1.0e-5;

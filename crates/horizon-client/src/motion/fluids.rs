@@ -139,7 +139,8 @@ pub fn bubble_column_push(
     ));
     let (lo, hi) = (b.min_position(), b.max_position());
     // Most boxes are in sections without a bubble column: no cell to read.
-    let column = |s| &*facts.get(s).name == "minecraft:bubble_column";
+    let kinds = crate::block_kinds::BlockKinds::of(registry);
+    let column = |s| kinds.is(s, crate::block_kinds::BUBBLE_COLUMN);
     let cells = (
         [
             lo.x.floor() as i32,
