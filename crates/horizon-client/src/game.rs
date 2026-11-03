@@ -1743,6 +1743,8 @@ struct Game<'a> {
     tick_chunks: horizon_client::tick_chunk_membership::TickChunkMembership,
     tickets: horizon_client::ticket_levels::ChunkTickets,
     random_tick_sections: horizon_client::random_tick_sections::RandomTickSections,
+    /// Which sections hold a contact hook, kept across ticks (`tick_blocks`).
+    contact_sections: horizon_client::contact_sections::ContactSections,
     level_events: Vec<LevelEvent>,
     falling: Vec<FallingBlock>,
     paintings: Vec<horizon_client::entities::Painting>,
@@ -3193,32 +3195,28 @@ impl Game<'_> {
         }
         drop(prepare);
         let contact_span = horizon_client::spans::scope("tb_contact");
+        let mut contact = std::mem::take(&mut self.contact_sections);
         self.with_level(|b, level, ticks| {
-            let mut contact = horizon_world::level::ContactSections::<
-                horizon_client::fast_hash::FxBuild,
-            >::default();
+            contact.begin(std::ptr::from_ref(b) as usize);
             // Whether the section of `key` holds a state with a contact hook,
-            // at the world's revision now. Recheck after every write,
-            // including writes made by an earlier contact callback.
-            let hot = |contact: &mut horizon_world::level::ContactSections<_>,
+            // as it is now: an answer is kept only while its section is
+            // unchanged, so a write by an earlier callback is seen.
+            let hot = |contact: &mut horizon_client::contact_sections::ContactSections,
                        level: &GameLevel<'_>,
                        key: (i32, i32, i32)| {
-                contact.get(key, level.world.revision, || {
-                    level.world.chunks.get(&(key.0, key.2)).map_or_else(
-                        || b.has_entity_inside(level.world.air),
-                        |chunk| {
-                            let index = key.1 - (MIN_Y >> 4);
-                            chunk.sections.get(index as usize).map_or_else(
-                                || b.has_entity_inside(BlockStateId(0)),
-                                |section| {
-                                    section
-                                        .blocks
-                                        .has(|id| b.has_entity_inside(BlockStateId(id)))
-                                },
-                            )
-                        },
-                    )
-                })
+                level.world.chunks.get(&(key.0, key.2)).map_or_else(
+                    || b.has_entity_inside(level.world.air),
+                    |chunk| {
+                        let index = key.1 - (MIN_Y >> 4);
+                        chunk.sections.get(index as usize).map_or_else(
+                            || b.has_entity_inside(BlockStateId(0)),
+                            |section| {
+                                contact
+                                    .get(key, section, |id| b.has_entity_inside(BlockStateId(id)))
+                            },
+                        )
+                    },
+                )
             };
             let section_of = |pos: BlockPos| (pos.x >> 4, pos.y >> 4, pos.z >> 4);
             for pos in inside {
@@ -3271,6 +3269,7 @@ impl Game<'_> {
                 b.entity_on_big_dripleaf(level, ticks, pos, on_ground, feet_y);
             }
         });
+        self.contact_sections = contact;
         self.process_level_events()?;
         drop(contact_span);
         horizon_client::spans::time("tb_scheduled", || self.tick_scheduled())?;
@@ -13977,6 +13976,7 @@ impl<'a> Game<'a> {
             tick_chunks: Default::default(),
             tickets: Default::default(),
             random_tick_sections: Default::default(),
+            contact_sections: Default::default(),
             level_events: Vec::new(),
             falling: Vec::new(),
             paintings: Vec::new(),
