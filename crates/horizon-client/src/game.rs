@@ -566,6 +566,34 @@ enum GuestUse {
 }
 
 /// The client world as seen by the vanilla block-behaviour library.
+/// Visit every position of `hot` and `cold` once, in `key` order, where
+/// `cold` positions are known to need no visit until `visit` reports a change
+/// (it returns whether anything changed since the walk began). Until then
+/// only `hot` is sorted; after the first change the rest of `cold` joins the
+/// positions still to come.
+fn walk_set_aside<P: Copy + PartialEq, K: Ord>(
+    mut hot: Vec<P>,
+    mut cold: Vec<P>,
+    key: impl Fn(&P) -> K,
+    mut visit: impl FnMut(P) -> bool,
+) {
+    hot.sort_unstable_by_key(&key);
+    hot.dedup();
+    let mut i = 0;
+    while i < hot.len() {
+        let pos = hot[i];
+        i += 1;
+        if visit(pos) && !cold.is_empty() {
+            let mut rest = hot.split_off(i);
+            let at = key(&pos);
+            rest.extend(cold.drain(..).filter(|p| key(p) > at));
+            rest.sort_unstable_by_key(&key);
+            rest.dedup();
+            hot = rest;
+            i = 0;
+        }
+    }
+}
 struct GameLevel<'w> {
     world: &'w mut World,
     facts: &'w BlockFacts,
@@ -3067,6 +3095,7 @@ impl Game<'_> {
     /// ServerLevel.tick block phases: scheduled ticks, random ticks in the
     /// chunks the tickets simulate, block events and moving pistons.
     fn tick_blocks(&mut self) -> Result<()> {
+        let prepare = horizon_client::spans::scope("tb_prepare");
         self.sync_tick_chunks();
         self.start_ticking_chunks();
         let levels = self.tickets.levels();
@@ -3162,29 +3191,19 @@ impl Game<'_> {
                 }
             }
         }
+        drop(prepare);
+        let contact_span = horizon_client::spans::scope("tb_contact");
         self.with_level(|b, level, ticks| {
-            // The mobs and the other entities (items, orbs, projectiles...) too.
-            let mut touched: Vec<BlockPos> = Vec::new();
-            for bounds in level.mob_trigger_boxes().chain(level.other_trigger_boxes()) {
-                let (lo, hi) = (bounds.min_position(), bounds.max_position());
-                for x in (lo.x + 1e-7).floor() as i32..=(hi.x - 1e-7).floor() as i32 {
-                    for y in (lo.y + 1e-7).floor() as i32..=(hi.y - 1e-7).floor() as i32 {
-                        for z in (lo.z + 1e-7).floor() as i32..=(hi.z - 1e-7).floor() as i32 {
-                            touched.push(BlockPos::new(x, y, z));
-                        }
-                    }
-                }
-            }
-            touched.sort_unstable_by_key(|p| (p.x, p.y, p.z));
-            touched.dedup();
             let mut contact = horizon_world::level::ContactSections::<
                 horizon_client::fast_hash::FxBuild,
             >::default();
-            for pos in inside.into_iter().chain(touched) {
-                let key = (pos.x >> 4, pos.y >> 4, pos.z >> 4);
-                // Recheck after every write, including writes made by an earlier
-                // contact callback. Never prefilter the remaining positions.
-                if contact.get(key, level.world.revision, || {
+            // Whether the section of `key` holds a state with a contact hook,
+            // at the world's revision now. Recheck after every write,
+            // including writes made by an earlier contact callback.
+            let hot = |contact: &mut horizon_world::level::ContactSections<_>,
+                       level: &GameLevel<'_>,
+                       key: (i32, i32, i32)| {
+                contact.get(key, level.world.revision, || {
                     level.world.chunks.get(&(key.0, key.2)).map_or_else(
                         || b.has_entity_inside(level.world.air),
                         |chunk| {
@@ -3199,16 +3218,62 @@ impl Game<'_> {
                             )
                         },
                     )
-                }) {
+                })
+            };
+            let section_of = |pos: BlockPos| (pos.x >> 4, pos.y >> 4, pos.z >> 4);
+            for pos in inside {
+                if hot(&mut contact, level, section_of(pos)) {
                     b.entity_inside(level, ticks, pos);
                 }
             }
+            // The mobs and the other entities (items, orbs, projectiles...)
+            // too, each block once in (x, y, z) order. Nearly every box lies
+            // in sections without a contact hook, whose blocks would be
+            // passed over: they are set aside unsorted, and only joined in
+            // (sorted, from where the walk is) if a callback writes, after
+            // which any section may have gained a hook.
+            let start = level.world.revision;
+            let (mut touched, mut cold): (Vec<BlockPos>, Vec<BlockPos>) = (Vec::new(), Vec::new());
+            for bounds in level.mob_trigger_boxes().chain(level.other_trigger_boxes()) {
+                let (lo, hi) = (bounds.min_position(), bounds.max_position());
+                let (x0, x1) = ((lo.x + 1e-7).floor() as i32, (hi.x - 1e-7).floor() as i32);
+                let (y0, y1) = ((lo.y + 1e-7).floor() as i32, (hi.y - 1e-7).floor() as i32);
+                let (z0, z1) = ((lo.z + 1e-7).floor() as i32, (hi.z - 1e-7).floor() as i32);
+                if x0 > x1 || y0 > y1 || z0 > z1 {
+                    continue;
+                }
+                let any_hot = (x0 >> 4..=x1 >> 4).any(|sx| {
+                    (y0 >> 4..=y1 >> 4)
+                        .any(|sy| (z0 >> 4..=z1 >> 4).any(|sz| hot(&mut contact, level, (sx, sy, sz))))
+                });
+                let list = if any_hot { &mut touched } else { &mut cold };
+                for x in x0..=x1 {
+                    for y in y0..=y1 {
+                        for z in z0..=z1 {
+                            list.push(BlockPos::new(x, y, z));
+                        }
+                    }
+                }
+            }
+            walk_set_aside(
+                touched,
+                cold,
+                |p| (p.x, p.y, p.z),
+                |pos| {
+                    if hot(&mut contact, level, section_of(pos)) {
+                        b.entity_inside(level, ticks, pos);
+                    }
+                    level.world.revision != start
+                },
+            );
             for (pos, on_ground, feet_y) in standing {
                 b.entity_on_big_dripleaf(level, ticks, pos, on_ground, feet_y);
             }
         });
         self.process_level_events()?;
-        self.tick_scheduled()?;
+        drop(contact_span);
+        horizon_client::spans::time("tb_scheduled", || self.tick_scheduled())?;
+        let _random = horizon_client::spans::scope("tb_random");
         self.with_level(|b, level, ticks| {
             // Out of the level for the turn: the random ticks don't read it.
             let mut sections = std::mem::take(level.random_tick_sections);
@@ -15577,6 +15642,41 @@ mod tests {
     use super::*;
     use horizon_client::container_screen::{Button, Clicks, Release, Target};
     use horizon_client::keymapping::{KeyAction, SPRINT, ToggleKeys};
+
+    /// Before the first change only the hot positions are visited; from it
+    /// on, every position still to come in the full sorted walk.
+    #[test]
+    fn set_aside_positions_join_the_walk_after_a_change() {
+        use horizon_core::random::{LegacyRandom, RandomSource};
+        let mut r = LegacyRandom::new(3);
+        for case in 0..200 {
+            let mut v = |n: i32| r.next_int_bound(n).unwrap();
+            let hot: Vec<i32> = (0..v(30)).map(|_| v(50)).collect();
+            let cold: Vec<i32> = (0..v(30)).map(|_| v(50)).collect();
+            let change = if case % 4 == 0 { None } else { Some(v(50)) };
+            let mut visited = Vec::new();
+            walk_set_aside(hot.clone(), cold.clone(), |p| *p, |p| {
+                visited.push(p);
+                change.is_some_and(|c| visited.iter().any(|&q| q >= c && hot.contains(&q)))
+            });
+            let mut hot_sorted = hot.clone();
+            hot_sorted.sort_unstable();
+            hot_sorted.dedup();
+            let first = change.and_then(|c| hot_sorted.iter().copied().find(|&q| q >= c));
+            let mut expected: Vec<i32> = hot_sorted
+                .iter()
+                .copied()
+                .filter(|&q| first.is_none_or(|f| q <= f))
+                .collect();
+            if let Some(f) = first {
+                let mut all: Vec<i32> = hot.iter().chain(&cold).copied().filter(|&q| q > f).collect();
+                all.sort_unstable();
+                all.dedup();
+                expected.extend(all);
+            }
+            assert_eq!(visited, expected, "case {case}");
+        }
+    }
 
     #[test]
     fn sleep_fade_lasts_ten_ticks_after_waking() {
