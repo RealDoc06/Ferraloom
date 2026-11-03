@@ -351,7 +351,18 @@ impl Game<'_> {
         // FireworkRocketItem.use boosts only a gliding player.
         motion.fall_flying = g.fall_flying;
         motion.invulnerable = motion.may_fly;
-        let _ = motion.set_health(g.health, false);
+        // LivingEntity.setHealth clamps to the maximum and stores what
+        // differs: the body holding the record's health already, at most the
+        // maximum and above zero, is left as it is.
+        let current = motion.health.health();
+        let kept = current.to_bits() == g.health.to_bits()
+            && current > 0.0
+            && motion
+                .attribute("minecraft:max_health")
+                .is_ok_and(|max| current <= max as f32);
+        if !kept {
+            let _ = motion.set_health(g.health, false);
+        }
         motion.health.food.food = g.food;
         motion.health.food.saturation = g.saturation;
         let mut player = Some(motion);

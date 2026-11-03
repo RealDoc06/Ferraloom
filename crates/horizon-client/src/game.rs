@@ -1947,7 +1947,7 @@ struct Game<'a> {
     ui: chat::UiState,
     combat: combat::CombatTracker,
     /// Each guest's own `CombatTracker`, out of `combat` between turns.
-    guest_combat: std::collections::HashMap<u32, combat::CombatTracker>,
+    guest_combat: horizon_client::fast_hash::FxHashMap<u32, combat::CombatTracker>,
     mount: mounts::MountState,
     stats: stats::Stats,
     score: scoreboard::ScoreState,
