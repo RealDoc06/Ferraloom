@@ -30,7 +30,9 @@ impl ContactSections {
             self.current.clear();
             self.owner = owner;
         }
-        self.previous = std::mem::take(&mut self.current);
+        // Swapped, not taken, so both maps keep their capacity.
+        std::mem::swap(&mut self.previous, &mut self.current);
+        self.current.clear();
     }
     /// Whether `section` (at `key`) has a block `hook` accepts, by
     /// [`crate::chunk::Section`]'s exact `has` (unused palette entries do not

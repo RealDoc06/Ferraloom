@@ -869,7 +869,11 @@ impl Game<'_> {
         // a sculk tick does loads, unloads or lights a chunk or moves a ticket.
         let levels = self.tickets.levels();
         let chunks = &self.world.chunks;
-        let mut ticking = FxHashMap::<(i32, i32), bool>::default();
+        // Each column asks itself and its eight neighbours.
+        let mut ticking = FxHashMap::<(i32, i32), bool>::with_capacity_and_hasher(
+            self.sculk.index.chunks.len() * 4,
+            Default::default(),
+        );
         let mut ticks = |cx: i32, cz: i32| {
             *ticking.entry((cx, cz)).or_insert_with(|| {
                 levels.block_ticking(cx, cz) && chunks.get(&(cx, cz)).is_some_and(|c| c.lit)
