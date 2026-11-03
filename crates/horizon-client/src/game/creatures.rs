@@ -463,6 +463,7 @@ impl Game<'_> {
             items: Some(self.res.items()),
             lid_openers: &self.lid_openers,
             fluids_ahead: None,
+            kinds_ahead: None,
             // The first player in the level: a server has no player of its own.
             difficulty: self.local_difficulty(
                 self.first_level_player()
@@ -558,27 +559,44 @@ impl Game<'_> {
             Option<Seen>,
             Option<Vec3>,
             Option<([u64; 7], horizon_client::mobs::living::Fluids)>,
+            Option<([u64; 4], u16)>,
         );
-        let mut ahead: Vec<Ahead> = self.mobs.iter().map(|m| (m, None, None, None)).collect();
+        let mut ahead: Vec<Ahead> = self
+            .mobs
+            .iter()
+            .map(|m| (m, None, None, None, None))
+            .collect();
         {
             let reader = self.mob_world_base(&[]);
-            horizon_threads::pool::for_each_mut(&mut ahead, 256, |(m, entry, near, fluids)| {
-                *entry = Some(seen(m, uuid));
-                *near = nearest_to(m.position);
-                let (bounds, eye) = (m.bounds(), m.eye_y());
-                *fluids = Some((
-                    horizon_client::mobs::living::fluids_key(bounds, eye),
-                    reader.fluids(bounds, eye),
-                ));
-            });
+            horizon_threads::pool::for_each_mut(
+                &mut ahead,
+                256,
+                |(m, entry, near, fluids, kinds)| {
+                    *entry = Some(seen(m, uuid));
+                    *near = nearest_to(m.position);
+                    let (bounds, eye) = (m.bounds(), m.eye_y());
+                    *fluids = Some((
+                        horizon_client::mobs::living::fluids_key(bounds, eye),
+                        reader.fluids(bounds, eye),
+                    ));
+                    // Its tick starts with `previous` where it stands now.
+                    let (at, width, height) = (m.position, m.width(), m.height());
+                    *kinds = Some((
+                        horizon_client::mobs::ai::key_at(at, width, height),
+                        horizon_client::mobs::ai::kinds_between(at, at, width, height, &reader),
+                    ));
+                },
+            );
         }
         let mut nearest_ahead = Vec::with_capacity(ahead.len());
         let mut fluids_ahead = Vec::with_capacity(ahead.len());
+        let mut kinds_ahead = Vec::with_capacity(ahead.len());
         let mut snapshot: Vec<Seen> = ahead
             .into_iter()
-            .map(|(m, entry, near, fluids)| {
+            .map(|(m, entry, near, fluids, kinds)| {
                 nearest_ahead.push((m.position, near));
                 fluids_ahead.push(fluids);
+                kinds_ahead.push(kinds);
                 entry.unwrap_or_else(|| seen(m, uuid))
             })
             .collect();
@@ -641,6 +659,7 @@ impl Game<'_> {
                 // not the local player's (a server thread has no player).
                 w.difficulty = self.local_difficulty([m.position.x, m.position.y, m.position.z]);
                 w.fluids_ahead = fluids_ahead[i];
+                w.kinds_ahead = kinds_ahead[i];
                 let (stood, near) = nearest_ahead[i];
                 let same = |a: Vec3, b: Vec3| {
                     [a.x, a.y, a.z].map(f64::to_bits) == [b.x, b.y, b.z].map(f64::to_bits)

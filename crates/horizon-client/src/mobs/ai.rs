@@ -615,8 +615,11 @@ fn effects_from_blocks(m: &mut Mob, w: &MobWorld, near: u16) {
 /// reading a cell. The cells cover the boxes the checks visit (the swept
 /// box of `effects_from_blocks`, both boxes of the flower contact).
 fn kinds_near(m: &Mob, w: &MobWorld) -> u16 {
-    let (a, b) = (m.previous, m.position);
-    let half = f64::from(m.width()) / 2.0 + 0.01;
+    kinds_between(m.previous, m.position, m.width(), m.height(), w)
+}
+/// [`kinds_near`] for a mob of `width` and `height` at `a` and `b`.
+pub fn kinds_between(a: Vec3, b: Vec3, width: f32, height: f32, w: &MobWorld) -> u16 {
+    let half = f64::from(width) / 2.0 + 0.01;
     let lo = [
         (a.x.min(b.x) - half).floor() as i32,
         a.y.min(b.y).floor() as i32,
@@ -624,7 +627,7 @@ fn kinds_near(m: &Mob, w: &MobWorld) -> u16 {
     ];
     let hi = [
         (a.x.max(b.x) + half).floor() as i32,
-        (a.y.max(b.y) + f64::from(m.height()) + 0.01).floor() as i32,
+        (a.y.max(b.y) + f64::from(height) + 0.01).floor() as i32,
         (a.z.max(b.z) + half).floor() as i32,
     ];
     // A long move (a teleport) reads its cells instead of many palettes.
@@ -632,6 +635,21 @@ fn kinds_near(m: &Mob, w: &MobWorld) -> u16 {
         return u16::MAX;
     }
     crate::block_kinds::BlockKinds::of(w.registry).near(w.world, lo, hi)
+}
+/// What [`MobWorld::kinds_ahead`] is keyed by: the mob's position, which
+/// must also be where it started the tick, and its size, as bits.
+pub fn start_key(m: &Mob) -> [u64; 4] {
+    let bits = |v: Vec3| [v.x, v.y, v.z].map(f64::to_bits);
+    // A mob moved since it started gets a key no read-ahead has.
+    if bits(m.position) != bits(m.previous) {
+        return [u64::MAX; 4];
+    }
+    key_at(m.position, m.width(), m.height())
+}
+/// [`start_key`] of a mob of `width` and `height` starting at `at`.
+pub fn key_at(at: Vec3, width: f32, height: f32) -> [u64; 4] {
+    let size = u64::from(width.to_bits()) << 32 | u64::from(height.to_bits());
+    [at.x.to_bits(), at.y.to_bits(), at.z.to_bits(), size]
 }
 /// LivingEntity.updateSwingTime.
 pub fn tick_swing(m: &mut Mob) {
@@ -686,7 +704,19 @@ fn base_tick(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
     if m.species() == Species::Drowned {
         super::undead::drowned_update_swimming(m, w);
     }
-    let fire = crate::motion::environment::fire_contact(w.world, w.registry, m.bounds());
+    // The kinds of block around the mob before its move, read ahead of the
+    // tick for a mob standing where it stood then: fire and powder snow
+    // checks with none of theirs around find nothing.
+    let near = match w.kinds_ahead {
+        Some((at, kinds)) if at == start_key(m) => kinds,
+        _ => kinds_near(m, w),
+    };
+    use crate::block_kinds::{FIRE, SOUL_FIRE};
+    let fire = if near & (FIRE | SOUL_FIRE) != 0 {
+        crate::motion::environment::fire_contact(w.world, w.registry, m.bounds())
+    } else {
+        0.0
+    };
     if fire > 0.0 {
         m.ticks_frozen = 0;
     }
@@ -776,7 +806,7 @@ fn base_tick(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
         if m.kind.flags.water_sensitive && (m.fluids.in_water || in_rain(m, w)) {
             m.damage(1.0, Damage::of(DamageKind::Drown));
         }
-        freeze_tick(m, w);
+        freeze_tick(m, w, near);
     }
     tick_effects(m);
     if m.species() == Species::Illusioner {
@@ -809,8 +839,8 @@ fn base_tick(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
 /// `LivingEntity.aiStep`'s "freezing" with `InsideBlockEffectType.FREEZE`:
 /// powder snow builds `ticks_frozen` up, anywhere else it melts twice as
 /// fast, and a fully frozen mob takes one freeze damage every 40 ticks.
-fn freeze_tick(m: &mut Mob, w: &MobWorld) {
-    let in_snow = in_powder_snow(m, w);
+fn freeze_tick(m: &mut Mob, w: &MobWorld, near: u16) {
+    let in_snow = in_powder_snow(m, w, near);
     if !in_snow && m.ticks_frozen == 0 {
         return;
     }
@@ -827,8 +857,8 @@ fn freeze_tick(m: &mut Mob, w: &MobWorld) {
 }
 /// Whether the mob's box (shrunk by `1.0E-5`, as in `Entity.checkInsideBlocks`)
 /// touches powder snow.
-fn in_powder_snow(m: &Mob, w: &MobWorld) -> bool {
-    if kinds_near(m, w) & crate::block_kinds::POWDER_SNOW == 0 {
+fn in_powder_snow(m: &Mob, w: &MobWorld, near: u16) -> bool {
+    if near & crate::block_kinds::POWDER_SNOW == 0 {
         return false;
     }
     let b = m.bounds().deflate(Vec3::new(1e-5, 1e-5, 1e-5));

@@ -1836,6 +1836,9 @@ pub struct MobWorld<'a> {
     /// The ticking mob's [`MobWorld::fluids`] read ahead of its tick: the
     /// box corners and eye height asked (as bits) and the answer.
     pub fluids_ahead: Option<([u64; 7], living::Fluids)>,
+    /// The ticking mob's `block_kinds` around its box where it stood
+    /// before its tick ([`ai::start_key`] and the kinds), read ahead.
+    pub kinds_ahead: Option<([u64; 4], u16)>,
 }
 /// `Entity.getTeam` of the player and of the mobs on a team.
 #[derive(Clone, Debug, Default)]
