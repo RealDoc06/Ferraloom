@@ -59,6 +59,9 @@ pub struct Ai {
     pub steps: super::living::Steps,
     /// The last straight up or down move `do_move` resolved.
     pub move_memo: super::living::MoveMemo,
+    /// The box and eye height `update_fluids` last read the fluids at,
+    /// during this tick only.
+    pub fluids_asked: Option<[u64; 7]>,
 }
 impl Mob {
     /// `LivingEntity.getCurrentSwingDuration`: 6 ticks unless a swing set its own.
@@ -444,6 +447,19 @@ pub fn is_monster(s: Species) -> bool {
 }
 /// One full entity tick. Returns false when the mob is gone.
 pub fn tick(
+    m: &mut Mob,
+    w: &MobWorld,
+    level_random: &mut LegacyRandom,
+    events: &mut Vec<MobEvent>,
+) -> bool {
+    // The world holds still for the length of one mob's tick, and only for
+    // that long: fluid answers are reused within it (`Mob::update_fluids`).
+    m.ai.fluids_asked = None;
+    let kept = tick_entity(m, w, level_random, events);
+    m.ai.fluids_asked = None;
+    kept
+}
+fn tick_entity(
     m: &mut Mob,
     w: &MobWorld,
     level_random: &mut LegacyRandom,
