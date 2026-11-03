@@ -53,6 +53,27 @@ pub trait BlockCollisionWorld {
     fn may_reach_out(&mut self, _chunk: Self::Chunk, _section_y: i32) -> Result<bool, Self::Error> {
         Ok(true)
     }
+    /// Whether every block of the section is `CollisionBlock::empty_shape`,
+    /// so a scan keeps none of them. True lets the scan pass the section's
+    /// cells without reading them.
+    fn section_is_empty(
+        &mut self,
+        _chunk: Self::Chunk,
+        _section_y: i32,
+    ) -> Result<bool, Self::Error> {
+        Ok(false)
+    }
+}
+
+/// What a section's palette says of the cells a scan visits in it.
+#[derive(Clone, Copy, PartialEq)]
+enum SectionCells {
+    /// None can be kept.
+    Empty,
+    /// Only those in the box's own cells can be kept.
+    InsideOnly,
+    /// Any can be kept.
+    All,
 }
 
 #[derive(Debug)]
@@ -101,8 +122,8 @@ pub struct BlockCollisionScan<'w, 'c, W: BlockCollisionWorld> {
     budget: usize,
     chunk: Option<(ChunkPos, W::Chunk)>,
     section: Option<(ChunkPos, i32, W::Chunk)>,
-    /// `may_reach_out` of the last section an outer cell was in.
-    reach: Option<(ChunkPos, i32, bool)>,
+    /// `SectionCells` of the last section visited.
+    cells: Option<(ChunkPos, i32, SectionCells)>,
     failed: bool,
 }
 impl<'w, 'c, W: BlockCollisionWorld> BlockCollisionScan<'w, 'c, W> {
@@ -152,7 +173,7 @@ impl<'w, 'c, W: BlockCollisionWorld> BlockCollisionScan<'w, 'c, W> {
             count,
             budget: candidate_budget,
             chunk: None,
-            reach: None,
+            cells: None,
             section: None,
             failed: false,
         })
@@ -194,11 +215,9 @@ impl<'w, 'c, W: BlockCollisionWorld> BlockCollisionScan<'w, 'c, W> {
                     self.cursor[2] += 1;
                 }
             }
-            let kind = relative
-                .into_iter()
-                .zip(self.sizes)
-                .filter(|(p, size)| *p == 0 || *p == size - 1)
-                .count();
+            let kind = usize::from(relative[0] == 0 || relative[0] == width - 1)
+                + usize::from(relative[1] == 0 || relative[1] == height - 1)
+                + usize::from(relative[2] == 0 || relative[2] == depth - 1);
             if kind == 3 {
                 continue;
             }
@@ -233,37 +252,51 @@ impl<'w, 'c, W: BlockCollisionWorld> BlockCollisionScan<'w, 'c, W> {
             // An outer cell only counts for a block reaching out of its own
             // cell: most sections hold none, so their outer cells go unread
             // (the result is the same, with a fifth of the block reads for a
-            // mob's box).
-            if kind != 0 {
-                let section_y = p.y >> 4;
-                let reaches = match self.reach {
-                    Some((at, y, reaches)) if at == chunk_position && y == section_y => reaches,
-                    _ => {
-                        let reaches = self
+            // mob's box). A section of air and the like needs no cell read.
+            let cells = match self.cells {
+                Some((at, y, cells)) if at == chunk_position && y == section_y => cells,
+                _ => {
+                    let cells = if !self.only_suffocating
+                        && self
                             .world
-                            .may_reach_out(chunk, section_y)
-                            .map_err(CollisionScanError::World)?;
-                        self.reach = Some((chunk_position, section_y, reaches));
-                        reaches
-                    }
-                };
-                if !reaches {
+                            .section_is_empty(chunk, section_y)
+                            .map_err(CollisionScanError::World)?
+                    {
+                        SectionCells::Empty
+                    } else if self
+                        .world
+                        .may_reach_out(chunk, section_y)
+                        .map_err(CollisionScanError::World)?
+                    {
+                        SectionCells::All
+                    } else {
+                        SectionCells::InsideOnly
+                    };
+                    self.cells = Some((chunk_position, section_y, cells));
+                    cells
+                }
+            };
+            let row_passes = cells == SectionCells::Empty
+                || cells == SectionCells::InsideOnly
+                    && kind != 0
                     // On a row along the box's bottom, top or sides every
-                    // cell is outer: the rest of it in this chunk is passed
-                    // at once (never beyond the budget, which still ends the
-                    // scan where it would have).
-                    if relative[1] == 0
+                    // cell is outer.
+                    && (relative[1] == 0
                         || relative[1] == height - 1
                         || relative[2] == 0
-                        || relative[2] == depth - 1
-                    {
-                        let rest = (width - 1 - relative[0])
-                            .min(15 - (p.x & 15) as usize)
-                            .min(self.budget.saturating_sub(self.index));
-                        self.skip(rest);
-                    }
-                    continue;
-                }
+                        || relative[2] == depth - 1);
+            if row_passes {
+                // The rest of the row in this chunk is passed at once (never
+                // beyond the budget, which still ends the scan where it would
+                // have).
+                let rest = (width - 1 - relative[0])
+                    .min(15 - (p.x & 15) as usize)
+                    .min(self.budget.saturating_sub(self.index));
+                self.skip(rest);
+                continue;
+            }
+            if cells == SectionCells::InsideOnly && kind != 0 {
+                continue;
             }
             let block = self
                 .world

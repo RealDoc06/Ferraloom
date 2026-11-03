@@ -123,6 +123,13 @@ impl<W: BlockCollisionWorld> BlockCollisionWorld for EntityCollisions<'_, W> {
     ) -> std::result::Result<bool, Self::Error> {
         self.blocks.may_reach_out(chunk, section_y)
     }
+    fn section_is_empty(
+        &mut self,
+        chunk: Self::Chunk,
+        section_y: i32,
+    ) -> std::result::Result<bool, Self::Error> {
+        self.blocks.section_is_empty(chunk, section_y)
+    }
     fn context_shape(
         &mut self,
         block: CollisionBlock,
@@ -295,6 +302,27 @@ where
     )
     .unwrap_or(false)
 }
+/// What a section's palette says for a collision scan
+/// (`PalettedContainer::palette_fact`, which needs the first bit).
+const FACT_KNOWN: u8 = 1;
+const FACT_EMPTY: u8 = 2;
+const FACT_REACHES: u8 = 4;
+impl<'w> SceneCollisions<'w, '_> {
+    /// The section's scan facts, remembered with its palette: a palette is
+    /// read under the one block registry of its world.
+    fn section_facts(&self, chunk: crate::chunk::ChunkBlocks<'w>, section_y: i32) -> Option<u8> {
+        let selected = chunk.select_section(section_y);
+        let section = selected.section()?;
+        Some(section.blocks.palette_fact(|blocks| {
+            if blocks.is_global() {
+                return FACT_KNOWN | FACT_REACHES;
+            }
+            let reaches = blocks.maybe_has(|v| self.binding.reaches_out(BlockStateId(v)));
+            let empty = !blocks.maybe_has(|v| !self.binding.scan_skips(BlockStateId(v)));
+            FACT_KNOWN | if reaches { FACT_REACHES } else { 0 } | if empty { FACT_EMPTY } else { 0 }
+        }))
+    }
+}
 impl<'w> BlockCollisionWorld for SceneCollisions<'w, '_> {
     type Error = io::Error;
     /// The resident column, looked up once per chunk the scan enters.
@@ -315,11 +343,14 @@ impl<'w> BlockCollisionWorld for SceneCollisions<'w, '_> {
     /// From the section's palette, without reading its blocks; a palette
     /// of the whole registry reads every cell.
     fn may_reach_out(&mut self, chunk: Self::Chunk, section_y: i32) -> io::Result<bool> {
-        let selected = chunk.select_section(section_y);
-        let blocks = selected.section().map(|section| &section.blocks);
-        Ok(blocks.is_none_or(|blocks| {
-            blocks.is_global() || blocks.maybe_has(|v| self.binding.reaches_out(BlockStateId(v)))
-        }))
+        let facts = self.section_facts(chunk, section_y);
+        Ok(facts.is_none_or(|facts| facts & FACT_REACHES != 0))
+    }
+    /// From the section's palette too. A section outside the column or with
+    /// a palette of the whole registry reads every cell.
+    fn section_is_empty(&mut self, chunk: Self::Chunk, section_y: i32) -> io::Result<bool> {
+        let facts = self.section_facts(chunk, section_y);
+        Ok(facts.is_some_and(|facts| facts & FACT_EMPTY != 0))
     }
     fn is_suffocating(
         &mut self,

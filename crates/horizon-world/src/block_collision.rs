@@ -158,6 +158,13 @@ impl<'r> BlockCollisionRegistry<'r> {
             empty_shape: flags & 4 != 0,
         })
     }
+    /// Whether a scan passes `state` wherever it is (`CollisionBlock::empty_shape`).
+    /// States outside the registry do not count.
+    pub fn scan_skips(&self, state: BlockStateId) -> bool {
+        self.scan_flags
+            .get(state.0 as usize)
+            .is_some_and(|flags| flags & 4 != 0)
+    }
     /// Whether a scan keeps `state` in the cells around its box: a large
     /// collision shape or a moving piston. States outside the registry count.
     pub fn reaches_out(&self, state: BlockStateId) -> bool {
