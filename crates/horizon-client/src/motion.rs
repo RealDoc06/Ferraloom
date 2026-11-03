@@ -1268,7 +1268,7 @@ impl MotionWorld<'_, '_, '_> {
                 }
             }
         }
-        let mut visited = std::collections::HashSet::new();
+        let mut visited = crate::fast_hash::FxHashSet::default();
         let mut entered = Vec::new();
         for movement in &movements {
             let mut from = movement.from;
@@ -1355,7 +1355,7 @@ impl MotionWorld<'_, '_, '_> {
         &mut self,
         from: Vec3,
         to: Vec3,
-        visited: &mut std::collections::HashSet<i64>,
+        visited: &mut crate::fast_hash::FxHashSet<i64>,
         entered: &mut Vec<(i32, BlockPos)>,
         max_iterations: i32,
         damage_only: bool,
