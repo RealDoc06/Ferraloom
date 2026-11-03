@@ -2932,7 +2932,7 @@ mod tests {
         // On the floor.
         assert!(!along(Vec3::new(5.5, 4.0, 5.5), Vec3::new(5.6, 4.0, 5.5)));
         // A long move goes the long way.
-        assert!(!along(Vec3::new(0.5, 80.0, 0.5), Vec3::new(30.5, 80.0, 0.5)));
+        assert!(!along(Vec3::new(0.5, 80.0, 0.5), Vec3::new(60.5, 80.0, 0.5)));
     }
 
     #[test]
