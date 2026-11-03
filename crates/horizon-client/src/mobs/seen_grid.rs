@@ -7,10 +7,16 @@ use horizon_core::geometry::{Aabb, Axis};
 /// Width of a grid column, in blocks.
 const CELL: f64 = 4.0;
 
+/// Columns per side of a block of the coarse count, as a shift.
+const BLOCK_SHIFT: i32 = 2;
+
 /// Snapshot indices by the column holding each box's minimum corner.
 #[derive(Default)]
 pub struct SeenGrid {
     cells: FxHashMap<(i32, i32), Vec<u32>>,
+    /// How many entries each block of columns holds: a wide query passes
+    /// an empty block with one lookup instead of one per column.
+    blocks: FxHashMap<(i32, i32), u32>,
     cell_of: Vec<(i32, i32)>,
     /// The widest box (along x or z) the grid has held: no box reaches
     /// further than this past its minimum corner.
@@ -22,6 +28,9 @@ fn column(x: f64, z: f64) -> (i32, i32) {
 }
 fn corner(b: Aabb) -> (i32, i32) {
     column(b.min(Axis::X), b.min(Axis::Z))
+}
+fn block_of((x, z): (i32, i32)) -> (i32, i32) {
+    (x >> BLOCK_SHIFT, z >> BLOCK_SHIFT)
 }
 fn width(b: Aabb) -> f64 {
     (b.max(Axis::X) - b.min(Axis::X)).max(b.max(Axis::Z) - b.min(Axis::Z))
@@ -35,6 +44,7 @@ impl SeenGrid {
             let at = corner(b);
             grid.reach = grid.reach.max(width(b));
             grid.cells.entry(at).or_default().push(i as u32);
+            *grid.blocks.entry(block_of(at)).or_default() += 1;
             grid.cell_of.push(at);
         }
         grid
@@ -51,8 +61,15 @@ impl SeenGrid {
             && let Some(k) = list.iter().position(|&j| j == i as u32)
         {
             list.swap_remove(k);
+            if let Some(n) = self.blocks.get_mut(&block_of(old)) {
+                *n -= 1;
+                if *n == 0 {
+                    self.blocks.remove(&block_of(old));
+                }
+            }
         }
         self.cells.entry(at).or_default().push(i as u32);
+        *self.blocks.entry(block_of(at)).or_default() += 1;
     }
     /// The indices, ascending, of every entry whose box can meet `area`
     /// (a superset: callers still test it). False when the area spans more
@@ -69,10 +86,20 @@ impl SeenGrid {
         if nx < 1 || nz < 1 || nx.saturating_mul(nz) > self.cells.len() as i64 {
             return false;
         }
-        for x in lo.0..=hi.0 {
-            for z in lo.1..=hi.1 {
-                if let Some(list) = self.cells.get(&(x, z)) {
-                    out.extend_from_slice(list);
+        let (block_lo, block_hi) = (block_of(lo), block_of(hi));
+        for bx in block_lo.0..=block_hi.0 {
+            for bz in block_lo.1..=block_hi.1 {
+                if !self.blocks.contains_key(&(bx, bz)) {
+                    continue;
+                }
+                let xs = lo.0.max(bx << BLOCK_SHIFT)..=hi.0.min(((bx + 1) << BLOCK_SHIFT) - 1);
+                for x in xs {
+                    let zs = lo.1.max(bz << BLOCK_SHIFT)..=hi.1.min(((bz + 1) << BLOCK_SHIFT) - 1);
+                    for z in zs {
+                        if let Some(list) = self.cells.get(&(x, z)) {
+                            out.extend_from_slice(list);
+                        }
+                    }
                 }
             }
         }
