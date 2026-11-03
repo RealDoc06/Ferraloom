@@ -2351,6 +2351,41 @@ impl MoveToBlock {
         self.next_start = next;
         self.find_nearest(m, w, valid)
     }
+    /// `find_nearest` for a target that must be a block `kind` accepts:
+    /// where no section the search reaches can hold one there is nothing to
+    /// find, and the search reads no cell.
+    pub fn find_nearest_of(
+        &mut self,
+        m: &Mob,
+        w: &MobWorld,
+        kind: impl FnMut(horizon_world::registry::BlockStateId) -> bool,
+        valid: impl Fn(&MobWorld, [i32; 3]) -> bool,
+    ) -> bool {
+        if self.range > 0 && self.vertical_start <= self.vertical_range {
+            let base = [
+                m.position.x.floor() as i32,
+                m.position.y.floor() as i32 - 1,
+                m.position.z.floor() as i32,
+            ];
+            // The rings reach `range - 1` out; the heights alternate up to
+            // `vertical_range` either way, from `vertical_start`.
+            let reach = self.range - 1;
+            let lo = [
+                base[0] - reach,
+                base[1] + self.vertical_start.min(-self.vertical_range),
+                base[2] - reach,
+            ];
+            let hi = [
+                base[0] + reach,
+                base[1] + self.vertical_range,
+                base[2] + reach,
+            ];
+            if !w.world.may_hold(lo, hi, kind) {
+                return false;
+            }
+        }
+        self.find_nearest(m, w, valid)
+    }
     /// `MoveToBlockGoal.findNearestBlock`: rings outward, alternating heights.
     pub fn find_nearest(
         &mut self,

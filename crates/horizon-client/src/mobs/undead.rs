@@ -972,7 +972,8 @@ impl Goal for AttackTurtleEgg {
             self.base.next_start -= 1;
             return false;
         }
-        if self.base.find_nearest(m, cx.w, turtle_egg_target) {
+        let egg = |s| &*cx.w.facts.get(s).name == "minecraft:turtle_egg";
+        if self.base.find_nearest_of(m, cx.w, egg, turtle_egg_target) {
             self.base.next_start = super::goals::reduced(20);
             return true;
         }

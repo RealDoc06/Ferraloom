@@ -242,6 +242,37 @@ impl MobWorld<'_> {
             .map(|shape| shape.boxes().iter().map(|b| b.move_by(offset)).collect())
             .unwrap_or_default()
     }
+    /// Whether a box of [`Self::block_collision_boxes`] meets `area`, without
+    /// collecting them: a unit cube's one box is the cell itself.
+    fn block_collision_meets(
+        &self,
+        block: horizon_world::block_collision_scan::CollisionBlock,
+        x: i32,
+        y: i32,
+        z: i32,
+        area: Aabb,
+    ) -> bool {
+        let offset = Vec3::new(f64::from(x), f64::from(y), f64::from(z));
+        if block.block_shape {
+            let cube = Aabb::new(Vec3::ZERO, Vec3::new(1.0, 1.0, 1.0));
+            return cube.move_by(offset).intersects(area);
+        }
+        let mut scene = SceneCollisions {
+            world: self.world,
+            binding: self.collision,
+            subject: None,
+        };
+        let at = horizon_core::position::BlockPos::new(x, y, z);
+        let context = horizon_world::collision_context::CollisionContext::empty(false);
+        self.collision
+            .collision_shape_with_context(&mut scene, block.state, at, &context)
+            .is_ok_and(|shape| {
+                shape
+                    .boxes()
+                    .iter()
+                    .any(|b| b.move_by(offset).intersects(area))
+            })
+    }
     /// `Level.findSupportingBlock`: of the blocks whose collision shape
     /// meets `area`, the one whose centre is nearest `from` (ties: the
     /// greatest by `Vec3i.compareTo`, y then z then x).
@@ -293,11 +324,7 @@ impl MobWorld<'_> {
                     {
                         continue;
                     }
-                    if !self
-                        .block_collision_boxes(x, y, z)
-                        .iter()
-                        .any(|b| b.intersects(area))
-                    {
+                    if !self.block_collision_meets(block, x, y, z, area) {
                         continue;
                     }
                     let d = (f64::from(x) + 0.5 - from.x).powi(2)
