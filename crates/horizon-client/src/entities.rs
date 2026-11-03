@@ -11,6 +11,7 @@ use horizon_core::geometry::{Aabb, Vec3};
 use horizon_world::block_collision::BlockCollisionRegistry;
 
 mod fluids;
+pub use fluids::ItemFluids;
 
 #[derive(Clone, Debug)]
 pub struct ItemEntity {
@@ -194,13 +195,32 @@ impl ItemEntity {
         no_physics: bool,
         fluids: &crate::motion::FluidResources,
     ) -> bool {
+        self.tick_with(world, facts, collision, no_physics, fluids, None)
+    }
+    /// [`Self::tick`] with its first fluid update read ahead: `ahead` is
+    /// taken while it is the update of the item as it stands and moves.
+    pub fn tick_with(
+        &mut self,
+        world: &World,
+        facts: &BlockFacts,
+        collision: &BlockCollisionRegistry<'_>,
+        no_physics: bool,
+        fluids: &crate::motion::FluidResources,
+        ahead: Option<ItemFluids>,
+    ) -> bool {
         self.ticks += 1;
         self.previous = self.position;
         if self.pickup_delay > 0 && self.pickup_delay != u32::MAX {
             self.pickup_delay -= 1;
         }
         // Entity.baseTick pushes before ItemEntity applies buoyancy and moves.
-        let (water_height, lava_height) = self.update_fluids(world, fluids);
+        let (water_height, lava_height) = match ahead.filter(|a| a.of(self)) {
+            Some(read) => {
+                self.velocity = read.pushed;
+                read.heights
+            }
+            None => self.update_fluids(world, fluids),
+        };
         let in_water = water_height > f64::from(0.1f32);
         if in_water {
             // ItemEntity.setUnderwaterMovement
