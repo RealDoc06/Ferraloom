@@ -127,6 +127,30 @@ impl ItemEntity {
         let inner = self.bounds().deflate(Vec3::new(1.0e-7, 1.0e-7, 1.0e-7));
         !crate::collisions::no_collision_empty(&mut scene, inner)
     }
+    /// [`Self::inside_block`], answered from `memo` while the item's box and
+    /// the sections around it are those it was last asked for.
+    pub fn inside_block_remembered(
+        &self,
+        world: &World,
+        collision: &BlockCollisionRegistry<'_>,
+        memo: &mut InsideMemo,
+    ) -> bool {
+        memo.used = true;
+        let b = self.bounds();
+        let (lo, hi) = (b.min_position(), b.max_position());
+        let key = [lo.x, lo.y, lo.z, hi.x, hi.y, hi.z].map(f64::to_bits);
+        let cells = crate::collisions::SectionsSeen::cells_around(b);
+        if memo.key == Some(key) && memo.sections.unchanged(world, cells) {
+            return memo.inside;
+        }
+        let inside = self.inside_block(world, collision);
+        memo.key = memo
+            .sections
+            .capture(world, collision, cells)
+            .then_some(key);
+        memo.inside = inside;
+        inside
+    }
     /// `Entity.moveTowardsClosestSpace` from the middle of the item's box:
     /// towards the nearest side of its block (north, south, west, east or
     /// up) without a full collision cube, at `speed` (`nextFloat() * 0.2 +
@@ -268,6 +292,22 @@ impl ItemEntity {
     /// delay isn't infinite, before its lifetime ends.
     fn mergeable(&self, age: u32, max_stack: u32) -> bool {
         self.pickup_delay != u32::MAX && age < 6000 && self.stack.count < max_stack
+    }
+}
+/// An item's last [`ItemEntity::inside_block`] answer, kept with the
+/// sections around its box ([`crate::collisions::SectionsSeen`]): the
+/// answer stands while the box and those sections are unchanged.
+#[derive(Debug, Default)]
+pub struct InsideMemo {
+    key: Option<[u64; 6]>,
+    sections: crate::collisions::SectionsSeen,
+    inside: bool,
+    used: bool,
+}
+impl InsideMemo {
+    /// Whether the item asked since the last call.
+    pub fn take_used(&mut self) -> bool {
+        std::mem::take(&mut self.used)
     }
 }
 /// Dropped items by block cell, for `ItemEntity.mergeWithNeighbours`'s

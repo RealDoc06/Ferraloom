@@ -1570,6 +1570,8 @@ struct Game<'a> {
     /// Guardians whose attack hum is playing.
     guardian_sounds: HashSet<u32>,
     dropped: Vec<ItemEntity>,
+    /// Each dropped item's last `inside_block` answer, by entity id.
+    item_inside: horizon_client::fast_hash::FxHashMap<u32, horizon_client::entities::InsideMemo>,
     next_entity: u32,
     particles: horizon_client::particles::ParticleEngine,
     /// `ItemPickupParticle`s: taken items, orbs and arrows flying to their collector.
@@ -2675,6 +2677,7 @@ impl Game<'_> {
             |stack: &ItemStack| catalog.get(&stack.item).map_or(64, |i| i.max_stack).max(1);
         // A LAN or server guest only shows the host's items.
         let merging = self.remote.is_none();
+        let mut inside = std::mem::take(&mut self.item_inside);
         for i in 0..items.len() {
             if removed[i] {
                 continue;
@@ -2688,7 +2691,10 @@ impl Game<'_> {
             }
             // ItemEntity.tick's noPhysics (servers only): out of a block
             // placed on it, towards the closest open side (#1252).
-            let no_physics = merging && item.inside_block(&self.world, self.collision);
+            let no_physics = merging && {
+                let memo = inside.entry(item.id).or_default();
+                item.inside_block_remembered(&self.world, self.collision, memo)
+            };
             if no_physics {
                 let speed = self.world.random.next_float() * 0.2 + 0.1;
                 item.move_towards_closest_space(&self.world, self.res.facts(), speed);
@@ -2759,6 +2765,9 @@ impl Game<'_> {
         }
         let mut removed = removed.into_iter();
         items.retain(|_| !removed.next().unwrap_or(false));
+        // Only the items that just asked keep their answers.
+        inside.retain(|_, memo| memo.take_used());
+        self.item_inside = inside;
         let Some(p) = self.player.as_ref() else {
             self.dropped = items;
             return;
@@ -13827,6 +13836,7 @@ impl<'a> Game<'a> {
             bee_sounds: HashMap::new(),
             guardian_sounds: HashSet::new(),
             dropped: Vec::new(),
+            item_inside: Default::default(),
             next_entity: 0,
             particles,
             pickups: Default::default(),
