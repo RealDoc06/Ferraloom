@@ -6,8 +6,13 @@ use crate::{
     entity_obstruction::EntityIdentity,
 };
 use horizon_core::geometry::{
-    Aabb, Collider, Vec3, VoxelShape, entity_collision_bounds, try_resolve_step_movement,
+    Aabb, Collider, Vec3, VoxelShape, entity_collision_bounds, try_resolve_step_movement_in,
 };
+
+thread_local! {
+    /// The colliders of the thread's last move, kept for their capacity.
+    static COLLIDERS: std::cell::Cell<Vec<Collider>> = const { std::cell::Cell::new(Vec::new()) };
+}
 
 pub trait EntityMovementWorld {
     type Error;
@@ -53,15 +58,18 @@ where
             entity_collision_bounds(request.movement, request.bounds, request.max_step),
         )
         .map_err(CollisionScanError::World)?;
-    try_resolve_step_movement(
+    // A move inside this one (none today) would find the buffer taken and
+    // use a fresh one.
+    let mut shapes = COLLIDERS.take();
+    let resolved = try_resolve_step_movement_in(
         request.movement,
         request.bounds,
         request.max_step,
         request.on_ground,
-        |bounds| {
+        &mut shapes,
+        |bounds, shapes| {
             // Full blocks stay positions (`Collider::Block`), so most
             // colliders cost no shape of their own.
-            let mut shapes = Vec::with_capacity(entities.len() + 8);
             shapes.extend(entities.iter().cloned().map(Collider::Shape));
             if let Some(border) = world
                 .movement_border(request.entity, bounds)
@@ -79,9 +87,14 @@ where
             while let Some(hit) = scan.next_collider() {
                 shapes.push(hit?.1);
             }
-            Ok(shapes)
+            Ok(())
         },
-    )
+    );
+    // Moved shapes hold their Arcs until the next move clears them; drop
+    // them now and keep only the capacity.
+    shapes.clear();
+    COLLIDERS.set(shapes);
+    resolved
 }
 
 /// Entity-bearing CollisionGetter.noCollision, with block/context selection

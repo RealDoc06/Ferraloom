@@ -171,11 +171,38 @@ pub fn try_resolve_step_movement<S: Collides, E>(
     on_ground: bool,
     mut collect: impl FnMut(Aabb) -> Result<Vec<S>, E>,
 ) -> Result<Vec3, E> {
+    try_resolve_step_movement_in(
+        movement,
+        aabb,
+        max_step,
+        on_ground,
+        &mut Vec::new(),
+        |bounds, shapes| {
+            *shapes = collect(bounds)?;
+            Ok(())
+        },
+    )
+}
+
+/// [`try_resolve_step_movement`] collecting into `shapes`, which `collect`
+/// finds empty for each query: a caller can keep one buffer across moves.
+pub fn try_resolve_step_movement_in<S: Collides, E>(
+    movement: Vec3,
+    aabb: Aabb,
+    max_step: f32,
+    on_ground: bool,
+    shapes: &mut Vec<S>,
+    mut collect: impl FnMut(Aabb, &mut Vec<S>) -> Result<(), E>,
+) -> Result<Vec3, E> {
+    let mut query = |bounds, shapes: &mut Vec<S>| {
+        shapes.clear();
+        collect(bounds, shapes)
+    };
     let resolved = if movement.length_squared() == 0.0 {
         movement
     } else {
-        let shapes = collect(aabb.expand_towards(movement))?;
-        resolve_borrowed_shape_movement(movement, aabb, &shapes)
+        query(aabb.expand_towards(movement), shapes)?;
+        resolve_borrowed_shape_movement(movement, aabb, shapes)
     };
     let landed = movement.y != resolved.y && movement.y < 0.0;
     if max_step > 0.0
@@ -187,16 +214,17 @@ pub fn try_resolve_step_movement<S: Collides, E>(
         } else {
             aabb
         };
-        let mut query = step_box.expand_towards(Vec3::new(movement.x, max_step as f64, movement.z));
+        let mut bounds =
+            step_box.expand_towards(Vec3::new(movement.x, max_step as f64, movement.z));
         if !landed {
-            query = query.expand_towards(Vec3::new(0.0, -(1.0e-5_f32 as f64), 0.0));
+            bounds = bounds.expand_towards(Vec3::new(0.0, -(1.0e-5_f32 as f64), 0.0));
         }
-        let shapes = collect(query)?;
-        for height in borrowed_step_heights(step_box, &shapes, max_step, resolved.y as f32) {
+        query(bounds, shapes)?;
+        for height in borrowed_step_heights(step_box, shapes, max_step, resolved.y as f32) {
             let candidate = resolve_borrowed_shape_movement(
                 Vec3::new(movement.x, height as f64, movement.z),
                 step_box,
-                &shapes,
+                shapes,
             );
             if candidate.horizontal_distance_squared() > resolved.horizontal_distance_squared() {
                 return Ok(candidate.subtract(Vec3::new(

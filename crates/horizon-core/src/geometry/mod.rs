@@ -13,6 +13,7 @@ use crate::position::BlockPos;
 pub use movement::{
     Collider, Collides, block_floor_height, candidate_step_heights, entity_collision_bounds,
     resolve_shape_movement, resolve_step_movement, try_resolve_step_movement,
+    try_resolve_step_movement_in,
 };
 pub use shape::{ShapeError, ShapeOp, VoxelShape};
 pub use sweep::sweep_intersected_blocks;
