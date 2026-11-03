@@ -171,6 +171,9 @@ pub(super) struct GameLevel<'g, 'a> {
     pub(super) game: &'g Game<'a>,
     pub(super) w: MobWorld<'g>,
     column: ColumnMemo<'g>,
+    /// The column the pass spawns in next, read without leaving the last
+    /// column for it (what `chunks.get` gives for the key).
+    ahead: Cell<Option<((i32, i32), Option<&'g Chunk>)>>,
     /// Every biome's [`BiomeRow`], in the biome list's order, for this pass.
     biome_rows: std::cell::OnceCell<Vec<BiomeRow<'g>>>,
     /// The generator's structure starts by owning chunk, once asked, for
@@ -266,7 +269,12 @@ impl<'g> GameLevel<'g, '_> {
         )
     }
     fn chunk(&self, x: i32, z: i32) -> Option<&'g Chunk> {
-        self.column.get(&self.w.world.chunks, x, z).chunk
+        let key = (x >> 4, z >> 4);
+        match (self.column.0.get(), self.ahead.get()) {
+            (Some(last), _) if last.key == key => last.chunk,
+            (_, Some((at, chunk))) if at == key => chunk,
+            _ => self.column.get(&self.w.world.chunks, x, z).chunk,
+        }
     }
     fn biome(&self, x: i32, y: i32, z: i32) -> Option<&BiomeInfo> {
         let chunk = self.chunk(x, z)?;
@@ -561,6 +569,7 @@ impl<'a> Game<'a> {
             game: self,
             w: self.mob_world_base(&[]),
             column: ColumnMemo::default(),
+            ahead: Cell::new(None),
             biome_rows: Default::default(),
             starts: Default::default(),
             locator: Default::default(),
@@ -770,6 +779,9 @@ impl<'a> Game<'a> {
                         next.prefetch_sections();
                     }
                     level.column.enter(chunk, columns[i]);
+                    level
+                        .ahead
+                        .set(columns.get(i + 1).map(|&next| (chunks[i + 1], next)));
                     let mut spawn = |l: &GameLevel, r: &SpawnRequest| {
                         let spawned = l.game.finalize_spawned(r, &mut pending);
                         if let Some(s) = &spawned {
