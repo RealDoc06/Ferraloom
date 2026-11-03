@@ -134,7 +134,8 @@ impl Hub {
     /// `ServerPlayer.crit` (`magicCrit` when `magic`): send the victim's
     /// animation to the players tracking the attacker and the attacker
     /// themselves (`sendToTrackingPlayersAndSelf`).
-    pub fn critical_hit(&self, attacker: i32, target: i32, magic: bool) {
+    pub fn critical_hit(&mut self, attacker: i32, target: i32, magic: bool) {
+        self.finish_tracking();
         let body = C::Animate(play::Animate {
             id: target,
             action: if magic { 2 } else { 1 },

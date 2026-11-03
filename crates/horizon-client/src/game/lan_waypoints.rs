@@ -73,6 +73,13 @@ impl Game<'_> {
     /// and joins the new one's (`addDuringTeleport`).
     pub(super) fn lan_update_waypoints(&mut self, host: &mut LanHost, state: Option<&HostState>) {
         let mut scratch = std::mem::take(&mut host.waypoint_tick);
+        // Last tick's passes are over by now, or wait here: they hold the
+        // snapshots this fills again.
+        for (level, list) in &mut scratch.levels {
+            if let Some(manager) = host.waypoints.get_mut(level) {
+                manager.finish_level(&mut list.players);
+            }
+        }
         std::sync::Arc::get_mut(&mut scratch.connections)
             .expect("waypoint snapshot released")
             .clear();
@@ -151,6 +158,25 @@ impl Game<'_> {
         for (level, list) in &mut scratch.levels {
             list.players.truncate(list.used);
             let manager = host.waypoints.entry(level.clone()).or_default();
+            // A server has no local player whose updates must come back at
+            // once: it runs on beside the tick, each player's packets in its
+            // place in the queue. (A level losing its last player ends here.)
+            if state.is_none() && !list.players.is_empty() {
+                let slots = host
+                    .hub
+                    .guests
+                    .iter()
+                    .map(|g| (g.conn, g.sender.reserve()))
+                    .collect();
+                manager.start_level(
+                    &mut list.players,
+                    &scratch.connections,
+                    &scratch.respawned,
+                    locator_bar,
+                    slots,
+                );
+                continue;
+            }
             manager.tick_level_into(
                 &mut list.players,
                 &scratch.connections,

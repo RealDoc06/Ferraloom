@@ -149,7 +149,7 @@ pub struct Guest {
     pub loaded: bool,
     // Chunks.
     pub center: Option<(i32, i32)>,
-    pub sent_chunks: crate::fast_hash::FxHashSet<(i32, i32)>,
+    pub sent_chunks: Arc<crate::fast_hash::FxHashSet<(i32, i32)>>,
     pub chunk_queue: Vec<(i32, i32)>,
     /// PlayerChunkSender: batches sent but not yet acknowledged, how many
     /// may be (1 until the client's first acknowledgement, then 10), the
@@ -159,6 +159,7 @@ pub struct Guest {
     pub chunks_per_tick: f32,
     pub batch_quota: f32,
     // Entities.
+    /// With the tracking pass while one runs: `Hub::finish_tracking` first.
     pub tracker: Tracker,
     // Player state the gameplay code reads and writes.
     pub motion: Option<Box<PlayerMotion>>,

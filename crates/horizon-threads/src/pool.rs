@@ -1,6 +1,8 @@
 //! A pool of worker threads for the tick's short parallel passes over borrowed
-//! data. Nothing here orders the work: a pass must give the same result
-//! whichever thread takes which item.
+//! data, and another for the passes that run beside the tick on a thread of
+//! their own (`for_each_mut_background`), so neither holds up the other. Nothing
+//! here orders the work: a pass must give the same result whichever thread
+//! takes which item.
 use std::{
     any::Any,
     panic::{AssertUnwindSafe, catch_unwind, resume_unwind},
@@ -70,32 +72,45 @@ impl Pool {
     }
 }
 
-/// The workers, started the first time: one per worker CPU of the affinity
-/// plan, or per core besides the caller's. None when no thread could start.
+/// `threads` workers on the worker CPUs. None when no thread could start.
+fn start(name: &'static str, threads: usize) -> Option<&'static Pool> {
+    let pool: &'static Pool = Box::leak(Box::new(Pool {
+        state: Mutex::default(),
+        wake: Condvar::new(),
+        idle: Condvar::new(),
+        pass: Mutex::new(()),
+    }));
+    let started = (0..threads)
+        .filter(|i| {
+            std::thread::Builder::new()
+                .name(format!("{name}-{i}"))
+                .spawn(move || {
+                    crate::worker_affinity();
+                    pool.work();
+                })
+                .is_ok()
+        })
+        .count();
+    (started > 0).then_some(pool)
+}
+
+/// One per worker CPU of the affinity plan, or per core besides the caller's.
+fn worker_count() -> usize {
+    crate::worker_threads()
+        .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, |n| n.get()) - 1)
+}
+
+/// The tick's workers, started the first time.
 fn pool() -> Option<&'static Pool> {
     static POOL: OnceLock<Option<&'static Pool>> = OnceLock::new();
-    *POOL.get_or_init(|| {
-        let threads = crate::worker_threads()
-            .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, |n| n.get()) - 1);
-        let pool: &'static Pool = Box::leak(Box::new(Pool {
-            state: Mutex::default(),
-            wake: Condvar::new(),
-            idle: Condvar::new(),
-            pass: Mutex::new(()),
-        }));
-        let started = (0..threads)
-            .filter(|i| {
-                std::thread::Builder::new()
-                    .name(format!("horizon-pass-{i}"))
-                    .spawn(move || {
-                        crate::worker_affinity();
-                        pool.work();
-                    })
-                    .is_ok()
-            })
-            .count();
-        (started > 0).then_some(pool)
-    })
+    *POOL.get_or_init(|| start("horizon-pass", worker_count()))
+}
+
+/// The workers of the passes beside the tick, started the first time: half
+/// as many, as the same CPUs have the writer threads and the tick's workers.
+fn background() -> Option<&'static Pool> {
+    static POOL: OnceLock<Option<&'static Pool>> = OnceLock::new();
+    *POOL.get_or_init(|| start("horizon-beside", worker_count() / 2))
 }
 
 /// Run `f` on this thread and on as many workers as get to it before this
@@ -103,7 +118,11 @@ fn pool() -> Option<&'static Pool> {
 /// busy elsewhere doesn't hold it up, so `f` must take its work from something
 /// shared and stop when none is left (see [`for_each_mut`]).
 pub fn broadcast(f: &(dyn Fn() + Sync)) {
-    let Some(pool) = pool() else {
+    broadcast_on(pool(), f);
+}
+
+fn broadcast_on(pool: Option<&'static Pool>, f: &(dyn Fn() + Sync)) {
+    let Some(pool) = pool else {
         return f();
     };
     let _pass = match pool.pass.try_lock() {
@@ -147,12 +166,27 @@ pub fn broadcast(f: &(dyn Fn() + Sync)) {
 /// `f` over every item, on this thread and the pool's, `grain` items at a
 /// time. A slice of no more than `grain` items stays on this thread.
 pub fn for_each_mut<T: Send>(items: &mut [T], grain: usize, f: impl Fn(&mut T) + Sync) {
+    for_each_mut_on(pool, items, grain, f);
+}
+
+/// [`for_each_mut`] for a pass on a thread beside the tick: it takes none of
+/// the tick's workers away from the tick's own passes.
+pub fn for_each_mut_background<T: Send>(items: &mut [T], grain: usize, f: impl Fn(&mut T) + Sync) {
+    for_each_mut_on(background, items, grain, f);
+}
+
+fn for_each_mut_on<T: Send>(
+    pool: fn() -> Option<&'static Pool>,
+    items: &mut [T],
+    grain: usize,
+    f: impl Fn(&mut T) + Sync,
+) {
     if items.len() <= grain {
         items.iter_mut().for_each(f);
         return;
     }
     let chunks = Mutex::new(items.chunks_mut(grain));
-    broadcast(&|| {
+    broadcast_on(pool(), &|| {
         loop {
             let next = chunks.lock().unwrap_or_else(PoisonError::into_inner).next();
             let Some(chunk) = next else {
@@ -175,7 +209,8 @@ mod tests {
                     for len in [0, 1, 7, 8, 1000] {
                         let mut items = vec![0u32; len];
                         for_each_mut(&mut items, 8, |item| *item += 1);
-                        assert!(items.iter().all(|&item| item == 1));
+                        for_each_mut_background(&mut items, 8, |item| *item += 1);
+                        assert!(items.iter().all(|&item| item == 2));
                     }
                 });
             }
