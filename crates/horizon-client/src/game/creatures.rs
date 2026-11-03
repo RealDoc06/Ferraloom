@@ -499,17 +499,8 @@ impl Game<'_> {
     /// Advance every mob one tick, then apply their events.
     pub(super) fn tick_creatures(&mut self) -> Result<()> {
         self.attack_ticks = self.attack_ticks.saturating_add(1);
-        let fresh: Vec<(i32, i32)> = self
-            .world
-            .chunks
-            .iter()
-            .filter(|(_, c)| c.fresh && c.lit)
-            .map(|(k, _)| *k)
-            .collect();
-        for key in fresh {
-            if let Some(c) = self.world.chunks.get_mut(&key) {
-                Arc::make_mut(c).fresh = false;
-            }
+        for key in self.world.chunks.fresh_and_lit() {
+            self.world.chunks.spawned_fresh(&key);
             self.spawn_generation_creatures(key.0, key.1);
         }
         self.tick_leads();
