@@ -2365,9 +2365,8 @@ impl Game<'_> {
             let held = g
                 .inventory
                 .get(g.selected)
-                .cloned()
-                .flatten()
-                .map(|s| s.item);
+                .and_then(Option::as_ref)
+                .map(|s| s.item.clone());
             let play = host.play.entry(conn).or_default();
             if play.attack_item != held {
                 play.attack_ticks = 0;
@@ -3357,7 +3356,11 @@ impl Game<'_> {
     /// else, the host's to the guests), and `LivingEntity.updateSwingTime`
     /// for the guests' bodies here.
     pub(super) fn lan_swings(&mut self, host: &mut LanHost) {
-        let conns: Vec<u32> = host.play.keys().copied().collect();
+        // In the guests' order: the swings' packets go out the same way each run.
+        let conns: Vec<u32> = (host.hub.guests.iter())
+            .map(|g| g.conn)
+            .filter(|conn| host.play.contains_key(conn))
+            .collect();
         for conn in conns {
             let Some(g) = host.hub.guest(conn) else {
                 continue;

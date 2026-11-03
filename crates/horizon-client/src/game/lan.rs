@@ -66,7 +66,7 @@ pub(super) struct LanHost {
     /// The guests' models in the host's world.
     pub models: HashMap<u32, Mob>,
     host_mode: i32,
-    pub play: HashMap<u32, Box<super::lan_actions::GuestPlay>>,
+    pub play: horizon_client::fast_hash::FxHashMap<u32, Box<super::lan_actions::GuestPlay>>,
     /// Blocks broken this tick (their sound is a level event for the guests).
     pub broken: Vec<[f64; 3]>,
     /// Hurt time, death and swing time (while swinging) of the mobs guests see.
@@ -1173,7 +1173,7 @@ impl Game<'_> {
             host_name: self.options.player_name(),
             models: HashMap::new(),
             host_mode: self.mode_id(),
-            play: HashMap::new(),
+            play: Default::default(),
             broken: Vec::new(),
             mob_state: HashMap::new(),
             mob_players: Default::default(),
