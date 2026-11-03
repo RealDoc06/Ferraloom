@@ -3,6 +3,23 @@
 
 pub mod pool;
 
+/// Starts loading the cache line holding `value` without waiting for it: a
+/// hint for a read coming soon, so serial readers can overlap their misses.
+/// It never faults and changes nothing; off x86_64 it does nothing.
+#[inline(always)]
+pub fn prefetch<T: ?Sized>(value: &T) {
+    #[cfg(target_arch = "x86_64")]
+    // SAFETY: PREFETCHT0 neither faults nor writes, and SSE is baseline on
+    // x86_64; the address comes from a live reference anyway.
+    unsafe {
+        core::arch::x86_64::_mm_prefetch::<{ core::arch::x86_64::_MM_HINT_T0 }>(
+            (value as *const T).cast(),
+        );
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    let _ = value;
+}
+
 #[cfg(target_os = "linux")]
 mod affinity;
 #[cfg(target_os = "linux")]

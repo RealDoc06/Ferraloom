@@ -284,6 +284,37 @@ impl Chunk {
         let surface = self.surface.get_or_init(|| self.prime(|v| !air(v)));
         i32::from(surface[column(x, z)])
     }
+    /// Prefetch hint for a pass about to read this column: the section table
+    /// a block read goes through and the field holding the kept surface.
+    pub fn prefetch_header(&self) {
+        // Every line the 192-byte table can straddle.
+        for s in [0, 8, 16, SECTIONS - 1] {
+            horizon_threads::prefetch(&self.sections[s]);
+        }
+        horizon_threads::prefetch(&self.surface);
+    }
+    /// Prefetch hint: the kept WORLD_SURFACE heightmap, once built.
+    pub fn prefetch_surface(&self) {
+        if let Some(heights) = self.surface.get() {
+            for column in (0..256).step_by(32) {
+                horizon_threads::prefetch(&heights[column]);
+            }
+        }
+    }
+    /// Prefetch hint: the storage the block at `x`, `y`, `z` is read from.
+    /// Reads the section's header, which may miss itself.
+    pub fn prefetch_block(&self, x: i32, y: i32, z: i32) {
+        let s = (y - MIN_Y) >> 4;
+        let Some(section) = usize::try_from(s).ok().and_then(|s| self.sections.get(s)) else {
+            return;
+        };
+        if let Some((word, palette)) = section.blocks.entry_storage(index(x, y, z)) {
+            horizon_threads::prefetch(word);
+            if let Some(palette) = palette {
+                horizon_threads::prefetch(palette);
+            }
+        }
+    }
     /// `getHeight(Heightmap.Types.MOTION_BLOCKING, x, z)` (`x`, `z` within
     /// the chunk): one above the highest state where `blocks` (a motion
     /// blocking block or a fluid), or `MIN_Y`. Kept as `world_surface` is.

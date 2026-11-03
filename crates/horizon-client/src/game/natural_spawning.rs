@@ -117,6 +117,14 @@ impl<'g> ColumnMemo<'g> {
             }
         }
     }
+    /// Makes `chunk` (what `chunks.get` gives for `key`) the last column.
+    fn enter(&self, key: (i32, i32), chunk: Option<&'g Chunk>) {
+        self.0.set(Some(LastColumn {
+            key,
+            chunk,
+            override_bits: None,
+        }));
+    }
     /// The categories whose lists the structures reaching the column may change.
     fn override_bits(&self, chunks: &'g ChunkMap, spawns: &StructureSpawns, x: i32, z: i32) -> u8 {
         let mut last = self.get(chunks, x, z);
@@ -478,6 +486,11 @@ impl NaturalLevel for GameLevel<'_, '_> {
     fn pathfindable_land(&self, x: i32, y: i32, z: i32) -> bool {
         self.w.data.state(self.state(x, y, z)).flags & data::LAND != 0
     }
+    fn prefetch_block(&self, x: i32, y: i32, z: i32) {
+        if let Some(chunk) = self.chunk(x, z) {
+            chunk.prefetch_block(x, y, z);
+        }
+    }
 }
 impl horizon_client::mobs::spawner::SpawnerLevel for GameLevel<'_, '_> {
     /// `Level.hasNearbyAlivePlayer`, over every player.
@@ -723,7 +736,17 @@ impl<'a> Game<'a> {
             if !categories.is_empty() {
                 let _span = horizon_client::spans::scope("spawn_chunks");
                 state.prepare_local(&chunks, &categories);
-                for chunk in chunks {
+                let columns = self.spawning_columns(&chunks);
+                for (i, &chunk) in chunks.iter().enumerate() {
+                    // Hints only: the next columns' headers and surfaces
+                    // load while this one spawns.
+                    if let Some(Some(next)) = columns.get(i + 2) {
+                        next.prefetch_header();
+                    }
+                    if let Some(Some(next)) = columns.get(i + 1) {
+                        next.prefetch_surface();
+                    }
+                    level.column.enter(chunk, columns[i]);
                     let mut spawn = |l: &GameLevel, r: &SpawnRequest| {
                         let spawned = l.game.finalize_spawned(r, &mut pending);
                         if let Some(s) = &spawned {
@@ -745,6 +768,20 @@ impl<'a> Game<'a> {
         }
         self.world.random = random;
         self.add_spawned(pending, false);
+    }
+    /// The columns of `chunks`, in their order, looked up on the pool with
+    /// their WORLD_SURFACE heightmaps built (the map and the blocks do not
+    /// change while a pass holds the game, and the heightmap is a cache).
+    fn spawning_columns(&self, chunks: &[(i32, i32)]) -> Vec<Option<&Chunk>> {
+        let (map, facts) = (&self.world.chunks, self.res.facts());
+        let mut columns: Vec<_> = chunks.iter().map(|&key| (key, None)).collect();
+        horizon_threads::pool::for_each_mut(&mut columns, PASS_GRAIN, |(key, column)| {
+            *column = map.get(key).map(|c| &**c);
+            if let Some(chunk) = column {
+                chunk.world_surface(0, 0, |v| facts.is_air(BlockStateId(v)));
+            }
+        });
+        columns.into_iter().map(|(_, column)| column).collect()
     }
     /// `NoiseBasedChunkGenerator.spawnOriginalMobs`: creature packs for a
     /// freshly generated chunk, from the biome at its corner column's top,

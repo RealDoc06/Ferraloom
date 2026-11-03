@@ -421,6 +421,9 @@ pub trait NaturalLevel: SpawnLevel {
     fn heightmap(&self, kind: Heightmap, x: i32, z: i32) -> i32;
     /// `isPathfindable(PathComputationType.LAND)` of the block.
     fn pathfindable_land(&self, x: i32, y: i32, z: i32) -> bool;
+    /// A hint that the block at a position will be read soon: the level may
+    /// start loading it. Must not change anything a read answers.
+    fn prefetch_block(&self, _x: i32, _y: i32, _z: i32) {}
 }
 
 /// The heightmap types `SpawnPlacements` registers.
@@ -1004,6 +1007,18 @@ impl SpawnState {
             *open = players.close_for_spawning_labels(*chunk, *asked);
         });
     }
+    /// What [`Self::can_spawn_local_of`] would answer for every category in
+    /// `asked` at `chunk` now, without asking or keeping anything.
+    fn open_for(&self, chunk: (i32, i32), asked: u8) -> u8 {
+        [self.local, self.prepared.last().copied()]
+            .into_iter()
+            .flatten()
+            .find(|&(at, known, _)| at == chunk && known == asked)
+            .map_or_else(
+                || self.players.close_for_spawning_labels(chunk, asked),
+                |(_, _, open)| open,
+            )
+    }
     fn asked(categories: &[Category]) -> u8 {
         categories.iter().fold(0, |bits, c| bits | c.bit())
     }
@@ -1129,9 +1144,76 @@ pub struct Spawned {
     pub school: bool,
 }
 
+/// A random natural spawning can look ahead in without drawing from it: the
+/// 48-bit state of a `java.util.Random`, or `None` to look nowhere.
+pub trait Foresee {
+    fn legacy_state(&self) -> Option<u64>;
+}
+impl Foresee for horizon_core::random::LegacyRandom {
+    fn legacy_state(&self) -> Option<u64> {
+        Some(self.state())
+    }
+}
+/// `java.util.Random`'s `next(31)` and `nextInt(bound)` on a copy of its
+/// state: a lookahead that neither moves nor traces the real random.
+#[derive(Clone, Copy)]
+struct Lcg(u64);
+impl Lcg {
+    fn bits31(&mut self) -> i32 {
+        self.0 = self.0.wrapping_mul(0x5_deec_e66d).wrapping_add(11) & ((1 << 48) - 1);
+        (self.0 >> 17) as i32
+    }
+    /// `nextInt(bound)`, and nothing drawn for a bound below 1 (the callers'
+    /// `unwrap_or(0)`).
+    fn next_int(&mut self, bound: i32) -> i32 {
+        if bound <= 0 {
+            return 0;
+        }
+        if bound & (bound - 1) == 0 {
+            return ((i64::from(bound) * i64::from(self.bits31())) >> 31) as i32;
+        }
+        loop {
+            let bits = self.bits31();
+            let value = bits % bound;
+            if bits.wrapping_sub(value).wrapping_add(bound - 1) >= 0 {
+                return value;
+            }
+        }
+    }
+}
+/// The starts `spawn_category_for_chunk` will pick for `categories` (those
+/// of them `open`) from random state `seed`, should each attempt end at its
+/// first read, as most do (a solid block, or the bottom of the world): their
+/// surfaces are read and their blocks prefetched together, so the serial
+/// pass meets them in cache. `after` gets the state each category should
+/// leave the random in; once the real one differs, the rest are guesses.
+fn foresee_starts<L: NaturalLevel>(
+    l: &L,
+    seed: u64,
+    open: u8,
+    categories: &[Category],
+    chunk: (i32, i32),
+    after: &mut [u64],
+) {
+    let mut random = Lcg(seed);
+    let min = l.min_y();
+    for (category, after) in categories.iter().zip(after) {
+        if open & category.bit() != 0 {
+            let x = chunk.0 * 16 + random.next_int(16);
+            let z = chunk.1 * 16 + random.next_int(16);
+            let top = l.heightmap(Heightmap::WorldSurface, x, z) + 1;
+            let y = min + random.next_int(top - min + 1);
+            if y > min {
+                l.prefetch_block(x, y, z);
+            }
+        }
+        *after = random.0;
+    }
+}
+
 /// `NaturalSpawner.spawnForChunk` for the categories already filtered.
 #[allow(clippy::too_many_arguments)]
-pub fn spawn_for_chunk<L: NaturalLevel, R: RandomSource>(
+pub fn spawn_for_chunk<L: NaturalLevel, R: RandomSource + Foresee>(
     l: &L,
     random: &mut R,
     state: &mut SpawnState,
@@ -1141,7 +1223,16 @@ pub fn spawn_for_chunk<L: NaturalLevel, R: RandomSource>(
     trace: &mut (impl FnMut(Event) + ?Sized),
 ) {
     let asked = SpawnState::asked(categories);
-    for &category in categories {
+    // The random state foreseen after each category ([`foresee_starts`]).
+    let mut after = [0u64; Category::ALL.len()];
+    for (i, &category) in categories.iter().enumerate() {
+        if let Some(now) = random.legacy_state()
+            && (i == 0 || after.get(i - 1) != Some(&now))
+        {
+            let open = state.open_for(chunk, asked);
+            let rest = after.get_mut(i..).unwrap_or_default();
+            foresee_starts(l, now, open, &categories[i..], chunk, rest);
+        }
         let local = state.can_spawn_local_of(asked, category, chunk);
         trace(Event::Local(category, local));
         if local {
@@ -1571,6 +1662,24 @@ fn top_non_colliding<L: NaturalLevel>(l: &L, entity: &str, x: i32, z: i32) -> [i
 #[cfg(test)]
 mod tests {
     use super::Event;
+
+    /// The lookahead draws what `LegacyRandom` draws, rejections included,
+    /// and ends in its state.
+    #[test]
+    fn lookahead_draws_as_the_random_does() {
+        use horizon_core::random::{LegacyRandom, RandomSource};
+        let mut real = LegacyRandom::new(0x5eed);
+        let mut copy = super::Lcg(real.state());
+        for bound in [16, 1, 2, 3, 100, 385, 1 << 30, (1 << 30) + 1, i32::MAX, 0] {
+            for _ in 0..64 {
+                assert_eq!(
+                    copy.next_int(bound),
+                    real.next_int_bound(bound).unwrap_or(0)
+                );
+                assert_eq!(copy.0, real.state(), "{bound}");
+            }
+        }
+    }
 
     /// `add_local` and `can_spawn_local` against vanilla's lists: every chunk's
     /// players found by a scan, their counts bumped one at a time, caps filling.
