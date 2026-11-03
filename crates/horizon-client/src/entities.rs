@@ -69,8 +69,12 @@ impl ItemEntity {
             self.position.z.floor() as i32,
         );
         let fluid = facts.get(at).fluid;
-        let fire_immune = items.resists_fire(&self.stack, "minecraft:in_fire");
-        if fluid == Fluid::Water || fire_immune {
+        // Read only where it decides something: most items touch no fire
+        // and the lookup hashes the item's name.
+        let fire_immune = std::cell::OnceCell::new();
+        let fire_immune =
+            || *fire_immune.get_or_init(|| items.resists_fire(&self.stack, "minecraft:in_fire"));
+        if fluid == Fluid::Water || fire_immune() {
             self.fire_ticks = 0;
         }
         if self.fire_ticks > 0 {
@@ -83,7 +87,7 @@ impl ItemEntity {
             self.fire_ticks -= 1;
         }
         let mut lava_hurt = false;
-        if fluid == Fluid::Lava && !fire_immune {
+        if fluid == Fluid::Lava && !fire_immune() {
             self.fire_ticks = self.fire_ticks.max(300);
             if !items.resists_fire(&self.stack, "minecraft:lava") {
                 self.health -= 4;
@@ -91,7 +95,7 @@ impl ItemEntity {
             }
         }
         let fire_damage = crate::motion::environment::fire_contact(world, registry, self.bounds());
-        if fire_damage > 0.0 && !fire_immune {
+        if fire_damage > 0.0 && !fire_immune() {
             self.fire_ticks = self.fire_ticks.max(160);
             if !items.resists_fire(&self.stack, "minecraft:in_fire") {
                 self.health -= fire_damage as i32;
@@ -267,14 +271,25 @@ impl ItemEntity {
     }
 }
 /// Dropped items by block cell, for `ItemEntity.mergeWithNeighbours`'s
-/// search around an item. Holds indexes into the tick's item list.
+/// search around an item. Holds indexes into the tick's item list, each
+/// cell's as a list linked through `next` (no allocation per cell).
 #[derive(Default)]
 pub struct ItemCells {
-    cells: crate::fast_hash::FxHashMap<(i32, i32, i32), Vec<u32>>,
+    /// The last item added to each cell.
+    heads: crate::fast_hash::FxHashMap<(i32, i32, i32), u32>,
+    /// The item added before each one to its cell, or [`ItemCells::END`].
+    next: Vec<u32>,
 }
 impl ItemCells {
+    const END: u32 = u32::MAX;
     pub fn new(items: &[ItemEntity]) -> Self {
-        let mut cells = Self::default();
+        let mut cells = Self {
+            heads: crate::fast_hash::FxHashMap::with_capacity_and_hasher(
+                items.len(),
+                Default::default(),
+            ),
+            next: vec![Self::END; items.len()],
+        };
         for (i, item) in items.iter().enumerate() {
             cells.add(i, item.position);
         }
@@ -284,11 +299,31 @@ impl ItemCells {
         (p.x.floor() as i32, p.y.floor() as i32, p.z.floor() as i32)
     }
     fn add(&mut self, i: usize, at: Vec3) {
-        self.cells.entry(Self::cell(at)).or_default().push(i as u32);
+        let previous = self.heads.insert(Self::cell(at), i as u32);
+        self.next[i] = previous.unwrap_or(Self::END);
     }
+    /// Takes item `i` out of the cell at `at`, if it is there.
     pub fn remove(&mut self, i: usize, at: Vec3) {
-        if let Some(list) = self.cells.get_mut(&Self::cell(at)) {
-            list.retain(|&j| j as usize != i);
+        let cell = Self::cell(at);
+        let Some(&head) = self.heads.get(&cell) else {
+            return;
+        };
+        if head as usize == i {
+            match self.next[i] {
+                Self::END => self.heads.remove(&cell),
+                rest => self.heads.insert(cell, rest),
+            };
+            self.next[i] = Self::END;
+            return;
+        }
+        let mut at = head as usize;
+        while self.next[at] != Self::END {
+            if self.next[at] as usize == i {
+                self.next[at] = self.next[i];
+                self.next[i] = Self::END;
+                return;
+            }
+            at = self.next[at] as usize;
         }
     }
     pub fn moved(&mut self, i: usize, from: Vec3, to: Vec3) {
@@ -311,8 +346,10 @@ impl ItemCells {
         for x in lo.0..=hi.0 {
             for y in lo.1..=hi.1 {
                 for z in lo.2..=hi.2 {
-                    if let Some(list) = self.cells.get(&(x, y, z)) {
-                        out.extend_from_slice(list);
+                    let mut at = self.heads.get(&(x, y, z)).copied().unwrap_or(Self::END);
+                    while at != Self::END {
+                        out.push(at);
+                        at = self.next[at as usize];
                     }
                 }
             }
