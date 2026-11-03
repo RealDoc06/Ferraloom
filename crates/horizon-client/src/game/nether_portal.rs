@@ -88,8 +88,9 @@ pub(super) struct Portals {
     client_inside: bool,
     /// Items and mobs, by entity id.
     entities: HashMap<u32, PortalState>,
-    /// Positions before this tick's moves, by entity id.
-    before: HashMap<u32, Vec3>,
+    /// Positions before this tick's moves, by entity id (every item, mob,
+    /// boat and minecart: its keys are the entities present).
+    before: horizon_client::fast_hash::FxHashMap<u32, Vec3>,
     arrivals: Vec<Arrival>,
     loaded: bool,
     dirty: bool,
@@ -618,21 +619,34 @@ impl Game<'_> {
         for c in &self.carts {
             self.portals.before.insert(c.id, c.position);
         }
+        let before = &self.portals.before;
+        self.portals.entities.retain(|id, _| before.contains_key(id));
+        if self.portals.entities.is_empty() {
+            return;
+        }
+        // Only the entities with a portal state act below (the loop only
+        // removes states), so only theirs is asked whether it may travel.
+        let has = |id: &u32| self.portals.entities.contains_key(id);
         let ids: Vec<(u32, bool)> = self
             .dropped
             .iter()
+            .filter(|e| has(&e.id))
             .map(|e| (e.id, true))
-            .chain(self.mobs.iter().map(|m| (m.id, self.mob_can_use_portal(m))))
+            .chain(
+                self.mobs
+                    .iter()
+                    .filter(|m| has(&m.id))
+                    .map(|m| (m.id, self.mob_can_use_portal(m))),
+            )
             .chain(
                 self.boats
                     .iter()
                     .map(|b| b.id)
                     .chain(self.carts.iter().map(|c| c.id))
+                    .filter(has)
                     .map(|id| (id, !self.vehicle_occupied(id))),
             )
             .collect();
-        let present: std::collections::HashSet<u32> = ids.iter().map(|(id, _)| *id).collect();
-        self.portals.entities.retain(|id, _| present.contains(id));
         for (id, allowed) in ids {
             let Some(state) = self.portals.entities.get_mut(&id) else {
                 continue;
@@ -683,6 +697,23 @@ impl Game<'_> {
             && self.riding != Some(m.id)
             && m.species() != Species::Wither
     }
+    /// The vehicles `vehicle_occupied` answers true for, gathered once.
+    fn occupied_vehicles(&self) -> horizon_client::fast_hash::FxHashSet<u32> {
+        let mut occupied: horizon_client::fast_hash::FxHashSet<u32> =
+            self.mobs.iter().filter_map(|m| m.extra.mount).collect();
+        occupied.extend(self.riding);
+        // ridden_by_guest.
+        if let Some(h) = self.lan.as_ref() {
+            occupied.extend(
+                h.hub
+                    .guests
+                    .iter()
+                    .filter(|g| Some(g.conn) != self.lan_acting)
+                    .filter_map(|g| g.vehicle),
+            );
+        }
+        occupied
+    }
     /// Whether the player, a server player or a mob rides vehicle `id`.
     fn vehicle_occupied(&self, id: u32) -> bool {
         self.riding == Some(id)
@@ -709,6 +740,7 @@ impl Game<'_> {
             .filter(|m| self.mob_can_use_portal(m))
             .map(|m| (m.id, m.position, m.width(), m.height()))
             .collect();
+        let occupied = self.occupied_vehicles();
         let vehicles: Vec<(u32, Vec3, f32, f32)> = self
             .boats
             .iter()
@@ -721,7 +753,7 @@ impl Game<'_> {
                     super::minecarts::HEIGHT,
                 )
             }))
-            .filter(|(id, ..)| !self.vehicle_occupied(*id))
+            .filter(|(id, ..)| !occupied.contains(id))
             .map(|(id, at, w, h)| (id, at, w as f32, h as f32))
             .collect();
         let mut portal_sections = std::mem::take(&mut self.portals.sections);
