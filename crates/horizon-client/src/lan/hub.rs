@@ -9,7 +9,7 @@ use super::{
     Lan, NetEvent,
     chunks::ChunkEncoder,
     data::SyncData,
-    entity::{Entities, EntityState, Viewer},
+    entity::{Entities, EntityState, Riding, States, Tracker, Viewer},
     guest::{Guest, SentEffect, stack_to_network},
 };
 use crate::{
@@ -259,8 +259,15 @@ pub struct Hub {
     clock_ids: Vec<i32>,
     item_ids: std::collections::HashMap<Arc<str>, i32>,
     entity_types: std::collections::HashMap<String, i32>,
-    /// Each level's tracked entities, by dimension.
+    /// Each level's tracked entities, by dimension (a level's is with the
+    /// tracking pass while it runs).
     entities: std::collections::HashMap<String, Entities>,
+    /// The tick's game entities when they may be read beside the tick:
+    /// `track_entities` then makes its packets on a thread of its own.
+    pub entity_states: Option<Arc<States>>,
+    /// The thread that runs the tracking passes, and the one running.
+    tracking_thread: Option<TrackThread>,
+    tracking: Option<std::sync::mpsc::Receiver<TrackPass>>,
     /// What one tick of entity tracking sends each guest, kept between ticks.
     entity_out: Vec<Vec<PacketBody>>,
     /// Player snapshots reused after each tracking tick.
@@ -333,6 +340,83 @@ fn yellow_names(key: &str, names: Vec<Tag>) -> Tag {
 }
 
 /// An entity type's registry id, remembered once looked up.
+/// Gives the tracking thread a pass, and where to send it back.
+type TrackThread = std::sync::mpsc::Sender<(TrackPass, std::sync::mpsc::Sender<TrackPass>)>;
+
+/// A player as a tracking pass beside the tick reads it, and its place for
+/// the packets (`Viewer`).
+struct TrackView {
+    conn: u32,
+    entity_id: i32,
+    moved: bool,
+    position: [f64; 3],
+    view_distance: i32,
+    chunks: Arc<crate::fast_hash::FxHashSet<(i32, i32)>>,
+    tracker: Tracker,
+    /// Filled and let go by the pass.
+    slot: Option<super::conn::SlotFiller>,
+}
+
+/// All a tracking pass beside the tick needs (`Hub::track_beside`).
+struct TrackPass {
+    dimension: String,
+    level: Entities,
+    players: Vec<EntityState>,
+    states: Arc<States>,
+    riding: Riding,
+    views: Vec<TrackView>,
+    types: std::collections::HashMap<String, i32>,
+    /// Names the entity types (the tests' passes do without).
+    sync: Option<Arc<SyncData>>,
+}
+
+impl TrackPass {
+    /// `ChunkMap.tick`: the same as `Hub::track_entities` does on the tick,
+    /// each player's packets going to its slot.
+    fn run(&mut self) {
+        let started = (std::time::Instant::now(), crate::spans::thread_cpu());
+        let entities: Vec<&EntityState> =
+            self.players.iter().chain(self.states.as_slice()).collect();
+        let mut outs: Vec<Vec<PacketBody>> = self.views.iter().map(|_| Vec::new()).collect();
+        let mut viewers: Vec<Viewer> = self
+            .views
+            .iter_mut()
+            .zip(&mut outs)
+            .map(|(v, out)| Viewer {
+                entity_id: v.entity_id,
+                moved: v.moved,
+                position: v.position,
+                view_distance: v.view_distance,
+                chunks: &v.chunks,
+                tracker: &mut v.tracker,
+                out,
+            })
+            .collect();
+        let (types, sync) = (&mut self.types, &self.sync);
+        self.level
+            .tick(&entities, &self.riding, &mut viewers, |kind| match sync {
+                Some(sync) => entity_type(types, sync, kind),
+                None => Some(1),
+            });
+        drop(viewers);
+        for (view, out) in self.views.iter_mut().zip(outs) {
+            if let Some(slot) = view.slot.take() {
+                slot.fill(out);
+            }
+        }
+        // Freed here rather than on the tick, which only wants the rest back.
+        drop(entities);
+        self.players.clear();
+        crate::spans::summary_add_span(
+            "beside_track",
+            started.0.elapsed().as_secs_f32() * 1000.0,
+            crate::spans::thread_cpu()
+                .zip(started.1)
+                .map_or(0.0, |(end, start)| (end - start).as_secs_f32() * 1000.0),
+        );
+    }
+}
+
 fn entity_type(
     types: &mut std::collections::HashMap<String, i32>,
     sync: &SyncData,
@@ -437,6 +521,9 @@ impl Hub {
             clock_ids,
             item_ids: Default::default(),
             entity_types: Default::default(),
+            entity_states: None,
+            tracking_thread: None,
+            tracking: None,
             entities: Default::default(),
             entity_out: Vec::new(),
             entity_players: Vec::new(),
@@ -1242,12 +1329,15 @@ impl Hub {
     /// map and the connections of the players in it): their packets, then
     /// the chunks, block changes, containers and entities they see.
     pub fn tick_level(&mut self, ctx: &mut TickCtx) -> Vec<HostEvent> {
+        self.finish_tracking();
         let mut events = Vec::new();
-        for i in 0..self.guests.len() {
-            if self.here(&self.guests[i]) {
-                self.process_inbox(i, ctx, &mut events);
+        crate::spans::time("lan_inbox", || {
+            for i in 0..self.guests.len() {
+                if self.here(&self.guests[i]) {
+                    self.process_inbox(i, ctx, &mut events);
+                }
             }
-        }
+        });
         if !self.guests.iter().any(|g| self.here(g)) {
             // ServerTickRateManager broadcasts a change to the players there
             // are; one who joins later is sent the state as it is then
@@ -1286,13 +1376,15 @@ impl Hub {
             }
         }
         self.sync_containers(ctx.world);
-        self.track_entities(ctx);
-        for i in 0..self.guests.len() {
-            if self.here(&self.guests[i]) {
-                self.sync_player_state(i);
-                self.sync_effects(i);
+        crate::spans::time("lan_track", || self.track_entities(ctx));
+        crate::spans::time("lan_player_state", || {
+            for i in 0..self.guests.len() {
+                if self.here(&self.guests[i]) {
+                    self.sync_player_state(i);
+                    self.sync_effects(i);
+                }
             }
-        }
+        });
         events
     }
 
@@ -1424,10 +1516,10 @@ impl Hub {
     // ---- chunks --------------------------------------------------------
 
     /// Every player's chunks here: their views, then the next batch of each
-    /// (PlayerChunkSender.sendNextChunks). The batches are chosen first, the
-    /// columns in them encoded once each on the pool's threads
-    /// (`ChunkEncoder::bodies_in`), then sent: nothing changes the level in
-    /// between, and each player's packets keep their order.
+    /// (PlayerChunkSender.sendNextChunks). The batches are chosen first and
+    /// each column in them is queued as the level has it now, to be made once
+    /// by a writer thread (`ChunkEncoder::later_bodies`): each player's
+    /// packets keep their order.
     fn update_chunks(&mut self, ctx: &TickCtx) {
         let world = &*ctx.world;
         let mut batches = Vec::new();
@@ -1442,9 +1534,8 @@ impl Hub {
         if batches.is_empty() {
             return;
         }
-        // Each column once, however many players it goes to, with the
-        // number of batches that take it.
-        let (mut columns, mut uses): (Vec<&Chunk>, Vec<usize>) = Default::default();
+        // Each column once, however many players it goes to.
+        let mut columns: Vec<&Chunk> = Vec::new();
         let mut index = crate::fast_hash::FxHashMap::default();
         let batches: Vec<(usize, Vec<usize>, Vec<usize>)> = batches
             .into_iter()
@@ -1454,50 +1545,34 @@ impl Hub {
                     .map(|(idx, chunk)| {
                         let j = *index.entry((chunk.x, chunk.z)).or_insert_with(|| {
                             columns.push(chunk);
-                            uses.push(0);
                             columns.len() - 1
                         });
-                        uses[j] += 1;
                         (idx, j)
                     })
                     .unzip();
                 (i, taken, bodies)
             })
             .collect();
-        // A column several players take is shared by them rather than copied.
-        let mut bodies: Vec<PacketBody> = self
-            .encoder
-            .bodies_in(&columns, world)
-            .into_iter()
-            .zip(&uses)
-            .map(|(body, &uses)| {
-                if uses > 1 {
-                    PacketBody::Shared(body.into())
-                } else {
-                    PacketBody::Owned(body)
-                }
-            })
-            .collect();
+        // A column several players take is made once, off the tick.
+        let bodies =
+            crate::spans::time("lan_bodies", || self.encoder.later_bodies(&columns, world));
         for (i, taken, batch) in batches {
             let g = &mut self.guests[i];
             let size = batch.len();
             g.batch_quota -= size as f32;
             g.send(&C::ChunkBatchStart(horizon_protocol::packets::Empty));
-            g.sender.send_bodies(batch.into_iter().map(|j| {
-                uses[j] -= 1;
-                if uses[j] == 0 {
-                    std::mem::replace(&mut bodies[j], PacketBody::Owned(Vec::new()))
-                } else {
-                    bodies[j].clone()
-                }
-            }));
+            g.sender.send_bodies(
+                batch
+                    .into_iter()
+                    .map(|j| PacketBody::Later(bodies[j].clone())),
+            );
             g.send(&C::ChunkBatchFinished(play::ChunkBatchFinished {
                 size: size as i32,
             }));
             g.unacknowledged += 1;
             for idx in taken.into_iter().rev() {
                 let key = g.chunk_queue.remove(idx);
-                g.sent_chunks.insert(key);
+                Arc::make_mut(&mut g.sent_chunks).insert(key);
             }
         }
     }
@@ -1526,7 +1601,7 @@ impl Hub {
             .filter(|&(x, z)| !tracked(cx, cz, r, x, z))
             .collect();
         for (x, z) in forget {
-            g.sent_chunks.remove(&(x, z));
+            Arc::make_mut(&mut g.sent_chunks).remove(&(x, z));
             g.send(&C::ForgetLevelChunk(play::ForgetLevelChunk { pos: [x, z] }));
         }
         requeue(&mut g.chunk_queue, &g.sent_chunks, (cx, cz), r);
@@ -1890,6 +1965,9 @@ impl Hub {
                 ),
             );
         }
+        if let Some(states) = self.entity_states.take() {
+            return self.track_beside(all, states);
+        }
         let entities: Vec<&EntityState> = all.iter().chain(ctx.entities).collect();
         // ChunkMap.tick: the level's entities, once for all its players.
         let mut level = self
@@ -1917,8 +1995,10 @@ impl Hub {
             .collect();
         level.range_percent = Some(self.entity_range_percent);
         let (types, sync) = (&mut self.entity_types, &self.sync);
-        level.tick(&entities, &self.riding, &mut viewers, |kind| {
-            entity_type(types, sync, kind)
+        crate::spans::time("lan_track_tick", || {
+            level.tick(&entities, &self.riding, &mut viewers, |kind| {
+                entity_type(types, sync, kind)
+            });
         });
         drop(viewers);
         for (g, out) in self.guests.iter().filter(|g| here(g)).zip(outs.iter_mut()) {
@@ -1928,6 +2008,80 @@ impl Hub {
         all.clear();
         self.entity_players = all;
         self.entities.insert(self.config.dimension.clone(), level);
+    }
+
+    /// `track_entities`' pass on a thread beside the tick: each player's
+    /// packets take a slot in its queue here and fill it from there. It reads
+    /// what it was given and the players' trackers, which come back at
+    /// [`Self::finish_tracking`], and nothing the tick does meanwhile.
+    fn track_beside(&mut self, players: Vec<EntityState>, states: Arc<States>) {
+        let dimension = self.config.dimension.clone();
+        let here = |g: &&mut Guest| g.placed && g.dimension == dimension;
+        let views = self
+            .guests
+            .iter_mut()
+            .filter(here)
+            .map(|g| TrackView {
+                conn: g.conn,
+                entity_id: g.entity_id,
+                moved: std::mem::take(&mut g.moved),
+                position: g.position,
+                view_distance: g.view_distance,
+                chunks: g.sent_chunks.clone(),
+                tracker: std::mem::take(&mut g.tracker),
+                slot: Some(g.sender.reserve()),
+            })
+            .collect();
+        let mut level = self.entities.remove(&dimension).unwrap_or_default();
+        level.range_percent = Some(self.entity_range_percent);
+        level.background = true;
+        let pass = TrackPass {
+            dimension,
+            level,
+            players,
+            states,
+            riding: self.riding.clone(),
+            views,
+            types: std::mem::take(&mut self.entity_types),
+            sync: Some(self.sync.clone()),
+        };
+        let thread = self.tracking_thread.get_or_insert_with(|| {
+            // The pass comes back by the channel it brings along.
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::Builder::new()
+                .name("horizon-lan-track".into())
+                .spawn(move || {
+                    horizon_threads::worker_affinity();
+                    while let Ok((mut pass, done)) = rx.recv() {
+                        TrackPass::run(&mut pass);
+                        let done: std::sync::mpsc::Sender<TrackPass> = done;
+                        let _ = done.send(pass);
+                    }
+                })
+                .expect("start the tracking thread");
+            tx
+        });
+        let (done, back) = std::sync::mpsc::channel();
+        let _ = thread.send((pass, done));
+        self.tracking = Some(back);
+    }
+
+    /// Wait for the tracking pass that is running, if any, and take back what
+    /// it had. Whatever reads a guest's tracker comes here first.
+    pub fn finish_tracking(&mut self) {
+        let Some(back) = self.tracking.take() else {
+            return;
+        };
+        let _span = crate::spans::scope("lan_track_join");
+        let pass = back.recv().expect("the tracking pass panicked");
+        self.entity_types = pass.types;
+        self.entity_players = pass.players;
+        self.entities.insert(pass.dimension, pass.level);
+        for view in pass.views {
+            if let Some(&i) = self.guest_index.get(&view.conn) {
+                self.guests[i].tracker = view.tracker;
+            }
+        }
     }
 
     /// ServerPlayer.stopSleepInBed: the wake-up animation goes to the player
@@ -2631,6 +2785,7 @@ impl Hub {
     /// respawned one as a new entity at the next tick. Their clients would otherwise keep
     /// the dead body, lying down, wherever the player goes.
     pub fn respawned(&mut self, id: i32) {
+        self.finish_tracking();
         for g in &mut self.guests {
             if g.entity_id != id && g.tracker.forget(id) {
                 g.send(&C::RemoveEntities(play::RemoveEntities { ids: vec![id] }));
@@ -2644,6 +2799,7 @@ impl Hub {
     pub fn respawn(&mut self, i: usize, at: [f64; 3], ctx: &TickCtx) {
         let info = self.spawn_info(i);
         self.close_container_for(i);
+        self.finish_tracking();
         let g = &mut self.guests[i];
         // PlayerList.respawn: into the level in place (the respawn level).
         g.dimension = self.config.dimension.clone();
@@ -2655,7 +2811,7 @@ impl Hub {
             g.send(&C::RemoveEntities(play::RemoveEntities { ids: vec![id] }));
         }
         g.tracker.clear();
-        g.sent_chunks.clear();
+        Arc::make_mut(&mut g.sent_chunks).clear();
         g.chunk_queue.clear();
         let id = g.entity_id;
         self.respawned(id);
@@ -2680,7 +2836,7 @@ impl Hub {
         g.effects = Default::default();
         g.sent_effects.clear();
         g.center = None;
-        g.sent_chunks.clear();
+        Arc::make_mut(&mut g.sent_chunks).clear();
         g.chunk_queue.clear();
         g.tracker.clear();
         self.teleport(i, None);
@@ -2757,10 +2913,11 @@ impl Hub {
     ) {
         let info = self.spawn_info(i);
         self.close_container_for(i);
+        self.finish_tracking();
         let g = &mut self.guests[i];
         g.dimension = self.config.dimension.clone();
         g.tracker.clear();
-        g.sent_chunks.clear();
+        Arc::make_mut(&mut g.sent_chunks).clear();
         g.chunk_queue.clear();
         g.center = None;
         g.yaw = yaw;
@@ -2937,6 +3094,159 @@ mod tests {
                 samples[3]
             );
         }
+    }
+
+    /// Players and mobs moving in and out of range, some players losing
+    /// chunks: each connection gets from the pass beside the tick, between
+    /// what the tick queues around it, the bytes the pass on the tick sends.
+    #[test]
+    fn tracking_beside_the_tick_sends_each_player_the_same_bytes() {
+        use super::super::conn::{Holding, PlayerSender};
+        use crate::lan::Out;
+        use horizon_protocol::entity_data::{Value, serializer};
+        const PLAYERS: i32 = 40;
+        let state_of = |id: i32, tick: i32| {
+            let walk = f64::from(tick) * if id % 3 == 0 { 9.0 } else { 0.7 };
+            EntityState {
+                id,
+                uuid: id as u128 + 1,
+                kind: if id < PLAYERS {
+                    "minecraft:player".into()
+                } else {
+                    "minecraft:zombie".into()
+                },
+                position: [
+                    f64::from(id % 9) * 24.0 + walk,
+                    64.0,
+                    f64::from(id % 7) * 16.0,
+                ],
+                yaw: tick as f32 * 3.0,
+                on_ground: true,
+                meta: vec![(8, serializer::BYTE, Value::Byte((tick / 7) as i8))],
+                ..EntityState::default()
+            }
+        };
+        let chunks_at = |id: i32, tick: i32| {
+            let e = state_of(id, tick);
+            let (x, z) = (e.position[0] as i32 >> 4, e.position[2] as i32 >> 4);
+            let r = if id % 5 == 0 { 3 } else { 10 };
+            (-r..=r)
+                .flat_map(|dx| (-r..=r).map(move |dz| (x + dx, z + dz)))
+                .collect::<FxHashSet<_>>()
+        };
+        // Mobs come and go, so packets for pairs and removals are in it.
+        let game = |tick: i32| {
+            let mut states = States::default();
+            states.extend(
+                (PLAYERS..PLAYERS + 60)
+                    .filter(|id| (id + tick / 10) % 4 != 0)
+                    .map(|id| state_of(id, tick)),
+            );
+            states
+        };
+
+        // On the tick.
+        let mut level = Entities::default();
+        let mut trackers: Vec<Tracker> = (0..PLAYERS).map(|_| Tracker::default()).collect();
+        let mut expected: Vec<Vec<Vec<u8>>> = vec![Vec::new(); PLAYERS as usize];
+        for tick in 0..120 {
+            let players: Vec<_> = (0..PLAYERS).map(|id| state_of(id, tick)).collect();
+            let states = game(tick);
+            let entities: Vec<&EntityState> = players.iter().chain(states.as_slice()).collect();
+            let chunks: Vec<_> = (0..PLAYERS).map(|id| chunks_at(id, tick)).collect();
+            let mut outs: Vec<Vec<PacketBody>> = vec![Vec::new(); PLAYERS as usize];
+            let mut viewers: Vec<Viewer> = trackers
+                .iter_mut()
+                .zip(&mut outs)
+                .zip(&chunks)
+                .enumerate()
+                .map(|(i, ((tracker, out), chunks))| Viewer {
+                    entity_id: i as i32,
+                    moved: true,
+                    position: players[i].position,
+                    view_distance: 10,
+                    chunks,
+                    tracker,
+                    out,
+                })
+                .collect();
+            level.tick(&entities, &Riding::default(), &mut viewers, |_| Some(1));
+            drop(viewers);
+            for (packets, out) in expected.iter_mut().zip(&outs) {
+                packets.push(vec![tick as u8]);
+                for body in out {
+                    packets.extend(body.packets().map(<[u8]>::to_vec));
+                }
+                packets.push(vec![tick as u8, 1]);
+            }
+        }
+
+        // Beside it, on another thread, as the tick goes on.
+        let connections: Vec<_> = (0..PLAYERS)
+            .map(|_| {
+                let (tx, rx) = std::sync::mpsc::channel();
+                (PlayerSender::new(tx, Arc::default()), rx)
+            })
+            .collect();
+        let mut got: Vec<Vec<Vec<u8>>> = vec![Vec::new(); PLAYERS as usize];
+        let mut level = Some(Entities::default());
+        level.as_mut().unwrap().background = true;
+        let mut trackers: Vec<Tracker> = (0..PLAYERS).map(|_| Tracker::default()).collect();
+        for tick in 0..120 {
+            let holding = Holding::start();
+            let views: Vec<TrackView> = trackers
+                .iter_mut()
+                .zip(&connections)
+                .enumerate()
+                .map(|(i, (tracker, (sender, _)))| {
+                    sender.send(vec![tick as u8]);
+                    let view = TrackView {
+                        conn: i as u32,
+                        entity_id: i as i32,
+                        moved: true,
+                        position: state_of(i as i32, tick).position,
+                        view_distance: 10,
+                        chunks: Arc::new(chunks_at(i as i32, tick)),
+                        tracker: std::mem::take(tracker),
+                        slot: Some(sender.reserve()),
+                    };
+                    sender.send(vec![tick as u8, 1]);
+                    view
+                })
+                .collect();
+            drop(holding);
+            let mut pass = TrackPass {
+                dimension: String::new(),
+                level: level.take().unwrap(),
+                players: (0..PLAYERS).map(|id| state_of(id, tick)).collect(),
+                states: Arc::new(game(tick)),
+                riding: Riding::default(),
+                views,
+                types: Default::default(),
+                sync: None,
+            };
+            let thread = std::thread::spawn(move || {
+                pass.run();
+                pass
+            });
+            for ((sender, rx), packets) in connections.iter().zip(&mut got) {
+                sender.flush();
+                for out in rx.try_iter() {
+                    let Out::Packets(bodies) = out else {
+                        panic!("expected held batches")
+                    };
+                    for body in bodies.iter().flat_map(|b| b.wait()) {
+                        packets.extend(body.packets().map(<[u8]>::to_vec));
+                    }
+                }
+            }
+            let pass = thread.join().unwrap();
+            level = Some(pass.level);
+            for (i, view) in pass.views.into_iter().enumerate() {
+                trackers[i] = view.tracker;
+            }
+        }
+        assert_eq!(got, expected);
     }
 
     /// `requeue` as it was, scanning the queue for each chunk of the view.

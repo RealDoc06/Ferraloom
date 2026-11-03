@@ -90,7 +90,7 @@ pub(super) struct LanHost {
     pub quiet: std::collections::VecDeque<super::lan_quiet::QuietBatch>,
     /// The entities the guests track, described again every tick
     /// (`lan_entities`) over last tick's states.
-    states: lan::entity::States,
+    states: std::sync::Arc<lan::entity::States>,
 }
 
 impl LanHost {
@@ -1480,6 +1480,8 @@ impl Game<'_> {
         let Some(mut host) = self.lan.take() else {
             return;
         };
+        // The last tick's tracking pass gives back what it read.
+        host.hub.finish_tracking();
         // What the tick sends a guest goes to its connection at the end.
         let holding = lan::Holding::start();
         // The host's own commands' (and command blocks') players moving
@@ -1504,7 +1506,8 @@ impl Game<'_> {
         // A dedicated server runs the hub without a host player.
         if state.is_some() || host.hub.config.dedicated {
             let has_guests = !host.hub.guests.is_empty();
-            let mut states = std::mem::take(&mut host.states);
+            let mut states =
+                std::sync::Arc::into_inner(std::mem::take(&mut host.states)).unwrap_or_default();
             if has_guests {
                 let host_entity = state.as_ref().map(|s| s.entity_id);
                 self.lan_assign_ids();
@@ -1515,8 +1518,10 @@ impl Game<'_> {
                     .filter_map(|g| Some((g.vehicle?, g.entity_id)))
                     .collect();
                 self.lan_riding(host_entity, &guests, &mut host.hub.riding);
-                self.lan_entities(host_entity, &host.mob_players, &mut host.hub, &mut states);
-                self.lan_hook_states(host_entity, &host.play, &host.hub, &mut states);
+                horizon_client::spans::time("lan_entities", || {
+                    self.lan_entities(host_entity, &host.mob_players, &mut host.hub, &mut states);
+                    self.lan_hook_states(host_entity, &host.play, &host.hub, &mut states);
+                });
             } else {
                 states.clear();
             }
@@ -1534,6 +1539,7 @@ impl Game<'_> {
             for (pos, b0, b1, state) in std::mem::take(&mut self.lan_block_events) {
                 host.hub.block_event(pos, b0, b1, state);
             }
+            let states = std::sync::Arc::new(states);
             let entities = states.as_slice();
             // An entity that left the level since the last tick (a snowball
             // that hit) is dropped by the tracker below: its event goes out
@@ -1569,6 +1575,10 @@ impl Game<'_> {
                 );
                 host.hub
                     .set_immediate_respawn(self.ui.rules.bool("immediate_respawn"));
+                // A dedicated server tracks its entities beside the tick.
+                if host.hub.config.dedicated {
+                    host.hub.entity_states = Some(states.clone());
+                }
                 // A server with several levels runs a pass for each
                 // (`tick_server`): the network is read once, before the first.
                 let pass = self.level_pass;
@@ -1577,7 +1587,11 @@ impl Game<'_> {
                 } else {
                     Vec::new()
                 };
-                events.extend(host.hub.tick_level(&mut ctx));
+                events.extend(horizon_client::spans::time("lan_tick_level", || {
+                    host.hub.tick_level(&mut ctx)
+                }));
+                // Not left for the next tick's: nothing here to track.
+                host.hub.entity_states = None;
                 if pass.last {
                     host.hub.end_tick();
                 }
@@ -1696,18 +1710,22 @@ impl Game<'_> {
         }
         self.lan_flush_effects(&mut host);
         if !paused {
-            self.tick_guests(&mut host);
+            horizon_client::spans::time("lan_guests", || self.tick_guests(&mut host));
         }
         self.lan_living_flags(&mut host);
         self.tick_server_travel(&mut host);
         self.lan_swings(&mut host);
         self.lan_update_streaming(&host);
         self.lan_update_models(&mut host);
-        self.lan_update_waypoints(&mut host, state.as_ref());
+        horizon_client::spans::time("lan_waypoints", || {
+            self.lan_update_waypoints(&mut host, state.as_ref());
+        });
         self.lan_sync_scoreboard(&mut host);
         self.lan_sync_border(&mut host);
         drop(holding);
-        lan::flush_all(host.hub.guests.iter().map(|g| &g.sender));
+        horizon_client::spans::time("lan_flush", || {
+            lan::flush_all(host.hub.guests.iter().map(|g| &g.sender));
+        });
         self.lan = Some(host);
         // A blast from a guest's attack, and a mace's wind burst.
         self.flush_lan_explosions();
