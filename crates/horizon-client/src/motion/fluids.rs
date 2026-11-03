@@ -138,6 +138,23 @@ pub fn bubble_column_push(
         f64::from(1.0e-5f32),
     ));
     let (lo, hi) = (b.min_position(), b.max_position());
+    // Most boxes are in sections without a bubble column: no cell to read.
+    let column = |s| &*facts.get(s).name == "minecraft:bubble_column";
+    let cells = (
+        [
+            lo.x.floor() as i32,
+            lo.y.floor() as i32,
+            lo.z.floor() as i32,
+        ],
+        [
+            hi.x.ceil() as i32 - 1,
+            hi.y.ceil() as i32 - 1,
+            hi.z.ceil() as i32 - 1,
+        ],
+    );
+    if !world.may_hold(cells.0, cells.1, column) {
+        return false;
+    }
     let mut reset_fall = false;
     for x in lo.x.floor() as i32..=(hi.x.ceil() as i32 - 1) {
         for y in lo.y.floor() as i32..=(hi.y.ceil() as i32 - 1) {
