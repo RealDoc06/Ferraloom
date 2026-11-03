@@ -32,6 +32,10 @@ struct Tables {
     occludes: Vec<bool>,
     dampens: Vec<bool>,
     resonator: Vec<bool>,
+    /// `minecraft:climbable`, for the steps of `Entity.move`.
+    climbable: Vec<bool>,
+    /// The redstone ores `RedStoneOreBlock.stepOn` lights.
+    redstone_ore: Vec<bool>,
 }
 /// `SculkSensorBlock.getAnalogOutputSignal`: the last vibration's frequency
 /// while the sensor is active.
@@ -89,6 +93,42 @@ pub(super) struct SculkState {
     pub actor: Option<Who>,
     ticks: u32,
     pub tracker_loaded: bool,
+    /// The mobs' slots while the entity pass posts its events.
+    pass: Option<EntityPass>,
+}
+
+/// Where the mobs are, taken once for the entity pass (`tick_entity_events`),
+/// which posts an event for nearly every mob: asking each event for its
+/// wardens and its mob would scan the mobs once per event. Nothing in the
+/// pass adds, removes or reorders mobs; the count and the last id are checked
+/// anyway, and a mismatch falls back to a scan.
+struct EntityPass {
+    len: usize,
+    last: Option<u32>,
+    /// Each id's first index.
+    slots: FxHashMap<u32, usize>,
+    wardens: Vec<usize>,
+}
+impl EntityPass {
+    fn new(mobs: &[Mob]) -> Self {
+        let mut slots = FxHashMap::with_capacity_and_hasher(mobs.len(), Default::default());
+        let mut wardens = Vec::new();
+        for (i, m) in mobs.iter().enumerate() {
+            slots.entry(m.id).or_insert(i);
+            if m.species() == Species::Warden {
+                wardens.push(i);
+            }
+        }
+        Self {
+            len: mobs.len(),
+            last: mobs.last().map(|m| m.id),
+            slots,
+            wardens,
+        }
+    }
+    fn matches(&self, mobs: &[Mob]) -> bool {
+        mobs.len() == self.len && mobs.last().map(|m| m.id) == self.last
+    }
 }
 
 impl SculkState {
@@ -108,33 +148,84 @@ impl SculkState {
         std::mem::swap(&mut self.known, &mut other.known);
     }
 }
+type Pos = (i32, i32, i32);
 /// An insertion-ordered set of block positions (`Level.blockEntityTickers`
-/// keeps the order block entities were added in).
+/// keeps the order block entities were added in), grouped by chunk column.
+/// Each position keeps the sequence number it was added under, so ascending
+/// sequence is insertion order and a query sorts only what it returns.
 #[derive(Default)]
 struct Index {
-    order: Vec<(i32, i32, i32)>,
-    set: HashSet<(i32, i32, i32)>,
+    seq: FxHashMap<Pos, u64>,
+    /// Each column's positions, in ascending sequence.
+    chunks: FxHashMap<(i32, i32), Vec<(u64, Pos)>>,
+    next: u64,
+}
+fn column(p: Pos) -> (i32, i32) {
+    (p.0 >> 4, p.2 >> 4)
 }
 impl Index {
-    fn insert(&mut self, key: (i32, i32, i32)) {
-        if self.set.insert(key) {
-            self.order.push(key);
+    fn insert(&mut self, key: Pos) {
+        if let std::collections::hash_map::Entry::Vacant(e) = self.seq.entry(key) {
+            e.insert(self.next);
+            self.chunks
+                .entry(column(key))
+                .or_default()
+                .push((self.next, key));
+            self.next += 1;
         }
     }
-    fn remove(&mut self, key: &(i32, i32, i32)) {
-        if self.set.remove(key) {
-            self.order.retain(|k| k != key);
+    fn remove(&mut self, key: &Pos) {
+        if self.seq.remove(key).is_some() {
+            let c = column(*key);
+            if let Some(list) = self.chunks.get_mut(&c) {
+                list.retain(|(_, k)| k != key);
+                if list.is_empty() {
+                    self.chunks.remove(&c);
+                }
+            }
         }
     }
-    fn contains(&self, key: &(i32, i32, i32)) -> bool {
-        self.set.contains(key)
+    fn contains(&self, key: &Pos) -> bool {
+        self.seq.contains_key(key)
     }
-    fn iter(&self) -> impl Iterator<Item = &(i32, i32, i32)> {
-        self.order.iter()
+    /// Every position, in insertion order.
+    fn ordered(&self) -> Vec<Pos> {
+        let mut all: Vec<(u64, Pos)> = self.chunks.values().flatten().copied().collect();
+        all.sort_unstable_by_key(|e| e.0);
+        all.into_iter().map(|e| e.1).collect()
     }
-    fn retain(&mut self, mut keep: impl FnMut(&(i32, i32, i32)) -> bool) {
-        self.order.retain(|k| keep(k));
-        self.set.retain(|k| keep(k));
+    /// The positions within `radius` (block distance squared) of `at`, with
+    /// their sequence numbers, in insertion order.
+    fn near(&self, at: [i32; 3], radius: i32) -> Vec<(u64, Pos)> {
+        let mut found: Vec<(u64, Pos)> = Vec::new();
+        let (x0, x1) = (
+            at[0].saturating_sub(radius) >> 4,
+            at[0].saturating_add(radius) >> 4,
+        );
+        let (z0, z1) = (
+            at[2].saturating_sub(radius) >> 4,
+            at[2].saturating_add(radius) >> 4,
+        );
+        let reach = i64::from(radius) * i64::from(radius);
+        for cx in x0..=x1 {
+            for cz in z0..=z1 {
+                if let Some(list) = self.chunks.get(&(cx, cz)) {
+                    found.extend(list.iter().filter(|(_, p)| dist_sqr(at, *p) <= reach));
+                }
+            }
+        }
+        found.sort_unstable_by_key(|e| e.0);
+        found
+    }
+    /// Forget the positions of the columns that left.
+    fn remove_columns(&mut self, gone: &HashSet<(i32, i32)>) {
+        for c in gone {
+            if let Some(list) = self.chunks.remove(c) {
+                for (_, p) in list {
+                    self.seq.remove(&p);
+                }
+            }
+        }
     }
 }
 const KIND_SENSOR: u8 = 1;
@@ -155,6 +246,20 @@ fn block_of(p: [f64; 3]) -> [i32; 3] {
         p[1].floor() as i32,
         p[2].floor() as i32,
     ]
+}
+/// `Entity.getOnPosLegacy`: the block 0.2 below the feet.
+fn on_pos_legacy(at: [f64; 3]) -> [i32; 3] {
+    [
+        at[0].floor() as i32,
+        (at[1] - 0.2).floor() as i32,
+        at[2].floor() as i32,
+    ]
+}
+fn is_redstone_ore(name: &str) -> bool {
+    matches!(
+        name,
+        "minecraft:redstone_ore" | "minecraft:deepslate_redstone_ore"
+    )
 }
 fn dist_sqr(a: [i32; 3], b: (i32, i32, i32)) -> i64 {
     let d = |x: i32, y: i32| i64::from(x) - i64::from(y);
@@ -207,6 +312,7 @@ impl Game<'_> {
         let listeners: Vec<serde_json::Value> = self
             .sculk
             .index
+            .ordered()
             .iter()
             .filter_map(|key| match self.world.block_entities.get(key) {
                 Some(BlockEntity::Sculk(e)) => Some(serde_json::json!({
@@ -300,10 +406,11 @@ impl Game<'_> {
                 .cloned()
                 .unwrap_or_default()
         };
-        let (wool, dampening, resonators) = (
+        let (wool, dampening, resonators, climbable) = (
             tag("minecraft:occludes_vibration_signals"),
             tag("minecraft:dampens_vibrations"),
             tag("minecraft:vibration_resonators"),
+            tag("minecraft:climbable"),
         );
         let mut t = Tables {
             built: true,
@@ -311,6 +418,8 @@ impl Game<'_> {
             occludes: vec![false; n],
             dampens: vec![false; n],
             resonator: vec![false; n],
+            climbable: vec![false; n],
+            redstone_ore: vec![false; n],
         };
         for i in 0..n {
             let facts = self.res.facts().get(BlockStateId(i as u32));
@@ -325,6 +434,8 @@ impl Game<'_> {
             t.occludes[i] = wool.contains(name);
             t.dampens[i] = dampening.contains(name);
             t.resonator[i] = resonators.contains(name);
+            t.climbable[i] = climbable.contains(name);
+            t.redstone_ore[i] = is_redstone_ore(name);
         }
         self.world.watched = t.kinds.iter().map(|k| *k != 0).collect();
         self.sculk.tables = t;
@@ -366,9 +477,7 @@ impl Game<'_> {
             // leaving unloads thousands of chunks at once.
             let gone: HashSet<(i32, i32)> = self.sculk.known.difference(&loaded).copied().collect();
             if !gone.is_empty() {
-                self.sculk
-                    .index
-                    .retain(|p| !gone.contains(&(p.0 >> 4, p.2 >> 4)));
+                self.sculk.index.remove_columns(&gone);
             }
             self.sculk.known = loaded;
         }
@@ -478,7 +587,7 @@ impl Game<'_> {
     }
     /// `GameEvent.Context.of(mob, state)`.
     pub(super) fn mob_context(&self, id: u32, state: Option<BlockStateId>) -> Context {
-        self.context_of_mob(self.mobs.iter().find(|m| m.id == id), id, state)
+        self.context_of_mob(self.mob_by_id(id), id, state)
     }
     fn context_of_mob(&self, mob: Option<&Mob>, id: u32, state: Option<BlockStateId>) -> Context {
         Context {
@@ -508,6 +617,17 @@ impl Game<'_> {
 
     /// `Level.gameEvent`: tell the listeners within reach.
     pub(super) fn post_game_event(&mut self, event: &'static str, pos: [f64; 3], ctx: Context) {
+        self.post_game_event_with(event, pos, |_| ctx);
+    }
+    /// `Level.gameEvent` with the context built only when a listener is in
+    /// reach (`GameEventDispatcher.post` visits no listener otherwise). The
+    /// context only reads the game, so building it later changes nothing.
+    pub(super) fn post_game_event_with(
+        &mut self,
+        event: &'static str,
+        pos: [f64; 3],
+        ctx: impl FnOnce(&Self) -> Context,
+    ) {
         super::dispense_fixture::record(|| {
             format!(
                 "G {},{},{} {event}",
@@ -521,21 +641,47 @@ impl Game<'_> {
         }
         let at = block_of(pos);
         let radius = sculk::notification_radius(event).min(16);
-        let near: Vec<(i32, i32, i32)> = self
-            .sculk
-            .index
-            .iter()
-            .copied()
-            .filter(|p| dist_sqr(at, *p) <= i64::from(radius * radius))
-            .collect();
-        for key in near {
+        let near = self.sculk.index.near(at, radius);
+        // Listening changes no mob but the listening warden, so the wardens
+        // can be found first; whether each is alive is asked in turn.
+        let wardens = self.warden_slots();
+        if near.is_empty() && !wardens.iter().any(|&i| self.mobs[i].alive()) {
+            return;
+        }
+        let ctx = ctx(self);
+        for (_, key) in near {
             self.sculk_listen(key, event, pos, &ctx);
         }
-        for i in 0..self.mobs.len() {
+        for i in wardens {
             if self.mobs[i].species() == Species::Warden && self.mobs[i].alive() {
                 self.warden_listen(i, event, pos, &ctx);
             }
         }
+    }
+    /// The indices of the wardens among the mobs, in order: the entity pass's
+    /// while the mobs are as it found them, else from a scan.
+    fn warden_slots(&self) -> Vec<usize> {
+        if let Some(pass) = &self.sculk.pass
+            && pass.matches(&self.mobs)
+        {
+            return pass.wardens.clone();
+        }
+        (0..self.mobs.len())
+            .filter(|&i| self.mobs[i].species() == Species::Warden)
+            .collect()
+    }
+    /// The mob with this id (the first, as `Iterator::find`), through the
+    /// entity pass's slots when it has the id there.
+    fn mob_by_id(&self, id: u32) -> Option<&Mob> {
+        if let Some(pass) = &self.sculk.pass
+            && let Some(&i) = pass.slots.get(&id)
+            && let Some(m) = self.mobs.get(i)
+            && m.id == id
+            && pass.matches(&self.mobs)
+        {
+            return Some(m);
+        }
+        self.mobs.iter().find(|m| m.id == id)
     }
     /// A game event at a block (`Level.gameEvent(source, event, pos)`).
     pub(super) fn post_block_game_event(
@@ -569,14 +715,11 @@ impl Game<'_> {
                 .as_ref()
                 .map(|p| [p.position.x, p.position.y, p.position.z]),
             Who::Mob(id) => self
-                .mobs
-                .iter()
-                .find(|m| m.id == id)
+                .mob_by_id(id)
                 .map(|m| [m.position.x, m.position.y, m.position.z]),
         };
         if let Some(at) = at {
-            let ctx = self.who_context(Some(who), None);
-            self.post_game_event(event, at, ctx);
+            self.post_game_event_with(event, at, |g| g.who_context(Some(who), None));
         }
     }
     /// `LevelEvent::GameEvent` from the block behaviour library.
@@ -726,7 +869,11 @@ impl Game<'_> {
         // a sculk tick does loads, unloads or lights a chunk or moves a ticket.
         let levels = self.tickets.levels();
         let chunks = &self.world.chunks;
-        let mut ticking = FxHashMap::<(i32, i32), bool>::default();
+        // Each column asks itself and its eight neighbours.
+        let mut ticking = FxHashMap::<(i32, i32), bool>::with_capacity_and_hasher(
+            self.sculk.index.chunks.len() * 4,
+            Default::default(),
+        );
         let mut ticks = |cx: i32, cz: i32| {
             *ticking.entry((cx, cz)).or_insert_with(|| {
                 levels.block_ticking(cx, cz) && chunks.get(&(cx, cz)).is_some_and(|c| c.lit)
@@ -736,24 +883,27 @@ impl Game<'_> {
         // around them tick too. Most sensors and catalysts wait for a
         // vibration or a death: their tick would change nothing, so they
         // are passed over here (a vibration scheduled during these ticks is
-        // chosen on the next tick at the earliest, as in vanilla).
+        // chosen on the next tick at the earliest, as in vanilla). A column
+        // that does not tick is passed over whole.
         let entities = &self.world.block_entities;
-        let due: Vec<((i32, i32, i32), bool)> = self
-            .sculk
-            .index
-            .iter()
-            .filter_map(|&key| {
-                let (cx, cz) = (key.0 >> 4, key.2 >> 4);
-                if !ticks(cx, cz)
-                    || matches!(entities.get(&key), Some(BlockEntity::Sculk(e)) if e.idle())
-                {
-                    return None;
+        let mut due: Vec<(u64, (i32, i32, i32), bool)> = Vec::new();
+        for (&(cx, cz), list) in &self.sculk.index.chunks {
+            if !ticks(cx, cz) {
+                continue;
+            }
+            let mut adjacent = None;
+            for &(seq, key) in list {
+                if matches!(entities.get(&key), Some(BlockEntity::Sculk(e)) if e.idle()) {
+                    continue;
                 }
-                let adjacent = (-1..=1).all(|dx| (-1..=1).all(|dz| ticks(cx + dx, cz + dz)));
-                Some((key, adjacent))
-            })
-            .collect();
-        for (key, adjacent) in due {
+                let adjacent = *adjacent.get_or_insert_with(|| {
+                    (-1..=1).all(|dx| (-1..=1).all(|dz| ticks(cx + dx, cz + dz)))
+                });
+                due.push((seq, key, adjacent));
+            }
+        }
+        due.sort_unstable_by_key(|d| d.0);
+        for (_, key, adjacent) in due {
             self.tick_sculk_block(key, adjacent)?;
         }
         Ok(())
@@ -1256,11 +1406,8 @@ impl Game<'_> {
         // order they were visited in: chunk x, chunk z, section y, then the
         // order they registered in. The first one takes the experience.
         let source = block_of(at);
-        let mut candidates: Vec<(f64, (i32, i32, i32), usize, (i32, i32, i32))> = Vec::new();
-        for (order, key) in self.sculk.index.iter().copied().enumerate() {
-            if dist_sqr(source, key) > 64 {
-                continue;
-            }
+        let mut candidates: Vec<(f64, (i32, i32, i32), u64, (i32, i32, i32))> = Vec::new();
+        for (order, key) in self.sculk.index.near(source, 8) {
             let is_catalyst = matches!(
                 self.world.block_entities.get(&key),
                 Some(BlockEntity::Sculk(e)) if e.kind == SculkKind::Catalyst
@@ -1510,7 +1657,9 @@ impl Game<'_> {
     /// changed this tick.
     fn tick_entity_events(&mut self) {
         self.tick_player_sculk_events();
+        self.sculk.pass = Some(EntityPass::new(&self.mobs));
         self.tick_mob_sculk_events();
+        self.sculk.pass = None;
         // Dropped items are entities too: Entity.applyEffectsFromBlocks.
         let items: Vec<[f64; 3]> = self
             .dropped
@@ -1547,6 +1696,7 @@ impl Game<'_> {
                 in_water,
                 crouch && on_ground,
                 flying,
+                None,
             );
             if let Some(last) = self.sculk.last_health
                 && health < last
@@ -1563,17 +1713,32 @@ impl Game<'_> {
         if carefully {
             return;
         }
-        // getOnPosLegacy: 0.2 below the feet.
-        let pos = [
-            at[0].floor() as i32,
-            (at[1] - 0.2).floor() as i32,
-            at[2].floor() as i32,
-        ];
-        if matches!(
-            &*self.block_name(pos),
-            "minecraft:redstone_ore" | "minecraft:deepslate_redstone_ore"
-        ) {
+        let pos = on_pos_legacy(at);
+        let state = self.world.block(pos[0], pos[1], pos[2]);
+        self.step_on_redstone_ore_state(pos, state);
+    }
+    /// `step_on_redstone_ore` with the state at `pos` already read; true when
+    /// it attacked the ore (which may have changed the state).
+    fn step_on_redstone_ore_state(&mut self, pos: [i32; 3], state: BlockStateId) -> bool {
+        let ore = match self.sculk.tables.redstone_ore.get(state.0 as usize) {
+            Some(&ore) if self.sculk.tables.built => ore,
+            _ => is_redstone_ore(&self.res.facts().get(state).name),
+        };
+        if ore {
             let _ = self.attack_block(pos);
+        }
+        ore
+    }
+    /// Whether `state` is in `minecraft:climbable`.
+    fn climbable(&self, state: BlockStateId) -> bool {
+        match self.sculk.tables.climbable.get(state.0 as usize) {
+            Some(&climbable) if self.sculk.tables.built => climbable,
+            _ => self
+                .res
+                .items()
+                .block_tags
+                .get("minecraft:climbable")
+                .is_some_and(|t| t.contains(&*self.res.facts().get(state).name)),
         }
     }
 
@@ -1594,12 +1759,24 @@ impl Game<'_> {
             })
             .collect();
         for (id, at, on_ground, in_water, species, damaged) in snapshot {
-            if on_ground {
-                self.step_on_redstone_ore(at, false);
+            // The block under the feet, read once for both (again after an
+            // ore was attacked, which may light it).
+            let pos = on_pos_legacy(at);
+            let mut below = self.world.block(pos[0], pos[1], pos[2]);
+            if on_ground && self.step_on_redstone_ore_state(pos, below) {
+                below = self.world.block(pos[0], pos[1], pos[2]);
             }
             let emits = !matches!(species, Species::Shulker);
             if emits {
-                self.entity_motion_events(Who::Mob(id), at, on_ground, in_water, false, false);
+                self.entity_motion_events(
+                    Who::Mob(id),
+                    at,
+                    on_ground,
+                    in_water,
+                    false,
+                    false,
+                    Some((below, species == Species::Warden)),
+                );
             }
             if let Some(t) = damaged {
                 let seen = self.sculk.damaged.insert(id, t);
@@ -1625,6 +1802,9 @@ impl Game<'_> {
             == horizon_client::blocks::Fluid::Water
     }
     /// `Entity.move`'s emission: footsteps, swimming, landing and splashes.
+    /// `known` is the state under the feet and whether the mob is a warden,
+    /// when the caller has them.
+    #[allow(clippy::too_many_arguments)]
     fn entity_motion_events(
         &mut self,
         who: Who,
@@ -1633,6 +1813,7 @@ impl Game<'_> {
         in_water: bool,
         discrete: bool,
         flying: bool,
+        known: Option<(BlockStateId, bool)>,
     ) {
         let entry = self.sculk.steps.entry(who).or_insert(Steps {
             move_dist: 0.0,
@@ -1663,19 +1844,15 @@ impl Game<'_> {
             return;
         }
         let horizontal = ((dx * dx + dz * dz).sqrt() * f64::from(0.6f32)) as f32;
-        let block = (
-            at[0].floor() as i32,
-            (at[1] - 0.2).floor() as i32,
-            at[2].floor() as i32,
-        );
-        let state = self.world.block(block.0, block.1, block.2);
+        let state = match known {
+            Some((state, _)) => state,
+            None => {
+                let p = on_pos_legacy(at);
+                self.world.block(p[0], p[1], p[2])
+            }
+        };
         let air = self.res.facts().is_air(state);
-        let climbable = self
-            .res
-            .items()
-            .block_tags
-            .get("minecraft:climbable")
-            .is_some_and(|t| t.contains(&*self.res.facts().get(state).name));
+        let climbable = self.climbable(state);
         let travelled = if climbable {
             ((dx * dx + dy * dy + dz * dz).sqrt() * f64::from(0.6f32)) as f32
         } else {
@@ -1689,16 +1866,19 @@ impl Game<'_> {
             let steps_on_block = on_ground || climbable;
             let move_dist = entry.move_dist;
             if steps_on_block {
+                // A mob the caller knows is not a warden is not one.
                 let warden = matches!(who, Who::Mob(id)
-                    if self.mobs.iter().any(|m| m.id == id && m.species() == Species::Warden));
+                    if known.is_none_or(|(_, warden)| warden)
+                        && self.mobs.iter().any(|m| m.id == id && m.species() == Species::Warden));
                 entry.next_step = if warden {
                     // Warden.nextStep
                     move_dist + 0.55
                 } else {
                     (move_dist as i32).wrapping_add(1) as f32
                 };
-                let ctx = self.who_context(Some(who), Some(state));
-                self.post_game_event("minecraft:step", at, ctx);
+                self.post_game_event_with("minecraft:step", at, |g| {
+                    g.who_context(Some(who), Some(state))
+                });
             } else if in_water {
                 entry.next_step = (move_dist as i32).wrapping_add(1) as f32;
                 self.post_entity_event("minecraft:swim", who);
@@ -1728,12 +1908,39 @@ mod tests {
         for key in [(5, 0, 0), (40, 1, 0), (6, 2, 17), (-3, 3, 0), (41, 4, 0)] {
             index.insert(key);
         }
-        index.retain(|p| p.0 >> 4 != 2 && p.2 >> 4 != 1);
-        assert_eq!(index.order, [(5, 0, 0), (-3, 3, 0)]);
+        index.remove_columns(&HashSet::from([(2, 0), (0, 1)]));
+        assert_eq!(index.ordered(), [(5, 0, 0), (-3, 3, 0)]);
         assert!(index.contains(&(5, 0, 0)) && !index.contains(&(41, 4, 0)));
-        assert_eq!(index.set.len(), 2);
+        assert_eq!(index.seq.len(), 2);
         index.insert((41, 4, 0));
-        assert_eq!(index.iter().last(), Some(&(41, 4, 0)));
+        assert_eq!(index.ordered().last(), Some(&(41, 4, 0)));
+        // Removing and adding again moves a position to the end.
+        index.remove(&(5, 0, 0));
+        index.insert((5, 0, 0));
+        assert_eq!(index.ordered(), [(-3, 3, 0), (41, 4, 0), (5, 0, 0)]);
+    }
+
+    /// `near` keeps what a scan of the whole index in order would: every
+    /// position within the radius, across columns, in insertion order.
+    #[test]
+    fn near_matches_an_ordered_scan() {
+        let mut index = Index::default();
+        let mut r = horizon_core::random::LegacyRandom::new(7);
+        for _ in 0..400 {
+            let v = |r: &mut horizon_core::random::LegacyRandom| r.next_int_bound(80).unwrap() - 40;
+            index.insert((v(&mut r), v(&mut r), v(&mut r)));
+        }
+        for at in [[0, 0, 0], [15, 3, -16], [-17, 0, 31], [40, -40, 40]] {
+            for radius in [8, 10, 16] {
+                let expected: Vec<Pos> = index
+                    .ordered()
+                    .into_iter()
+                    .filter(|p| dist_sqr(at, *p) <= i64::from(radius * radius))
+                    .collect();
+                let found: Vec<Pos> = index.near(at, radius).into_iter().map(|e| e.1).collect();
+                assert_eq!(found, expected);
+            }
+        }
     }
 
     #[test]

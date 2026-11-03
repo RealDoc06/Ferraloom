@@ -37,6 +37,7 @@ pub mod collisions;
 pub mod command_block;
 pub mod command_storage;
 pub mod confirm_screen;
+pub mod contact_sections;
 pub mod container_screen;
 pub mod containers;
 pub mod control;
