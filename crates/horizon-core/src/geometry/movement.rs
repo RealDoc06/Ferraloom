@@ -1,5 +1,123 @@
 //! Entity geometry helpers operating on an already selected collider list.
-use super::{Aabb, Axis, Vec3, VoxelShape};
+use super::{Aabb, Axis, COLLISION_EPSILON, Vec3, VoxelShape, java_max, java_min};
+use crate::position::BlockPos;
+
+/// What `Entity.collide` stops at: the shape's `collide` and its Y
+/// coordinates (the step-up candidates).
+pub trait Collides {
+    fn collide(&self, axis: Axis, aabb: Aabb, amount: f64) -> f64;
+    /// `getCoords(Axis.Y)`, ascending.
+    fn y_coordinates(&self) -> impl Iterator<Item = f64> + '_;
+}
+impl Collides for VoxelShape {
+    fn collide(&self, axis: Axis, aabb: Aabb, amount: f64) -> f64 {
+        VoxelShape::collide(self, axis, aabb, amount)
+    }
+    fn y_coordinates(&self) -> impl Iterator<Item = f64> + '_ {
+        self.coordinates(Axis::Y).iter().copied()
+    }
+}
+impl<T: Collides> Collides for &T {
+    fn collide(&self, axis: Axis, aabb: Aabb, amount: f64) -> f64 {
+        (**self).collide(axis, aabb, amount)
+    }
+    fn y_coordinates(&self) -> impl Iterator<Item = f64> + '_ {
+        (**self).y_coordinates()
+    }
+}
+
+/// A collider of a block collision scan: a moved shape, or a block's unit
+/// cube left as its position. `Shapes.block().move(p)` is an array shape
+/// with the coordinates `[p, p + 1]` on each axis; `Block` answers exactly
+/// as that shape does without building it.
+#[derive(Clone, Debug)]
+pub enum Collider {
+    Shape(VoxelShape),
+    Block(BlockPos),
+}
+impl Collider {
+    /// The shape this collider stands for.
+    pub fn into_shape(self) -> VoxelShape {
+        match self {
+            Self::Shape(shape) => shape,
+            Self::Block(p) => VoxelShape::block().moved(block_offset(p)),
+        }
+    }
+}
+fn block_offset(p: BlockPos) -> Vec3 {
+    Vec3::new(f64::from(p.x), f64::from(p.y), f64::from(p.z))
+}
+/// The moved unit cube's coordinates on an axis: `0 + p` and `1 + p`, as
+/// `VoxelShape.move` adds the offset to each.
+fn block_coords(p: BlockPos, axis: Axis) -> (f64, f64) {
+    let c = f64::from([p.x, p.y, p.z][axis as usize]);
+    (0.0 + c, 1.0 + c)
+}
+/// `VoxelShape.findIndex` over two coordinates (the binary search of an
+/// array shape): -1 below `lo`, 0 inside, 1 from `hi` up (NaN included).
+fn block_index((lo, hi): (f64, f64), value: f64) -> i32 {
+    if value < hi {
+        if value < lo { -1 } else { 0 }
+    } else {
+        1
+    }
+}
+impl Collides for Collider {
+    fn collide(&self, axis: Axis, aabb: Aabb, amount: f64) -> f64 {
+        let p = match self {
+            Self::Shape(shape) => return shape.collide(axis, aabb, amount),
+            Self::Block(p) => *p,
+        };
+        // VoxelShape.collideX over the single full cell of a moved block.
+        if amount.abs() < COLLISION_EPSILON {
+            return 0.0;
+        }
+        let i = axis as usize;
+        let u = Axis::ALL[(i + 1) % 3];
+        let v = Axis::ALL[(i + 2) % 3];
+        let (cu, cv) = (block_coords(p, u), block_coords(p, v));
+        let occupied = block_index(cu, aabb.min(u) + COLLISION_EPSILON).max(0)
+            < (block_index(cu, aabb.max(u) - COLLISION_EPSILON) + 1).min(1)
+            && block_index(cv, aabb.min(v) + COLLISION_EPSILON).max(0)
+                < (block_index(cv, aabb.max(v) - COLLISION_EPSILON) + 1).min(1);
+        let (lo, hi) = block_coords(p, axis);
+        if amount > 0.0 {
+            if occupied && block_index((lo, hi), aabb.max(axis) - COLLISION_EPSILON) == -1 {
+                let distance = lo - aabb.max(axis);
+                return if distance >= -COLLISION_EPSILON {
+                    java_min(amount, distance)
+                } else {
+                    amount
+                };
+            }
+        } else if amount < 0.0
+            && occupied
+            && block_index((lo, hi), aabb.min(axis) + COLLISION_EPSILON) >= 1
+        {
+            let distance = hi - aabb.min(axis);
+            return if distance <= COLLISION_EPSILON {
+                java_max(amount, distance)
+            } else {
+                amount
+            };
+        }
+        amount
+    }
+    fn y_coordinates(&self) -> impl Iterator<Item = f64> + '_ {
+        let (shape, block) = match self {
+            Self::Shape(shape) => (Some(shape.coordinates(Axis::Y)), None),
+            Self::Block(p) => {
+                let (lo, hi) = block_coords(*p, Axis::Y);
+                (None, Some([lo, hi]))
+            }
+        };
+        shape
+            .into_iter()
+            .flatten()
+            .copied()
+            .chain(block.into_iter().flatten())
+    }
+}
 
 /// BlockGetter's floor-height decision for caller-selected collision shapes.
 /// The lower block is queried lazily only if the current shape is empty.
@@ -46,7 +164,7 @@ pub fn resolve_step_movement<'s>(
 /// The same movement/step decision with fallible, owned or borrowed collider
 /// collections. A provider failure stops before the next query and returns no
 /// movement result. Existing world-query side effects are not rolled back.
-pub fn try_resolve_step_movement<S: std::borrow::Borrow<VoxelShape>, E>(
+pub fn try_resolve_step_movement<S: Collides, E>(
     movement: Vec3,
     aabb: Aabb,
     max_step: f32,
@@ -100,11 +218,7 @@ pub fn try_resolve_step_movement<S: std::borrow::Borrow<VoxelShape>, E>(
 pub fn resolve_shape_movement(movement: Vec3, aabb: Aabb, shapes: &[&VoxelShape]) -> Vec3 {
     resolve_borrowed_shape_movement(movement, aabb, shapes)
 }
-fn resolve_borrowed_shape_movement<S: std::borrow::Borrow<VoxelShape>>(
-    movement: Vec3,
-    aabb: Aabb,
-    shapes: &[S],
-) -> Vec3 {
+fn resolve_borrowed_shape_movement<S: Collides>(movement: Vec3, aabb: Aabb, shapes: &[S]) -> Vec3 {
     if shapes.is_empty() {
         return movement;
     }
@@ -115,12 +229,7 @@ fn resolve_borrowed_shape_movement<S: std::borrow::Borrow<VoxelShape>>(
             continue;
         }
         let moved = aabb.move_by(Vec3::new(result[0], result[1], result[2]));
-        result[axis as usize] = VoxelShape::collide_all(
-            axis,
-            moved,
-            shapes.iter().map(std::borrow::Borrow::borrow),
-            amount,
-        );
+        result[axis as usize] = collide_all(axis, moved, shapes, amount);
     }
     Vec3::new(result[0], result[1], result[2])
 }
@@ -137,7 +246,18 @@ pub fn candidate_step_heights(
     borrowed_step_heights(aabb, shapes, max_step, current_y)
 }
 
-fn borrowed_step_heights<S: std::borrow::Borrow<VoxelShape>>(
+/// `Shapes.collide`: each shape in turn, until the movement is spent.
+fn collide_all<S: Collides>(axis: Axis, aabb: Aabb, shapes: &[S], mut amount: f64) -> f64 {
+    for shape in shapes {
+        if amount.abs() < COLLISION_EPSILON {
+            return 0.0;
+        }
+        amount = shape.collide(axis, aabb, amount);
+    }
+    amount
+}
+
+fn borrowed_step_heights<S: Collides>(
     aabb: Aabb,
     shapes: &[S],
     max_step: f32,
@@ -145,9 +265,8 @@ fn borrowed_step_heights<S: std::borrow::Borrow<VoxelShape>>(
 ) -> Vec<f32> {
     let mut heights = Vec::<f32>::with_capacity(4);
     for shape in shapes {
-        let shape = shape.borrow();
-        for coordinate in shape.coordinates(Axis::Y) {
-            let height = (*coordinate - aabb.min(Axis::Y)) as f32;
+        for coordinate in shape.y_coordinates() {
+            let height = (coordinate - aabb.min(Axis::Y)) as f32;
             if height < 0.0 || height == current_y {
                 continue;
             }
@@ -280,5 +399,81 @@ mod fallible_tests {
             [result.x.to_bits(), result.y.to_bits(), result.z.to_bits()],
             [(-0.0f64).to_bits(); 3]
         );
+    }
+    /// A block's collider answers as the moved unit cube, bit for bit, over
+    /// boxes on and around its faces and edges.
+    #[test]
+    fn block_collider_matches_the_moved_unit_cube() {
+        let mut seed = 0x2545_f491_4f6c_dd1d_u64;
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        };
+        let offsets = [
+            -1.0,
+            -0.6,
+            -1.0e-7,
+            -5.0e-8,
+            0.0,
+            5.0e-8,
+            1.0e-7,
+            0.3,
+            0.5,
+            0.999_999_9,
+            1.0,
+            1.000_000_1,
+            1.6,
+            2.0,
+        ];
+        let amounts = [
+            0.0,
+            -0.0,
+            5.0e-8,
+            -5.0e-8,
+            0.0784,
+            -0.0784,
+            0.6,
+            -0.6,
+            3.0,
+            -3.0,
+            f64::NAN,
+        ];
+        for p in [
+            BlockPos::new(0, 0, 0),
+            BlockPos::new(-3, 64, 17),
+            BlockPos::new(-30_000_000, -64, 29_999_999),
+        ] {
+            let collider = Collider::Block(p);
+            let shape = VoxelShape::block().moved(Vec3::new(
+                f64::from(p.x),
+                f64::from(p.y),
+                f64::from(p.z),
+            ));
+            assert!(collider.y_coordinates().eq(shape.y_coordinates()));
+            for _ in 0..20_000 {
+                let mut pick = |base: i32| {
+                    let r = next();
+                    let o = if r % 4 == 0 {
+                        (r >> 11) as f64 / (1u64 << 53) as f64 * 3.0 - 1.0
+                    } else {
+                        offsets[(r >> 8) as usize % offsets.len()]
+                    };
+                    f64::from(base) + o
+                };
+                let a = Vec3::new(pick(p.x), pick(p.y), pick(p.z));
+                let b = Vec3::new(pick(p.x), pick(p.y), pick(p.z));
+                let aabb = Aabb::new(a, b);
+                let amount = amounts[next() as usize % amounts.len()];
+                for axis in Axis::ALL {
+                    assert_eq!(
+                        Collides::collide(&collider, axis, aabb, amount).to_bits(),
+                        shape.collide(axis, aabb, amount).to_bits(),
+                        "{p:?} {axis:?} {aabb:?} {amount}"
+                    );
+                }
+            }
+        }
     }
 }
