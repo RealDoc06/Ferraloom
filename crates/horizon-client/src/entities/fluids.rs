@@ -25,6 +25,27 @@ struct ItemFluidWorld<'a> {
 }
 impl ItemEntity {
     pub(super) fn update_fluids(&mut self, world: &World, fluids: &FluidResources) -> (f64, f64) {
+        // Most items lie where no section of their cells holds a fluid: the
+        // interaction would find none, so no height and no current.
+        let b = self.bounds().deflate(Vec3::new(0.001, 0.001, 0.001));
+        let (lo, hi) = (b.min_position(), b.max_position());
+        let cells = (
+            [
+                lo.x.floor() as i32,
+                lo.y.floor() as i32,
+                lo.z.floor() as i32,
+            ],
+            [
+                (hi.x.ceil() as i32).wrapping_sub(1),
+                (hi.y.ceil() as i32).wrapping_sub(1),
+                (hi.z.ceil() as i32).wrapping_sub(1),
+            ],
+        );
+        if !world.may_hold(cells.0, cells.1, |s| {
+            fluids.fluid(s).kind() != FluidKind::Empty
+        }) {
+            return (0.0, 0.0);
+        }
         let mut interaction = EntityFluidInteraction::new([WATER, LAVA]);
         let mut scene = ItemFluidWorld {
             item: self,
