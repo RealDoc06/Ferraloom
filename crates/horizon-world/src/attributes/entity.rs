@@ -23,10 +23,13 @@ pub struct NameHasher(u64);
 impl std::hash::Hasher for NameHasher {
     fn write(&mut self, bytes: &[u8]) {
         const SEED: u64 = 0xf135_7aea_2e62_a9c5;
-        let (words, rest) = bytes.as_chunks::<8>();
+        let words = bytes.chunks_exact(8);
+        let rest = words.remainder();
         let mut add = |word: u64| self.0 = self.0.wrapping_add(word).wrapping_mul(SEED);
         for word in words {
-            add(u64::from_le_bytes(*word));
+            let mut full = [0u8; 8];
+            full.copy_from_slice(word);
+            add(u64::from_le_bytes(full));
         }
         if !rest.is_empty() {
             let mut word = [0u8; 8];
