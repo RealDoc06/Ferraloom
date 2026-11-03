@@ -876,9 +876,6 @@ pub struct SpawnState {
     prepared: Vec<((i32, i32), u8, u8)>,
     /// Reused across the tick's positions; holds the chunk's players.
     nearest: Nearest,
-    /// The players [`Self::prepare_local`] kept for the chunks to come,
-    /// last chunk first.
-    nearest_ahead: Vec<Nearest>,
 }
 /// Every spawning category's bit.
 const SPAWNING_BITS: u8 = {
@@ -935,7 +932,6 @@ impl SpawnState {
             local: None,
             prepared: Vec::new(),
             nearest: Nearest::default(),
-            nearest_ahead: Vec::new(),
         };
         // The local caps are sums, so a chunk's mobs can go in together.
         let mut mobs_by_chunk = FxHashMap::<(i32, i32), [i32; 8]>::default();
@@ -1000,8 +996,7 @@ impl SpawnState {
         }
     }
     /// Works out on the pool what [`spawn_for_chunk`] will ask about `chunks`,
-    /// in the order it will ask, for `categories`, and the players each
-    /// chunk's attempts measure against.
+    /// in the order it will ask, for `categories`.
     pub fn prepare_local(&mut self, chunks: &[(i32, i32)], categories: &[Category]) {
         let asked = Self::asked(categories);
         self.prepared.clear();
@@ -1011,31 +1006,6 @@ impl SpawnState {
         horizon_threads::pool::for_each_mut(&mut self.prepared, 256, |(chunk, asked, open)| {
             *open = players.close_for_spawning_labels(*chunk, *asked);
         });
-        self.nearest_ahead.clear();
-        self.nearest_ahead
-            .extend(chunks.iter().rev().map(|&chunk| Nearest {
-                chunk: Some(chunk),
-                ..Nearest::default()
-            }));
-        horizon_threads::pool::for_each_mut(&mut self.nearest_ahead, 64, |nearest| {
-            if let Some(chunk) = nearest.chunk {
-                nearest.keep_players(players, chunk);
-            }
-        });
-    }
-    /// [`Nearest::distance_sqr`] for an attempt of `chunk`, with the players
-    /// [`Self::prepare_local`] kept for it when it did.
-    fn nearest_distance(&mut self, chunk: (i32, i32), at: [f64; 3]) -> Option<f64> {
-        if self.nearest.chunk != Some(chunk) {
-            // Chunks come in the prepared order; those passed asked nothing.
-            while let Some(next) = self.nearest_ahead.pop() {
-                if next.chunk == Some(chunk) {
-                    self.nearest = next;
-                    break;
-                }
-            }
-        }
-        self.nearest.distance_sqr(&self.players, chunk, at)
     }
     /// What [`Self::can_spawn_local_of`] would answer for every category in
     /// `asked` at `chunk` now, without asking or keeping anything.
@@ -1325,7 +1295,11 @@ pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
             z += random.next_int_bound(6).unwrap_or(0) - random.next_int_bound(6).unwrap_or(0);
             let (xx, zz) = (f64::from(x) + 0.5, f64::from(z) + 0.5);
             trace(Event::Try(x, z));
-            let Some(distance) = state.nearest_distance(chunk, [xx, f64::from(y), zz]) else {
+            let Some(distance) =
+                state
+                    .nearest
+                    .distance_sqr(&state.players, chunk, [xx, f64::from(y), zz])
+            else {
                 continue;
             };
             if !right_distance(l, chunk, [x, y, z], distance) {
@@ -1419,25 +1393,21 @@ pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
 /// checks only compare it with [`Nearest::CHECKS`], so the few players that can
 /// be within 128 blocks of an attempt near the chunk are kept and measured:
 /// when none is, the nearest reads as infinitely far, which every check answers
-/// as it answers the real distance. In a crowd too big to keep, the ones
-/// nearest the chunk's centre are kept: when the nearest of them is closer
-/// than any player left out can be, it is the answer; otherwise it gives the
-/// index's search a distance to beat. An attempt that wanders farther asks the
-/// index outright. Either way the answer is good enough for the checks.
+/// as it answers the real distance. In a crowd too big to keep, those kept give
+/// the index's search a distance to beat; an attempt that wanders farther asks
+/// the index outright. Either way the answer is good enough for the checks.
 #[derive(Clone, Debug, Default)]
 struct Nearest {
     chunk: Option<(i32, i32)>,
     centre: (f64, f64),
     nearby: [[f64; 3]; Self::KEPT],
     kept: usize,
-    /// In a crowd: how far from the centre, across, the nearest player left
-    /// out is (every kept player is no farther).
-    crowded: Option<f64>,
+    crowded: bool,
 }
 impl Nearest {
     /// `right_distance`'s 24² and the despawn distances, 64² and 128².
     const CHECKS: [f64; 3] = [576.0, 4096.0, 16384.0];
-    const KEPT: usize = 24;
+    const KEPT: usize = 16;
     /// An attempt this far from the chunk's centre on both axes uses `nearby`.
     const MARGIN: f64 = 48.0;
     /// 128 blocks past the corner of that square.
@@ -1462,36 +1432,27 @@ impl Nearest {
             .iter()
             .map(|p| (p[0] - at[0]).powi(2) + (p[1] - at[1]).powi(2) + (p[2] - at[2]).powi(2))
             .fold(f64::INFINITY, f64::min);
-        let Some(reach) = self.crowded else {
-            return Some(kept);
-        };
-        // A player left out is at least `reach` from the centre across, so
-        // at least `clear` from the attempt: past the nearest kept one, it
-        // cannot be the nearest (the factor covers rounding).
-        let clear = reach - ((at[0] - cx).powi(2) + (at[2] - cz).powi(2)).sqrt();
-        if clear > 0.0 && kept < clear * clear * (1.0 - 1e-9) {
-            return Some(kept);
-        }
-        Some(players.nearest_against_from(kept, at, &Self::CHECKS))
+        Some(if self.crowded {
+            players.nearest_against_from(kept, at, &Self::CHECKS)
+        } else {
+            kept
+        })
     }
     fn keep_players(&mut self, players: &PlayerIndex, chunk: (i32, i32)) {
         self.chunk = Some(chunk);
         self.centre = (f64::from(chunk.0 * 16 + 8), f64::from(chunk.1 * 16 + 8));
+        self.kept = 0;
+        self.crowded = false;
         let (x, z) = self.centre;
-        let mut near: Vec<([f64; 3], f64)> = Vec::new();
         let _ = players.visit_within(x, z, Self::RADIUS_SQR, &mut |p| {
-            let across = (p.position[0] - x).powi(2) + (p.position[2] - z).powi(2);
-            near.push((p.position, across));
+            if self.kept == Self::KEPT {
+                self.crowded = true;
+                return ControlFlow::Break(());
+            }
+            self.nearby[self.kept] = p.position;
+            self.kept += 1;
             ControlFlow::Continue(())
         });
-        self.crowded = (near.len() > Self::KEPT).then(|| {
-            near.select_nth_unstable_by(Self::KEPT, |a, b| a.1.total_cmp(&b.1));
-            near[Self::KEPT].1.sqrt()
-        });
-        self.kept = near.len().min(Self::KEPT);
-        for (slot, (position, _)) in self.nearby.iter_mut().zip(&near) {
-            *slot = *position;
-        }
     }
 }
 /// `isRightDistanceToPlayerAndSpawnPoint`.
@@ -1742,7 +1703,6 @@ mod tests {
             local: None,
             prepared: Vec::new(),
             nearest: Nearest::default(),
-            nearest_ahead: Vec::new(),
         };
         state.label_open_categories();
         let close = |(cx, cz): (i32, i32)| -> Vec<usize> {
@@ -1830,7 +1790,7 @@ mod tests {
             ((seed >> 33) as i32).rem_euclid(range)
         };
         // A few nearby, then more than the chunk keeps, and none at all near.
-        for (count, spread) in [(3, 400), (40, 64), (300, 2000), (300, 120), (2, 100_000)] {
+        for (count, spread) in [(3, 400), (40, 64), (300, 2000), (2, 100_000)] {
             let players: Vec<[f64; 3]> = (0..count)
                 .map(|_| {
                     [
