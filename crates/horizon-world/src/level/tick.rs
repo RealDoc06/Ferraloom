@@ -1585,6 +1585,17 @@ pub struct Precipitation {
     pub kind: PrecipitationKind,
 }
 
+/// Where [`Behaviours::tick_chunk_random_from`] reads a chunk's sections and
+/// states. Both answers must describe the chunk as it is at the call: a random
+/// tick can write blocks between any two calls.
+pub trait RandomTickSource<L: ?Sized> {
+    /// The minimum Y of the lowest randomly ticking section from `from_y` up.
+    fn next_section(&mut self, level: &mut L, from_y: i32) -> Option<i32>;
+    /// The state at `pos`. `None` is only allowed where that state has no
+    /// random tick (`Sim::random_tick_state` would do nothing with it).
+    fn ticking_state(&mut self, level: &mut L, pos: BlockPos) -> Option<BlockStateId>;
+}
+
 impl Behaviours {
     /// Run due scheduled ticks for the level's current game time, in vanilla
     /// order: block ticks then fluid ticks (65536 each at most).
@@ -1715,20 +1726,27 @@ impl Behaviours {
         chunk: ChunkPos,
         next_ticking: impl FnMut(&mut L, i32) -> Option<i32>,
     ) {
-        self.tick_chunk_random_with_reader(level, ticks, chunk, next_ticking, |level, pos| {
-            level.block_state(pos)
-        });
+        struct Scan<F>(F);
+        impl<L: LevelAccess + ?Sized, F: FnMut(&mut L, i32) -> Option<i32>> RandomTickSource<L>
+            for Scan<F>
+        {
+            fn next_section(&mut self, level: &mut L, from_y: i32) -> Option<i32> {
+                self.0(level, from_y)
+            }
+            fn ticking_state(&mut self, level: &mut L, pos: BlockPos) -> Option<BlockStateId> {
+                Some(level.block_state(pos))
+            }
+        }
+        self.tick_chunk_random_from(level, ticks, chunk, &mut Scan(next_ticking));
     }
 
-    /// Like `tick_chunk_random`, with a caller-supplied current-state reader.
-    /// A cached reader must invalidate after every world revision before reading.
-    pub fn tick_chunk_random_with_reader<L: LevelAccess + ?Sized>(
+    /// [`Self::tick_chunk_random`], with the sections and states read from `source`.
+    pub fn tick_chunk_random_from<L: LevelAccess + ?Sized>(
         &self,
         level: &mut L,
         ticks: &mut Ticks,
         chunk: ChunkPos,
-        mut next_ticking: impl FnMut(&mut L, i32) -> Option<i32>,
-        mut read_state: impl FnMut(&L, BlockPos) -> BlockStateId,
+        source: &mut impl RandomTickSource<L>,
     ) {
         let speed = level.game_rules().random_tick_speed;
         if speed <= 0 {
@@ -1744,11 +1762,15 @@ impl Behaviours {
             }
         }
         let mut from = level.min_y();
-        while let Some(min_y) = next_ticking(level, from).filter(|&y| y < level.max_y()) {
+        while let Some(min_y) = source
+            .next_section(level, from)
+            .filter(|&y| y < level.max_y())
+        {
             for _ in 0..speed {
                 let pos = ticks.block_random_pos(min_x, min_y, min_z, 15);
-                let state = read_state(level, pos);
-                self.sim(level, ticks).random_tick_state(pos, state);
+                if let Some(state) = source.ticking_state(level, pos) {
+                    self.sim(level, ticks).random_tick_state(pos, state);
+                }
             }
             from = min_y + 16;
         }

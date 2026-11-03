@@ -808,6 +808,14 @@ impl GameLevel<'_> {
             .collect()
     }
 }
+impl horizon_client::random_tick_sections::RandomTickChunks for GameLevel<'_> {
+    fn block_revision(&self) -> u64 {
+        self.world.revision
+    }
+    fn chunk_at(&self, key: (i32, i32)) -> Option<&Arc<horizon_client::chunk::Chunk>> {
+        self.world.chunks.get(&key)
+    }
+}
 impl LevelAccess for GameLevel<'_> {
     fn is_client_side(&self) -> bool {
         self.client_side
@@ -3064,9 +3072,11 @@ impl Game<'_> {
         let ticking: Vec<_> = self
             .world
             .chunks
-            .keys()
-            .copied()
-            .filter(|&(x, z)| levels.random_ticking(x, z) && ticking_chunk(&self.world, x, z))
+            .iter()
+            .filter(|&(&(x, z), chunk)| {
+                levels.random_ticking(x, z) && self.tick_chunks.surrounded((x, z)) && chunk.lit
+            })
+            .map(|(&key, _)| key)
             .collect();
         // Entity.checkInsideBlocks for the plates, tripwires, detector rails and
         // buttons under the players (the host and the LAN guests), the minecarts
@@ -3164,7 +3174,9 @@ impl Game<'_> {
             }
             touched.sort_unstable_by_key(|p| (p.x, p.y, p.z));
             touched.dedup();
-            let mut contact = horizon_world::level::ContactSections::default();
+            let mut contact = horizon_world::level::ContactSections::<
+                horizon_client::fast_hash::FxBuild,
+            >::default();
             for pos in inside.into_iter().chain(touched) {
                 let key = (pos.x >> 4, pos.y >> 4, pos.z >> 4);
                 // Recheck after every write, including writes made by an earlier
@@ -3195,38 +3207,15 @@ impl Game<'_> {
         self.process_level_events()?;
         self.tick_scheduled()?;
         self.with_level(|b, level, ticks| {
-            for (x, z) in ticking {
-                // The sections are read again only after a block changed.
-                let mut read = None;
-                let mut sections = Default::default();
-                let pos = horizon_core::position::ChunkPos::new(x, z);
-                let mut current_chunk = horizon_world::level::RandomTickChunk::default();
-                b.tick_chunk_random_with_reader(
-                    level,
-                    ticks,
-                    pos,
-                    |level, from| {
-                        if read != Some(level.world.revision) {
-                            read = Some(level.world.revision);
-                            sections = level
-                                .world
-                                .chunks
-                                .get(&(x, z))
-                                .map_or_else(Default::default, |chunk| {
-                                    level.random_tick_sections.get((x, z), chunk, level.facts)
-                                });
-                        }
-                        sections.from(from)
-                    },
-                    |level, at| {
-                        let current = current_chunk
-                            .get(level.world.revision, || level.world.chunks.get(&(x, z)));
-                        current.map_or(level.world.air, |chunk| {
-                            chunk.block(at.x & 15, at.y, at.z & 15)
-                        })
-                    },
-                );
+            // Out of the level for the turn: the random ticks don't read it.
+            let mut sections = std::mem::take(level.random_tick_sections);
+            let facts = level.facts;
+            for key in ticking {
+                let pos = horizon_core::position::ChunkPos::new(key.0, key.1);
+                let mut visit = sections.visit(key, facts, b);
+                b.tick_chunk_random_from(level, ticks, pos, &mut visit);
             }
+            *level.random_tick_sections = sections;
             b.run_block_events(level, ticks);
             b.tick_block_entities(level, ticks);
         });
@@ -3259,34 +3248,44 @@ impl Game<'_> {
     /// events) happen before the next tick runs, as they do inline in vanilla.
     pub(super) fn tick_scheduled(&mut self) -> Result<()> {
         for fluids in [false, true] {
-            if !self.with_level(|b, level, ticks| b.scheduled_begin(level, ticks, fluids)) {
-                continue;
-            }
+            let mut begun = false;
             loop {
-                let more = self.with_level(|b, level, ticks| {
+                // Reuse the adapter until a tick changes caller-owned state.
+                // Events and drops must be applied before the next tick: they
+                // can summon entities, change rules or trigger blocks.
+                let (more, finished) = self.with_level(|b, level, ticks| {
+                    if !begun {
+                        if !b.scheduled_begin(level, ticks, fluids) {
+                            return (false, true);
+                        }
+                        begun = true;
+                    }
                     loop {
                         let more = b.scheduled_step(level, ticks, fluids);
-                        // Reuse the adapter until a tick changes caller-owned state.
-                        // Events and drops must be applied before the next tick:
-                        // they can summon entities, change rules or trigger blocks.
-                        if !more
-                            || !level.events.is_empty()
+                        if !level.events.is_empty()
                             || !level.spill.spawns.is_empty()
                             || !level.spill.orbs.is_empty()
                             || !level.spill.removed.is_empty()
                         {
-                            break more;
+                            return (more, false);
+                        }
+                        if !more {
+                            b.scheduled_finish(ticks, fluids);
+                            return (false, true);
                         }
                     }
                 });
                 if !self.level_events.is_empty() {
                     self.process_level_events()?;
                 }
+                if finished {
+                    break;
+                }
                 if !more {
+                    self.with_level(|b, _, ticks| b.scheduled_finish(ticks, fluids));
                     break;
                 }
             }
-            self.with_level(|b, _, ticks| b.scheduled_finish(ticks, fluids));
         }
         Ok(())
     }

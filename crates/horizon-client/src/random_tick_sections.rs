@@ -2,10 +2,14 @@
 //! (`LevelChunkSection.isRandomlyTicking`), memoized per section.
 use crate::{
     blocks::BlockFacts,
-    chunk::{Chunk, MIN_Y, SECTIONS, Section},
+    chunk::{Chunk, MIN_Y, SECTIONS, Section, index},
     fast_hash::FxHashMap,
 };
-use horizon_world::registry::BlockStateId;
+use horizon_core::position::BlockPos;
+use horizon_world::{
+    level::{Behaviours, RandomTickSource},
+    registry::BlockStateId,
+};
 use std::sync::{Arc, Weak};
 
 /// A value snapshot, in ascending section order, with no per-chunk allocation.
@@ -40,6 +44,78 @@ struct Cached {
     /// The section each bit of `sections` was read from.
     read: [Weak<Section>; SECTIONS],
     sections: Sections,
+    /// For the sections in `sections`: which of the 4,096 blocks (bit
+    /// `chunk::index`) `Sim::random_tick_state` acts on.
+    positions: [Option<Box<[u64; 64]>>; SECTIONS],
+    /// Which 4x4x4 cells of each section hold one of its `positions`, here so
+    /// that most positions are answered without a read of those.
+    cells: [u64; SECTIONS],
+}
+/// The bit of a block's 4x4x4 cell in `Cached::cells`, from its `chunk::index`.
+#[inline]
+fn cell(index: usize) -> u32 {
+    (index >> 10 << 4 | (index >> 6 & 3) << 2 | (index >> 2 & 3)) as u32
+}
+/// `Cached::cells` of a section's positions. A word of those is one Y and four Z
+/// rows of 16 X, so a cell is every row's same four bits.
+fn cells(positions: &[u64; 64]) -> u64 {
+    const ROWS: u64 = 0x000F_000F_000F_000F;
+    let mut cells = 0;
+    for (w, &word) in positions.iter().enumerate() {
+        for x in 0..4 {
+            if word & ROWS << (4 * x) != 0 {
+                cells |= 1 << ((w >> 4) << 4 | (w & 3) << 2 | x);
+            }
+        }
+    }
+    cells
+}
+impl Cached {
+    /// Reads the sections that are no longer the ones read. `random` is
+    /// `isRandomlyTicking`'s test of a state, `acts` the random tick's own.
+    fn refresh(
+        &mut self,
+        chunk: &Arc<Chunk>,
+        mut random: impl FnMut(u32) -> bool,
+        mut acts: impl FnMut(u32) -> bool,
+    ) {
+        const {
+            assert!(SECTIONS <= u32::BITS as usize);
+        }
+        if self.chunk.as_ptr() == Arc::as_ptr(chunk) {
+            return;
+        }
+        for (i, section) in chunk.sections.iter().enumerate() {
+            if self.read[i].as_ptr() == Arc::as_ptr(section) {
+                continue;
+            }
+            // `isRandomlyTicking`: the blocks themselves, not the palette,
+            // which keeps the states no block uses any more.
+            if section.blocks.has(&mut random) {
+                self.sections.0 |= 1 << i;
+                let positions = self.positions[i].get_or_insert_with(|| Box::new([0; 64]));
+                section.blocks.fill_matching(&mut acts, &mut positions[..]);
+                self.cells[i] = cells(positions);
+            } else {
+                self.sections.0 &= !(1 << i);
+                self.positions[i] = None;
+                self.cells[i] = 0;
+            }
+            self.read[i] = Arc::downgrade(section);
+        }
+        self.chunk = Arc::downgrade(chunk);
+    }
+}
+impl Default for Cached {
+    fn default() -> Self {
+        Self {
+            chunk: Weak::new(),
+            read: std::array::from_fn(|_| Weak::new()),
+            sections: Sections::default(),
+            positions: std::array::from_fn(|_| None),
+            cells: [0; SECTIONS],
+        }
+    }
 }
 /// Vanilla keeps a count of randomly ticking blocks and fluids per section,
 /// updated by every `setBlockState`, and ticks the sections where it is above
@@ -63,39 +139,113 @@ impl RandomTickSections {
         self.chunks.remove(key);
     }
     /// The sections of `chunk` holding a randomly ticking block or fluid.
-    pub fn get(&mut self, key: (i32, i32), chunk: &Arc<Chunk>, facts: &BlockFacts) -> Sections {
-        self.get_with(key, chunk, |id| facts.get(BlockStateId(id)).random_ticks)
+    pub fn get(
+        &mut self,
+        key: (i32, i32),
+        chunk: &Arc<Chunk>,
+        facts: &BlockFacts,
+        behaviours: &Behaviours,
+    ) -> Sections {
+        let cached = self.chunks.entry(key).or_default();
+        cached.refresh(
+            chunk,
+            |id| facts.get(BlockStateId(id)).random_ticks,
+            |id| behaviours.acts_on_random_tick(BlockStateId(id)),
+        );
+        cached.sections
     }
+    /// The [`RandomTickSource`] for the chunk at `key`, for one chunk's turn.
+    pub fn visit<'a>(
+        &'a mut self,
+        key: (i32, i32),
+        facts: &'a BlockFacts,
+        behaviours: &'a Behaviours,
+    ) -> ChunkVisit<'a> {
+        ChunkVisit {
+            cached: self.chunks.entry(key).or_default(),
+            key,
+            revision: None,
+            present: false,
+            facts,
+            behaviours,
+        }
+    }
+}
+
+/// A level's resident chunks and its block revision, which must advance with
+/// every block write.
+pub trait RandomTickChunks {
+    fn block_revision(&self) -> u64;
+    fn chunk_at(&self, key: (i32, i32)) -> Option<&Arc<Chunk>>;
+}
+
+/// One chunk's turn of random ticks. The sections are read again only after a
+/// block changed, and a position that won't tick (99% of them at 500 players)
+/// is answered from the bitmaps without touching the chunk.
+pub struct ChunkVisit<'a> {
+    cached: &'a mut Cached,
+    key: (i32, i32),
+    revision: Option<u64>,
+    present: bool,
+    facts: &'a BlockFacts,
+    behaviours: &'a Behaviours,
+}
+impl ChunkVisit<'_> {
+    #[inline]
+    fn sync<L: RandomTickChunks + ?Sized>(&mut self, level: &L) {
+        let revision = level.block_revision();
+        if self.revision != Some(revision) {
+            self.revision = Some(revision);
+            self.present = level.chunk_at(self.key).is_some_and(|chunk| {
+                let (facts, behaviours) = (self.facts, self.behaviours);
+                self.cached.refresh(
+                    chunk,
+                    |id| facts.get(BlockStateId(id)).random_ticks,
+                    |id| behaviours.acts_on_random_tick(BlockStateId(id)),
+                );
+                true
+            });
+        }
+    }
+}
+impl<L: RandomTickChunks + ?Sized> RandomTickSource<L> for ChunkVisit<'_> {
+    fn next_section(&mut self, level: &mut L, from_y: i32) -> Option<i32> {
+        self.sync(&*level);
+        self.present
+            .then(|| self.cached.sections.from(from_y))
+            .flatten()
+    }
+    #[inline]
+    fn ticking_state(&mut self, level: &mut L, pos: BlockPos) -> Option<BlockStateId> {
+        self.sync(&*level);
+        let section = ((pos.y - MIN_Y) >> 4) as usize;
+        let i = index(pos.x, pos.y, pos.z);
+        if !self.present || self.cached.cells[section] >> cell(i) & 1 == 0 {
+            return None;
+        }
+        let positions = self.cached.positions[section].as_deref()?;
+        if positions[i / 64] >> (i % 64) & 1 == 0 {
+            return None;
+        }
+        Some(
+            level
+                .chunk_at(self.key)?
+                .block(pos.x & 15, pos.y, pos.z & 15),
+        )
+    }
+}
+
+#[cfg(test)]
+impl RandomTickSections {
+    /// The sections of `chunk` holding a state `random` accepts.
     fn get_with(
         &mut self,
         key: (i32, i32),
         chunk: &Arc<Chunk>,
-        mut random: impl FnMut(u32) -> bool,
+        random: impl FnMut(u32) -> bool,
     ) -> Sections {
-        const {
-            assert!(SECTIONS <= u32::BITS as usize);
-        }
-        let cached = self.chunks.entry(key).or_insert_with(|| Cached {
-            chunk: Weak::new(),
-            read: std::array::from_fn(|_| Weak::new()),
-            sections: Sections::default(),
-        });
-        if cached.chunk.as_ptr() != Arc::as_ptr(chunk) {
-            for (i, (section, read)) in chunk.sections.iter().zip(&mut cached.read).enumerate() {
-                if read.as_ptr() == Arc::as_ptr(section) {
-                    continue;
-                }
-                // `isRandomlyTicking`: the blocks themselves, not the palette,
-                // which keeps the states no block uses any more.
-                if section.blocks.has(&mut random) {
-                    cached.sections.0 |= 1 << i;
-                } else {
-                    cached.sections.0 &= !(1 << i);
-                }
-                *read = Arc::downgrade(section);
-            }
-            cached.chunk = Arc::downgrade(chunk);
-        }
+        let cached = self.chunks.entry(key).or_default();
+        cached.refresh(chunk, random, |_| false);
         cached.sections
     }
 }
@@ -104,6 +254,18 @@ impl RandomTickSections {
 mod tests {
     use super::*;
     use crate::chunk::Section;
+
+    #[test]
+    fn cells_hold_exactly_the_cells_of_the_positions() {
+        for (x, y, z) in [(0, 0, 0), (15, 15, 15), (3, 4, 7), (4, 3, 8), (9, 12, 1)] {
+            let i = index(x, y, z);
+            let mut positions = [0; 64];
+            positions[i / 64] |= 1 << (i % 64);
+            let expected = 1u64 << ((y >> 2) << 4 | (z >> 2) << 2 | x >> 2);
+            assert_eq!(cells(&positions), expected);
+            assert_eq!(1u64 << cell(i), expected);
+        }
+    }
 
     #[test]
     fn edits_replacements_compaction_and_reload() {
@@ -212,7 +374,7 @@ mod tests {
 mod tick_parity {
     use super::*;
     use horizon_core::{
-        position::{BlockPos, ChunkPos},
+        position::ChunkPos,
         random::{LegacyRandom, RandomSource},
     };
     use horizon_world::level::{LevelAccess, LevelEvent, Ticks, data};
@@ -226,6 +388,58 @@ mod tick_parity {
         events: Vec<LevelEvent>,
         time: i64,
         speed: i32,
+        revision: u64,
+    }
+    impl RandomTickChunks for Level {
+        fn block_revision(&self) -> u64 {
+            self.revision
+        }
+        fn chunk_at(&self, key: (i32, i32)) -> Option<&Arc<Chunk>> {
+            self.chunks.get(&key)
+        }
+    }
+    /// The whole-section scan's draws: every position vanilla reads, with the
+    /// state there, outside the reads the random ticks themselves make.
+    struct Scan<'a, F> {
+        next: F,
+        draws: &'a mut Vec<(BlockPos, BlockStateId)>,
+    }
+    impl<F: FnMut(&mut Level, i32) -> Option<i32>> RandomTickSource<Level> for Scan<'_, F> {
+        fn next_section(&mut self, level: &mut Level, from_y: i32) -> Option<i32> {
+            (self.next)(level, from_y)
+        }
+        fn ticking_state(&mut self, level: &mut Level, pos: BlockPos) -> Option<BlockStateId> {
+            let state = level
+                .chunks
+                .get(&(pos.x >> 4, pos.z >> 4))
+                .map_or(BlockStateId(0), |c| c.block(pos.x, pos.y, pos.z));
+            self.draws.push((pos, state));
+            Some(state)
+        }
+    }
+    /// The bitmap's draws, each checked against the blocks as they are then.
+    struct Checked<'a> {
+        visit: ChunkVisit<'a>,
+        draws: &'a mut Vec<(BlockPos, BlockStateId)>,
+        behaviours: &'a Behaviours,
+    }
+    impl RandomTickSource<Level> for Checked<'_> {
+        fn next_section(&mut self, level: &mut Level, from_y: i32) -> Option<i32> {
+            self.visit.next_section(level, from_y)
+        }
+        fn ticking_state(&mut self, level: &mut Level, pos: BlockPos) -> Option<BlockStateId> {
+            let answer = self.visit.ticking_state(level, pos);
+            let state = level.chunks[&(pos.x >> 4, pos.z >> 4)].block(pos.x, pos.y, pos.z);
+            assert_eq!(
+                answer,
+                self.behaviours.acts_on_random_tick(state).then_some(state),
+                "at {pos:?}"
+            );
+            if answer.is_some() {
+                self.draws.push((pos, state));
+            }
+            answer
+        }
     }
     impl LevelAccess for Level {
         fn block_state(&self, pos: BlockPos) -> BlockStateId {
@@ -236,9 +450,9 @@ mod tick_parity {
         }
         fn set_raw(&mut self, pos: BlockPos, state: BlockStateId) -> Option<BlockStateId> {
             let chunk = self.chunks.get_mut(&(pos.x >> 4, pos.z >> 4))?;
-            Some(BlockStateId(
-                Arc::make_mut(chunk).set(pos.x, pos.y, pos.z, state.0),
-            ))
+            let previous = Arc::make_mut(chunk).set(pos.x, pos.y, pos.z, state.0);
+            self.revision += u64::from(previous != state.0);
+            Some(BlockStateId(previous))
         }
         fn is_loaded(&self, pos: BlockPos) -> bool {
             self.chunks.contains_key(&(pos.x >> 4, pos.z >> 4))
@@ -312,6 +526,7 @@ mod tick_parity {
             events: Vec::new(),
             time: 0,
             speed: 3,
+            revision: 0,
         };
         Arc::make_mut(original.chunks.get_mut(&(1, 0)).unwrap()).lit = true; // precipitation-only chunk
         let mut cached = original.clone();
@@ -377,6 +592,7 @@ mod tick_parity {
                 keys
             };
             let random = |id| facts.get(BlockStateId(id)).random_ticks;
+            let (mut scanned, mut hits) = (Vec::new(), Vec::new());
             for (x, z) in lit(&original) {
                 // Vanilla's rule, asked as each section is reached: any of its
                 // 4,096 blocks ticks randomly.
@@ -390,14 +606,32 @@ mod tick_parity {
                             })
                         })
                 };
-                behaviours.tick_chunk_random(&mut original, &mut a, ChunkPos::new(x, z), reference);
+                let mut source = Scan {
+                    next: reference,
+                    draws: &mut scanned,
+                };
+                behaviours.tick_chunk_random_from(
+                    &mut original,
+                    &mut a,
+                    ChunkPos::new(x, z),
+                    &mut source,
+                );
             }
             for (x, z) in lit(&cached) {
-                let memoized = |level: &mut Level, from| {
-                    cache.get((x, z), &level.chunks[&(x, z)], &facts).from(from)
+                let mut source = Checked {
+                    visit: cache.visit((x, z), &facts, &behaviours),
+                    draws: &mut hits,
+                    behaviours: &behaviours,
                 };
-                behaviours.tick_chunk_random(&mut cached, &mut b, ChunkPos::new(x, z), memoized);
+                behaviours.tick_chunk_random_from(
+                    &mut cached,
+                    &mut b,
+                    ChunkPos::new(x, z),
+                    &mut source,
+                );
             }
+            scanned.retain(|&(_, state)| behaviours.acts_on_random_tick(state));
+            assert_eq!(scanned, hits, "ticking draws at tick {step}");
             assert_eq!(original.reads, cached.reads, "ordered reads at tick {step}");
             assert_eq!(original.events, cached.events, "events at tick {step}");
             assert_eq!(

@@ -108,7 +108,7 @@ mod feature_world;
 mod fluids;
 mod growth;
 mod hot_sections;
-pub use hot_sections::{ContactSections, RandomTickChunk};
+pub use hot_sections::ContactSections;
 mod hooks;
 mod interact;
 pub mod pistons;
@@ -127,6 +127,7 @@ mod signals;
 mod speleothem;
 mod survive;
 mod tick;
+pub use tick::RandomTickSource;
 mod timeline;
 mod update;
 mod weather;
@@ -551,6 +552,11 @@ impl Behaviours {
             })
             .collect();
         self
+    }
+    /// Whether `Sim::random_tick_state` can act on this state: it has a random
+    /// tick as a block, or as lava's fluid.
+    pub fn acts_on_random_tick(&self, state: BlockStateId) -> bool {
+        self.hot_flags[state.0 as usize] & 6 != 0
     }
     /// Whether the generic entity-sensing hook can act on this state.
     /// Big dripleaf and movement effects have separate entry points.
