@@ -2617,7 +2617,7 @@ impl Hub {
             )
         };
         let (old, new) = (at(g.position), at(to));
-        if only_air_around(ctx.world, old.union_bounds(new)) {
+        if ctx.world.only_air_near(old.union_bounds(new)) {
             return (false, false);
         }
         let mut scene = SceneCollisions {
@@ -3029,34 +3029,6 @@ fn shared_flags(sneaking: bool, sprinting: bool, body: &BodyFlags) -> i8 {
 mod tests {
     use super::*;
 
-    /// A move's check skips the scans only with nothing but air in a
-    /// loaded column around it.
-    #[test]
-    fn only_air_around_needs_loaded_air_within_a_block() {
-        use crate::{chunk::Chunk, world::World};
-        use horizon_world::registry::BlockStateId;
-        let mut world = World::new(BlockStateId(0), 0);
-        let mut chunk = Chunk::empty(0, 0);
-        chunk.set(3, 70, 3, 9);
-        world.chunks.insert((0, 0), Arc::new(chunk));
-        world.chunks.insert((1, 0), Arc::new(Chunk::empty(1, 0)));
-        let body = |x: f64, y: f64, z: f64| {
-            Aabb::new(
-                Vec3::new(x - 0.3, y, z - 0.3),
-                Vec3::new(x + 0.3, y + 1.8, z + 0.3),
-            )
-        };
-        assert!(only_air_around(&world, body(8.5, 100.0, 8.5)));
-        // The section with the block, and the one below it a block away.
-        assert!(!only_air_around(&world, body(8.5, 66.0, 8.5)));
-        assert!(!only_air_around(&world, body(8.5, 80.0, 8.5)));
-        // Next to an unloaded column.
-        assert!(!only_air_around(&world, body(31.5, 100.0, 8.5)));
-        assert!(!only_air_around(&world, body(8.5, 100.0, 0.2)));
-        // Too far to look at.
-        let far = body(8.5, 100.0, 8.5).union_bounds(body(24.5, 140.0, 8.5));
-        assert!(!only_air_around(&world, far));
-    }
     use crate::fast_hash::FxHashSet;
 
     /// Isolate routing 500 players' inbound packets, including index rebuild.
@@ -3318,25 +3290,4 @@ mod tests {
             }
         }
     }
-}
-
-/// Whether every block within one of `bounds` is in a loaded chunk's
-/// section that holds only air: a move there meets no block (the scene's
-/// collisions have no border or entities), so `Hub::collide` finds nothing
-/// to stop it. A region too big for that goes the long way.
-fn only_air_around(world: &crate::world::World, bounds: Aabb) -> bool {
-    let (lo, hi) = (bounds.min_position(), bounds.max_position());
-    let within = |v: Vec3| [v.x, v.y, v.z].iter().all(|c| c.abs() < 3.0e7);
-    if !within(lo) || !within(hi) {
-        return false;
-    }
-    let corner = |v: Vec3, by: i32| [v.x, v.y, v.z].map(|c| c.floor() as i32 + by);
-    let (lo, hi) = (corner(lo, -1), corner(hi, 1));
-    let blocks: i64 = (0..3).map(|k| i64::from(hi[k] - lo[k] + 1)).product();
-    if blocks > 512 {
-        return false;
-    }
-    let loaded = (lo[0] >> 4..=hi[0] >> 4)
-        .all(|cx| (lo[2] >> 4..=hi[2] >> 4).all(|cz| world.loaded(cx << 4, cz << 4)));
-    loaded && !world.may_hold(lo, hi, |state| !world.is_air(state))
 }

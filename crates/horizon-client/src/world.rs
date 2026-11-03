@@ -415,6 +415,28 @@ impl World {
     pub fn loaded(&self, x: i32, z: i32) -> bool {
         self.chunks.contains_key(&(x >> 4, z >> 4))
     }
+    /// Whether every block within one of `bounds` is in a loaded chunk's
+    /// section that holds only air: a box there meets no block, and a
+    /// collision check with no entities or border to add finds nothing (a
+    /// guest's move, its pose). False for a region of more than 512 blocks,
+    /// which is cheaper to scan than to answer for.
+    pub fn only_air_near(&self, bounds: horizon_core::geometry::Aabb) -> bool {
+        let (lo, hi) = (bounds.min_position(), bounds.max_position());
+        let within = |v: [f64; 3]| v.iter().all(|c| c.abs() < 3.0e7);
+        let (lo, hi) = (lo.components(), hi.components());
+        if !within(lo) || !within(hi) {
+            return false;
+        }
+        let corner = |v: [f64; 3], by: i32| v.map(|c| c.floor() as i32 + by);
+        let (lo, hi) = (corner(lo, -1), corner(hi, 1));
+        let blocks: i64 = (0..3).map(|k| i64::from(hi[k] - lo[k] + 1)).product();
+        if blocks > 512 {
+            return false;
+        }
+        let loaded = (lo[0] >> 4..=hi[0] >> 4)
+            .all(|cx| (lo[2] >> 4..=hi[2] >> 4).all(|cz| self.loaded(cx << 4, cz << 4)));
+        loaded && !self.may_hold(lo, hi, |state| !self.is_air(state))
+    }
 }
 
 /// The game rules and difficulty a player's health reads (`Player.isInvulnerableTo`,
@@ -539,6 +561,34 @@ mod tests {
                 cached.as_nanos() as f64 / reads
             );
         }
+    }
+
+    /// Only air within a block, in loaded columns, and a region small
+    /// enough to look at.
+    #[test]
+    fn only_air_near_needs_loaded_air_within_a_block() {
+        use horizon_core::geometry::{Aabb, Vec3};
+        let mut world = World::new(BlockStateId(0), 0);
+        let mut chunk = Chunk::empty(0, 0);
+        chunk.set(3, 70, 3, 9);
+        world.chunks.insert((0, 0), Arc::new(chunk));
+        world.chunks.insert((1, 0), Arc::new(Chunk::empty(1, 0)));
+        let body = |x: f64, y: f64, z: f64| {
+            Aabb::new(
+                Vec3::new(x - 0.3, y, z - 0.3),
+                Vec3::new(x + 0.3, y + 1.8, z + 0.3),
+            )
+        };
+        assert!(world.only_air_near(body(8.5, 100.0, 8.5)));
+        // The section with the block, and the one below it a block away.
+        assert!(!world.only_air_near(body(8.5, 66.0, 8.5)));
+        assert!(!world.only_air_near(body(8.5, 80.0, 8.5)));
+        // Next to an unloaded column.
+        assert!(!world.only_air_near(body(31.5, 100.0, 8.5)));
+        assert!(!world.only_air_near(body(8.5, 100.0, 0.2)));
+        // Too far to look at.
+        let far = body(8.5, 100.0, 8.5).union_bounds(body(24.5, 140.0, 8.5));
+        assert!(!world.only_air_near(far));
     }
 
     /// A box misses a state only where no section it reaches lists it, and
