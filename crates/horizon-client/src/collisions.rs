@@ -760,3 +760,52 @@ mod border_movement_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod sections_seen_tests {
+    use super::*;
+    use crate::chunk::Chunk;
+
+    /// Held sections tell a write inside the box from one elsewhere, and a
+    /// section that may hold a moving piston is never held.
+    #[test]
+    fn held_sections_notice_writes_inside_the_box_only() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../.local/horizon-client")
+            .join(horizon_core::VANILLA_VERSION);
+        if !root.join("cached-collision.nbt").exists() {
+            return;
+        }
+        let assets = crate::assets::Assets::load(&root).unwrap();
+        let binding = load(&root, assets.registry).unwrap();
+        let state = |name| assets.registry.default_state(name).unwrap();
+        let (air, stone) = (state("minecraft:air"), state("minecraft:stone"));
+        let mut world = World::new(air, 0);
+        for (x, z) in [(0, 0), (1, 0), (4, 4)] {
+            world.chunks.insert((x, z), Arc::new(Chunk::empty(x, z)));
+        }
+        world.set(5, 63, 5, stone).unwrap();
+        let bounds = Aabb::new(Vec3::new(5.2, 64.0, 5.2), Vec3::new(5.8, 65.8, 5.8));
+        let cells = SectionsSeen::cells_around(bounds);
+        let mut seen = SectionsSeen::default();
+        assert!(seen.capture(&world, &binding, cells));
+        assert!(seen.unchanged(&world, cells));
+        // A write two chunks away leaves the box's sections as they were.
+        world.set(70, 64, 70, stone).unwrap();
+        assert!(seen.unchanged(&world, cells));
+        // One under the box replaces its section.
+        world.set(6, 63, 6, stone).unwrap();
+        assert!(!seen.unchanged(&world, cells));
+        // So does a column arriving where none was resident.
+        let wide = SectionsSeen::cells_around(bounds.move_by(Vec3::new(10.0, 0.0, 10.0)));
+        assert!(seen.capture(&world, &binding, wide));
+        world.chunks.insert((0, 1), Arc::new(Chunk::empty(0, 1)));
+        assert!(!seen.unchanged(&world, wide));
+        // A moving piston's shape moves without a write: never held.
+        world
+            .set(5, 64, 6, state("minecraft:moving_piston"))
+            .unwrap();
+        assert!(!seen.capture(&world, &binding, cells));
+        assert!(!seen.unchanged(&world, cells));
+    }
+}
