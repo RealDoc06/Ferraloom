@@ -767,15 +767,16 @@ impl<'a> Game<'a> {
                 state.prepare_local(&chunks, &categories);
                 let columns = self.spawning_columns(&chunks);
                 for (i, &chunk) in chunks.iter().enumerate() {
-                    // Hints only: the next columns' headers, surfaces and
-                    // section headers load while this one spawns.
-                    if let Some(Some(next)) = columns.get(i + 3) {
+                    // Hints only: the coming columns' headers, surfaces and
+                    // section headers load while this one spawns, ready for
+                    // the next column's foreseen starts.
+                    if let Some(Some(next)) = columns.get(i + 4) {
                         next.prefetch_header();
                     }
-                    if let Some(Some(next)) = columns.get(i + 2) {
+                    if let Some(Some(next)) = columns.get(i + 3) {
                         next.prefetch_surface();
                     }
-                    if let Some(Some(next)) = columns.get(i + 1) {
+                    if let Some(Some(next)) = columns.get(i + 2) {
                         next.prefetch_sections();
                     }
                     level.column.enter(chunk, columns[i]);
