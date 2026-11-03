@@ -173,6 +173,11 @@ pub(super) struct GameLevel<'g, 'a> {
     column: ColumnMemo<'g>,
     /// Every biome's [`BiomeRow`], in the biome list's order, for this pass.
     biome_rows: std::cell::OnceCell<Vec<BiomeRow<'g>>>,
+    /// The generator's structure starts by owning chunk, once asked, for
+    /// this pass (each look-up takes two locks and the generator's cache).
+    starts: std::cell::RefCell<FxHashMap<(i32, i32), Starts>>,
+    locator:
+        std::cell::OnceCell<Option<std::sync::Arc<horizon_client::vanillagen::VanillaTerrain>>>,
     /// Entity types as [`NaturalLevel::mob_type`] answers, for this pass.
     mob_types: std::cell::RefCell<FxHashMap<String, Option<MobType>>>,
     /// Natural spawning snapshots players once for its pass. Other spawning
@@ -189,6 +194,8 @@ pub(super) struct GameLevel<'g, 'a> {
     pub(super) box_queries: std::cell::Cell<u32>,
 }
 const SCANNED_QUERIES: u32 = 1;
+type Starts =
+    std::rc::Rc<[std::sync::Arc<horizon_world::worldgen::structure::start::StructureStart>]>;
 /// How many chunks or mobs a pool thread takes at a time in this pass's reads.
 const PASS_GRAIN: usize = 512;
 /// A mob not removed: its index in `Game::mobs`, box, alive, and whether
@@ -407,15 +414,26 @@ impl NaturalLevel for GameLevel<'_, '_> {
         z: i32,
         wanted: &dyn Fn(&str) -> bool,
     ) -> Vec<StructureAt> {
-        self.game
-            .structures_reaching_where([x, y, z], wanted)
-            .into_iter()
-            .map(|(id, in_piece)| StructureAt {
-                id,
-                in_piece,
-                in_bounds: true,
-            })
-            .collect()
+        let Some(chunk) = self.chunk(x, z).filter(|c| !c.structure_refs.is_empty()) else {
+            return Vec::new();
+        };
+        let Some(locator) = self.locator.get_or_init(|| self.game.end.locator()) else {
+            return Vec::new();
+        };
+        super::structures::structures_reaching_in(chunk, [x, y, z], wanted, |sx, sz| {
+            let mut starts = self.starts.borrow_mut();
+            let owned = starts
+                .entry((sx, sz))
+                .or_insert_with(|| locator.starts_at(sx, sz).into());
+            Starts::clone(owned)
+        })
+        .into_iter()
+        .map(|(id, in_piece)| StructureAt {
+            id,
+            in_piece,
+            in_bounds: true,
+        })
+        .collect()
     }
     fn structure_spawns(&self) -> &StructureSpawns {
         StructureSpawns::shared(&self.game.options.resources)
@@ -544,6 +562,8 @@ impl<'a> Game<'a> {
             w: self.mob_world_base(&[]),
             column: ColumnMemo::default(),
             biome_rows: Default::default(),
+            starts: Default::default(),
+            locator: Default::default(),
             mob_types: Default::default(),
             players,
             pending: Default::default(),
