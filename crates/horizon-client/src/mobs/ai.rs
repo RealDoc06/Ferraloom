@@ -498,7 +498,9 @@ pub fn tick(
     } else {
         ai_step(m, w, level_random, events);
     }
-    effects_from_blocks(m, w);
+    // The kinds of block the contact checks after the move may meet.
+    let near = kinds_near(m, w);
+    effects_from_blocks(m, w, near);
     if m.species() == Species::Rabbit {
         super::rabbit::post_tick(m);
     }
@@ -515,7 +517,7 @@ pub fn tick(
     super::axolotl::tick_animation(m);
     m.anim.end_tick(m.ai.swinging);
     tick_swing(m);
-    flower_contact_effects(m, w);
+    flower_contact_effects(m, w, near);
     if m.species() == Species::CopperGolem {
         // CopperGolem.tick: updateWeathering after the living tick.
         super::copper_golem::update_weathering(m, w, level_random, events);
@@ -540,9 +542,9 @@ pub fn tick(
 /// 0.8, and a grown bush pricks for 1 when the mob moved at least 0.003 on X
 /// or Z this tick). The blocks are those the mob's box touches anywhere along
 /// its move this tick, from where it started to where it ended.
-fn effects_from_blocks(m: &mut Mob, w: &MobWorld) {
+fn effects_from_blocks(m: &mut Mob, w: &MobWorld, near: u16) {
     use crate::block_kinds::{CACTUS, SWEET_BERRY_BUSH};
-    if !may_touch(m, w, CACTUS | SWEET_BERRY_BUSH) {
+    if near & (CACTUS | SWEET_BERRY_BUSH) == 0 {
         return;
     }
     let mut visited: Vec<[i32; 3]> = Vec::new();
@@ -591,29 +593,29 @@ fn effects_from_blocks(m: &mut Mob, w: &MobWorld) {
         }
     }
 }
-/// Whether a block of the `kinds` may stand in the cells around the mob's
-/// boxes at `previous` and `position` (a superset, read from the section
-/// palettes). False lets a contact check that only reacts to those blocks
-/// stop before reading a cell.
-fn may_touch(m: &Mob, w: &MobWorld, kinds: u16) -> bool {
+/// The `block_kinds` the section palettes around the mob's boxes at
+/// `previous` and `position` may hold (a superset). A contact check that
+/// only reacts to kinds not among them finds nothing, so it stops before
+/// reading a cell. The cells cover the boxes the checks visit (the swept
+/// box of `effects_from_blocks`, both boxes of the flower contact).
+fn kinds_near(m: &Mob, w: &MobWorld) -> u16 {
     let (a, b) = (m.previous, m.position);
-    let reach = f64::from(m.width()) / 2.0 + 1.0;
+    let half = f64::from(m.width()) / 2.0 + 0.01;
     let lo = [
-        (a.x.min(b.x) - reach).floor() as i32,
-        (a.y.min(b.y) - 1.0).floor() as i32,
-        (a.z.min(b.z) - reach).floor() as i32,
+        (a.x.min(b.x) - half).floor() as i32,
+        a.y.min(b.y).floor() as i32,
+        (a.z.min(b.z) - half).floor() as i32,
     ];
     let hi = [
-        (a.x.max(b.x) + reach).floor() as i32,
-        (a.y.max(b.y) + f64::from(m.height()) + 1.0).floor() as i32,
-        (a.z.max(b.z) + reach).floor() as i32,
+        (a.x.max(b.x) + half).floor() as i32,
+        (a.y.max(b.y) + f64::from(m.height()) + 0.01).floor() as i32,
+        (a.z.max(b.z) + half).floor() as i32,
     ];
     // A long move (a teleport) reads its cells instead of many palettes.
     if hi[0].saturating_sub(lo[0]) > 64 || hi[2].saturating_sub(lo[2]) > 64 {
-        return true;
+        return u16::MAX;
     }
-    let table = crate::block_kinds::BlockKinds::of(w.registry);
-    w.world.may_hold(lo, hi, |s| table.is(s, kinds))
+    crate::block_kinds::BlockKinds::of(w.registry).near(w.world, lo, hi)
 }
 /// LivingEntity.updateSwingTime.
 pub fn tick_swing(m: &mut Mob) {
@@ -810,7 +812,7 @@ fn freeze_tick(m: &mut Mob, w: &MobWorld) {
 /// Whether the mob's box (shrunk by `1.0E-5`, as in `Entity.checkInsideBlocks`)
 /// touches powder snow.
 fn in_powder_snow(m: &Mob, w: &MobWorld) -> bool {
-    if !may_touch(m, w, crate::block_kinds::POWDER_SNOW) {
+    if kinds_near(m, w) & crate::block_kinds::POWDER_SNOW == 0 {
         return false;
     }
     let b = m.bounds().deflate(Vec3::new(1e-5, 1e-5, 1e-5));
@@ -1921,12 +1923,12 @@ pub fn custom_travel(m: &mut Mob, w: &MobWorld, input: Vec3, events: &mut Vec<Mo
 /// for 25 ticks on a bee, when the open flower attracts bees). The blocks
 /// are those the mob's box touches where it started the tick and where it
 /// ended.
-fn flower_contact_effects(m: &mut Mob, w: &MobWorld) {
+fn flower_contact_effects(m: &mut Mob, w: &MobWorld, near: u16) {
     if !m.alive() || w.difficulty.effective == 0.0 {
         return;
     }
     use crate::block_kinds::{OPEN_EYEBLOSSOM, WITHER_ROSE};
-    if !may_touch(m, w, WITHER_ROSE | OPEN_EYEBLOSSOM) {
+    if near & (WITHER_ROSE | OPEN_EYEBLOSSOM) == 0 {
         return;
     }
     let half = f64::from(m.width()) / 2.0 - 1.0e-5;

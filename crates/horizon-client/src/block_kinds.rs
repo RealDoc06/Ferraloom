@@ -70,6 +70,38 @@ impl BlockKinds {
         others.push(kinds);
         kinds
     }
+    /// The kinds the palettes of the sections over cells `lo..=hi` may
+    /// hold (a superset; all of them where a palette is the whole
+    /// registry). Unloaded columns and heights past the world are their air.
+    pub fn near(&self, world: &crate::world::World, lo: [i32; 3], hi: [i32; 3]) -> u16 {
+        use crate::chunk::{MIN_Y, SECTIONS};
+        let bits = |s: u32| self.bits.get(s as usize).copied().unwrap_or(0);
+        let top = MIN_Y + SECTIONS as i32 * 16 - 1;
+        let mut kinds = 0;
+        if lo[1] < MIN_Y || hi[1] > top {
+            kinds |= bits(0);
+        }
+        let sections = (lo[1].max(MIN_Y) - MIN_Y) >> 4..=(hi[1].min(top) - MIN_Y) >> 4;
+        for cx in lo[0] >> 4..=hi[0] >> 4 {
+            for cz in lo[2] >> 4..=hi[2] >> 4 {
+                let Some(chunk) = world.chunks.get(&(cx, cz)) else {
+                    kinds |= bits(world.air.0);
+                    continue;
+                };
+                for s in sections.clone() {
+                    let blocks = &chunk.sections[s as usize].blocks;
+                    if blocks.is_global() {
+                        return u16::MAX;
+                    }
+                    blocks.maybe_has(|v| {
+                        kinds |= bits(v);
+                        false
+                    });
+                }
+            }
+        }
+        kinds
+    }
     /// Whether `state` is one of the kinds in `mask`. States outside the
     /// registry are none of them.
     #[inline]
