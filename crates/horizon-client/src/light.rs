@@ -1136,7 +1136,7 @@ mod tests {
             }
             MIN_Y
         }
-        let mut w = world(|c| {
+        let w = world(|c| {
             // A slab at a section's bottom, one mid-section, and a section
             // of stone (uniform, but closed to itself) high up; the
             // neighbouring chunks are open down to their stone.

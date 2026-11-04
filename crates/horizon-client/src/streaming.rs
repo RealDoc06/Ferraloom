@@ -443,10 +443,12 @@ impl GenerationScan {
                     .push(run);
             }
             let chunks = &input.world.chunks;
+            // The protos map holds unshared values: its keys are all the scan asks.
+            let protos: FxHashSet<(i32, i32)> = input.protos.keys().copied().collect();
             let (ranges, generating, protos, finishing, ahead) = (
                 &input.ranges,
                 input.generating,
-                input.protos,
+                &protos,
                 input.finishing,
                 input.ahead,
             );
@@ -464,7 +466,7 @@ impl GenerationScan {
                         if !ranges.requested(x, z, decorates)
                             || chunks.contains_key(&(x, z))
                             || generating.contains(&(x, z))
-                            || protos.contains_key(&(x, z))
+                            || protos.contains(&(x, z))
                             || finishing.contains(&(x, z))
                         {
                             continue;
