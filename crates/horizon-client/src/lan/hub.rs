@@ -438,6 +438,223 @@ fn tracked(cx: i32, cz: i32, r: i32, x: i32, z: i32) -> bool {
     dx * dx + dz * dz < i64::from(r) * i64::from(r)
 }
 
+/// ServerPlayer.doTick: health, food, experience and the inventory menu.
+fn sync_player_state(g: &mut Guest, sync: &SyncData) {
+    // LivingEntity.startSleeping / stopSleeping: the pose and the bed go
+    // to the player too (its client lies down in the bed from them).
+    if g.bed != g.sent_bed {
+        g.sent_bed = g.bed;
+        let pose = if g.bed.is_some() { 2 } else { 0 };
+        g.send(&C::SetEntityData(play::SetEntityData {
+            id: g.entity_id,
+            values: vec![
+                (6, serializer::POSE, Value::Id(pose)),
+                (14, serializer::OPTIONAL_BLOCK_POS, Value::OptPos(g.bed)),
+            ],
+        }));
+    }
+    // ServerEntity.sendDirtyEntityData on the player's first tick: the
+    // health its creation set is still dirty, and goes to the player too.
+    if g.sent_health.is_none() {
+        g.send(&C::SetEntityData(play::SetEntityData {
+            id: g.entity_id,
+            values: vec![(9, serializer::FLOAT, Value::Float(g.health))],
+        }));
+        // ServerPlayer.tick's CriteriaTriggers.TICK, then flushDirty. A
+        // player who has been here has had the tick's criteria already.
+        if !g.advancements_loaded {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_millis() as i64);
+            let first =
+                sync.advancements
+                    .first_tick(sync, now, &mut g.advancements, &mut g.recipe_book);
+            if let Some(add) = first.recipe_book_add {
+                g.send(&raw(ids::RECIPE_BOOK_ADD, add));
+            }
+            g.send(&raw(ids::UPDATE_ADVANCEMENTS, first.update_advancements));
+            g.advancements_visible = sync.advancements.visibility(&g.advancements);
+            g.advancements_changed.clear();
+        } else {
+            flush_advancements(g, sync, true);
+        }
+    }
+    // ServerEntity.sendDirtyEntityData: the player's changed attribute
+    // instances go to the player too (its trackers get them from
+    // track_entities).
+    if let Some(m) = g.motion.as_mut() {
+        let values = super::attributes::take_dirty(&mut m.attributes);
+        if !values.is_empty() {
+            g.send(&C::UpdateAttributes(play::UpdateAttributes {
+                id: g.entity_id,
+                values,
+            }));
+        }
+    }
+    // ServerEntity.sendDirtyEntityData: the air supply and the absorption
+    // amount the server's body changed go to the player, whose HUD draws
+    // them (bubbles, golden hearts).
+    if let Some(m) = g.motion.as_ref() {
+        let now = (m.air, m.health.absorption());
+        let mut values = Vec::new();
+        if now.0 != g.sent_air.0 {
+            values.push((1, serializer::INT, Value::Int(now.0)));
+        }
+        if now.1.to_bits() != g.sent_air.1.to_bits() {
+            values.push((17, serializer::FLOAT, Value::Float(now.1)));
+        }
+        if !values.is_empty() {
+            g.sent_air = now;
+            g.send(&C::SetEntityData(play::SetEntityData {
+                id: g.entity_id,
+                values,
+            }));
+        }
+    }
+    // ServerEntity.sendDirtyEntityData: the shared flags go to the player
+    // too, so the sprint a hit stops (Player.causeExtraKnockback) stops
+    // on its client.
+    let shared = shared_flags(g.sneaking, g.sprinting, &guest_body(g));
+    if shared != g.sent_shared {
+        g.sent_shared = shared;
+        g.send(&C::SetEntityData(play::SetEntityData {
+            id: g.entity_id,
+            values: vec![(0, serializer::BYTE, Value::Byte(shared))],
+        }));
+    }
+    // Sent when the health or the food level changes, or the saturation
+    // reaches or leaves zero; a dead player's health of 0 too.
+    let health = (g.health, g.food, g.saturation == 0.0);
+    if g.sent_health != Some(health) {
+        g.send(&C::SetHealth(play::SetHealth {
+            health: g.health,
+            food: g.food,
+            saturation: g.saturation,
+        }));
+        g.sent_health = Some(health);
+    }
+    let xp = (g.xp_progress, g.xp_level, g.xp_total);
+    if g.sent_xp != Some(xp) {
+        g.send(&C::SetExperience(play::SetExperience {
+            progress: xp.0,
+            level: xp.1,
+            total: xp.2,
+        }));
+        g.sent_xp = Some(xp);
+    }
+    // AbstractContainerMenu.broadcastChanges for the inventory menu.
+    let mut changes = Vec::new();
+    for slot in 0..46 {
+        let now = g.menu_slot_ref(slot);
+        if now != g.menu_sent[slot].as_ref() {
+            changes.push((slot, now.cloned()));
+        }
+    }
+    for (slot, now) in changes {
+        let net = now.as_ref().and_then(|s| sync.stack(s));
+        g.menu_state = (g.menu_state + 1) & 0x7FFF;
+        g.send(&C::ContainerSetSlot(play::ContainerSetSlot {
+            container: 0,
+            state: g.menu_state,
+            slot: slot as i16,
+            item: net,
+        }));
+        g.menu_sent[slot] = now;
+    }
+}
+
+/// `Hub::sync_effects` for one guest.
+fn sync_effects(g: &mut Guest, sync: &SyncData) {
+    if g.effects.list.is_empty() && g.sent_effects.is_empty() {
+        return;
+    }
+    let now = g.effects.tick_count;
+    let mut sent = Vec::with_capacity(g.effects.list.len());
+    let mut changes = Vec::new();
+    for e in &g.effects.list {
+        match g.sent_effects.iter().find(|s| s.id == e.id) {
+            None => changes.push((e.clone(), true)),
+            Some(s) => {
+                let ticked = now.wrapping_sub(s.tick_count);
+                let expected = if s.duration == -1 {
+                    -1
+                } else {
+                    s.duration - ticked
+                };
+                let refresh = ticked > 0 && e.duration > 0 && e.duration % 600 == 0;
+                if s.amplifier != e.amplifier
+                    || s.flags != PlayerEffects::flags(e)
+                    || e.duration != expected
+                    || refresh
+                {
+                    changes.push((e.clone(), false));
+                } else {
+                    sent.push(s.clone());
+                }
+            }
+        }
+    }
+    let removed: Vec<&'static str> = g
+        .sent_effects
+        .iter()
+        .filter(|s| g.effects.get(s.id).is_none())
+        .map(|s| s.id)
+        .collect();
+    for id in removed {
+        let Some(effect) = sync.id("minecraft:mob_effect", &format!("minecraft:{id}")) else {
+            continue;
+        };
+        g.send(&C::RemoveMobEffect(play::RemoveMobEffect {
+            id: g.entity_id,
+            effect,
+        }));
+    }
+    for (e, added) in changes {
+        sent.extend(send_effect(g, sync, &e, added));
+    }
+    g.sent_effects = sent;
+}
+
+/// `Hub::send_effect` for one guest.
+fn send_effect(g: &Guest, sync: &SyncData, e: &EffectInstance, blend: bool) -> Option<SentEffect> {
+    let effect = sync.id("minecraft:mob_effect", &format!("minecraft:{}", e.id))?;
+    let flags = PlayerEffects::flags(e);
+    g.send(&C::UpdateMobEffect(play::UpdateMobEffect {
+        id: g.entity_id,
+        effect,
+        amplifier: e.amplifier,
+        duration: e.duration,
+        flags: flags | if blend { 8 } else { 0 },
+    }));
+    Some(SentEffect {
+        id: e.id,
+        amplifier: e.amplifier,
+        flags,
+        duration: e.duration,
+        tick_count: g.effects.tick_count,
+    })
+}
+
+/// `Hub::flush_advancements` for one guest.
+fn flush_advancements(g: &mut Guest, sync: &SyncData, show: bool) {
+    let mut unlocked = std::mem::take(&mut g.recipes_unlocked);
+    // A recipe given and taken before this flush must not reappear.
+    unlocked.retain(|id| g.recipe_book.knows(id));
+    if let Some(add) = sync.advancements.recipes_added(&unlocked, sync) {
+        g.send(&raw(ids::RECIPE_BOOK_ADD, add));
+    }
+    let changed = std::mem::take(&mut g.advancements_changed);
+    if let Some(update) = sync.advancements.update(
+        sync,
+        &g.advancements,
+        &mut g.advancements_visible,
+        &changed,
+        show,
+    ) {
+        g.send(&raw(ids::UPDATE_ADVANCEMENTS, update));
+    }
+}
+
 /// Guests per piece of `track_entities`' pass on the pool.
 const PLAYER_STATE_GRAIN: usize = 32;
 
@@ -1197,25 +1414,7 @@ impl Hub {
 
     /// ClientboundUpdateMobEffectPacket for one of the guest's effects.
     fn send_effect(&mut self, i: usize, e: &EffectInstance, blend: bool) -> Option<SentEffect> {
-        let effect = self
-            .sync
-            .id("minecraft:mob_effect", &format!("minecraft:{}", e.id))?;
-        let flags = PlayerEffects::flags(e);
-        let g = &self.guests[i];
-        g.send(&C::UpdateMobEffect(play::UpdateMobEffect {
-            id: g.entity_id,
-            effect,
-            amplifier: e.amplifier,
-            duration: e.duration,
-            flags: flags | if blend { 8 } else { 0 },
-        }));
-        Some(SentEffect {
-            id: e.id,
-            amplifier: e.amplifier,
-            flags,
-            duration: e.duration,
-            tick_count: g.effects.tick_count,
-        })
+        send_effect(&self.guests[i], &self.sync, e, blend)
     }
 
     /// PlayerList.sendActivePlayerEffects: every effect, unblended, when the
@@ -1244,59 +1443,7 @@ impl Hub {
         }
     }
     fn sync_effects(&mut self, i: usize) {
-        let g = &self.guests[i];
-        if g.effects.list.is_empty() && g.sent_effects.is_empty() {
-            return;
-        }
-        let now = g.effects.tick_count;
-        let mut sent = Vec::with_capacity(g.effects.list.len());
-        let mut changes = Vec::new();
-        for e in &g.effects.list {
-            match g.sent_effects.iter().find(|s| s.id == e.id) {
-                None => changes.push((e.clone(), true)),
-                Some(s) => {
-                    let ticked = now.wrapping_sub(s.tick_count);
-                    let expected = if s.duration == -1 {
-                        -1
-                    } else {
-                        s.duration - ticked
-                    };
-                    let refresh = ticked > 0 && e.duration > 0 && e.duration % 600 == 0;
-                    if s.amplifier != e.amplifier
-                        || s.flags != PlayerEffects::flags(e)
-                        || e.duration != expected
-                        || refresh
-                    {
-                        changes.push((e.clone(), false));
-                    } else {
-                        sent.push(s.clone());
-                    }
-                }
-            }
-        }
-        let removed: Vec<&'static str> = g
-            .sent_effects
-            .iter()
-            .filter(|s| g.effects.get(s.id).is_none())
-            .map(|s| s.id)
-            .collect();
-        for id in removed {
-            let Some(effect) = self
-                .sync
-                .id("minecraft:mob_effect", &format!("minecraft:{id}"))
-            else {
-                continue;
-            };
-            let g = &self.guests[i];
-            g.send(&C::RemoveMobEffect(play::RemoveMobEffect {
-                id: g.entity_id,
-                effect,
-            }));
-        }
-        for (e, added) in changes {
-            sent.extend(self.send_effect(i, &e, added));
-        }
-        self.guests[i].sent_effects = sent;
+        sync_effects(&mut self.guests[i], &self.sync);
     }
 
     /// PlayerList.sendPlayerPermissionLevel: the op level as an entity event
@@ -1630,12 +1777,19 @@ impl Hub {
         self.sync_containers(ctx.world);
         crate::spans::time("lan_track", || self.track_entities(ctx));
         crate::spans::time("lan_player_state", || {
-            for i in 0..self.guests.len() {
-                if self.here(&self.guests[i]) {
-                    self.sync_player_state(i);
-                    self.sync_effects(i);
-                }
-            }
+            // What each guest is told of itself is its own, on the pool's
+            // threads, each guest's packets in their order.
+            let (dimension, sync) = (&self.config.dimension, &*self.sync);
+            let mut here: Vec<&mut Guest> = (self.guests.iter_mut())
+                .filter(|g| g.placed && g.dimension == *dimension)
+                .collect();
+            let held = super::conn::holding();
+            horizon_threads::pool::for_each_mut(&mut here, PLAYER_STATE_GRAIN, |g| {
+                // Held for the tick's flush, as the tick's thread holds them.
+                let _held = super::conn::Holding::like(held);
+                sync_player_state(g, sync);
+                sync_effects(g, sync);
+            });
         });
         events
     }
@@ -2156,148 +2310,6 @@ impl Hub {
 
     // ---- per-player state ------------------------------------------------
 
-    /// ServerPlayer.doTick: health, food, experience and the inventory menu.
-    fn sync_player_state(&mut self, i: usize) {
-        // LivingEntity.startSleeping / stopSleeping: the pose and the bed go
-        // to the player too (its client lies down in the bed from them).
-        let g = &mut self.guests[i];
-        if g.bed != g.sent_bed {
-            g.sent_bed = g.bed;
-            let pose = if g.bed.is_some() { 2 } else { 0 };
-            g.send(&C::SetEntityData(play::SetEntityData {
-                id: g.entity_id,
-                values: vec![
-                    (6, serializer::POSE, Value::Id(pose)),
-                    (14, serializer::OPTIONAL_BLOCK_POS, Value::OptPos(g.bed)),
-                ],
-            }));
-        }
-        // ServerEntity.sendDirtyEntityData on the player's first tick: the
-        // health its creation set is still dirty, and goes to the player too.
-        if self.guests[i].sent_health.is_none() {
-            let g = &self.guests[i];
-            g.send(&C::SetEntityData(play::SetEntityData {
-                id: g.entity_id,
-                values: vec![(9, serializer::FLOAT, Value::Float(g.health))],
-            }));
-            // ServerPlayer.tick's CriteriaTriggers.TICK, then flushDirty. A
-            // player who has been here has had the tick's criteria already.
-            if !g.advancements_loaded {
-                let now = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map_or(0, |d| d.as_millis() as i64);
-                let sync = self.sync.clone();
-                let g = &mut self.guests[i];
-                let first = sync.advancements.first_tick(
-                    &sync,
-                    now,
-                    &mut g.advancements,
-                    &mut g.recipe_book,
-                );
-                if let Some(add) = first.recipe_book_add {
-                    g.send(&raw(ids::RECIPE_BOOK_ADD, add));
-                }
-                g.send(&raw(ids::UPDATE_ADVANCEMENTS, first.update_advancements));
-                g.advancements_visible = sync.advancements.visibility(&g.advancements);
-                g.advancements_changed.clear();
-            } else {
-                self.flush_advancements(i, true);
-            }
-        }
-        // ServerEntity.sendDirtyEntityData: the player's changed attribute
-        // instances go to the player too (its trackers get them from
-        // track_entities).
-        let g = &mut self.guests[i];
-        if let Some(m) = g.motion.as_mut() {
-            let values = super::attributes::take_dirty(&mut m.attributes);
-            if !values.is_empty() {
-                g.send(&C::UpdateAttributes(play::UpdateAttributes {
-                    id: g.entity_id,
-                    values,
-                }));
-            }
-        }
-        // ServerEntity.sendDirtyEntityData: the air supply and the absorption
-        // amount the server's body changed go to the player, whose HUD draws
-        // them (bubbles, golden hearts).
-        let g = &mut self.guests[i];
-        if let Some(m) = g.motion.as_ref() {
-            let now = (m.air, m.health.absorption());
-            let mut values = Vec::new();
-            if now.0 != g.sent_air.0 {
-                values.push((1, serializer::INT, Value::Int(now.0)));
-            }
-            if now.1.to_bits() != g.sent_air.1.to_bits() {
-                values.push((17, serializer::FLOAT, Value::Float(now.1)));
-            }
-            if !values.is_empty() {
-                g.sent_air = now;
-                g.send(&C::SetEntityData(play::SetEntityData {
-                    id: g.entity_id,
-                    values,
-                }));
-            }
-        }
-        // ServerEntity.sendDirtyEntityData: the shared flags go to the player
-        // too, so the sprint a hit stops (Player.causeExtraKnockback) stops
-        // on its client.
-        let g = &mut self.guests[i];
-        let shared = shared_flags(g.sneaking, g.sprinting, &guest_body(g));
-        if shared != g.sent_shared {
-            g.sent_shared = shared;
-            g.send(&C::SetEntityData(play::SetEntityData {
-                id: g.entity_id,
-                values: vec![(0, serializer::BYTE, Value::Byte(shared))],
-            }));
-        }
-        // Sent when the health or the food level changes, or the saturation
-        // reaches or leaves zero; a dead player's health of 0 too.
-        let g = &mut self.guests[i];
-        let health = (g.health, g.food, g.saturation == 0.0);
-        if g.sent_health != Some(health) {
-            g.send(&C::SetHealth(play::SetHealth {
-                health: g.health,
-                food: g.food,
-                saturation: g.saturation,
-            }));
-            g.sent_health = Some(health);
-        }
-        let xp = {
-            let g = &self.guests[i];
-            (g.xp_progress, g.xp_level, g.xp_total)
-        };
-        if self.guests[i].sent_xp != Some(xp) {
-            let g = &mut self.guests[i];
-            g.send(&C::SetExperience(play::SetExperience {
-                progress: xp.0,
-                level: xp.1,
-                total: xp.2,
-            }));
-            g.sent_xp = Some(xp);
-        }
-        // AbstractContainerMenu.broadcastChanges for the inventory menu.
-        let mut changes = Vec::new();
-        let g = &self.guests[i];
-        for slot in 0..46 {
-            let now = g.menu_slot_ref(slot);
-            if now != g.menu_sent[slot].as_ref() {
-                changes.push((slot, now.cloned()));
-            }
-        }
-        for (slot, now) in changes {
-            let net = self.stack(&now);
-            let g = &mut self.guests[i];
-            g.menu_state = (g.menu_state + 1) & 0x7FFF;
-            g.send(&C::ContainerSetSlot(play::ContainerSetSlot {
-                container: 0,
-                state: g.menu_state,
-                slot: slot as i16,
-                item: net,
-            }));
-            g.menu_sent[slot] = now;
-        }
-    }
-
     /// `PlayerAdvancements.flushDirty` and the recipes the player unlocked
     /// since (`ServerRecipeBook.addRecipes`), once the player's first tick
     /// has sent their advancements.
@@ -2309,24 +2321,7 @@ impl Hub {
         }
     }
     fn flush_advancements(&mut self, i: usize, show: bool) {
-        let sync = self.sync.clone();
-        let g = &mut self.guests[i];
-        let mut unlocked = std::mem::take(&mut g.recipes_unlocked);
-        // A recipe given and taken before this flush must not reappear.
-        unlocked.retain(|id| g.recipe_book.knows(id));
-        if let Some(add) = sync.advancements.recipes_added(&unlocked, &sync) {
-            g.send(&raw(ids::RECIPE_BOOK_ADD, add));
-        }
-        let changed = std::mem::take(&mut g.advancements_changed);
-        if let Some(update) = sync.advancements.update(
-            &sync,
-            &g.advancements,
-            &mut g.advancements_visible,
-            &changed,
-            show,
-        ) {
-            g.send(&raw(ids::UPDATE_ADVANCEMENTS, update));
-        }
+        flush_advancements(&mut self.guests[i], &self.sync, show);
     }
 
     /// ClientboundAwardStatsPacket (`ServerStatsCounter.sendStats`): each
