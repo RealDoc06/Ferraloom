@@ -400,10 +400,10 @@ impl WaterSplashWorld for MotionWorld<'_, '_, '_> {
         Ok(high_speed)
     }
     fn random_float(&mut self) -> Result<f32> {
-        Ok(self.scene.random.next_float())
+        Ok(self.scene.random().next_float())
     }
     fn random_double(&mut self) -> Result<f64> {
-        Ok(self.scene.random.next_double())
+        Ok(self.scene.random().next_double())
     }
     fn play_sound(&mut self, high_speed: bool, volume: f32, pitch: f32) -> Result<()> {
         self.player.events.push(MotionEvent::Splash {

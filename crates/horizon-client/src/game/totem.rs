@@ -6,7 +6,7 @@ use horizon_client::{
     particles::{ParticleOptions, ParticleType},
 };
 
-const TOTEM: &str = "minecraft:totem_of_undying";
+pub(super) const TOTEM: &str = "minecraft:totem_of_undying";
 
 /// `EntityEvent.TOTEM_OF_UNDYING`.
 pub(super) const TOTEM_EVENT: i8 = 35;

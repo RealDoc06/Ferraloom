@@ -303,7 +303,7 @@ pub fn main() -> Result<()> {
             let mut world = MotionWorld {
                 entities: &[],
                 player: &mut player,
-                scene: &mut scene,
+                scene: horizon_client::motion::Scene::Live(&mut scene),
                 assets: &assets,
                 collision_binding: &binding,
                 resources: &resources,
@@ -345,16 +345,17 @@ pub fn main() -> Result<()> {
                     world.player.health.tick_count = op["value"].as_i64().unwrap() as i32
                 }
                 "rules" => {
-                    world.scene.health_rules = horizon_client::health::HealthRules {
-                        difficulty: [
-                            horizon_world::food::Difficulty::Peaceful,
-                            horizon_world::food::Difficulty::Easy,
-                            horizon_world::food::Difficulty::Normal,
-                            horizon_world::food::Difficulty::Hard,
-                        ][op["difficulty"].as_u64().unwrap() as usize],
-                        natural_regeneration: op["regenerate"].as_bool().unwrap(),
-                        ..Default::default()
-                    };
+                    world.scene.live().unwrap().health_rules =
+                        horizon_client::health::HealthRules {
+                            difficulty: [
+                                horizon_world::food::Difficulty::Peaceful,
+                                horizon_world::food::Difficulty::Easy,
+                                horizon_world::food::Difficulty::Normal,
+                                horizon_world::food::Difficulty::Hard,
+                            ][op["difficulty"].as_u64().unwrap() as usize],
+                            natural_regeneration: op["regenerate"].as_bool().unwrap(),
+                            ..Default::default()
+                        };
                 }
                 "food" => {
                     world.player.health.food = horizon_world::food::FoodData {
@@ -417,7 +418,7 @@ pub fn main() -> Result<()> {
                         amount,
                     )?;
                 }
-                "seed" => world.scene.random.set_seed(op["value"].as_i64().unwrap()),
+                "seed" => world.scene.random().set_seed(op["value"].as_i64().unwrap()),
                 "impulse" => world.player.impulse.set_ignore_fall_damage(
                     op["ignore"].as_bool().unwrap(),
                     if op["value"].is_null() {
@@ -450,7 +451,7 @@ pub fn main() -> Result<()> {
                     for x in at(p, 0)..=at(to, 0) {
                         for y in at(p, 1)..=at(to, 1) {
                             for z in at(p, 2)..=at(to, 2) {
-                                world.scene.set(x, y, z, state)?;
+                                world.scene.live()?.set(x, y, z, state)?;
                             }
                         }
                     }

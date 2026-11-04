@@ -85,6 +85,7 @@ mod lan_chat;
 mod lan_crafting;
 mod lan_entities;
 mod lan_mobs;
+mod lan_motion;
 mod lan_mount_menu;
 mod lan_particles;
 mod lan_pvp;
@@ -5324,7 +5325,7 @@ impl Game<'_> {
             MotionWorld {
                 entities: &entity_collisions,
                 player,
-                scene: &mut self.world,
+                scene: horizon_client::motion::Scene::Live(&mut self.world),
                 assets: &self.pack.assets,
                 collision_binding: self.collision,
                 resources: self.motion,

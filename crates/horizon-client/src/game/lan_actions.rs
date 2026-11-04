@@ -27,7 +27,6 @@ use horizon_protocol::{
     packets::play::{self, Clientbound as C, Serverbound as S},
     text::literal,
 };
-use horizon_world::entity_move::EntityMoveWorld;
 use winit::keyboard::KeyCode;
 
 /// Per-guest state of the gameplay code that lives outside `Guest`.
@@ -39,6 +38,9 @@ pub(super) struct GuestPlay {
     destroy_delay: u32,
     using: Option<(usize, u32)>,
     use_delay: u32,
+    /// The turns the guest took (`enter_guest`): a copy of its body made
+    /// between two is the body (game/lan_motion.rs).
+    turns: u32,
     /// The shield's ItemCooldowns entry: an axe disabled it for this many ticks.
     pub(super) shield_cooldown: u32,
     /// `ServerGamePacketListenerImpl.dropSpamThrottler` (`TickThrottler(20, 1480)`): 20 for each
@@ -221,16 +223,102 @@ impl PickupCells {
 }
 
 impl GuestPlay {
+    /// The turns the guest took so far.
+    pub(super) fn turns(&self) -> u32 {
+        self.turns
+    }
+    /// No turn comes before its server tick's in `tick_guests`: it digs,
+    /// uses and waits for nothing, and its attack strength is charged.
+    pub(super) fn on_its_own(&self) -> bool {
+        self.digging.is_none()
+            && self.using.is_none()
+            && self.delayed.is_none()
+            && self.destroy_delay == 0
+            && self.use_delay == 0
+            && self.attack_ticks >= 100
+    }
     /// The item in use: its slot and for how many ticks.
     pub(super) fn using(&self) -> Option<(usize, u32)> {
         self.using
     }
     /// Whether the equipment modifiers were last put on for this armour and
     /// main hand (`apply_equipment`).
-    fn wears(&self, armor: &[Option<ItemStack>; 4], held: Option<&ItemStack>) -> bool {
+    pub(super) fn wears(&self, armor: &[Option<ItemStack>; 4], held: Option<&ItemStack>) -> bool {
         self.equipped
             .as_ref()
             .is_some_and(|e| e.len() == 5 && e[..4] == armor[..] && e[4].as_ref() == held)
+    }
+}
+
+/// The record's fields a turn's start puts on the body (`enter_guest`).
+#[derive(Clone, Copy)]
+pub(super) struct BodySync {
+    position: [f64; 3],
+    on_ground: bool,
+    yaw: f32,
+    pitch: f32,
+    sprinting: bool,
+    may_fly: bool,
+    flying: bool,
+    fall_flying: bool,
+    health: f32,
+    food: i32,
+    saturation: f32,
+}
+impl BodySync {
+    pub(super) fn of(g: &horizon_client::lan::guest::Guest) -> Self {
+        Self {
+            position: g.position,
+            on_ground: g.on_ground,
+            yaw: g.yaw,
+            pitch: g.pitch,
+            sprinting: g.sprinting,
+            may_fly: g.creative() || g.game_mode == SPECTATOR,
+            flying: g.flying,
+            fall_flying: g.fall_flying,
+            health: g.health,
+            food: g.food,
+            saturation: g.saturation,
+        }
+    }
+    pub(super) fn apply(&self, motion: &mut PlayerMotion) {
+        let [x, y, z] = self.position;
+        motion.position = Vec3::new(x, y, z);
+        motion.ground.on_ground = self.on_ground;
+        motion.yaw = self.yaw;
+        motion.pitch = self.pitch;
+        motion.sprinting = self.sprinting;
+        motion.may_fly = self.may_fly;
+        motion.flying = self.flying;
+        // FireworkRocketItem.use boosts only a gliding player.
+        motion.fall_flying = self.fall_flying;
+        motion.invulnerable = self.may_fly;
+        // LivingEntity.setHealth clamps to the maximum and stores what
+        // differs: the body holding the record's health already, at most the
+        // maximum and above zero, is left as it is.
+        let current = motion.health.health();
+        let kept = current.to_bits() == self.health.to_bits()
+            && current > 0.0
+            && motion
+                .attribute("minecraft:max_health")
+                .is_ok_and(|max| current <= max as f32);
+        if !kept {
+            let _ = motion.set_health(self.health, false);
+        }
+        motion.health.food.food = self.food;
+        motion.health.food.saturation = self.saturation;
+    }
+    /// The same, to the bit.
+    pub(super) fn same(&self, other: &Self) -> bool {
+        let bits = |s: &Self| {
+            (
+                s.position.map(f64::to_bits),
+                [s.yaw, s.pitch, s.health, s.saturation].map(f32::to_bits),
+                [s.on_ground, s.sprinting, s.may_fly, s.flying, s.fall_flying],
+                s.food,
+            )
+        };
+        bits(self) == bits(other)
     }
 }
 
@@ -318,6 +406,7 @@ impl Game<'_> {
             }
         }
         let mut play = host.play.remove(&conn).unwrap_or_default();
+        play.turns = play.turns.wrapping_add(1);
         if fresh {
             // A new body (joined, respawned, changed level): nothing on it yet,
             // its effects' modifiers and armor protection included.
@@ -341,30 +430,7 @@ impl Game<'_> {
         };
         let host_combat = std::mem::replace(&mut self.combat, guest_combat);
         self.potions.swap_player(&mut g.effects, &mut play.potions);
-        motion.position = Vec3::new(g.position[0], g.position[1], g.position[2]);
-        motion.ground.on_ground = g.on_ground;
-        motion.yaw = g.yaw;
-        motion.pitch = g.pitch;
-        motion.sprinting = g.sprinting;
-        motion.may_fly = g.creative() || g.game_mode == SPECTATOR;
-        motion.flying = g.flying;
-        // FireworkRocketItem.use boosts only a gliding player.
-        motion.fall_flying = g.fall_flying;
-        motion.invulnerable = motion.may_fly;
-        // LivingEntity.setHealth clamps to the maximum and stores what
-        // differs: the body holding the record's health already, at most the
-        // maximum and above zero, is left as it is.
-        let current = motion.health.health();
-        let kept = current.to_bits() == g.health.to_bits()
-            && current > 0.0
-            && motion
-                .attribute("minecraft:max_health")
-                .is_ok_and(|max| current <= max as f32);
-        if !kept {
-            let _ = motion.set_health(g.health, false);
-        }
-        motion.health.food.food = g.food;
-        motion.health.food.saturation = g.saturation;
+        BodySync::of(g).apply(&mut motion);
         let mut player = Some(motion);
         std::mem::swap(&mut self.player, &mut player);
         let eye = (g.eye_height() as f32, self.eye);
@@ -644,25 +710,7 @@ impl Game<'_> {
             g.name.clone()
         };
         // enter_guest.
-        m.position = Vec3::new(g.position[0], g.position[1], g.position[2]);
-        m.ground.on_ground = g.on_ground;
-        m.yaw = g.yaw;
-        m.pitch = g.pitch;
-        m.sprinting = g.sprinting;
-        m.may_fly = g.creative() || g.game_mode == SPECTATOR;
-        m.flying = g.flying;
-        m.fall_flying = g.fall_flying;
-        m.invulnerable = m.may_fly;
-        let current = m.health.health();
-        let kept = current.to_bits() == g.health.to_bits()
-            && current > 0.0
-            && m.attribute("minecraft:max_health")
-                .is_ok_and(|max| current <= max as f32);
-        if !kept {
-            let _ = m.set_health(g.health, false);
-        }
-        m.health.food.food = g.food;
-        m.health.food.saturation = g.saturation;
+        BodySync::of(g).apply(m);
         self.eye = g.eye_height() as f32;
         self.keys.clear();
         if g.sneaking {
@@ -2384,6 +2432,8 @@ impl Game<'_> {
             self.refresh_hook_targets(host);
         }
         let pickups = PickupCells::new(&self.dropped);
+        // The guests' motion, ahead on the pool (game/lan_motion.rs).
+        let mut specs = self.speculate_guest_motion(host, &conns);
         for conn in conns {
             let Some(gi) = host.hub.guest_index(conn) else {
                 continue;
@@ -2477,7 +2527,7 @@ impl Game<'_> {
                 play.attack_item = held;
             }
             self.guest_delayed_destroy(host, conn);
-            self.guest_server_tick(host, conn);
+            self.guest_server_tick(host, conn, specs.remove(&conn));
             // Player.tick's statistics and ServerPlayer.tick's triggers, then
             // PlayerAdvancements.flushDirty.
             let sleeping = host.hub.guests[gi].sleeping;
@@ -2709,7 +2759,12 @@ impl Game<'_> {
     /// hazards (drowning, lava, fire blocks, suffocation, the void), and
     /// regeneration and the food tick (ServerPlayer.doTick). Their hurt
     /// sounds are heard at the guest.
-    fn guest_server_tick(&mut self, host: &mut LanHost, conn: u32) {
+    fn guest_server_tick(
+        &mut self,
+        host: &mut LanHost,
+        conn: u32,
+        speculation: Option<super::lan_motion::Speculation>,
+    ) {
         self.guest_vehicle_tick(host, conn);
         // The last move's fall stands in for the server's delta movement.
         let fell = host
@@ -2740,160 +2795,122 @@ impl Game<'_> {
         let (sneaking, sleeping) = (g.sneaking, g.sleeping);
         let riding = g.vehicle.is_some();
         let mut soul = None;
-        let body = |game: &mut Self| {
-            let (rules, motion) = (game.world.health_rules, game.motion);
-            let health = &motion.health;
-            let freeze_immune = game.wears_freeze_immune();
-            let burn_immune = game.wears_burn_from_stepping_immunity();
-            let Some(player) = game.player.as_mut() else {
-                return (Vec::new(), None);
+        let mut body =
+            |game: &mut Self,
+             inputs: super::lan_motion::MotionInputs,
+             kept: Option<(Box<PlayerMotion>, super::lan_motion::MotionResult)>| {
+                let (rules, motion) = (game.world.health_rules, game.motion);
+                let health = &motion.health;
+                let Some(player) = game.player.as_mut() else {
+                    return (Vec::new(), None);
+                };
+                let super::lan_motion::MotionResult {
+                    mut events,
+                    start,
+                    travelled,
+                } = match kept {
+                    // The pool's copy: the body this would have made.
+                    Some((body, result)) => {
+                        *player = body;
+                        result
+                    }
+                    None => super::lan_motion::guest_motion(
+                        &mut MotionWorld {
+                            entities: &[],
+                            player,
+                            scene: horizon_client::motion::Scene::Live(&mut game.world),
+                            assets: &game.pack.assets,
+                            collision_binding: game.collision,
+                            resources: game.motion,
+                        },
+                        &inputs,
+                    ),
+                };
+                let from_ground = inputs.from_ground;
+                // LayeredCauldronBlock.handleEntityOnFireInside along those moves.
+                for event in &events {
+                    if let MotionEvent::CauldronExtinguish { pos } = event {
+                        game.cauldron_extinguish(*pos);
+                    }
+                }
+                // Entity.baseTick: rain puts out a burning player.
+                game.rain_extinguish_player();
+                // WitherRoseBlock.entityInside along those moves.
+                for event in &events {
+                    if matches!(event, MotionEvent::InsideWitherRose) {
+                        game.wither_rose_contact();
+                    }
+                }
+                // ServerGamePacketListenerImpl.handleMovePlayer:
+                // Player.checkMovementStatistics for each move.
+                for d in travelled {
+                    game.movement_stats(Vec3::new(d[0], d[1], d[2]));
+                }
+                // LivingEntity.baseTick: a new block position runs the worn
+                // enchantments' location_changed effects (frost walker).
+                game.location_changed_effects([start.x, start.y, start.z], from_ground);
+                // LivingEntity.baseTick: outside the world border, then tickEffects.
+                game.border_damage();
+                game.tick_mob_effects();
+                // Soul Speed's effects (LivingEntity.baseTick's location_changed
+                // and tick effects); its particle goes to the players around.
+                soul = game.tick_soul_speed();
+                game.handle_shoulder_entities();
+                let Some(player) = game.player.as_mut() else {
+                    return (Vec::new(), None);
+                };
+                let _ = player.peaceful_regeneration(rules);
+                let _ = player.food_tick(health, rules);
+                events.append(&mut player.events);
+                let _ = MotionWorld {
+                    entities: &[],
+                    player,
+                    scene: horizon_client::motion::Scene::Live(&mut game.world),
+                    assets: &game.pack.assets,
+                    collision_binding: game.collision,
+                    resources: game.motion,
+                }
+                .server_travel();
+                // Landing damage from this travel reaches the tracker too.
+                events.append(&mut player.events);
+                // A hurt since the last tick marked the velocity (Entity.markHurt):
+                // ServerEntity.sendChanges sends it as it is after this travel.
+                let marked = std::mem::take(&mut player.health.sync_velocity);
+                let velocity = marked.then_some(player.velocity);
+                // Player.causeFallDamage: a fall of 2 blocks or more counts.
+                for event in &events {
+                    if let MotionEvent::Fall(horizon_client::landing::FallEvent::Statistic(cm)) =
+                        event
+                    {
+                        game.stats.custom("fall_one_cm", *cm);
+                    }
+                }
+                game.record_combat(&events);
+                game.wear_armor(&events);
+                (events, velocity)
             };
-            let mut w = MotionWorld {
-                entities: &[],
-                player,
-                scene: &mut game.world,
-                assets: &game.pack.assets,
-                collision_binding: game.collision,
-                resources: game.motion,
-            };
-            w.player.health.advance_clock();
-            let _ = w.fluid_base_tick();
-            w.player.ground.on_ground = from_ground;
-            // Player.aiStep: a flying player that isn't riding starts every tick
-            // with no fall distance, so flying down in creative and switching to
-            // survival lands without the flight's distance.
-            if w.player.flying && !riding {
-                w.player.fall_distance = 0.0;
-            }
-            let travelled: Vec<[f64; 3]> = moves.iter().map(|m| m.0).collect();
-            // Entity.move's movementThisTick: each move, from where the
-            // tick's first one started.
-            let end = w.player.position;
-            let start = travelled
-                .iter()
-                .fold(end, |p, d| p.subtract(Vec3::new(d[0], d[1], d[2])));
-            w.player.history.clear();
-            let mut from = start;
-            for d in &travelled {
-                let delta = Vec3::new(d[0], d[1], d[2]);
-                let to = from.add_vector(delta);
-                w.player
-                    .history
-                    .add(horizon_world::entity_move::MovementRecord {
-                        from,
-                        to,
-                        original: Some(delta),
-                    });
-                from = to;
-            }
-            for (moved, on_ground) in moves {
-                let movement = Vec3::new(moved[0], moved[1], moved[2]);
-                if w.player.ground.on_ground && !on_ground && moved[1] > 0.0 {
-                    let sprinting = w.player.sprinting;
-                    w.player
-                        .cause_food_exhaustion(if sprinting { 0.2 } else { 0.05 });
-                }
-                let landed = (|| -> horizon_client::Result<()> {
-                    w.set_on_ground_with_movement(on_ground, false, movement)?;
-                    let pos = w.legacy_on_position()?;
-                    let state = w.block_state(pos)?;
-                    w.check_fall_damage(moved[1], on_ground, state, pos)?;
-                    w.check_movement_statistics(movement)
-                })();
-                if landed.is_err() {
-                    break;
-                }
-            }
-            // A ServerPlayer travels on the server too
-            // (MoveSimulationType.AUTHORITATIVE_SIDE_AND_SERVER), so every tick
-            // on a ladder or vine LivingEntity.handleOnClimbable resets its fall
-            // distance: climbing down doesn't hurt where it lands (#1255).
-            if w.climbable().unwrap_or(false) {
-                w.player.fall_distance = 0.0;
-            }
-            // Entity.applyEffectsFromBlocks along those moves: magma, cactus,
-            // lit campfires and grown sweet berry bushes hurt (#1305).
-            w.player.shift_key_down = sneaking;
-            let _ = w.player.set_sleeping(sleeping);
-            w.player.freeze_immune = freeze_immune;
-            w.player.burn_from_stepping_immune = burn_immune;
-            let _ = w.server_block_damage(start);
-            let _ = w.update_soul_speed_block();
-            let _ = w.tick_environment_damage();
-            let _ = w.apply_fire_contact();
-            let _ = w.server_hazards_tick(in_wall);
-            // LivingEntity.aiStep: a Riptide spin counts down on the server's
-            // copy too, or it would stay in the spin pose (eye 0.4) for good.
-            w.player.count_down_server_spin();
-            // Player.tick ends with updatePlayerPose: a swimmer, or a player
-            // crawling under a block, takes the short box its moves are checked with.
-            let _ = w.update_player_pose();
-            let mut events = std::mem::take(&mut w.player.events);
-            // LayeredCauldronBlock.handleEntityOnFireInside along those moves.
-            for event in &events {
-                if let MotionEvent::CauldronExtinguish { pos } = event {
-                    game.cauldron_extinguish(*pos);
-                }
-            }
-            // Entity.baseTick: rain puts out a burning player.
-            game.rain_extinguish_player();
-            // WitherRoseBlock.entityInside along those moves.
-            for event in &events {
-                if matches!(event, MotionEvent::InsideWitherRose) {
-                    game.wither_rose_contact();
-                }
-            }
-            // ServerGamePacketListenerImpl.handleMovePlayer:
-            // Player.checkMovementStatistics for each move.
-            for d in travelled {
-                game.movement_stats(Vec3::new(d[0], d[1], d[2]));
-            }
-            // LivingEntity.baseTick: a new block position runs the worn
-            // enchantments' location_changed effects (frost walker).
-            game.location_changed_effects([start.x, start.y, start.z], from_ground);
-            // LivingEntity.baseTick: outside the world border, then tickEffects.
-            game.border_damage();
-            game.tick_mob_effects();
-            // Soul Speed's effects (LivingEntity.baseTick's location_changed
-            // and tick effects); its particle goes to the players around.
-            soul = game.tick_soul_speed();
-            game.handle_shoulder_entities();
-            let Some(player) = game.player.as_mut() else {
-                return (Vec::new(), None);
-            };
-            let _ = player.peaceful_regeneration(rules);
-            let _ = player.food_tick(health, rules);
-            events.append(&mut player.events);
-            let _ = MotionWorld {
-                entities: &[],
-                player,
-                scene: &mut game.world,
-                assets: &game.pack.assets,
-                collision_binding: game.collision,
-                resources: game.motion,
-            }
-            .server_travel();
-            // Landing damage from this travel reaches the tracker too.
-            events.append(&mut player.events);
-            // A hurt since the last tick marked the velocity (Entity.markHurt):
-            // ServerEntity.sendChanges sends it as it is after this travel.
-            let marked = std::mem::take(&mut player.health.sync_velocity);
-            let velocity = marked.then_some(player.velocity);
-            // Player.causeFallDamage: a fall of 2 blocks or more counts.
-            for event in &events {
-                if let MotionEvent::Fall(horizon_client::landing::FallEvent::Statistic(cm)) = event
-                {
-                    game.stats.custom("fall_one_cm", *cm);
-                }
-            }
-            game.record_combat(&events);
-            game.wear_armor(&events);
-            (events, velocity)
-        };
         let Some(mut swap) = self.enter_guest(host, conn) else {
             return;
         };
-        let (events, marked) = body(self);
+        let inputs = super::lan_motion::MotionInputs {
+            moves,
+            from_ground,
+            riding,
+            sneaking,
+            sleeping,
+            freeze_immune: self.wears_freeze_immune(),
+            burn_immune: self.wears_burn_from_stepping_immunity(),
+            in_wall,
+        };
+        let kept = speculation.and_then(|s| {
+            s.take_if_still_true(
+                swap.play.turns(),
+                &host.hub.guests[swap.i],
+                &inputs,
+                &self.world,
+            )
+        });
+        let (events, marked) = body(self, inputs, kept);
         // The sculk events are a turn of their own after the soul particle;
         // with nothing for the turn's end and the next one's start to do but
         // sync the body with the record, they go on in this one.
@@ -3060,7 +3077,7 @@ impl Game<'_> {
     /// eyes. Suffocating is a full collision box that is also a full render
     /// cube (`BlockBehaviour.isSuffocating`'s default; glass and the like
     /// opt out), as the mobs' check has it.
-    fn in_wall(&self, at: [f64; 3], eye_height: f64) -> bool {
+    pub(super) fn in_wall(&self, at: [f64; 3], eye_height: f64) -> bool {
         let (y, half) = ((at[1] + eye_height).floor() as i32, 0.24);
         let range = |v: f64| (v - half).floor() as i32..=(v + half).floor() as i32;
         range(at[0]).any(|x| {

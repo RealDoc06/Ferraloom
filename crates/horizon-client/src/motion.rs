@@ -771,11 +771,60 @@ impl PlayerMotion {
     }
 }
 
+/// The level a body moves in: the level itself, or, for a speculative tick
+/// on the pool's threads, the level read only with a copy of its random
+/// source that tells whether it was drawn from (game/lan_motion.rs).
+pub enum Scene<'w> {
+    Live(&'w mut World),
+    Read {
+        world: &'w World,
+        random: &'w mut ReadRandom,
+    },
+}
+/// A copy of a level's random source for a read-only `Scene`.
+pub struct ReadRandom {
+    pub random: horizon_core::random::LegacyRandom,
+    /// Something asked for the source, or to change the level: what it
+    /// drew would differ from the level's own, and the level is unchanged.
+    pub touched: bool,
+}
+impl std::ops::Deref for Scene<'_> {
+    type Target = World;
+    fn deref(&self) -> &World {
+        match self {
+            Self::Live(world) => world,
+            Self::Read { world, .. } => world,
+        }
+    }
+}
+impl Scene<'_> {
+    /// `Level.getRandom()`.
+    pub fn random(&mut self) -> &mut horizon_core::random::LegacyRandom {
+        match self {
+            Self::Live(world) => &mut world.random,
+            Self::Read { random, .. } => {
+                random.touched = true;
+                &mut random.random
+            }
+        }
+    }
+    /// The level to change; a read-only scene refuses, and remembers it.
+    pub fn live(&mut self) -> Result<&mut World> {
+        match self {
+            Self::Live(world) => Ok(world),
+            Self::Read { random, .. } => {
+                random.touched = true;
+                Err("a read-only scene is not changed".into())
+            }
+        }
+    }
+}
+
 pub struct MotionWorld<'p, 'w, 'r> {
     /// Entity boxes selected by the host for this player's collision queries.
     pub entities: &'w [Aabb],
     pub player: &'p mut PlayerMotion,
-    pub scene: &'w mut World,
+    pub scene: Scene<'w>,
     pub assets: &'r Assets,
     pub collision_binding: &'w BlockCollisionRegistry<'r>,
     pub resources: &'w MotionResources,
@@ -798,7 +847,7 @@ impl MotionWorld<'_, '_, '_> {
     }
     fn collisions(&self) -> SceneCollisions<'_, '_> {
         SceneCollisions {
-            world: self.scene,
+            world: &self.scene,
             binding: self.collision_binding,
             subject: Some(self.player.powder_snow_subject()),
         }
@@ -1605,7 +1654,7 @@ impl MotionWorld<'_, '_, '_> {
         }
         self.player.fall_distance = 0.0;
         // maybeDoSlideEffects: the sound, then the server's event 53.
-        let random = &mut self.scene.random;
+        let random = self.scene.random();
         let sound = random.next_int_bound(5).map_err(|e| format!("{e:?}"))? == 0;
         // Only the server broadcasts event 53 (`!level.isClientSide()`).
         let particles = !self.player.client_side
@@ -1715,7 +1764,7 @@ impl MotionWorld<'_, '_, '_> {
         self.make_stuck_in_block(Vec3::new(f64::from(0.9_f32), 1.5, f64::from(0.9_f32)));
         // ServerPlayer.getKnownMovement: this tick's movement.
         let known = self.player.position.subtract(self.player.old_position);
-        let random = &mut self.scene.random;
+        let random = self.scene.random();
         if (known.x != 0.0 || known.z != 0.0) && random.next_boolean() {
             // Mth.randomBetween(random, -1, 1) * (1 / 12)
             let xa = (random.next_float() * 2.0 - 1.0) * 0.083_333_336_f32;
@@ -2104,7 +2153,7 @@ impl EntityMoveWorld for MotionWorld<'_, '_, '_> {
         let bounds = self.player.bounds();
         let context = self.context();
         let mut collisions = SceneCollisions {
-            world: self.scene,
+            world: &self.scene,
             binding: self.collision_binding,
             subject: Some(self.player.powder_snow_subject()),
         };
@@ -2348,7 +2397,7 @@ impl MovementEmissionWorld for MotionWorld<'_, '_, '_> {
             let decayed = self.player.crystal_sound_intensity * 0.997_f64.powf(elapsed) as f32;
             let intensity = 1.0_f32.min(decayed + 0.07);
             self.player.crystal_sound_intensity = intensity;
-            let pitch = 0.5 + intensity * self.scene.random.next_float() * 1.2;
+            let pitch = 0.5 + intensity * self.scene.random().next_float() * 1.2;
             let volume = 0.1 + intensity * 1.2;
             self.player
                 .events
@@ -2372,7 +2421,7 @@ impl MovementEmissionWorld for MotionWorld<'_, '_, '_> {
                 as f32
                 * 0.35,
         );
-        let random = &mut self.scene.random;
+        let random = self.scene.random();
         let pitch = 1.0 + (random.next_float() - random.next_float()) * 0.4;
         self.player.events.push(MotionEvent::Swim { volume, pitch });
         Ok(())
@@ -2635,6 +2684,48 @@ impl LivingMotionWorld for MotionWorld<'_, '_, '_> {
 mod tests {
     use super::*;
 
+    /// A read-only scene reads the level, and remembers being asked for the
+    /// random source or to change the level; the level's own stays as it was.
+    #[test]
+    fn a_read_only_scene_tells_when_it_was_drawn_from_or_written() {
+        use horizon_core::random::RandomSource;
+        let mut world = World::new(BlockStateId(0), 3);
+        world.chunks.insert(
+            (0, 0),
+            std::sync::Arc::new(crate::chunk::Chunk::empty(0, 0)),
+        );
+        let before = world.random.clone().next_int();
+        let mut random = ReadRandom {
+            random: world.random.clone(),
+            touched: false,
+        };
+        {
+            let mut scene = Scene::Read {
+                world: &world,
+                random: &mut random,
+            };
+            assert_eq!(scene.block(1, 2, 3), BlockStateId(0));
+            assert!(scene.live().is_err());
+            let _ = scene.random().next_int();
+        }
+        assert!(random.touched);
+        assert_eq!(world.random.clone().next_int(), before);
+        let mut untouched = ReadRandom {
+            random: world.random.clone(),
+            touched: false,
+        };
+        {
+            let scene = Scene::Read {
+                world: &world,
+                random: &mut untouched,
+            };
+            assert!(scene.loaded(0, 0));
+        }
+        assert!(!untouched.touched);
+        let mut live = Scene::Live(&mut world);
+        assert!(live.live().is_ok());
+    }
+
     #[test]
     fn sword_sweep_requires_charge_ground_and_slow_horizontal_movement() {
         let root = std::env::var_os("HORIZON_TEST_RESOURCES")
@@ -2697,7 +2788,7 @@ mod tests {
             MotionWorld {
                 entities: &entities,
                 player,
-                scene: &mut scene,
+                scene: Scene::Live(&mut scene),
                 assets: &assets,
                 collision_binding: &binding,
                 resources: &resources,
@@ -2783,7 +2874,7 @@ mod tests {
             MotionWorld {
                 entities: &[],
                 player: &mut player,
-                scene: &mut scene,
+                scene: Scene::Live(&mut scene),
                 assets: &assets,
                 collision_binding: &binding,
                 resources: &resources,
@@ -2799,7 +2890,7 @@ mod tests {
             MotionWorld {
                 entities: &[],
                 player: &mut player,
-                scene: &mut scene,
+                scene: Scene::Live(&mut scene),
                 assets: &assets,
                 collision_binding: &binding,
                 resources: &resources,
@@ -2836,7 +2927,7 @@ mod tests {
             MotionWorld {
                 entities: &[],
                 player,
-                scene: &mut scene,
+                scene: Scene::Live(&mut scene),
                 assets: &assets,
                 collision_binding: &binding,
                 resources: &resources,
@@ -2887,7 +2978,7 @@ mod tests {
             MotionWorld {
                 entities: &[],
                 player,
-                scene: &mut scene,
+                scene: Scene::Live(&mut scene),
                 assets: &assets,
                 collision_binding: &binding,
                 resources: &resources,
@@ -2942,7 +3033,7 @@ mod tests {
             MotionWorld {
                 entities: &[],
                 player: &mut player,
-                scene: &mut scene,
+                scene: Scene::Live(&mut scene),
                 assets: &assets,
                 collision_binding: &binding,
                 resources: &resources,
@@ -3015,7 +3106,7 @@ mod tests {
         MotionWorld {
             entities: &[],
             player: &mut player,
-            scene: &mut scene,
+            scene: Scene::Live(&mut scene),
             assets: &assets,
             collision_binding: &binding,
             resources: &resources,
@@ -3029,7 +3120,7 @@ mod tests {
         MotionWorld {
             entities: &[],
             player: &mut player,
-            scene: &mut scene,
+            scene: Scene::Live(&mut scene),
             assets: &assets,
             collision_binding: &binding,
             resources: &resources,
@@ -3042,7 +3133,7 @@ mod tests {
         MotionWorld {
             entities: &[],
             player: &mut away,
-            scene: &mut scene,
+            scene: Scene::Live(&mut scene),
             assets: &assets,
             collision_binding: &binding,
             resources: &resources,
@@ -3071,7 +3162,7 @@ mod tests {
             MotionWorld {
                 entities: &[],
                 player,
-                scene: &mut scene,
+                scene: Scene::Live(&mut scene),
                 assets: &assets,
                 collision_binding: &binding,
                 resources: &resources,
@@ -3131,7 +3222,7 @@ mod tests {
             MotionWorld {
                 entities: &[],
                 player: &mut player,
-                scene: &mut scene,
+                scene: Scene::Live(&mut scene),
                 assets: &assets,
                 collision_binding: &binding,
                 resources: &resources,
@@ -3189,7 +3280,7 @@ mod tests {
                 MotionWorld {
                     entities: &[],
                     player: &mut player,
-                    scene: &mut scene,
+                    scene: Scene::Live(&mut scene),
                     assets: &assets,
                     collision_binding: &binding,
                     resources: &resources,
@@ -3486,7 +3577,7 @@ mod tests {
             let mut w = MotionWorld {
                 entities: &[],
                 player: &mut player,
-                scene: &mut scene,
+                scene: Scene::Live(&mut scene),
                 assets: &assets,
                 collision_binding: &binding,
                 resources: &resources,
@@ -3538,7 +3629,7 @@ mod tests {
             let mut w = MotionWorld {
                 entities: &[],
                 player: &mut player,
-                scene: &mut scene,
+                scene: Scene::Live(&mut scene),
                 assets: &assets,
                 collision_binding: &binding,
                 resources: &resources,
@@ -3578,7 +3669,7 @@ mod tests {
             let mut w = MotionWorld {
                 entities: &[],
                 player: &mut player,
-                scene: &mut scene,
+                scene: Scene::Live(&mut scene),
                 assets: &assets,
                 collision_binding: &binding,
                 resources: &resources,
@@ -3631,7 +3722,7 @@ mod tests {
             let mut w = MotionWorld {
                 entities: &[],
                 player: &mut player,
-                scene: &mut scene,
+                scene: Scene::Live(&mut scene),
                 assets: &assets,
                 collision_binding: &binding,
                 resources: &resources,
@@ -3670,7 +3761,7 @@ mod tests {
         let mut w = MotionWorld {
             entities: &[],
             player: &mut player,
-            scene: &mut scene,
+            scene: Scene::Live(&mut scene),
             assets: &assets,
             collision_binding: &binding,
             resources: &resources,
@@ -3714,7 +3805,7 @@ mod tests {
             let mut w = MotionWorld {
                 entities: &[],
                 player: &mut player,
-                scene: &mut scene,
+                scene: Scene::Live(&mut scene),
                 assets: &assets,
                 collision_binding: &binding,
                 resources: &resources,
@@ -3751,7 +3842,7 @@ mod tests {
         let mut w = MotionWorld {
             entities: &[],
             player: &mut player,
-            scene: &mut scene,
+            scene: Scene::Live(&mut scene),
             assets: &assets,
             collision_binding: &binding,
             resources: &resources,
@@ -3806,7 +3897,7 @@ mod tests {
         let mut w = MotionWorld {
             entities: &[],
             player: &mut player,
-            scene: &mut scene,
+            scene: Scene::Live(&mut scene),
             assets: &assets,
             collision_binding: &binding,
             resources: &resources,
@@ -3830,7 +3921,7 @@ mod tests {
         for x in 19..=21 {
             for y in 3..=7 {
                 for z in 19..=21 {
-                    w.scene.set(x, y, z, lava).unwrap();
+                    w.scene.live().unwrap().set(x, y, z, lava).unwrap();
                 }
             }
         }
@@ -3843,7 +3934,7 @@ mod tests {
         for x in 19..=21 {
             for y in 3..=7 {
                 for z in 19..=21 {
-                    w.scene.set(x, y, z, water).unwrap();
+                    w.scene.live().unwrap().set(x, y, z, water).unwrap();
                 }
             }
         }
@@ -3887,7 +3978,7 @@ mod tests {
         for x in 19..=21 {
             for y in 3..=7 {
                 for z in 19..=21 {
-                    w.scene.set(x, y, z, fire).unwrap();
+                    w.scene.live().unwrap().set(x, y, z, fire).unwrap();
                 }
             }
         }
@@ -3939,7 +4030,7 @@ mod tests {
         for x in 19..=21 {
             for y in 2..=7 {
                 for z in 19..=30 {
-                    w.scene.set(x, y, z, water).unwrap();
+                    w.scene.live().unwrap().set(x, y, z, water).unwrap();
                 }
             }
         }
@@ -4059,7 +4150,7 @@ mod tests {
         let mut w = MotionWorld {
             entities: &[],
             player: &mut player,
-            scene: &mut scene,
+            scene: Scene::Live(&mut scene),
             assets: &assets,
             collision_binding: &binding,
             resources: &resources,
@@ -4086,7 +4177,7 @@ mod tests {
         w.fluid_base_tick().unwrap();
         assert!(w.player.swimming);
         let air = assets.registry.default_state("minecraft:air").unwrap();
-        w.scene.set(20, 4, 20, air).unwrap();
+        w.scene.live().unwrap().set(20, 4, 20, air).unwrap();
         w.player.swimming = false;
         w.fluid_base_tick().unwrap();
         assert!(w.player.is_under_water());
@@ -4105,7 +4196,7 @@ mod tests {
         assert!(!w.player.swimming);
         w.player.flying = false;
         w.player.spectator = true;
-        w.scene.set(20, 4, 20, water).unwrap();
+        w.scene.live().unwrap().set(20, 4, 20, water).unwrap();
         w.fluid_base_tick().unwrap();
         assert!(
             w.player.swimming,
@@ -4135,7 +4226,7 @@ mod tests {
             let mut w = MotionWorld {
                 entities: &[],
                 player: &mut player,
-                scene: &mut scene,
+                scene: Scene::Live(&mut scene),
                 assets: &assets,
                 collision_binding: &binding,
                 resources: &resources,
@@ -4187,7 +4278,7 @@ mod tests {
         let mut w = MotionWorld {
             entities: &[],
             player: &mut player,
-            scene: &mut scene,
+            scene: Scene::Live(&mut scene),
             assets: &assets,
             collision_binding: &binding,
             resources: &resources,
@@ -4221,6 +4312,8 @@ mod tests {
             ("minecraft:air", true),
         ] {
             w.scene
+                .live()
+                .unwrap()
                 .set(20, 5, 20, assets.registry.default_state(name).unwrap())
                 .unwrap();
             w.player.status.breath_of_the_nautilus = nautilus;
@@ -4230,7 +4323,7 @@ mod tests {
             assert_eq!(w.player.air, -15, "{name}, nautilus={nautilus}");
             assert_eq!(w.player.health.health(), 20.0);
         }
-        w.scene.set(20, 5, 20, water).unwrap();
+        w.scene.live().unwrap().set(20, 5, 20, water).unwrap();
         w.player.status.breath_of_the_nautilus = false;
         w.player.air = -19;
         w.fluid_base_tick().unwrap();
@@ -4272,7 +4365,7 @@ mod tests {
             let mut w = MotionWorld {
                 entities: &[],
                 player: &mut player,
-                scene: &mut scene,
+                scene: Scene::Live(&mut scene),
                 assets: &assets,
                 collision_binding: &binding,
                 resources: &resources,
@@ -4310,7 +4403,7 @@ mod tests {
                 MotionWorld {
                     entities: &[],
                     player: &mut *player,
-                    scene: &mut scene,
+                    scene: Scene::Live(&mut scene),
                     assets: &assets,
                     collision_binding: &binding,
                     resources: &resources,
@@ -4381,7 +4474,7 @@ mod tests {
             let mut w = MotionWorld {
                 entities: &[],
                 player: &mut player,
-                scene: &mut scene,
+                scene: Scene::Live(&mut scene),
                 assets: &assets,
                 collision_binding: &binding,
                 resources: &resources,
@@ -4431,7 +4524,7 @@ mod tests {
         let mut w = MotionWorld {
             entities: &[],
             player: &mut player,
-            scene: &mut scene,
+            scene: Scene::Live(&mut scene),
             assets: &assets,
             collision_binding: &binding,
             resources: &resources,
@@ -4487,7 +4580,7 @@ mod tests {
         let mut w = MotionWorld {
             entities: &[],
             player: &mut player,
-            scene: &mut scene,
+            scene: Scene::Live(&mut scene),
             assets: &assets,
             collision_binding: &binding,
             resources: &resources,

@@ -74,7 +74,7 @@ impl MotionWorld<'_, '_, '_> {
                 .player
                 .attribute("minecraft:oxygen_bonus")?
                 .max(f64::from(self.player.respiration));
-            if oxygen <= 0.0 || self.scene.random.next_double() < 1.0 / (oxygen + 1.0) {
+            if oxygen <= 0.0 || self.scene.random().next_double() < 1.0 / (oxygen + 1.0) {
                 self.player.air -= 1;
             }
             if self.player.air <= -20 {
@@ -122,7 +122,7 @@ impl MotionWorld<'_, '_, '_> {
             self.player.fire_ticks = 0;
             return Ok(());
         }
-        let damage = fire_contact(self.scene, self.assets.registry, self.player.bounds());
+        let damage = fire_contact(&self.scene, self.assets.registry, self.player.bounds());
         if damage > 0.0 {
             self.player.ticks_frozen = 0;
             if !self.player.fluids.was_touching_water {
@@ -130,7 +130,7 @@ impl MotionWorld<'_, '_, '_> {
                 let ticks = ignite_contact(
                     self.player.fire_ticks,
                     true,
-                    &mut self.scene.random,
+                    self.scene.random(),
                     multiplier,
                 );
                 self.player.set_remaining_fire_ticks(ticks);
@@ -328,7 +328,7 @@ impl MotionWorld<'_, '_, '_> {
         if empty {
             // Entity.sendBubbleColumnParticles: two splashes and two bubbles
             // over the column's top, from the level random.
-            let random = &mut self.scene.random;
+            let random = self.scene.random();
             for bubble in [false, true, false, true] {
                 let x = f64::from(p.x) + random.next_double();
                 let z = f64::from(p.z) + random.next_double();

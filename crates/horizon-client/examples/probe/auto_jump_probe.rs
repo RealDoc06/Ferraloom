@@ -103,7 +103,7 @@ pub fn main() -> Result<()> {
         MotionWorld {
             entities: &[],
             player: &mut player,
-            scene: &mut scene,
+            scene: horizon_client::motion::Scene::Live(&mut scene),
             assets: &assets,
             collision_binding: &binding,
             resources: &resources,

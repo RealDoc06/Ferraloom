@@ -293,7 +293,7 @@ impl BlockPushWorld for MotionWorld<'_, '_, '_> {
     type Error = Box<dyn std::error::Error>;
     fn collision_shape(&mut self, state: BlockStateId, p: BlockPos) -> Result<VoxelShape> {
         let mut world = SceneCollisions {
-            world: self.scene,
+            world: &self.scene,
             binding: self.collision_binding,
             subject: None,
         };
@@ -333,10 +333,10 @@ impl BlockLandingWorld for MotionWorld<'_, '_, '_> {
         Ok(self.player.client_side)
     }
     fn random_float(&mut self) -> Result<f32> {
-        Ok(self.scene.random.next_float())
+        Ok(self.scene.random().next_float())
     }
     fn random_int(&mut self, bound: i32) -> Result<i32> {
-        Ok(self.scene.random.next_int_bound(bound)?)
+        Ok(self.scene.random().next_int_bound(bound)?)
     }
     fn under_spawn_protection(&mut self, _: BlockPos) -> Result<bool> {
         Ok(false)
@@ -432,12 +432,16 @@ impl BlockLandingWorld for MotionWorld<'_, '_, '_> {
             .registry
             .default_state("minecraft:air")
             .ok_or("missing air")?;
-        self.scene.set(position.x, position.y, position.z, air)?;
+        self.scene
+            .live()?
+            .set(position.x, position.y, position.z, air)?;
         self.fall_event(FallEvent::Destroy { position, drops });
         Ok(true)
     }
     fn set_block(&mut self, position: BlockPos, state: BlockStateId, flags: u32) -> Result<bool> {
-        self.scene.set(position.x, position.y, position.z, state)?;
+        self.scene
+            .live()?
+            .set(position.x, position.y, position.z, state)?;
         self.fall_event(FallEvent::Write {
             position,
             state,

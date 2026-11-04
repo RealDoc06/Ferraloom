@@ -157,7 +157,7 @@ impl Game<'_> {
         let free = horizon_client::motion::MotionWorld {
             entities: &entities,
             player,
-            scene: &mut self.world,
+            scene: horizon_client::motion::Scene::Live(&mut self.world),
             assets: &self.pack.assets,
             collision_binding: self.collision,
             resources: self.motion,
