@@ -1466,7 +1466,7 @@ impl Game<'_> {
             e.leash = leash;
         }
         for d in &self.dropped {
-            let stack = hub.stack(&Some(d.stack.clone()));
+            let stack = hub.stack_of(&d.stack);
             let e = out.add(d.id as i32, entity_uuid(d.id), "minecraft:item");
             e.position = [d.position.x, d.position.y, d.position.z];
             e.on_ground = d.on_ground;

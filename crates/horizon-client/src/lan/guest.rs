@@ -540,15 +540,22 @@ pub fn stack_to_network(
     synced_id: impl Fn(&str, &str) -> Option<i32>,
     s: &Option<ItemStack>,
 ) -> Option<Stack> {
+    network_stack(&item_id, &synced_id, s.as_ref()?)
+}
+/// `stack_to_network` of a stack in place.
+pub fn stack_ref_to_network(
+    item_id: impl Fn(&str) -> i32,
+    synced_id: impl Fn(&str, &str) -> Option<i32>,
+    s: &ItemStack,
+) -> Option<Stack> {
     network_stack(&item_id, &synced_id, s)
 }
 fn network_stack(
     item_id: &dyn Fn(&str) -> i32,
     synced_id: &dyn Fn(&str, &str) -> Option<i32>,
-    s: &Option<ItemStack>,
+    s: &ItemStack,
 ) -> Option<Stack> {
     let enchantment_id = |name: &str| synced_id("minecraft:enchantment", name);
-    let s = s.as_ref()?;
     let mut stack = Stack::new(item_id(&s.item), s.count as i32);
     if s.damage > 0 {
         stack.added.push((
@@ -659,7 +666,7 @@ fn network_stack(
             let charged = d
                 .charged
                 .iter()
-                .filter_map(|c| network_stack(item_id, synced_id, &Some(c.clone())))
+                .filter_map(|c| network_stack(item_id, synced_id, c))
                 .collect();
             stack.added.push((
                 horizon_protocol::item::component::CHARGED_PROJECTILES,
@@ -671,7 +678,7 @@ fn network_stack(
             let contents = d
                 .bundle_contents
                 .iter()
-                .filter_map(|c| network_stack(item_id, synced_id, &Some(c.clone())))
+                .filter_map(|c| network_stack(item_id, synced_id, c))
                 .collect();
             stack.added.push((
                 horizon_protocol::item::component::BUNDLE_CONTENTS,

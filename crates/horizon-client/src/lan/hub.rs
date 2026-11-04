@@ -10,7 +10,7 @@ use super::{
     chunks::ChunkEncoder,
     data::SyncData,
     entity::{Entities, EntityState, Riding, States, Tracker, Viewer},
-    guest::{Guest, SentEffect, stack_to_network},
+    guest::{Guest, SentEffect, stack_ref_to_network},
 };
 use crate::{
     chunk::Chunk,
@@ -257,7 +257,7 @@ pub struct Hub {
     chat_type: i32,
     dimension_type: i32,
     clock_ids: Vec<i32>,
-    item_ids: std::collections::HashMap<Arc<str>, i32>,
+    item_ids: crate::fast_hash::FxHashMap<Arc<str>, i32>,
     entity_types: std::collections::HashMap<String, i32>,
     /// Each level's tracked entities, by dimension (a level's is with the
     /// tracking pass while it runs).
@@ -568,7 +568,11 @@ impl Hub {
         id
     }
     pub fn stack(&mut self, s: &Option<ItemStack>) -> Option<horizon_protocol::item::Stack> {
-        let item = s.as_ref()?.item.clone();
+        self.stack_of(s.as_ref()?)
+    }
+    /// `stack` of a stack in place.
+    pub fn stack_of(&mut self, s: &ItemStack) -> Option<horizon_protocol::item::Stack> {
+        let item = s.item.clone();
         let id = self.item_id(&item);
         let sync = self.sync.clone();
         // The stacks inside it (a bundle's contents, a crossbow's projectiles)
@@ -582,7 +586,7 @@ impl Hub {
                 .and_then(|i| i.id(name))
                 .unwrap_or(0)
         };
-        stack_to_network(item_id, |registry, name| sync.id(registry, name), s)
+        stack_ref_to_network(item_id, |registry, name| sync.id(registry, name), s)
     }
 
     pub fn broadcast(&self, packet: &C) {
