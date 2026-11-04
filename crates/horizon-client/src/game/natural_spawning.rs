@@ -573,6 +573,11 @@ impl NaturalLevel for GameLevel<'_, '_> {
     fn pathfindable_land(&self, x: i32, y: i32, z: i32) -> bool {
         self.w.data.state(self.state(x, y, z)).flags & data::LAND != 0
     }
+    fn prefetch_try(&self, x: i32, y: i32, z: i32) {
+        if let Some(chunk) = self.chunk(x, z) {
+            chunk.prefetch_try(x, y, z);
+        }
+    }
     fn prefetch_block(&self, x: i32, y: i32, z: i32) {
         if let Some(chunk) = self.chunk(x, z) {
             chunk.prefetch_block(x, y, z);
