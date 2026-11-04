@@ -852,7 +852,7 @@ impl LevelAccess for GameLevel<'_> {
         self.world.world_surface(x, z, |s| self.facts.is_air(s))
     }
     fn precipitation(&self, pos: BlockPos) -> Option<horizon_world::level::Precipitation> {
-        self.behaviours.precipitation_info(self, pos)
+        self.behaviours.precipitation_tick_info(self, pos)
     }
     fn is_raining_at(&self, pos: BlockPos) -> bool {
         self.behaviours.is_raining_at(self, pos)

@@ -394,6 +394,15 @@ fn snowy_biomes_freeze_and_snow() {
         .precipitation_info(&w.level, BlockPos::new(1, 70, 0))
         .unwrap();
     assert!(pond.freezes_below, "a water source at the edge freezes");
+    // Without rain a tick only freezes water: elsewhere it is skipped.
+    assert!(
+        b.precipitation_tick_info(&w.level, BlockPos::new(0, 70, 0))
+            .is_none()
+    );
+    let tick = b
+        .precipitation_tick_info(&w.level, BlockPos::new(1, 70, 0))
+        .unwrap();
+    assert!(tick.freezes_below && tick.top == pond.top);
     w.level.biome = "minecraft:plains";
     let rain = b
         .precipitation_info(&w.level, BlockPos::new(0, 70, 0))
