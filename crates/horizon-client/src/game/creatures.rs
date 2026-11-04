@@ -613,16 +613,22 @@ impl Game<'_> {
                 }
                 read.memo = m.ai.move_memo.sections_ahead(world);
                 let (bounds, eye) = (m.bounds(), m.eye_y());
-                read.fluids = Some((
-                    horizon_client::mobs::living::fluids_key(bounds, eye),
-                    reader.fluids(bounds, eye),
-                ));
+                let fluids_key = horizon_client::mobs::living::fluids_key(bounds, eye);
                 // Its tick starts with `previous` where it stands now.
                 let (at, width, height) = (m.position, m.width(), m.height());
-                read.kinds = Some((
-                    horizon_client::mobs::ai::key_at(at, width, height),
-                    horizon_client::mobs::ai::kinds_between(at, at, width, height, &reader),
-                ));
+                let kinds_key = horizon_client::mobs::ai::key_at(at, width, height);
+                // An idle mob over unchanged sections reads what it read
+                // last tick (MoveMemo::keep_reads).
+                let (fluids, kinds) =
+                    match m.ai.move_memo.kept_reads(read.memo, fluids_key, kinds_key) {
+                        Some(kept) => kept,
+                        None => (
+                            reader.fluids(bounds, eye),
+                            horizon_client::mobs::ai::kinds_between(at, at, width, height, &reader),
+                        ),
+                    };
+                read.fluids = Some((fluids_key, fluids));
+                read.kinds = Some((kinds_key, kinds));
             });
         }
         // How many mobs there are and how many tick, now and then, for
@@ -762,6 +768,8 @@ impl Game<'_> {
                 horizon_client::mobs::apply_mob_pushes(m, &mut pushes);
                 let from = events.len();
                 let kept = m.tick(&w, &mut scratch, &mut events);
+                // This tick's reads, for the next one over the same blocks.
+                m.ai.move_memo.keep_reads(read.fluids, read.kinds);
                 // A killed mob's body is removed: its effects that act on
                 // death run (`LivingEntity.remove` with KILLED).
                 if !kept && !m.alive() && !m.removed && !m.extra.effects.is_empty() {
