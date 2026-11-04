@@ -15559,8 +15559,14 @@ pub fn run() -> Result<()> {
         horizon_threads::configure_server_affinity();
     }
     // Before any worker starts: on Linux they go behind the server thread
-    // and the render thread.
-    horizon_threads::put_helpers_behind();
+    // and the render thread; a dedicated server's into the idle class, so
+    // the tick's pool gets a worker core the moment it asks
+    // (`FERRALOOM_HELPERS=nice` keeps them ten nice levels down instead).
+    if options.dedicated.is_some() && std::env::var("FERRALOOM_HELPERS").as_deref() != Ok("nice") {
+        horizon_threads::put_helpers_idle();
+    } else {
+        horizon_threads::put_helpers_behind();
+    }
     if options.execution_role.is_client() {
         // The render thread, like the server thread, ahead of the workers on
         // macOS and Windows. While terrain loads, the worker pools (two with
