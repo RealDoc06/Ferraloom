@@ -600,7 +600,7 @@ impl Game<'_> {
             let with_guests = !guest_views.is_empty();
             let levels = self.tickets.levels();
             let world = &self.world;
-            horizon_threads::pool::for_each_mut(&mut ahead, 256, |(m, read)| {
+            horizon_threads::pool::for_each_mut(&mut ahead, 64, |(m, read)| {
                 read.seen = Some(seen(m, uuid));
                 read.nearest = nearest_to(m.position);
                 if with_guests {
