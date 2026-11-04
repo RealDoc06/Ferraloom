@@ -186,6 +186,13 @@ fn flame_geometry(
 pub(super) fn seen(m: &Mob, player: Option<[i32; 4]>) -> Seen {
     m.seen(player)
 }
+/// How many of the mobs read ahead tick (those whose fluids were read).
+fn reads_ticking(ahead: &[(&Mob, MobAhead)]) -> usize {
+    ahead
+        .iter()
+        .filter(|(_, read)| read.fluids.is_some())
+        .count()
+}
 /// The species among a list of mobs, as bits (all of them past the 128th).
 #[derive(Default)]
 struct SpeciesSet([u64; 2], bool);
@@ -589,9 +596,19 @@ impl Game<'_> {
             let reader = self.mob_world_base(&[]);
             let host = reader.player.as_ref();
             let with_guests = !guest_views.is_empty();
+            let levels = self.tickets.levels();
+            let world = &self.world;
             horizon_threads::pool::for_each_mut(&mut ahead, 256, |(m, read)| {
                 read.seen = Some(seen(m, uuid));
                 read.nearest = nearest_to(m.position);
+                if with_guests {
+                    read.guest = super::lan_mobs::nearest_choice(m.position, host, &guests);
+                }
+                // Only a mob that ticks reads its fluids and the blocks.
+                let (x, z) = (m.position.x.floor() as i32, m.position.z.floor() as i32);
+                if !world.loaded(x, z) || !levels.entity_ticking_at(x, z) {
+                    return;
+                }
                 let (bounds, eye) = (m.bounds(), m.eye_y());
                 read.fluids = Some((
                     horizon_client::mobs::living::fluids_key(bounds, eye),
@@ -603,10 +620,13 @@ impl Game<'_> {
                     horizon_client::mobs::ai::key_at(at, width, height),
                     horizon_client::mobs::ai::kinds_between(at, at, width, height, &reader),
                 ));
-                if with_guests {
-                    read.guest = super::lan_mobs::nearest_choice(at, host, &guests);
-                }
             });
+        }
+        // How many mobs there are and how many tick, now and then, for
+        // reading per-mob costs off a benchmark's log.
+        if self.world.game_time.rem_euclid(600) == 0 {
+            let ticking = reads_ticking(&ahead);
+            log::info!("mobs: {} loaded, {ticking} ticking", ahead.len());
         }
         let mut reads = Vec::with_capacity(ahead.len());
         let mut snapshot: Vec<Seen> = ahead

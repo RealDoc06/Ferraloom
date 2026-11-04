@@ -2710,6 +2710,10 @@ impl Game<'_> {
             kinds: u16,
         }
         let mut items = std::mem::take(&mut self.dropped);
+        // For reading per-item costs off a benchmark's log.
+        if self.world.game_time.rem_euclid(600) == 0 {
+            log::info!("dropped items: {}", items.len());
+        }
         // ServerLevel.tick: only entities in entity-ticking chunks tick.
         let ticking = self.entity_ticking_area();
         let mut removed = vec![false; items.len()];
