@@ -1442,6 +1442,11 @@ struct Nearest {
     nearby: [[f64; 3]; Self::KEPT],
     kept: usize,
     crowded: bool,
+    /// In a crowd, the players the index's searches found last, measured
+    /// with the kept ones: an attempt's next tries are a few blocks away,
+    /// where the same player is often near enough to end the search.
+    found: [[f64; 3]; Self::FOUND],
+    found_len: usize,
 }
 impl Nearest {
     /// `right_distance`'s 24² and the despawn distances, 64² and 128².
@@ -1470,19 +1475,27 @@ impl Nearest {
         }
         let kept = self.nearby[..self.kept]
             .iter()
+            .chain(&self.found[..self.found_len])
             .map(|p| (p[0] - at[0]).powi(2) + (p[1] - at[1]).powi(2) + (p[2] - at[2]).powi(2))
             .fold(f64::INFINITY, f64::min);
-        Some(if self.crowded {
-            players.nearest_against_from(kept, at, &Self::CHECKS)
-        } else {
-            kept
-        })
+        if !self.crowded {
+            return Some(kept);
+        }
+        let (distance, found) = players.nearest_point_against_from(kept, at, &Self::CHECKS);
+        if let Some(position) = found {
+            // The newest first; the oldest drops out.
+            self.found.copy_within(..Self::FOUND - 1, 1);
+            self.found[0] = position;
+            self.found_len = (self.found_len + 1).min(Self::FOUND);
+        }
+        Some(distance)
     }
     fn keep_players(&mut self, players: &PlayerIndex, chunk: (i32, i32)) {
         self.chunk = Some(chunk);
         self.centre = (f64::from(chunk.0 * 16 + 8), f64::from(chunk.1 * 16 + 8));
         self.kept = 0;
         self.crowded = false;
+        self.found_len = 0;
         let (x, z) = self.centre;
         let _ = players.visit_within(x, z, Self::RADIUS_SQR, &mut |p| {
             if self.kept == Self::KEPT {

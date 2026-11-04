@@ -69,6 +69,8 @@ pub struct NearestPlayer {
 struct Against {
     distance_sqr: f64,
     limit: f64,
+    /// Where the player at `distance_sqr` is, once the search found one.
+    position: Option<[f64; 3]>,
 }
 impl Against {
     /// How close a player must be to change the answer for one `d` away: past
@@ -198,6 +200,7 @@ impl PlayerIndex {
         let mut found = Against {
             distance_sqr: f64::INFINITY,
             limit: cutoffs[2],
+            position: None,
         };
         self.against_in(0, at, cutoffs, &mut found);
         found.distance_sqr
@@ -205,17 +208,28 @@ impl PlayerIndex {
     /// [`Self::nearest_against`] given the squared distance of some player
     /// already measured, which is what its search then has to beat.
     pub fn nearest_against_from(&self, seen: f64, at: [f64; 3], cutoffs: &[f64; 3]) -> f64 {
+        self.nearest_point_against_from(seen, at, cutoffs).0
+    }
+    /// The same, with where the search found a player nearer than `seen`
+    /// (`None` when it found none, or the index is linear).
+    pub fn nearest_point_against_from(
+        &self,
+        seen: f64,
+        at: [f64; 3],
+        cutoffs: &[f64; 3],
+    ) -> (f64, Option<[f64; 3]>) {
         if self.linear {
-            return self.nearest_against(at, cutoffs);
+            return (self.nearest_against(at, cutoffs), None);
         }
         let mut found = Against {
             distance_sqr: seen,
             limit: Against::limit_below(seen, cutoffs),
+            position: None,
         };
         if found.limit != f64::NEG_INFINITY {
             self.against_in(0, at, cutoffs, &mut found);
         }
-        found.distance_sqr
+        (found.distance_sqr, found.position)
     }
     fn against_leaf(&self, n: &Node, q: [f64; 3], cutoffs: &[f64; 3], found: &mut Against) {
         for p in &self.points[n.start as usize..n.end as usize] {
@@ -223,6 +237,7 @@ impl PlayerIndex {
             if d <= found.limit {
                 found.distance_sqr = d;
                 found.limit = Against::limit_below(d, cutoffs);
+                found.position = Some(p.position);
             }
         }
     }
