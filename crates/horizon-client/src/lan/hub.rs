@@ -1908,21 +1908,21 @@ impl Hub {
                 &[],
             ));
         }
-        for i in 0..self.guests.len() {
-            if !self.here(&self.guests[i]) {
+        // Out of the hub while their states are made: what a state reads of
+        // the hub (the registries, the item ids) is not theirs, and their
+        // stacks are read in place.
+        let guests = std::mem::take(&mut self.guests);
+        for g in &guests {
+            if !self.here(g) {
                 continue;
             }
-            let (main, off, armor) = {
-                let g = &self.guests[i];
-                (
-                    g.inventory.get(g.selected).cloned().flatten(),
-                    g.offhand.clone(),
-                    g.armor.clone(),
-                )
-            };
-            let equipment =
-                self.equipment_of(&main, &off, [&armor[0], &armor[1], &armor[2], &armor[3]]);
-            let g = &self.guests[i];
+            let main = g.inventory.get(g.selected).unwrap_or(&None);
+            let armor = &g.armor;
+            let equipment = self.equipment_of(
+                main,
+                &g.offhand,
+                [&armor[0], &armor[1], &armor[2], &armor[3]],
+            );
             all.push(
                 self.player_state(
                     g.entity_id,
@@ -1945,6 +1945,7 @@ impl Hub {
                 ),
             );
         }
+        self.guests = guests;
         if let Some(states) = self.entity_states.take() {
             return self.track_beside(all, states);
         }
