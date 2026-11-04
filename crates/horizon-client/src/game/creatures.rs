@@ -186,6 +186,19 @@ fn flame_geometry(
 pub(super) fn seen(m: &Mob, player: Option<[i32; 4]>) -> Seen {
     m.seen(player)
 }
+/// What the mob ticks read of each mob ahead of the serial pass, on the
+/// tick's workers, from the mob as it stands and the blocks: its snapshot
+/// entry, the nearest player to it (the despawn distance), the fluids at
+/// its box, the block kinds around it and the player it would see when
+/// bound to none. Each is taken only while its inputs are unchanged.
+#[derive(Default)]
+struct MobAhead {
+    seen: Option<Seen>,
+    nearest: Option<Vec3>,
+    fluids: Option<([u64; 7], horizon_client::mobs::living::Fluids)>,
+    kinds: Option<([u64; 4], u16)>,
+    guest: Option<u32>,
+}
 impl Game<'_> {
     pub(super) fn player_view(&self) -> Option<PlayerView> {
         let p = self.player.as_ref()?;
@@ -549,55 +562,44 @@ impl Game<'_> {
                 .nearest([at.x, at.y, at.z])
                 .map(|p| Vec3::new(p.position[0], p.position[1], p.position[2]))
         };
+        // With guests on, each mob sees its nearest player (game/lan_mobs.rs).
+        let guest_views = self.lan_guest_views();
+        let guests = super::lan_mobs::GuestLookup::new(&guest_views);
         // Read ahead on the pool, from the mobs as they stand before any
-        // ticks and the blocks, which hold still until the ticks are over:
-        // each one's snapshot entry, the nearest player to where it stands
-        // and the fluids at its box. A mob moved before its own tick asks
-        // again then.
-        type Ahead<'m> = (
-            &'m Mob,
-            Option<Seen>,
-            Option<Vec3>,
-            Option<([u64; 7], horizon_client::mobs::living::Fluids)>,
-            Option<([u64; 4], u16)>,
-        );
-        let mut ahead: Vec<Ahead> = self
-            .mobs
-            .iter()
-            .map(|m| (m, None, None, None, None))
-            .collect();
+        // ticks and the blocks, which hold still until the ticks are over
+        // (see `MobAhead`). A mob moved before its own tick asks again then.
+        let mut ahead: Vec<(&Mob, MobAhead)> =
+            self.mobs.iter().map(|m| (m, MobAhead::default())).collect();
         {
             let reader = self.mob_world_base(&[]);
-            horizon_threads::pool::for_each_mut(
-                &mut ahead,
-                256,
-                |(m, entry, near, fluids, kinds)| {
-                    *entry = Some(seen(m, uuid));
-                    *near = nearest_to(m.position);
-                    let (bounds, eye) = (m.bounds(), m.eye_y());
-                    *fluids = Some((
-                        horizon_client::mobs::living::fluids_key(bounds, eye),
-                        reader.fluids(bounds, eye),
-                    ));
-                    // Its tick starts with `previous` where it stands now.
-                    let (at, width, height) = (m.position, m.width(), m.height());
-                    *kinds = Some((
-                        horizon_client::mobs::ai::key_at(at, width, height),
-                        horizon_client::mobs::ai::kinds_between(at, at, width, height, &reader),
-                    ));
-                },
-            );
+            let host = reader.player.as_ref();
+            let with_guests = !guest_views.is_empty();
+            horizon_threads::pool::for_each_mut(&mut ahead, 256, |(m, read)| {
+                read.seen = Some(seen(m, uuid));
+                read.nearest = nearest_to(m.position);
+                let (bounds, eye) = (m.bounds(), m.eye_y());
+                read.fluids = Some((
+                    horizon_client::mobs::living::fluids_key(bounds, eye),
+                    reader.fluids(bounds, eye),
+                ));
+                // Its tick starts with `previous` where it stands now.
+                let (at, width, height) = (m.position, m.width(), m.height());
+                read.kinds = Some((
+                    horizon_client::mobs::ai::key_at(at, width, height),
+                    horizon_client::mobs::ai::kinds_between(at, at, width, height, &reader),
+                ));
+                if with_guests {
+                    read.guest = super::lan_mobs::nearest_choice(at, host, &guests);
+                }
+            });
         }
-        let mut nearest_ahead = Vec::with_capacity(ahead.len());
-        let mut fluids_ahead = Vec::with_capacity(ahead.len());
-        let mut kinds_ahead = Vec::with_capacity(ahead.len());
+        let mut reads = Vec::with_capacity(ahead.len());
         let mut snapshot: Vec<Seen> = ahead
             .into_iter()
-            .map(|(m, entry, near, fluids, kinds)| {
-                nearest_ahead.push((m.position, near));
-                fluids_ahead.push(fluids);
-                kinds_ahead.push(kinds);
-                entry.unwrap_or_else(|| seen(m, uuid))
+            .map(|(m, mut read)| {
+                let entry = read.seen.take().unwrap_or_else(|| seen(m, uuid));
+                reads.push((m.position, read));
+                entry
             })
             .collect();
         let mut events = Vec::new();
@@ -606,9 +608,6 @@ impl Game<'_> {
         let mut corpses = Vec::new();
         let mut died = std::mem::take(&mut self.died);
         let ticking = self.entity_ticking_area();
-        // With guests on, each mob sees its nearest player (game/lan_mobs.rs).
-        let guest_views = self.lan_guest_views();
-        let guests = super::lan_mobs::GuestLookup::new(&guest_views);
         let mut bindings = match self.lan.as_mut() {
             Some(host) if !guest_views.is_empty() => std::mem::take(&mut host.mob_players),
             _ => Default::default(),
@@ -645,6 +644,9 @@ impl Game<'_> {
             for (i, s) in snapshot.iter().enumerate() {
                 index.entry(s.id).or_insert(i as u32);
             }
+            // getCurrentDifficultyAt by chunk: the same for every mob of a
+            // chunk while the mobs tick.
+            let mut difficulty = horizon_client::fast_hash::FxHashMap::default();
             drop(prep);
             let each = horizon_client::spans::scope("creature_loop");
             for i in 0..mobs.len() {
@@ -657,15 +659,20 @@ impl Game<'_> {
                 let m = &mut mobs[i];
                 // getCurrentDifficultyAt(blockPosition()): the mob's own chunk,
                 // not the local player's (a server thread has no player).
-                w.difficulty = self.local_difficulty([m.position.x, m.position.y, m.position.z]);
-                w.fluids_ahead = fluids_ahead[i];
-                w.kinds_ahead = kinds_ahead[i];
-                let (stood, near) = nearest_ahead[i];
+                let at = [m.position.x, m.position.y, m.position.z];
+                let chunk = ((at[0].floor() as i32) >> 4, (at[2].floor() as i32) >> 4);
+                w.difficulty = *difficulty
+                    .entry(chunk)
+                    .or_insert_with(|| self.local_difficulty(at));
+                let (stood, read) = &reads[i];
+                w.fluids_ahead = read.fluids;
+                w.kinds_ahead = read.kinds;
                 let same = |a: Vec3, b: Vec3| {
                     [a.x, a.y, a.z].map(f64::to_bits) == [b.x, b.y, b.z].map(f64::to_bits)
                 };
-                w.nearest_player = if same(stood, m.position) {
-                    near
+                let stands = same(*stood, m.position);
+                w.nearest_player = if stands {
+                    read.nearest
                 } else {
                     nearest_to(m.position)
                 };
@@ -673,7 +680,9 @@ impl Game<'_> {
                     None
                 } else {
                     let bound = bindings.get(&m.id).copied();
-                    let conn = super::lan_mobs::player_for(m, w.player.as_ref(), &guests, bound);
+                    let ahead = Some((*stood, read.guest));
+                    let conn =
+                        super::lan_mobs::player_for(m, w.player.as_ref(), &guests, bound, ahead);
                     match conn {
                         Some(conn) => {
                             bindings.insert(m.id, conn);
