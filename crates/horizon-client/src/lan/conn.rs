@@ -1129,8 +1129,9 @@ fn play(c: Connection, shared: &Arc<Shared>, parts: Parts, address: std::net::So
         std::thread::Builder::new()
             .name(format!("horizon-lan-out-{conn_id}"))
             .spawn(move || {
-                // Ticks and frames come first (horizon_threads).
-                horizon_threads::behind_server();
+                // Ticks and frames come first (horizon_threads), but a
+                // player's packets are not left to idle time.
+                horizon_threads::behind_server_io();
                 write_loop(writer, rx, alive, latency, pending)
             })
             .ok()
