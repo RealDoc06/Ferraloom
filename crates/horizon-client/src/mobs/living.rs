@@ -1438,6 +1438,9 @@ impl horizon_world::water_splash::WaterSplashWorld for Splash<'_> {
 #[derive(Clone, Debug, Default)]
 pub struct MoveMemo {
     key: Option<[u64; 14]>,
+    /// Counts the moves remembered, so an answer read ahead about these
+    /// sections is known to be about this memo.
+    generation: u64,
     sections: SectionsSeen,
     moved: Vec3,
     /// Where the mob stood when it looked for its support, and the support.
@@ -1480,13 +1483,36 @@ impl MoveMemo {
     /// The remembered move, if `key` is the remembered one and every
     /// section is unchanged.
     fn recall(&self, key: &[u64; 14], w: &MobWorld, bounds: Aabb, dy: f64) -> Option<Vec3> {
-        (self.key.as_ref() == Some(key)
-            && self.sections.unchanged(w.world, Self::cells(bounds, dy)))
-        .then_some(self.moved)
+        if self.key.as_ref() != Some(key) {
+            return None;
+        }
+        let unchanged = match w.memo_ahead {
+            Some((generation, unchanged)) if generation == self.generation => unchanged,
+            _ => self.sections.unchanged(w.world, Self::cells(bounds, dy)),
+        };
+        unchanged.then_some(self.moved)
+    }
+    /// Whether the remembered move's sections are unchanged, asked ahead
+    /// of the tick (the blocks hold still until the ticks are over), with
+    /// the memo's generation: None without a remembered move.
+    pub fn sections_ahead(&self, world: &crate::world::World) -> Option<(u64, bool)> {
+        let key = self.key.as_ref()?;
+        let at = |i: usize| {
+            Vec3::new(
+                f64::from_bits(key[i]),
+                f64::from_bits(key[i + 1]),
+                f64::from_bits(key[i + 2]),
+            )
+        };
+        let bounds = Aabb::new(at(3), at(6));
+        let dy = f64::from_bits(key[10]);
+        let unchanged = self.sections.unchanged(world, Self::cells(bounds, dy));
+        Some((self.generation, unchanged))
     }
     /// Keep a resolved move, if its sections can be kept.
     fn remember(&mut self, key: [u64; 14], w: &MobWorld, bounds: Aabb, dy: f64, moved: Vec3) {
         self.support = None;
+        self.generation = self.generation.wrapping_add(1);
         let kept = self
             .sections
             .capture(w.world, w.collision, Self::cells(bounds, dy));

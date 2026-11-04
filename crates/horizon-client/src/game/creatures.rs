@@ -220,6 +220,7 @@ struct MobAhead {
     fluids: Option<([u64; 7], horizon_client::mobs::living::Fluids)>,
     kinds: Option<([u64; 4], u16)>,
     guest: Option<u32>,
+    memo: Option<(u64, bool)>,
 }
 impl Game<'_> {
     pub(super) fn player_view(&self) -> Option<PlayerView> {
@@ -499,6 +500,7 @@ impl Game<'_> {
             lid_openers: &self.lid_openers,
             fluids_ahead: None,
             kinds_ahead: None,
+            memo_ahead: None,
             // The first player in the level: a server has no player of its own.
             difficulty: self.local_difficulty(
                 self.first_level_player()
@@ -609,6 +611,7 @@ impl Game<'_> {
                 if !world.loaded(x, z) || !levels.entity_ticking_at(x, z) {
                     return;
                 }
+                read.memo = m.ai.move_memo.sections_ahead(world);
                 let (bounds, eye) = (m.bounds(), m.eye_y());
                 read.fluids = Some((
                     horizon_client::mobs::living::fluids_key(bounds, eye),
@@ -709,6 +712,7 @@ impl Game<'_> {
                 let (stood, read) = &reads[i];
                 w.fluids_ahead = read.fluids;
                 w.kinds_ahead = read.kinds;
+                w.memo_ahead = read.memo;
                 let same = |a: Vec3, b: Vec3| {
                     [a.x, a.y, a.z].map(f64::to_bits) == [b.x, b.y, b.z].map(f64::to_bits)
                 };
