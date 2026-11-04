@@ -15560,13 +15560,15 @@ pub fn run() -> Result<()> {
         horizon_threads::configure_server_affinity();
     }
     // Before any worker starts: on Linux they go behind the server thread
-    // and the render thread; a dedicated server's into the idle class, so
-    // the tick's pool gets a worker core the moment it asks
-    // (`FERRALOOM_HELPERS=nice` keeps them ten nice levels down instead).
-    if options.dedicated.is_some() && std::env::var("FERRALOOM_HELPERS").as_deref() != Ok("nice") {
-        horizon_threads::put_helpers_idle();
-    } else {
-        horizon_threads::put_helpers_behind();
+    // and the render thread; a dedicated server's generation and loading
+    // into the idle class, so the tick's pool gets a worker core the moment
+    // it asks, while its connection writers stay ten nice levels down.
+    // `FERRALOOM_HELPERS=all-idle` idles the writers too, `nice` none.
+    let helpers = std::env::var("FERRALOOM_HELPERS");
+    match (options.dedicated.is_some(), helpers.as_deref()) {
+        (true, Ok("nice")) | (false, _) => horizon_threads::put_helpers_behind(),
+        (true, Ok("all-idle")) => horizon_threads::put_helpers_idle(true),
+        (true, _) => horizon_threads::put_helpers_idle(false),
     }
     if options.execution_role.is_client() {
         // The render thread, like the server thread, ahead of the workers on

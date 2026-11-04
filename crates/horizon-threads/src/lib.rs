@@ -124,6 +124,9 @@ static HELPERS_BEHIND: AtomicBool = AtomicBool::new(false);
 /// Set by a dedicated server: its helpers take the idle class instead of a
 /// nicer value (`put_helpers_idle`).
 static HELPERS_IDLE: AtomicBool = AtomicBool::new(false);
+/// Set with `HELPERS_IDLE` when the threads delivering to players take the
+/// idle class too (`behind_server_io`).
+static DELIVERY_IDLE: AtomicBool = AtomicBool::new(false);
 
 /// How many nice levels a helper thread goes below the process on Linux and Android.
 #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -144,8 +147,13 @@ pub fn put_helpers_behind() {
 /// then run on what the tick and its pools leave, which on a server is most
 /// of every worker core. Not for a client, whose helpers would wait behind
 /// every other program on the machine. Implies `put_helpers_behind`.
-pub fn put_helpers_idle() {
+///
+/// The threads that deliver to players (`behind_server_io`) stay ten nice
+/// levels down unless `delivery` is set too: with every core busy, an
+/// idle-class writer could hold a player's packets back.
+pub fn put_helpers_idle(delivery: bool) {
     HELPERS_IDLE.store(true, Ordering::Relaxed);
+    DELIVERY_IDLE.store(delivery, Ordering::Relaxed);
     put_helpers_behind();
 }
 
@@ -164,6 +172,17 @@ pub fn behind_server() -> bool {
     worker_affinity();
     #[cfg(target_os = "linux")]
     if HELPERS_IDLE.load(Ordering::Relaxed) {
+        return idle();
+    }
+    HELPERS_BEHIND.load(Ordering::Relaxed) && behind()
+}
+/// `behind_server` for a thread that delivers to players (a connection's
+/// packet writer): it takes the idle class only if `put_helpers_idle` was
+/// told so, and otherwise goes ten nice levels down like any helper.
+pub fn behind_server_io() -> bool {
+    worker_affinity();
+    #[cfg(target_os = "linux")]
+    if HELPERS_IDLE.load(Ordering::Relaxed) && DELIVERY_IDLE.load(Ordering::Relaxed) {
         return idle();
     }
     HELPERS_BEHIND.load(Ordering::Relaxed) && behind()
@@ -345,11 +364,34 @@ mod tests {
         .unwrap();
         #[cfg(not(any(target_os = "linux", target_os = "android")))]
         assert!(!std::thread::spawn(super::behind_server).join().unwrap());
-        // A dedicated server's helpers take the idle class on Linux.
-        super::put_helpers_idle();
+        // A dedicated server's helpers take the idle class on Linux; the
+        // threads delivering to players only when asked.
+        super::put_helpers_idle(false);
         #[cfg(target_os = "linux")]
         std::thread::spawn(|| {
             assert!(super::behind_server());
+            // SAFETY: reads the calling thread's own policy.
+            assert_eq!(unsafe { libc::sched_getscheduler(0) }, libc::SCHED_IDLE);
+        })
+        .join()
+        .unwrap();
+        #[cfg(target_os = "linux")]
+        std::thread::spawn(|| {
+            // SAFETY: reads the calling thread's own nice value.
+            let before = unsafe { libc::getpriority(libc::PRIO_PROCESS as _, 0) };
+            assert!(super::behind_server_io());
+            // Ten nice levels down, unless nice runs out first.
+            if before + super::BEHIND <= 19 {
+                // SAFETY: reads the calling thread's own policy.
+                assert_ne!(unsafe { libc::sched_getscheduler(0) }, libc::SCHED_IDLE);
+            }
+        })
+        .join()
+        .unwrap();
+        super::put_helpers_idle(true);
+        #[cfg(target_os = "linux")]
+        std::thread::spawn(|| {
+            assert!(super::behind_server_io());
             // SAFETY: reads the calling thread's own policy.
             assert_eq!(unsafe { libc::sched_getscheduler(0) }, libc::SCHED_IDLE);
         })
