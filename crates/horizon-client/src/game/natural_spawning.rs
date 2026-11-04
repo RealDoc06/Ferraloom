@@ -865,17 +865,13 @@ mod tests {
     #[test]
     fn column_memo_answers_as_the_map_does() {
         let mut spawns = StructureSpawns::default();
-        spawns.overrides.insert(
+        spawns.insert(
             "minecraft:monument".to_owned(),
-            [(
-                Category::Monster.name().to_owned(),
-                horizon_client::mobs::spawn_selection::Override {
-                    piece: true,
-                    spawns: Vec::new(),
-                },
-            )]
-            .into_iter()
-            .collect(),
+            Category::Monster,
+            horizon_client::mobs::spawn_selection::Override {
+                piece: true,
+                spawns: Vec::new(),
+            },
         );
         let mut chunks = ChunkMap::default();
         for x in 0..4 {

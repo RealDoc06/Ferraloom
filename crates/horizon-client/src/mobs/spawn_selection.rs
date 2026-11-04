@@ -661,9 +661,10 @@ pub struct Override {
 /// Every structure's `spawn_overrides`, by structure id then category.
 #[derive(Clone, Debug, Default)]
 pub struct StructureSpawns {
-    /// Fx-hashed: natural spawning asks for every structure reaching every
+    /// Each category's override by category index. Fx-hashed, one look-up a
+    /// structure: natural spawning asks about every structure reaching every
     /// position it tries.
-    pub overrides: FxHashMap<String, FxHashMap<String, Override>>,
+    pub overrides: FxHashMap<String, [Option<Override>; Category::ALL.len()]>,
 }
 impl StructureSpawns {
     /// The overrides of the resource root first asked for, loaded once.
@@ -685,28 +686,27 @@ impl StructureSpawns {
             else {
                 continue;
             };
-            let map: FxHashMap<String, Override> = v["spawn_overrides"]
-                .as_object()
-                .into_iter()
-                .flatten()
-                .map(|(category, o)| {
-                    (
-                        category.clone(),
-                        Override {
-                            piece: o["bounding_box"].as_str() == Some("piece"),
-                            spawns: parse_entries(&o["spawns"]),
-                        },
-                    )
-                })
-                .collect();
-            if !map.is_empty() {
-                overrides.insert(format!("minecraft:{stem}"), map);
+            let mut spawns = Self::default();
+            for (category, o) in v["spawn_overrides"].as_object().into_iter().flatten() {
+                // A category no spawner asks about is never looked up.
+                if let Some(c) = Category::ALL.into_iter().find(|c| c.name() == category) {
+                    let o = Override {
+                        piece: o["bounding_box"].as_str() == Some("piece"),
+                        spawns: parse_entries(&o["spawns"]),
+                    };
+                    spawns.insert(format!("minecraft:{stem}"), c, o);
+                }
             }
+            overrides.extend(spawns.overrides);
         }
         Self { overrides }
     }
-    pub fn get(&self, structure: &str, category: &str) -> Option<&Override> {
-        self.overrides.get(structure)?.get(category)
+    /// Sets a structure's override for a category.
+    pub fn insert(&mut self, structure: String, category: Category, o: Override) {
+        self.overrides.entry(structure).or_default()[category.index()] = Some(o);
+    }
+    pub fn get(&self, structure: &str, category: Category) -> Option<&Override> {
+        self.overrides.get(structure)?[category.index()].as_ref()
     }
     /// The bits ([`Category::bit`]) of the categories whose [`mobs_at`] looks
     /// a structure up: those it overrides, and monsters for a fortress.
@@ -719,7 +719,7 @@ impl StructureSpawns {
         self.overrides.get(structure).map_or(fortress, |map| {
             Category::ALL
                 .into_iter()
-                .filter(|c| map.contains_key(c.name()))
+                .filter(|c| map[c.index()].is_some())
                 .fold(fortress, |bits, c| bits | c.bit())
         })
     }
@@ -776,7 +776,7 @@ pub fn mobs_at<L: NaturalLevel>(
     let overrides = l.structure_spawns();
     let monster = category == Category::Monster;
     let structures = l.structures_at(x, y, z, &|id| {
-        (monster && id == "minecraft:fortress") || overrides.get(id, category.name()).is_some()
+        (monster && id == "minecraft:fortress") || overrides.get(id, category).is_some()
     });
     if category == Category::Monster
         && structures
@@ -787,7 +787,7 @@ pub fn mobs_at<L: NaturalLevel>(
         return fortress_enemies();
     }
     for s in &structures {
-        if let Some(o) = overrides.get(&s.id, category.name())
+        if let Some(o) = overrides.get(&s.id, category)
             && (if o.piece { s.in_piece } else { s.in_bounds })
         {
             return &o.spawns;
@@ -1447,6 +1447,7 @@ impl Nearest {
     /// `right_distance`'s 24² and the despawn distances, 64² and 128².
     const CHECKS: [f64; 3] = [576.0, 4096.0, 16384.0];
     const KEPT: usize = 16;
+    const FOUND: usize = 4;
     /// An attempt this far from the chunk's centre on both axes uses `nearby`.
     const MARGIN: f64 = 48.0;
     /// 128 blocks past the corner of that square.
@@ -1786,23 +1787,17 @@ mod tests {
         }
         assert_eq!(Category::from_name("other"), Category::Misc);
         let mut spawns = StructureSpawns::default();
-        let piece = |category: Category| {
-            let o = Override {
-                piece: true,
-                spawns: Vec::new(),
-            };
-            (category.name().to_owned(), o)
+        let piece = || Override {
+            piece: true,
+            spawns: Vec::new(),
         };
-        spawns.overrides.insert(
-            "minecraft:monument".to_owned(),
-            [piece(Category::Monster), piece(Category::Axolotls)]
-                .into_iter()
-                .collect(),
-        );
-        spawns.overrides.insert(
-            "minecraft:fortress".to_owned(),
-            [piece(Category::Creature)].into_iter().collect(),
-        );
+        for (id, category) in [
+            ("minecraft:monument", Category::Monster),
+            ("minecraft:monument", Category::Axolotls),
+            ("minecraft:fortress", Category::Creature),
+        ] {
+            spawns.insert(id.to_owned(), category, piece());
+        }
         for id in [
             "minecraft:monument",
             "minecraft:fortress",
@@ -1811,7 +1806,7 @@ mod tests {
             for c in Category::ALL {
                 // The structures `mobs_at` wants.
                 let wanted = c == Category::Monster && id == "minecraft:fortress"
-                    || spawns.get(id, c.name()).is_some();
+                    || spawns.get(id, c).is_some();
                 assert_eq!(
                     spawns.category_bits(id) & c.bit() != 0,
                     wanted,
