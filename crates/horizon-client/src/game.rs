@@ -606,8 +606,11 @@ struct GameLevel<'w> {
     raining: bool,
     thundering: bool,
     player_box: Option<([f64; 3], [f64; 3])>,
+    /// The LAN host, from which the guests' boxes and feet below are built
+    /// when first asked: nothing a level adapter does moves a guest.
+    lan: Option<&'w lan::LanHost>,
     /// The LAN guests in this level who trigger blocks (not spectators).
-    guest_boxes: Vec<([f64; 3], [f64; 3])>,
+    guest_boxes: std::cell::OnceCell<Vec<([f64; 3], [f64; 3])>>,
     player_collision: Option<PlayerCollision>,
     /// Minecart boxes (detector rails).
     cart_boxes: Vec<([f64; 3], [f64; 3])>,
@@ -638,7 +641,9 @@ struct GameLevel<'w> {
     difficulty: i32,
     /// The feet of the players who keep fire spreading around them: the local
     /// player and the LAN guests in this level, spectators aside.
-    fire_players: Vec<[f64; 3]>,
+    fire_players: std::cell::OnceCell<Vec<[f64; 3]>>,
+    /// The local player's feet among them.
+    fire_host: Option<[f64; 3]>,
     /// Block loot random sequences (`ServerLevel.getRandomSequence`).
     rand_sequences: &'w mut horizon_client::random_sequences::RandomSequences,
     pending: &'w mut spill::Pending,
@@ -701,6 +706,24 @@ impl GameLevel<'_> {
     /// The living entities that trigger plates and tripwires and don't ignore
     /// block triggers (`Entity.isIgnoringBlockTriggers`: bats and marker armor
     /// stands). Armor stands live apart from `mobs`.
+    fn guest_boxes(&self) -> &[([f64; 3], [f64; 3])] {
+        self.guest_boxes
+            .get_or_init(|| Game::guest_trigger_boxes(self.lan))
+    }
+    fn fire_players(&self) -> &[[f64; 3]] {
+        self.fire_players.get_or_init(|| {
+            self.fire_host
+                .into_iter()
+                .chain(self.lan.iter().flat_map(|h| {
+                    h.hub
+                        .guests
+                        .iter()
+                        .filter(|g| h.hub.here(g) && !g.spectator())
+                        .map(|g| g.position)
+                }))
+                .collect()
+        })
+    }
     fn mob_trigger_boxes(&self) -> impl Iterator<Item = Aabb> + '_ {
         self.blockers
             .mobs
@@ -808,7 +831,7 @@ impl GameLevel<'_> {
         let b = self.blockers;
         self.player_box
             .iter()
-            .chain(&self.guest_boxes)
+            .chain(self.guest_boxes())
             .chain(&self.cart_boxes)
             .map(boxed)
             .chain(b.mobs.iter().filter(|m| !m.removed).map(Mob::bounds))
@@ -949,7 +972,7 @@ impl LevelAccess for GameLevel<'_> {
     fn can_spread_fire_around(&self, pos: BlockPos) -> bool {
         let radius = self.rules.fire_spread_radius_around_player;
         radius == -1
-            || self.fire_players.iter().any(|p| {
+            || self.fire_players().iter().any(|p| {
                 let d = [
                     p[0] - f64::from(pos.x),
                     p[1] - f64::from(pos.y),
@@ -1111,7 +1134,7 @@ impl LevelAccess for GameLevel<'_> {
         let players = || {
             self.player_box
                 .iter()
-                .chain(&self.guest_boxes)
+                .chain(self.guest_boxes())
                 .filter(|b| hit(b))
                 .count()
         };
@@ -2963,26 +2986,17 @@ impl Game<'_> {
                 (b.min_position().components(), b.max_position().components())
             })
             .collect();
-        let guest_boxes = self.lan_block_trigger_boxes();
         let dimension = match self.dim {
             Dim::Overworld => LevelDimension::Overworld,
             Dim::Nether => LevelDimension::Nether,
             Dim::End => LevelDimension::End,
         };
         let rules = self.level_rules();
-        let fire_players: Vec<[f64; 3]> = self
+        let fire_host = self
             .player
-            .iter()
+            .as_ref()
             .filter(|_| !spectator)
-            .map(|p| [p.position.x, p.position.y, p.position.z])
-            .chain(self.lan.iter().flat_map(|h| {
-                h.hub
-                    .guests
-                    .iter()
-                    .filter(|g| h.hub.here(g) && !g.spectator())
-                    .map(|g| g.position)
-            }))
-            .collect();
+            .map(|p| [p.position.x, p.position.y, p.position.z]);
         let blockers = Blockers {
             mobs: &self.mobs,
             armor_stands: &self.armor_stands,
@@ -3014,7 +3028,8 @@ impl Game<'_> {
             raining: rain > 0.2,
             thundering: thunder > 0.9,
             player_box,
-            guest_boxes,
+            lan: self.lan.as_ref(),
+            guest_boxes: std::cell::OnceCell::new(),
             player_collision,
             biomes: self.res.biomes(),
             seed: self.level.seed,
@@ -3031,7 +3046,8 @@ impl Game<'_> {
             registry: self.pack.assets.registry,
             rules,
             difficulty: i32::from(self.ui.difficulty),
-            fire_players,
+            fire_players: std::cell::OnceCell::new(),
+            fire_host,
             rand_sequences: &mut self.rand_sequences,
             pending: &mut self.pending,
             spill: &mut self.spill,
