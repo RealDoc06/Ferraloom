@@ -305,7 +305,12 @@ impl MobWorld<'_> {
             Vec3::new(from.x - r, from.y - r, from.z - r),
             Vec3::new(from.x + r, from.y + r, from.z + r),
         );
-        let mut v: Vec<&Seen> = self
+        let distance = |s: &Seen| {
+            (s.position.x - from.x).powi(2)
+                + (s.position.y - from.y).powi(2)
+                + (s.position.z - from.z).powi(2)
+        };
+        let found: Vec<(f64, &Seen)> = self
             .others_near(area)
             .filter(|s| {
                 s.alive
@@ -314,20 +319,56 @@ impl MobWorld<'_> {
                     && (s.position.z - from.z).abs() <= range
             })
             .filter(move |s| pred(s))
+            .map(|s| (distance(s), s))
             .collect();
-        v.sort_by(|a, b| {
-            let da = (a.position.x - from.x).powi(2)
-                + (a.position.y - from.y).powi(2)
-                + (a.position.z - from.z).powi(2);
-            let db = (b.position.x - from.x).powi(2)
-                + (b.position.y - from.y).powi(2)
-                + (b.position.z - from.z).powi(2);
-            da.total_cmp(&db)
-        });
-        v.into_iter()
+        Nearest::new(found)
     }
 }
 
+/// `nearby`'s answer: its candidates nearest first, as a stable sort by
+/// distance (`total_cmp`) orders them. The first is found by one scan, and
+/// the rest are sorted only if asked for: most callers take one.
+struct Nearest<'a> {
+    found: Vec<(f64, &'a Seen)>,
+    /// The candidates left, in the order they are given out; None until
+    /// the second is asked for.
+    sorted: Option<std::vec::IntoIter<(f64, &'a Seen)>>,
+    first: bool,
+}
+impl<'a> Nearest<'a> {
+    fn new(found: Vec<(f64, &'a Seen)>) -> Self {
+        Self {
+            found,
+            sorted: None,
+            first: true,
+        }
+    }
+}
+impl<'a> Iterator for Nearest<'a> {
+    type Item = &'a Seen;
+    fn next(&mut self) -> Option<&'a Seen> {
+        if let Some(rest) = &mut self.sorted {
+            return rest.next().map(|(_, s)| s);
+        }
+        if std::mem::take(&mut self.first) {
+            // The first of the least distance, as the stable sort puts it.
+            let mut best: Option<usize> = None;
+            for (k, (d, _)) in self.found.iter().enumerate() {
+                if best.is_none_or(|b| d.total_cmp(&self.found[b].0).is_lt()) {
+                    best = Some(k);
+                }
+            }
+            return best.map(|k| self.found.remove(k).1);
+        }
+        // The rest keep their order among equals, as the stable sort does.
+        let mut rest = std::mem::take(&mut self.found);
+        rest.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let mut rest = rest.into_iter();
+        let next = rest.next().map(|(_, s)| s);
+        self.sorted = Some(rest);
+        next
+    }
+}
 thread_local! {
     /// The candidate list of the thread's last `others_near`, kept for its
     /// capacity: queries run for most mobs every tick.
