@@ -25,7 +25,7 @@ use horizon_core::{
     geometry::{Aabb, Vec3},
     random::{LegacyRandom, RandomSource, WorldgenRandom},
 };
-use horizon_world::registry::BlockStateId;
+use horizon_world::{registry::BlockStateId, worldgen::structure::BoundingBox};
 use std::{cell::Cell, collections::HashMap, ops::ControlFlow};
 
 /// A player in the level in place, as spawning and despawning see it.
@@ -99,31 +99,57 @@ struct LastColumn<'g> {
     override_bits: Option<u8>,
 }
 #[derive(Default)]
-struct ColumnMemo<'g>(Cell<Option<LastColumn<'g>>>);
+struct ColumnMemo<'g> {
+    last: Cell<Option<LastColumn<'g>>>,
+    /// The columns around the one the pass entered, once read, by `dz * 3 +
+    /// dx`: an attempt's tries wander into its neighbours and back.
+    around: [Cell<Option<LastColumn<'g>>>; 9],
+    centre: Cell<Option<(i32, i32)>>,
+}
 impl<'g> ColumnMemo<'g> {
+    fn slot(&self, key: (i32, i32)) -> Option<&Cell<Option<LastColumn<'g>>>> {
+        let (cx, cz) = self.centre.get()?;
+        let (dx, dz) = (key.0.wrapping_sub(cx) + 1, key.1.wrapping_sub(cz) + 1);
+        ((0..3).contains(&dx) && (0..3).contains(&dz)).then(|| &self.around[(dz * 3 + dx) as usize])
+    }
+    fn keep(&self, column: LastColumn<'g>) {
+        self.last.set(Some(column));
+        if let Some(slot) = self.slot(column.key) {
+            slot.set(Some(column));
+        }
+    }
     /// What `chunks.get` gives for the column holding block `x`, `z`.
     fn get(&self, chunks: &'g ChunkMap, x: i32, z: i32) -> LastColumn<'g> {
         let key = (x >> 4, z >> 4);
-        match self.0.get() {
-            Some(last) if last.key == key => last,
-            _ => {
-                let last = LastColumn {
-                    key,
-                    chunk: chunks.get(&key).map(|c| &**c),
-                    override_bits: None,
-                };
-                self.0.set(Some(last));
-                last
-            }
+        if let Some(last) = self.last.get()
+            && last.key == key
+        {
+            return last;
         }
+        let column = self
+            .slot(key)
+            .and_then(Cell::get)
+            .filter(|c| c.key == key)
+            .unwrap_or_else(|| LastColumn {
+                key,
+                chunk: chunks.get(&key).map(|c| &**c),
+                override_bits: None,
+            });
+        self.keep(column);
+        column
     }
-    /// Makes `chunk` (what `chunks.get` gives for `key`) the last column.
+    /// Makes `chunk` (what `chunks.get` gives for `key`) the last column,
+    /// and the centre of the ones kept around it.
     fn enter(&self, key: (i32, i32), chunk: Option<&'g Chunk>) {
-        self.0.set(Some(LastColumn {
+        self.centre.set(Some(key));
+        for slot in &self.around {
+            slot.set(None);
+        }
+        self.keep(LastColumn {
             key,
             chunk,
             override_bits: None,
-        }));
+        });
     }
     /// The categories whose lists the structures reaching the column may change.
     fn override_bits(&self, chunks: &'g ChunkMap, spawns: &StructureSpawns, x: i32, z: i32) -> u8 {
@@ -138,7 +164,7 @@ impl<'g> ColumnMemo<'g> {
                 .fold(0, |bits, (id, _)| bits | spawns.category_bits(id))
         });
         last.override_bits = Some(bits);
-        self.0.set(Some(last));
+        self.keep(last);
         bits
     }
 }
@@ -171,9 +197,6 @@ pub(super) struct GameLevel<'g, 'a> {
     pub(super) game: &'g Game<'a>,
     pub(super) w: MobWorld<'g>,
     column: ColumnMemo<'g>,
-    /// The column the pass spawns in next, read without leaving the last
-    /// column for it (what `chunks.get` gives for the key).
-    ahead: Cell<Option<((i32, i32), Option<&'g Chunk>)>>,
     /// Every biome's [`BiomeRow`], in the biome list's order, for this pass.
     biome_rows: std::cell::OnceCell<Vec<BiomeRow<'g>>>,
     /// The generator's structure starts by owning chunk, once asked, for
@@ -197,8 +220,47 @@ pub(super) struct GameLevel<'g, 'a> {
     pub(super) box_queries: std::cell::Cell<u32>,
 }
 const SCANNED_QUERIES: u32 = 1;
-type Starts =
-    std::rc::Rc<[std::sync::Arc<horizon_world::worldgen::structure::start::StructureStart>]>;
+/// The starts a chunk owns, as the reaching test reads them.
+type Starts = std::rc::Rc<[StartView]>;
+/// A structure start's name and boxes, its pieces' boxes by the chunk
+/// columns they reach: the reaching test reads them for every position a
+/// spawn attempt tries, and a trial chamber has hundreds of pieces.
+struct StartView {
+    name: String,
+    bounds: BoundingBox,
+    pieces: FxHashMap<(i32, i32), Vec<BoundingBox>>,
+}
+impl StartView {
+    fn new(start: &horizon_world::worldgen::structure::start::StructureStart) -> Self {
+        let mut pieces = FxHashMap::<(i32, i32), Vec<BoundingBox>>::default();
+        for piece in &start.pieces {
+            let b = piece.bounding_box();
+            for cx in b.min[0] >> 4..=b.max[0] >> 4 {
+                for cz in b.min[2] >> 4..=b.max[2] >> 4 {
+                    pieces.entry((cx, cz)).or_default().push(b);
+                }
+            }
+        }
+        Self {
+            name: start.name.clone(),
+            bounds: start.bounding_box,
+            pieces,
+        }
+    }
+}
+impl super::structures::StartBoxes for StartView {
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn bounds_contain(&self, pos: [i32; 3]) -> bool {
+        self.bounds.is_inside(pos)
+    }
+    fn piece_contains(&self, pos: [i32; 3]) -> bool {
+        self.pieces
+            .get(&(pos[0] >> 4, pos[2] >> 4))
+            .is_some_and(|boxes| boxes.iter().any(|b| b.is_inside(pos)))
+    }
+}
 /// How many chunks or mobs a pool thread takes at a time in this pass's reads.
 const PASS_GRAIN: usize = 512;
 /// A mob not removed: its index in `Game::mobs`, box, alive, and whether
@@ -269,12 +331,7 @@ impl<'g> GameLevel<'g, '_> {
         )
     }
     fn chunk(&self, x: i32, z: i32) -> Option<&'g Chunk> {
-        let key = (x >> 4, z >> 4);
-        match (self.column.0.get(), self.ahead.get()) {
-            (Some(last), _) if last.key == key => last.chunk,
-            (_, Some((at, chunk))) if at == key => chunk,
-            _ => self.column.get(&self.w.world.chunks, x, z).chunk,
-        }
+        self.column.get(&self.w.world.chunks, x, z).chunk
     }
     fn biome(&self, x: i32, y: i32, z: i32) -> Option<&BiomeInfo> {
         let chunk = self.chunk(x, z)?;
@@ -430,9 +487,13 @@ impl NaturalLevel for GameLevel<'_, '_> {
         };
         super::structures::structures_reaching_in(chunk, [x, y, z], wanted, |sx, sz| {
             let mut starts = self.starts.borrow_mut();
-            let owned = starts
-                .entry((sx, sz))
-                .or_insert_with(|| locator.starts_at(sx, sz).into());
+            let owned = starts.entry((sx, sz)).or_insert_with(|| {
+                locator
+                    .starts_at(sx, sz)
+                    .iter()
+                    .map(|s| StartView::new(s))
+                    .collect()
+            });
             Starts::clone(owned)
         })
         .into_iter()
@@ -569,7 +630,6 @@ impl<'a> Game<'a> {
             game: self,
             w: self.mob_world_base(&[]),
             column: ColumnMemo::default(),
-            ahead: Cell::new(None),
             biome_rows: Default::default(),
             starts: Default::default(),
             locator: Default::default(),
@@ -767,22 +827,7 @@ impl<'a> Game<'a> {
                 state.prepare_local(&chunks, &categories);
                 let columns = self.spawning_columns(&chunks);
                 for (i, &chunk) in chunks.iter().enumerate() {
-                    // Hints only: the coming columns' headers, surfaces and
-                    // section headers load while this one spawns, ready for
-                    // the next column's foreseen starts.
-                    if let Some(Some(next)) = columns.get(i + 4) {
-                        next.prefetch_header();
-                    }
-                    if let Some(Some(next)) = columns.get(i + 3) {
-                        next.prefetch_surface();
-                    }
-                    if let Some(Some(next)) = columns.get(i + 2) {
-                        next.prefetch_sections();
-                    }
                     level.column.enter(chunk, columns[i]);
-                    level
-                        .ahead
-                        .set(columns.get(i + 1).map(|&next| (chunks[i + 1], next)));
                     let mut spawn = |l: &GameLevel, r: &SpawnRequest| {
                         let spawned = l.game.finalize_spawned(r, &mut pending);
                         if let Some(s) = &spawned {
@@ -865,17 +910,13 @@ mod tests {
     #[test]
     fn column_memo_answers_as_the_map_does() {
         let mut spawns = StructureSpawns::default();
-        spawns.overrides.insert(
+        spawns.insert(
             "minecraft:monument".to_owned(),
-            [(
-                Category::Monster.name().to_owned(),
-                horizon_client::mobs::spawn_selection::Override {
-                    piece: true,
-                    spawns: Vec::new(),
-                },
-            )]
-            .into_iter()
-            .collect(),
+            Category::Monster,
+            horizon_client::mobs::spawn_selection::Override {
+                piece: true,
+                spawns: Vec::new(),
+            },
         );
         let mut chunks = ChunkMap::default();
         for x in 0..4 {
@@ -891,6 +932,8 @@ mod tests {
             chunks.insert((x, 0), std::sync::Arc::new(chunk));
         }
         let memo = ColumnMemo::default();
+        // Columns 0 to 2 are kept around the centre; 3 and -1 are not.
+        memo.enter((1, 0), chunks.get(&(1, 0)).map(|c| &**c));
         for block_x in [0, 15, 16, 17, 31, 32, 48, 64, 64, -1, -1, 3] {
             let key = (block_x >> 4, 0);
             let expected = chunks.get(&key).map(|c| &**c as *const Chunk);

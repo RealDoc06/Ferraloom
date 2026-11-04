@@ -661,9 +661,10 @@ pub struct Override {
 /// Every structure's `spawn_overrides`, by structure id then category.
 #[derive(Clone, Debug, Default)]
 pub struct StructureSpawns {
-    /// Fx-hashed: natural spawning asks for every structure reaching every
+    /// Each category's override by category index. Fx-hashed, one look-up a
+    /// structure: natural spawning asks about every structure reaching every
     /// position it tries.
-    pub overrides: FxHashMap<String, FxHashMap<String, Override>>,
+    pub overrides: FxHashMap<String, [Option<Override>; Category::ALL.len()]>,
 }
 impl StructureSpawns {
     /// The overrides of the resource root first asked for, loaded once.
@@ -685,28 +686,27 @@ impl StructureSpawns {
             else {
                 continue;
             };
-            let map: FxHashMap<String, Override> = v["spawn_overrides"]
-                .as_object()
-                .into_iter()
-                .flatten()
-                .map(|(category, o)| {
-                    (
-                        category.clone(),
-                        Override {
-                            piece: o["bounding_box"].as_str() == Some("piece"),
-                            spawns: parse_entries(&o["spawns"]),
-                        },
-                    )
-                })
-                .collect();
-            if !map.is_empty() {
-                overrides.insert(format!("minecraft:{stem}"), map);
+            let mut spawns = Self::default();
+            for (category, o) in v["spawn_overrides"].as_object().into_iter().flatten() {
+                // A category no spawner asks about is never looked up.
+                if let Some(c) = Category::ALL.into_iter().find(|c| c.name() == category) {
+                    let o = Override {
+                        piece: o["bounding_box"].as_str() == Some("piece"),
+                        spawns: parse_entries(&o["spawns"]),
+                    };
+                    spawns.insert(format!("minecraft:{stem}"), c, o);
+                }
             }
+            overrides.extend(spawns.overrides);
         }
         Self { overrides }
     }
-    pub fn get(&self, structure: &str, category: &str) -> Option<&Override> {
-        self.overrides.get(structure)?.get(category)
+    /// Sets a structure's override for a category.
+    pub fn insert(&mut self, structure: String, category: Category, o: Override) {
+        self.overrides.entry(structure).or_default()[category.index()] = Some(o);
+    }
+    pub fn get(&self, structure: &str, category: Category) -> Option<&Override> {
+        self.overrides.get(structure)?[category.index()].as_ref()
     }
     /// The bits ([`Category::bit`]) of the categories whose [`mobs_at`] looks
     /// a structure up: those it overrides, and monsters for a fortress.
@@ -719,7 +719,7 @@ impl StructureSpawns {
         self.overrides.get(structure).map_or(fortress, |map| {
             Category::ALL
                 .into_iter()
-                .filter(|c| map.contains_key(c.name()))
+                .filter(|c| map[c.index()].is_some())
                 .fold(fortress, |bits, c| bits | c.bit())
         })
     }
@@ -776,7 +776,7 @@ pub fn mobs_at<L: NaturalLevel>(
     let overrides = l.structure_spawns();
     let monster = category == Category::Monster;
     let structures = l.structures_at(x, y, z, &|id| {
-        (monster && id == "minecraft:fortress") || overrides.get(id, category.name()).is_some()
+        (monster && id == "minecraft:fortress") || overrides.get(id, category).is_some()
     });
     if category == Category::Monster
         && structures
@@ -787,7 +787,7 @@ pub fn mobs_at<L: NaturalLevel>(
         return fortress_enemies();
     }
     for s in &structures {
-        if let Some(o) = overrides.get(&s.id, category.name())
+        if let Some(o) = overrides.get(&s.id, category)
             && (if o.piece { s.in_piece } else { s.in_bounds })
         {
             return &o.spawns;
@@ -876,10 +876,6 @@ pub struct SpawnState {
     prepared: Vec<((i32, i32), u8, u8)>,
     /// Reused across the tick's positions; holds the chunk's players.
     nearest: Nearest,
-    /// The next chunk's starts, foreseen while the one before spawned from
-    /// the state it should leave: the chunk, that state and [`foresee_starts`]'
-    /// states after each category.
-    foreseen: Option<((i32, i32), u64, [u64; Category::ALL.len()])>,
 }
 /// Every spawning category's bit.
 const SPAWNING_BITS: u8 = {
@@ -935,7 +931,6 @@ impl SpawnState {
             players,
             local: None,
             prepared: Vec::new(),
-            foreseen: None,
             nearest: Nearest::default(),
         };
         // The local caps are sums, so a chunk's mobs can go in together.
@@ -988,16 +983,29 @@ impl SpawnState {
     /// chunk's centre is within the tracker's 8 chunks of it.
     fn add_local(&mut self, chunk: (i32, i32), category: Category) {
         let i = category.index();
-        let mut filled = false;
+        // Where the players whose cap this fills are.
+        let mut filled: Vec<[f64; 3]> = Vec::new();
         let counts = &mut self.player_counts;
-        self.players.for_each_close_for_spawning(chunk, |p| {
-            counts[p][i] += 1;
-            filled |= counts[p][i] == category.max();
+        self.players.for_each_point_close_for_spawning(chunk, |p| {
+            let count = &mut counts[p.slot as usize][i];
+            *count += 1;
+            if *count == category.max() {
+                filled.push(p.position);
+            }
         });
-        if filled {
+        if !filled.is_empty() {
             self.local = None;
-            self.prepared.clear();
             self.label_open_categories();
+            // Only the chunks close to those players can answer otherwise.
+            let players = &self.players;
+            for (at, asked, open) in &mut self.prepared {
+                if filled
+                    .iter()
+                    .any(|&p| super::player_index::close_for_spawning(*at, p))
+                {
+                    *open = players.close_for_spawning_labels(*at, *asked);
+                }
+            }
         }
     }
     /// Works out on the pool what [`spawn_for_chunk`] will ask about `chunks`,
@@ -1023,17 +1031,6 @@ impl SpawnState {
                 || self.players.close_for_spawning_labels(chunk, asked),
                 |(_, _, open)| open,
             )
-    }
-    /// The prepared answers of the chunk [`spawn_for_chunk`] asks about
-    /// after `chunk`.
-    fn next_prepared(&self, chunk: (i32, i32)) -> Option<((i32, i32), u8, u8)> {
-        let mut ahead = self.prepared.iter().rev();
-        let next = ahead.next()?;
-        if next.0 == chunk {
-            ahead.next().copied()
-        } else {
-            Some(*next)
-        }
     }
     fn asked(categories: &[Category]) -> u8 {
         categories.iter().fold(0, |bits, c| bits | c.bit())
@@ -1239,38 +1236,15 @@ pub fn spawn_for_chunk<L: NaturalLevel, R: RandomSource + Foresee>(
     trace: &mut (impl FnMut(Event) + ?Sized),
 ) {
     let asked = SpawnState::asked(categories);
-    // The random state foreseen after each category ([`foresee_starts`]),
-    // and whether the chunk before foresaw this one's start rightly.
+    // The random state foreseen after each category ([`foresee_starts`]).
     let mut after = [0u64; Category::ALL.len()];
-    let foreseen = match state.foreseen.take() {
-        Some((at, seed, foreseen)) if at == chunk && random.legacy_state() == Some(seed) => {
-            after = foreseen;
-            true
-        }
-        _ => false,
-    };
     for (i, &category) in categories.iter().enumerate() {
         if let Some(now) = random.legacy_state()
-            && !(if i == 0 {
-                foreseen
-            } else {
-                after.get(i - 1) == Some(&now)
-            })
+            && (i == 0 || after.get(i - 1) != Some(&now))
         {
             let open = state.open_for(chunk, asked);
             let rest = after.get_mut(i..).unwrap_or_default();
             foresee_starts(l, now, open, &categories[i..], chunk, rest);
-        }
-        // The next chunk, from the state this one should leave, so its
-        // blocks load while this one spawns.
-        if i == 0
-            && let Some((next, known, open)) = state.next_prepared(chunk)
-            && known == asked
-            && let Some(&seed) = after.get(categories.len() - 1)
-        {
-            let mut next_after = [0u64; Category::ALL.len()];
-            foresee_starts(l, seed, open, categories, next, &mut next_after);
-            state.foreseen = Some((next, seed, next_after));
         }
         let local = state.can_spawn_local_of(asked, category, chunk);
         trace(Event::Local(category, local));
@@ -1442,11 +1416,17 @@ struct Nearest {
     nearby: [[f64; 3]; Self::KEPT],
     kept: usize,
     crowded: bool,
+    /// In a crowd, the players the index's searches found last, measured
+    /// with the kept ones: an attempt's next tries are a few blocks away,
+    /// where the same player is often near enough to end the search.
+    found: [[f64; 3]; Self::FOUND],
+    found_len: usize,
 }
 impl Nearest {
     /// `right_distance`'s 24² and the despawn distances, 64² and 128².
     const CHECKS: [f64; 3] = [576.0, 4096.0, 16384.0];
     const KEPT: usize = 16;
+    const FOUND: usize = 4;
     /// An attempt this far from the chunk's centre on both axes uses `nearby`.
     const MARGIN: f64 = 48.0;
     /// 128 blocks past the corner of that square.
@@ -1469,19 +1449,27 @@ impl Nearest {
         }
         let kept = self.nearby[..self.kept]
             .iter()
+            .chain(&self.found[..self.found_len])
             .map(|p| (p[0] - at[0]).powi(2) + (p[1] - at[1]).powi(2) + (p[2] - at[2]).powi(2))
             .fold(f64::INFINITY, f64::min);
-        Some(if self.crowded {
-            players.nearest_against_from(kept, at, &Self::CHECKS)
-        } else {
-            kept
-        })
+        if !self.crowded {
+            return Some(kept);
+        }
+        let (distance, found) = players.nearest_point_against_from(kept, at, &Self::CHECKS);
+        if let Some(position) = found {
+            // The newest first; the oldest drops out.
+            self.found.copy_within(..Self::FOUND - 1, 1);
+            self.found[0] = position;
+            self.found_len = (self.found_len + 1).min(Self::FOUND);
+        }
+        Some(distance)
     }
     fn keep_players(&mut self, players: &PlayerIndex, chunk: (i32, i32)) {
         self.chunk = Some(chunk);
         self.centre = (f64::from(chunk.0 * 16 + 8), f64::from(chunk.1 * 16 + 8));
         self.kept = 0;
         self.crowded = false;
+        self.found_len = 0;
         let (x, z) = self.centre;
         let _ = players.visit_within(x, z, Self::RADIUS_SQR, &mut |p| {
             if self.kept == Self::KEPT {
@@ -1741,7 +1729,6 @@ mod tests {
             player_counts: vec![[0; 8]; players.len()],
             local: None,
             prepared: Vec::new(),
-            foreseen: None,
             nearest: Nearest::default(),
         };
         state.label_open_categories();
@@ -1786,23 +1773,17 @@ mod tests {
         }
         assert_eq!(Category::from_name("other"), Category::Misc);
         let mut spawns = StructureSpawns::default();
-        let piece = |category: Category| {
-            let o = Override {
-                piece: true,
-                spawns: Vec::new(),
-            };
-            (category.name().to_owned(), o)
+        let piece = || Override {
+            piece: true,
+            spawns: Vec::new(),
         };
-        spawns.overrides.insert(
-            "minecraft:monument".to_owned(),
-            [piece(Category::Monster), piece(Category::Axolotls)]
-                .into_iter()
-                .collect(),
-        );
-        spawns.overrides.insert(
-            "minecraft:fortress".to_owned(),
-            [piece(Category::Creature)].into_iter().collect(),
-        );
+        for (id, category) in [
+            ("minecraft:monument", Category::Monster),
+            ("minecraft:monument", Category::Axolotls),
+            ("minecraft:fortress", Category::Creature),
+        ] {
+            spawns.insert(id.to_owned(), category, piece());
+        }
         for id in [
             "minecraft:monument",
             "minecraft:fortress",
@@ -1811,7 +1792,7 @@ mod tests {
             for c in Category::ALL {
                 // The structures `mobs_at` wants.
                 let wanted = c == Category::Monster && id == "minecraft:fortress"
-                    || spawns.get(id, c.name()).is_some();
+                    || spawns.get(id, c).is_some();
                 assert_eq!(
                     spawns.category_bits(id) & c.bit() != 0,
                     wanted,

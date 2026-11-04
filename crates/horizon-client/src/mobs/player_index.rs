@@ -69,6 +69,8 @@ pub struct NearestPlayer {
 struct Against {
     distance_sqr: f64,
     limit: f64,
+    /// Where the player at `distance_sqr` is, once the search found one.
+    position: Option<[f64; 3]>,
 }
 impl Against {
     /// How close a player must be to change the answer for one `d` away: past
@@ -198,6 +200,7 @@ impl PlayerIndex {
         let mut found = Against {
             distance_sqr: f64::INFINITY,
             limit: cutoffs[2],
+            position: None,
         };
         self.against_in(0, at, cutoffs, &mut found);
         found.distance_sqr
@@ -205,17 +208,28 @@ impl PlayerIndex {
     /// [`Self::nearest_against`] given the squared distance of some player
     /// already measured, which is what its search then has to beat.
     pub fn nearest_against_from(&self, seen: f64, at: [f64; 3], cutoffs: &[f64; 3]) -> f64 {
+        self.nearest_point_against_from(seen, at, cutoffs).0
+    }
+    /// The same, with where the search found a player nearer than `seen`
+    /// (`None` when it found none, or the index is linear).
+    pub fn nearest_point_against_from(
+        &self,
+        seen: f64,
+        at: [f64; 3],
+        cutoffs: &[f64; 3],
+    ) -> (f64, Option<[f64; 3]>) {
         if self.linear {
-            return self.nearest_against(at, cutoffs);
+            return (self.nearest_against(at, cutoffs), None);
         }
         let mut found = Against {
             distance_sqr: seen,
             limit: Against::limit_below(seen, cutoffs),
+            position: None,
         };
         if found.limit != f64::NEG_INFINITY {
             self.against_in(0, at, cutoffs, &mut found);
         }
-        found.distance_sqr
+        (found.distance_sqr, found.position)
     }
     fn against_leaf(&self, n: &Node, q: [f64; 3], cutoffs: &[f64; 3], found: &mut Against) {
         for p in &self.points[n.start as usize..n.end as usize] {
@@ -223,6 +237,7 @@ impl PlayerIndex {
             if d <= found.limit {
                 found.distance_sqr = d;
                 found.limit = Against::limit_below(d, cutoffs);
+                found.position = Some(p.position);
             }
         }
     }
@@ -295,6 +310,14 @@ impl PlayerIndex {
             ControlFlow::Continue(())
         });
     }
+    /// [`Self::for_each_close_for_spawning`], with the players themselves.
+    pub fn for_each_point_close_for_spawning(&self, chunk: (i32, i32), mut f: impl FnMut(&Point)) {
+        let (x, z) = chunk_centre(chunk);
+        let _ = self.visit_within(x, z, CLOSE_FOR_SPAWNING_SQR, &mut |p| {
+            f(p);
+            ControlFlow::Continue(())
+        });
+    }
     /// Whether that list has anyone on it.
     pub fn any_close_for_spawning(&self, chunk: (i32, i32)) -> bool {
         let (x, z) = chunk_centre(chunk);
@@ -356,6 +379,11 @@ impl PlayerIndex {
 }
 
 /// `ChunkMap.euclideanDistanceSquared`'s reference point.
+/// `ChunkMap.playerIsCloseEnoughForSpawning` for a player at `position`.
+pub fn close_for_spawning(chunk: (i32, i32), position: [f64; 3]) -> bool {
+    let (x, z) = chunk_centre(chunk);
+    (position[0] - x).powi(2) + (position[2] - z).powi(2) < CLOSE_FOR_SPAWNING_SQR
+}
 fn chunk_centre((cx, cz): (i32, i32)) -> (f64, f64) {
     (f64::from(cx * 16 + 8), f64::from(cz * 16 + 8))
 }
