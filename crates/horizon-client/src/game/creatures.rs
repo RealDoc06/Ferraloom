@@ -841,7 +841,13 @@ impl Game<'_> {
             bindings.retain(|id, _| live.contains(id));
             host.mob_players = bindings;
         }
-        self.mobs.append(&mut mobs);
+        // The mobs went out whole: they come back as the same list (an
+        // append into the empty one would copy every mob).
+        if self.mobs.is_empty() {
+            self.mobs = mobs;
+        } else {
+            self.mobs.append(&mut mobs);
+        }
         self.died = died;
         // ... and entity event 60 goes out as it is: the poof.
         for (id, at, width, height) in gone {
