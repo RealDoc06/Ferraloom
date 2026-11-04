@@ -221,7 +221,34 @@ pub(super) struct GameLevel<'g, 'a> {
 }
 const SCANNED_QUERIES: u32 = 1;
 /// The starts a chunk owns, as the reaching test reads them.
-type Starts = std::rc::Rc<[StartView]>;
+type Starts = std::rc::Rc<[std::rc::Rc<StartView>]>;
+type StructureStart = horizon_world::worldgen::structure::start::StructureStart;
+thread_local! {
+    /// [`StartView`]s across ticks, by the address of the start they view.
+    /// The start is held, so its address is not reused, and a start never
+    /// changes behind its `Arc`: a view stays the view of its start.
+    static START_VIEWS: std::cell::RefCell<
+        FxHashMap<usize, (std::sync::Arc<StructureStart>, std::rc::Rc<StartView>)>,
+    > = Default::default();
+}
+/// Views [`START_VIEWS`] keeps before it starts over.
+const KEPT_START_VIEWS: usize = 4096;
+/// The [`StartView`] of `start`, built once while [`START_VIEWS`] keeps it.
+fn start_view(start: &std::sync::Arc<StructureStart>) -> std::rc::Rc<StartView> {
+    START_VIEWS.with(|views| {
+        let mut views = views.borrow_mut();
+        let key = std::sync::Arc::as_ptr(start) as usize;
+        if let Some((_, view)) = views.get(&key) {
+            return view.clone();
+        }
+        if views.len() >= KEPT_START_VIEWS {
+            views.clear();
+        }
+        let view = std::rc::Rc::new(StartView::new(start));
+        views.insert(key, (start.clone(), view.clone()));
+        view
+    })
+}
 /// A structure start's name and boxes, its pieces' boxes by the chunk
 /// columns they reach: the reaching test reads them for every position a
 /// spawn attempt tries, and a trial chamber has hundreds of pieces.
@@ -231,7 +258,7 @@ struct StartView {
     pieces: FxHashMap<(i32, i32), Vec<BoundingBox>>,
 }
 impl StartView {
-    fn new(start: &horizon_world::worldgen::structure::start::StructureStart) -> Self {
+    fn new(start: &StructureStart) -> Self {
         let mut pieces = FxHashMap::<(i32, i32), Vec<BoundingBox>>::default();
         for piece in &start.pieces {
             let b = piece.bounding_box();
@@ -248,7 +275,7 @@ impl StartView {
         }
     }
 }
-impl super::structures::StartBoxes for StartView {
+impl super::structures::StartBoxes for std::rc::Rc<StartView> {
     fn name(&self) -> &str {
         &self.name
     }
@@ -282,12 +309,16 @@ pub(super) struct MobBoxes {
 }
 impl MobBoxes {
     fn new(mobs: &[Mob]) -> Self {
-        let entries: Vec<_> = mobs
-            .iter()
-            .enumerate()
-            .filter(|(_, m)| !m.removed)
-            .map(|(i, m)| mob_box(i, m))
-            .collect();
+        Self::from_entries(
+            mobs.iter()
+                .enumerate()
+                .filter(|(_, m)| !m.removed)
+                .map(|(i, m)| mob_box(i, m))
+                .collect(),
+        )
+    }
+    /// The grid over [`mob_box`]es of the mobs not removed, in their order.
+    fn from_entries(entries: Vec<MobBox>) -> Self {
         let grid = SeenGrid::new(entries.iter().map(|e| e.1));
         Self { entries, grid }
     }
@@ -487,13 +518,9 @@ impl NaturalLevel for GameLevel<'_, '_> {
         };
         super::structures::structures_reaching_in(chunk, [x, y, z], wanted, |sx, sz| {
             let mut starts = self.starts.borrow_mut();
-            let owned = starts.entry((sx, sz)).or_insert_with(|| {
-                locator
-                    .starts_at(sx, sz)
-                    .iter()
-                    .map(|s| StartView::new(s))
-                    .collect()
-            });
+            let owned = starts
+                .entry((sx, sz))
+                .or_insert_with(|| locator.starts_at(sx, sz).iter().map(start_view).collect());
             Starts::clone(owned)
         })
         .into_iter()
@@ -572,6 +599,11 @@ impl NaturalLevel for GameLevel<'_, '_> {
     }
     fn pathfindable_land(&self, x: i32, y: i32, z: i32) -> bool {
         self.w.data.state(self.state(x, y, z)).flags & data::LAND != 0
+    }
+    fn prefetch_try(&self, x: i32, y: i32, z: i32) {
+        if let Some(chunk) = self.chunk(x, z) {
+            chunk.prefetch_try(x, y, z);
+        }
     }
     fn prefetch_block(&self, x: i32, y: i32, z: i32) {
         if let Some(chunk) = self.chunk(x, z) {
@@ -751,28 +783,31 @@ impl<'a> Game<'a> {
             *self.world.inhabited.entry(key).or_insert(0) += 1;
         }
     }
-    /// What `createState` counts of the loaded mobs, in their order. Mobs are
-    /// read here (they cannot be shared with the pool); the columns and biomes
-    /// each of them needs are read on the pool, whichever thread takes which.
-    fn counted_mobs(&self) -> impl Iterator<Item = CountedCharge> {
+    /// What `createState` counts of the loaded mobs, in their order, and the
+    /// pass's [`MobBoxes`], from one walk over the mobs (the boxes don't change
+    /// while the pass holds the game). Mobs are read here (they cannot be
+    /// shared with the pool); the columns and biomes each counted one needs
+    /// are read on the pool, whichever thread takes which.
+    fn counted_mobs(&self) -> (impl Iterator<Item = CountedCharge>, MobBoxes) {
         let (chunks, biomes) = (&self.world.chunks, self.res.biomes());
-        let mut rows: Vec<(&str, Category, [i32; 3], Option<CountedCharge>)> = self
-            .mobs
-            .iter()
-            .filter_map(|m| {
-                let category = Category::from_name(&m.kind.category);
-                let persistent =
-                    m.persistent || horizon_client::mobs::ai::requires_custom_persistence(m);
-                counted_by_state(category, true, persistent).then(|| {
-                    let block = [
-                        m.position.x.floor() as i32,
-                        m.position.y.floor() as i32,
-                        m.position.z.floor() as i32,
-                    ];
-                    (m.kind.id.as_str(), category, block, None)
-                })
-            })
-            .collect();
+        let mut rows: Vec<(&str, Category, [i32; 3], Option<CountedCharge>)> = Vec::new();
+        let mut boxes = Vec::with_capacity(self.mobs.len());
+        for (i, m) in self.mobs.iter().enumerate() {
+            if !m.removed {
+                boxes.push(mob_box(i, m));
+            }
+            let category = Category::from_name(&m.kind.category);
+            let persistent =
+                m.persistent || horizon_client::mobs::ai::requires_custom_persistence(m);
+            if counted_by_state(category, true, persistent) {
+                let block = [
+                    m.position.x.floor() as i32,
+                    m.position.y.floor() as i32,
+                    m.position.z.floor() as i32,
+                ];
+                rows.push((m.kind.id.as_str(), category, block, None));
+            }
+        }
         horizon_threads::pool::for_each_mut(&mut rows, PASS_GRAIN, |(id, category, block, out)| {
             let [x, y, z] = *block;
             if let Some(chunk) = chunks.get(&(x >> 4, z >> 4)) {
@@ -788,7 +823,8 @@ impl<'a> Game<'a> {
                 });
             }
         });
-        rows.into_iter().filter_map(|row| row.3)
+        let counted = rows.into_iter().filter_map(|row| row.3);
+        (counted, MobBoxes::from_entries(boxes))
     }
     /// `ServerChunkCache.tickChunks`: the spawn state over the loaded mobs,
     /// the categories under their global caps (creatures every 400 ticks),
@@ -811,7 +847,9 @@ impl<'a> Game<'a> {
         let mut pending = Vec::new();
         {
             let level = self.natural_level_with_players(Some(players));
-            let mut state = SpawnState::from_counted(spawnable, close, self.counted_mobs());
+            let (counted, boxes) = self.counted_mobs();
+            let mut state = SpawnState::from_counted(spawnable, close, counted);
+            let _ = level.boxes.set(boxes);
             let categories = if spawn_mobs {
                 state.filtered_categories(spawn_enemies, self.world.game_time % 400 == 0)
             } else {

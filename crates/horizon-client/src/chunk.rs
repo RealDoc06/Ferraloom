@@ -298,6 +298,27 @@ impl Chunk {
             }
         }
     }
+    /// Prefetch hint: what a spawn try at `x`, `y`, `z` reads, the blocks
+    /// there, below and above, its light and its biome cell.
+    pub fn prefetch_try(&self, x: i32, y: i32, z: i32) {
+        for y in [y - 1, y, y + 1] {
+            self.prefetch_block(x, y, z);
+        }
+        let Some(section) = usize::try_from((y - MIN_Y) >> 4)
+            .ok()
+            .and_then(|s| self.sections.get(s))
+        else {
+            return;
+        };
+        if let Light::Full(light) = &section.light {
+            horizon_threads::prefetch(&light[index(x, y, z)]);
+        }
+        // `biome`'s cell: the column's quart is within this section.
+        let cell = (((y - MIN_Y) >> 2 & 3) << 4 | ((z & 15) >> 2) << 2 | (x & 15) >> 2) as usize;
+        if let Some((word, _)) = section.biomes.entry_storage(cell) {
+            horizon_threads::prefetch(word);
+        }
+    }
     /// `getHeight(Heightmap.Types.MOTION_BLOCKING, x, z)` (`x`, `z` within
     /// the chunk): one above the highest state where `blocks` (a motion
     /// blocking block or a fluid), or `MIN_Y`. Kept as `world_surface` is.

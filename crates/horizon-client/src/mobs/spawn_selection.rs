@@ -424,6 +424,10 @@ pub trait NaturalLevel: SpawnLevel {
     /// A hint that the block at a position will be read soon: the level may
     /// start loading it. Must not change anything a read answers.
     fn prefetch_block(&self, _x: i32, _y: i32, _z: i32) {}
+    /// A hint that a spawn try at a position is coming: the blocks there,
+    /// below and above, its light and its biome. Changes nothing a read
+    /// answers.
+    fn prefetch_try(&self, _x: i32, _y: i32, _z: i32) {}
 }
 
 /// The heightmap types `SpawnPlacements` registers.
@@ -1167,14 +1171,21 @@ impl Foresee for horizon_core::random::LegacyRandom {
         Some(self.state())
     }
 }
-/// `java.util.Random`'s `next(31)` and `nextInt(bound)` on a copy of its
-/// state: a lookahead that neither moves nor traces the real random.
+/// `java.util.Random`'s `next(31)`, `nextInt(bound)` and `nextFloat` on a
+/// copy of its state: a lookahead that neither moves nor traces the real
+/// random.
 #[derive(Clone, Copy)]
 struct Lcg(u64);
 impl Lcg {
-    fn bits31(&mut self) -> i32 {
+    fn bits(&mut self, count: u32) -> i32 {
         self.0 = self.0.wrapping_mul(0x5_deec_e66d).wrapping_add(11) & ((1 << 48) - 1);
-        (self.0 >> 17) as i32
+        (self.0 >> (48 - count)) as i32
+    }
+    fn bits31(&mut self) -> i32 {
+        self.bits(31)
+    }
+    fn next_float(&mut self) -> f32 {
+        self.bits(24) as f32 * (1.0 / 16_777_216.0)
     }
     /// `nextInt(bound)`, and nothing drawn for a bound below 1 (the callers'
     /// `unwrap_or(0)`).
@@ -1253,10 +1264,55 @@ pub fn spawn_for_chunk<L: NaturalLevel, R: RandomSource + Foresee>(
         }
     }
 }
+/// Where an attempt's group stands after a try: what [`foresee_tries`] plays
+/// forward from.
+#[derive(Clone, Copy)]
+struct TryAt {
+    x: i32,
+    z: i32,
+    /// Tries made in the group, and its size.
+    ll: i32,
+    max: i32,
+    /// Groups left after this one.
+    groups_left: u32,
+}
+/// How many tries [`foresee_tries`] looks ahead.
+const FORESEEN_TRIES: usize = 2;
+/// The next tries of an attempt from random state `seed`, should each end
+/// without drawing past its own steps (most are too near a player or fail a
+/// check that draws nothing): their reads are hinted to the level so they
+/// load while the checks before them run. A group that ends starts the next
+/// one at `start`, sized by its own draw. A wrong guess only hints the wrong
+/// blocks.
+fn foresee_tries<L: NaturalLevel>(l: &L, seed: u64, start: [i32; 3], mut at: TryAt) {
+    let mut random = Lcg(seed);
+    let mut hinted = 0;
+    while hinted < FORESEEN_TRIES {
+        if at.ll >= at.max {
+            if at.groups_left == 0 {
+                return;
+            }
+            at = TryAt {
+                x: start[0],
+                z: start[2],
+                ll: 0,
+                max: (random.next_float() * 4.0).ceil() as i32,
+                groups_left: at.groups_left - 1,
+            };
+            continue;
+        }
+        at.ll += 1;
+        at.x += random.next_int(6) - random.next_int(6);
+        at.z += random.next_int(6) - random.next_int(6);
+        l.prefetch_try(at.x, start[1], at.z);
+        hinted += 1;
+    }
+}
+
 /// `NaturalSpawner.spawnCategoryForChunk`: `getRandomPosWithin` (a column of
 /// the chunk, a height up to one above the world surface).
 #[inline(never)]
-pub fn spawn_category_for_chunk<L: NaturalLevel, R: RandomSource>(
+pub fn spawn_category_for_chunk<L: NaturalLevel, R: RandomSource + Foresee>(
     l: &L,
     random: &mut R,
     state: &mut SpawnState,
@@ -1279,7 +1335,7 @@ pub fn spawn_category_for_chunk<L: NaturalLevel, R: RandomSource>(
 /// `canSpawn` and `afterSpawn`.
 #[allow(clippy::too_many_arguments)]
 #[inline(never)]
-pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
+pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource + Foresee>(
     l: &L,
     random: &mut R,
     state: &mut SpawnState,
@@ -1295,7 +1351,7 @@ pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
     }
     let mut spawned: Vec<Aabb> = Vec::new();
     let mut cluster = 0u32;
-    for _ in 0..3 {
+    for group in 0..3 {
         let (mut x, mut z) = (x0, z0);
         // The group's entry, its type and where it was picked.
         let mut current: Option<(&SpawnEntry, Option<MobType>, [i32; 3])> = None;
@@ -1308,6 +1364,16 @@ pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
             z += random.next_int_bound(6).unwrap_or(0) - random.next_int_bound(6).unwrap_or(0);
             let (xx, zz) = (f64::from(x) + 0.5, f64::from(z) + 0.5);
             trace(Event::Try(x, z));
+            if let Some(seed) = random.legacy_state() {
+                let at = TryAt {
+                    x,
+                    z,
+                    ll,
+                    max,
+                    groups_left: 2 - group,
+                };
+                foresee_tries(l, seed, start, at);
+            }
             let Some(distance) =
                 state
                     .nearest
