@@ -876,10 +876,6 @@ pub struct SpawnState {
     prepared: Vec<((i32, i32), u8, u8)>,
     /// Reused across the tick's positions; holds the chunk's players.
     nearest: Nearest,
-    /// The next chunk's starts, foreseen while the one before spawned from
-    /// the state it should leave: the chunk, that state and [`foresee_starts`]'
-    /// states after each category.
-    foreseen: Option<((i32, i32), u64, [u64; Category::ALL.len()])>,
 }
 /// Every spawning category's bit.
 const SPAWNING_BITS: u8 = {
@@ -935,7 +931,6 @@ impl SpawnState {
             players,
             local: None,
             prepared: Vec::new(),
-            foreseen: None,
             nearest: Nearest::default(),
         };
         // The local caps are sums, so a chunk's mobs can go in together.
@@ -1036,17 +1031,6 @@ impl SpawnState {
                 || self.players.close_for_spawning_labels(chunk, asked),
                 |(_, _, open)| open,
             )
-    }
-    /// The prepared answers of the chunk [`spawn_for_chunk`] asks about
-    /// after `chunk`.
-    fn next_prepared(&self, chunk: (i32, i32)) -> Option<((i32, i32), u8, u8)> {
-        let mut ahead = self.prepared.iter().rev();
-        let next = ahead.next()?;
-        if next.0 == chunk {
-            ahead.next().copied()
-        } else {
-            Some(*next)
-        }
     }
     fn asked(categories: &[Category]) -> u8 {
         categories.iter().fold(0, |bits, c| bits | c.bit())
@@ -1252,38 +1236,15 @@ pub fn spawn_for_chunk<L: NaturalLevel, R: RandomSource + Foresee>(
     trace: &mut (impl FnMut(Event) + ?Sized),
 ) {
     let asked = SpawnState::asked(categories);
-    // The random state foreseen after each category ([`foresee_starts`]),
-    // and whether the chunk before foresaw this one's start rightly.
+    // The random state foreseen after each category ([`foresee_starts`]).
     let mut after = [0u64; Category::ALL.len()];
-    let foreseen = match state.foreseen.take() {
-        Some((at, seed, foreseen)) if at == chunk && random.legacy_state() == Some(seed) => {
-            after = foreseen;
-            true
-        }
-        _ => false,
-    };
     for (i, &category) in categories.iter().enumerate() {
         if let Some(now) = random.legacy_state()
-            && !(if i == 0 {
-                foreseen
-            } else {
-                after.get(i - 1) == Some(&now)
-            })
+            && (i == 0 || after.get(i - 1) != Some(&now))
         {
             let open = state.open_for(chunk, asked);
             let rest = after.get_mut(i..).unwrap_or_default();
             foresee_starts(l, now, open, &categories[i..], chunk, rest);
-        }
-        // The next chunk, from the state this one should leave, so its
-        // blocks load while this one spawns.
-        if i == 0
-            && let Some((next, known, open)) = state.next_prepared(chunk)
-            && known == asked
-            && let Some(&seed) = after.get(categories.len() - 1)
-        {
-            let mut next_after = [0u64; Category::ALL.len()];
-            foresee_starts(l, seed, open, categories, next, &mut next_after);
-            state.foreseen = Some((next, seed, next_after));
         }
         let local = state.can_spawn_local_of(asked, category, chunk);
         trace(Event::Local(category, local));
@@ -1768,7 +1729,6 @@ mod tests {
             player_counts: vec![[0; 8]; players.len()],
             local: None,
             prepared: Vec::new(),
-            foreseen: None,
             nearest: Nearest::default(),
         };
         state.label_open_categories();
