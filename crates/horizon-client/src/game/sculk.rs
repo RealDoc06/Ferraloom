@@ -912,11 +912,12 @@ impl Game<'_> {
             let Some(&seq) = index.seq.get(&key) else {
                 return false;
             };
-            if !ticks(cx, cz) {
-                return true;
-            }
+            // Idle, ticking or not: asleep until touched.
             if matches!(entities.get(&key), Some(BlockEntity::Sculk(e)) if e.idle()) {
                 return false;
+            }
+            if !ticks(cx, cz) {
+                return true;
             }
             let adjacent = (-1..=1).all(|dx| (-1..=1).all(|dz| ticks(cx + dx, cz + dz)));
             due.push((seq, key, adjacent));
