@@ -282,12 +282,16 @@ pub(super) struct MobBoxes {
 }
 impl MobBoxes {
     fn new(mobs: &[Mob]) -> Self {
-        let entries: Vec<_> = mobs
-            .iter()
-            .enumerate()
-            .filter(|(_, m)| !m.removed)
-            .map(|(i, m)| mob_box(i, m))
-            .collect();
+        Self::from_entries(
+            mobs.iter()
+                .enumerate()
+                .filter(|(_, m)| !m.removed)
+                .map(|(i, m)| mob_box(i, m))
+                .collect(),
+        )
+    }
+    /// The grid over [`mob_box`]es of the mobs not removed, in their order.
+    fn from_entries(entries: Vec<MobBox>) -> Self {
         let grid = SeenGrid::new(entries.iter().map(|e| e.1));
         Self { entries, grid }
     }
@@ -756,28 +760,31 @@ impl<'a> Game<'a> {
             *self.world.inhabited.entry(key).or_insert(0) += 1;
         }
     }
-    /// What `createState` counts of the loaded mobs, in their order. Mobs are
-    /// read here (they cannot be shared with the pool); the columns and biomes
-    /// each of them needs are read on the pool, whichever thread takes which.
-    fn counted_mobs(&self) -> impl Iterator<Item = CountedCharge> {
+    /// What `createState` counts of the loaded mobs, in their order, and the
+    /// pass's [`MobBoxes`], from one walk over the mobs (the boxes don't change
+    /// while the pass holds the game). Mobs are read here (they cannot be
+    /// shared with the pool); the columns and biomes each counted one needs
+    /// are read on the pool, whichever thread takes which.
+    fn counted_mobs(&self) -> (impl Iterator<Item = CountedCharge>, MobBoxes) {
         let (chunks, biomes) = (&self.world.chunks, self.res.biomes());
-        let mut rows: Vec<(&str, Category, [i32; 3], Option<CountedCharge>)> = self
-            .mobs
-            .iter()
-            .filter_map(|m| {
-                let category = Category::from_name(&m.kind.category);
-                let persistent =
-                    m.persistent || horizon_client::mobs::ai::requires_custom_persistence(m);
-                counted_by_state(category, true, persistent).then(|| {
-                    let block = [
-                        m.position.x.floor() as i32,
-                        m.position.y.floor() as i32,
-                        m.position.z.floor() as i32,
-                    ];
-                    (m.kind.id.as_str(), category, block, None)
-                })
-            })
-            .collect();
+        let mut rows: Vec<(&str, Category, [i32; 3], Option<CountedCharge>)> = Vec::new();
+        let mut boxes = Vec::with_capacity(self.mobs.len());
+        for (i, m) in self.mobs.iter().enumerate() {
+            if !m.removed {
+                boxes.push(mob_box(i, m));
+            }
+            let category = Category::from_name(&m.kind.category);
+            let persistent =
+                m.persistent || horizon_client::mobs::ai::requires_custom_persistence(m);
+            if counted_by_state(category, true, persistent) {
+                let block = [
+                    m.position.x.floor() as i32,
+                    m.position.y.floor() as i32,
+                    m.position.z.floor() as i32,
+                ];
+                rows.push((m.kind.id.as_str(), category, block, None));
+            }
+        }
         horizon_threads::pool::for_each_mut(&mut rows, PASS_GRAIN, |(id, category, block, out)| {
             let [x, y, z] = *block;
             if let Some(chunk) = chunks.get(&(x >> 4, z >> 4)) {
@@ -793,7 +800,8 @@ impl<'a> Game<'a> {
                 });
             }
         });
-        rows.into_iter().filter_map(|row| row.3)
+        let counted = rows.into_iter().filter_map(|row| row.3);
+        (counted, MobBoxes::from_entries(boxes))
     }
     /// `ServerChunkCache.tickChunks`: the spawn state over the loaded mobs,
     /// the categories under their global caps (creatures every 400 ticks),
@@ -816,7 +824,9 @@ impl<'a> Game<'a> {
         let mut pending = Vec::new();
         {
             let level = self.natural_level_with_players(Some(players));
-            let mut state = SpawnState::from_counted(spawnable, close, self.counted_mobs());
+            let (counted, boxes) = self.counted_mobs();
+            let mut state = SpawnState::from_counted(spawnable, close, counted);
+            let _ = level.boxes.set(boxes);
             let categories = if spawn_mobs {
                 state.filtered_categories(spawn_enemies, self.world.game_time % 400 == 0)
             } else {
