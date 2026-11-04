@@ -2207,10 +2207,11 @@ impl Hub {
         }
         // AbstractContainerMenu.broadcastChanges for the inventory menu.
         let mut changes = Vec::new();
+        let g = &self.guests[i];
         for slot in 0..46 {
-            let now = self.guests[i].menu_slot(slot);
-            if now != self.guests[i].menu_sent[slot] {
-                changes.push((slot, now));
+            let now = g.menu_slot_ref(slot);
+            if now != g.menu_sent[slot].as_ref() {
+                changes.push((slot, now.cloned()));
             }
         }
         for (slot, now) in changes {

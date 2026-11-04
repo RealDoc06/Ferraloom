@@ -468,13 +468,17 @@ impl Guest {
     /// result, 1..=4 crafting grid, 5..=8 armor, 9..=35 main, 36..=44 hotbar,
     /// 45 off hand.
     pub fn menu_slot(&self, slot: usize) -> Option<ItemStack> {
+        self.menu_slot_ref(slot).cloned()
+    }
+    /// The stack in an inventory menu slot (`menu_slot`), borrowed.
+    pub fn menu_slot_ref(&self, slot: usize) -> Option<&ItemStack> {
         match slot {
-            0 => self.craft_result.clone(),
-            1..=4 => self.craft_grid[slot - 1].clone(),
-            5..=8 => self.armor[slot - 5].clone(),
-            9..=35 => self.inventory.get(slot).cloned().flatten(),
-            36..=44 => self.inventory.get(slot - 36).cloned().flatten(),
-            45 => self.offhand.clone(),
+            0 => self.craft_result.as_ref(),
+            1..=4 => self.craft_grid[slot - 1].as_ref(),
+            5..=8 => self.armor[slot - 5].as_ref(),
+            9..=35 => self.inventory.get(slot).and_then(Option::as_ref),
+            36..=44 => self.inventory.get(slot - 36).and_then(Option::as_ref),
+            45 => self.offhand.as_ref(),
             _ => None,
         }
     }
