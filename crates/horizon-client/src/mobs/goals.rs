@@ -1432,32 +1432,35 @@ impl Goal for NearestTarget {
                 let pos = Vec3::new(m.position.x, m.eye_y(), m.position.z);
                 let id = m.id;
                 let attacker = m.species();
-                let candidates: Vec<(u32, Vec3)> =
-                    cx.w.nearby(pos, range, move |s| {
-                        s.id != id
-                            && !s.playing_dead
-                            && !illager_spares(attacker, s)
-                            && match prey {
-                                Prey::Species(list) => list.contains(&s.species),
-                                Prey::Filter(f) => f(s),
-                                Prey::Player => false,
-                            }
-                    })
-                    .map(|s| (s.id, s.position))
-                    .collect();
-                for (cid, cpos) in candidates {
+                // Nearest first, asked one at a time: the first that passes
+                // ends the search (most often the first).
+                let candidates = cx.w.nearby(pos, range, move |s| {
+                    s.id != id
+                        && !s.playing_dead
+                        && !illager_spares(attacker, s)
+                        && match prey {
+                            Prey::Species(list) => list.contains(&s.species),
+                            Prey::Filter(f) => f(s),
+                            Prey::Player => false,
+                        }
+                });
+                let beyond = self.beyond_sqr;
+                let mut found = None;
+                for s in candidates {
+                    let (cid, cpos) = (s.id, s.position);
                     if m.distance_sqr(cpos) > range * range {
                         continue;
                     }
-                    if self.beyond_sqr.is_some_and(|d| m.distance_sqr(cpos) <= d) {
+                    if beyond.is_some_and(|d| m.distance_sqr(cpos) <= d) {
                         continue;
                     }
                     if !m.sees(cx.w, Who::Mob(cid)) {
                         continue;
                     }
-                    self.found = Some(Who::Mob(cid));
+                    found = Some(Who::Mob(cid));
                     break;
                 }
+                self.found = found;
             }
         }
         self.found.is_some()

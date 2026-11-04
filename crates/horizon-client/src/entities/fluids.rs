@@ -26,25 +26,62 @@ struct ItemFluidWorld<'a> {
 }
 /// What `ItemEntity::update_fluids` makes of an item at a position moving
 /// at a velocity: the water and lava heights and the velocity after the
-/// currents. It reads only those and the blocks.
+/// currents. It reads only those and the blocks. With it, the move the
+/// tick then resolves, which reads only the box, the velocity it wants,
+/// whether it stands on the ground and the blocks.
 #[derive(Clone, Copy, Debug)]
 pub struct ItemFluids {
     pub position: Vec3,
     pub velocity: Vec3,
     pub heights: (f64, f64),
     pub pushed: Vec3,
+    /// The velocity the move wanted, the ground it started on and how far
+    /// it went, when the tick moves the item.
+    pub moved: Option<(Vec3, bool, Vec3)>,
 }
 impl ItemFluids {
-    /// The update of an item at `position` moving at `velocity`.
-    pub fn at(position: Vec3, velocity: Vec3, world: &World, fluids: &FluidResources) -> Self {
+    /// The update of an item at `position` moving at `velocity`, and the
+    /// move that follows for one `on_ground` with this `age` and `id`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn at(
+        position: Vec3,
+        velocity: Vec3,
+        on_ground: bool,
+        age: u32,
+        id: u32,
+        world: &World,
+        fluids: &FluidResources,
+        collision: &horizon_world::block_collision::BlockCollisionRegistry<'_>,
+    ) -> Self {
         let mut pushed = velocity;
         let heights = update_fluids_at(position, &mut pushed, world, fluids);
+        let wanted = ItemEntity::swim_or_fall(pushed, heights.0, heights.1);
+        let moved = ItemEntity::moves(wanted, on_ground, age, id).then(|| {
+            let mut scene = crate::collisions::SceneCollisions {
+                world,
+                binding: collision,
+                subject: None,
+            };
+            let moved = scene
+                .resolve(ItemEntity::bounds_at(position), wanted, 0.0, on_ground)
+                .unwrap_or(Vec3::ZERO);
+            (wanted, on_ground, moved)
+        });
         Self {
             position,
             velocity,
             heights,
             pushed,
+            moved,
         }
+    }
+    /// The move resolved ahead, if it is the one an item at `position`
+    /// wanting `wanted` from `on_ground` makes.
+    pub fn moved_for(&self, position: Vec3, wanted: Vec3, on_ground: bool) -> Option<Vec3> {
+        let bits = |v: Vec3| [v.x, v.y, v.z].map(f64::to_bits);
+        let (w, g, moved) = self.moved?;
+        (bits(self.position) == bits(position) && bits(w) == bits(wanted) && g == on_ground)
+            .then_some(moved)
     }
     /// Whether this is the update of `item` as it stands and moves now.
     pub fn of(&self, item: &ItemEntity) -> bool {

@@ -515,7 +515,7 @@ fn tick_entity(
         ai_step(m, w, level_random, events);
     }
     // The kinds of block the contact checks after the move may meet.
-    let near = kinds_near(m, w);
+    let near = start_kinds(m, w);
     effects_from_blocks(m, w, near);
     if m.species() == Species::Rabbit {
         super::rabbit::post_tick(m);
@@ -636,6 +636,15 @@ pub fn kinds_between(a: Vec3, b: Vec3, width: f32, height: f32, w: &MobWorld) ->
     }
     crate::block_kinds::BlockKinds::of(w.registry).near(w.world, lo, hi)
 }
+/// [`kinds_near`], from [`MobWorld::kinds_ahead`] while the mob stands
+/// where it started its tick, at the size it was: then both boxes are the
+/// one the read-ahead read around.
+pub(super) fn start_kinds(m: &Mob, w: &MobWorld) -> u16 {
+    match w.kinds_ahead {
+        Some((at, kinds)) if at == start_key(m) => kinds,
+        _ => kinds_near(m, w),
+    }
+}
 /// What [`MobWorld::kinds_ahead`] is keyed by: the mob's position, which
 /// must also be where it started the tick, and its size, as bits.
 pub fn start_key(m: &Mob) -> [u64; 4] {
@@ -707,10 +716,7 @@ fn base_tick(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
     // The kinds of block around the mob before its move, read ahead of the
     // tick for a mob standing where it stood then: fire and powder snow
     // checks with none of theirs around find nothing.
-    let near = match w.kinds_ahead {
-        Some((at, kinds)) if at == start_key(m) => kinds,
-        _ => kinds_near(m, w),
-    };
+    let near = start_kinds(m, w);
     use crate::block_kinds::{FIRE, SOUL_FIRE};
     let fire = if near & (FIRE | SOUL_FIRE) != 0 {
         crate::motion::environment::fire_contact(w.world, w.registry, m.bounds())
