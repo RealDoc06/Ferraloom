@@ -552,6 +552,10 @@ fn accept_loop(listener: TcpListener, shared: Arc<Shared>, stop: &AtomicBool) {
     }
 }
 fn handle(stream: TcpStream, addr: SocketAddr, shared: Arc<Shared>) {
+    // A connection's reader wakes for every packet: on the worker cores, not
+    // the tick's core or its sibling (horizon_threads). It keeps its priority,
+    // as the tick waits for what it reads.
+    horizon_threads::worker_affinity();
     let _ = stream.set_nonblocking(false);
     if let Err(e) = conn::serve(stream, addr, shared)
         && std::env::var_os("HORIZON_NET_DEBUG").is_some()
