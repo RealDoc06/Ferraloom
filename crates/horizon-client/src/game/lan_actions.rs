@@ -580,6 +580,110 @@ impl Game<'_> {
             )
     }
 
+    /// Whether `leave_guest` then `enter_guest` for the guest in place would
+    /// send nothing and change nothing but what `go_on_with_guest_turn` does:
+    /// no totem went off, no hurt direction, teleport, turn, move, vehicle,
+    /// bed, game mode or level spawn changed, and nothing opened (a screen,
+    /// container, table, station, sign, book, mount menu, ender chest or
+    /// action bar message).
+    fn guest_turn_can_go_on(&self, host: &LanHost, swap: &GuestSwap) -> bool {
+        let (Some(m), Some(g)) = (self.player.as_ref(), host.hub.guests.get(swap.i)) else {
+            return false;
+        };
+        let moved: f64 = (0..3)
+            .map(|k| ([m.position.x, m.position.y, m.position.z][k] - g.position[k]).powi(2))
+            .sum();
+        g.conn == swap.conn
+            && !m.health.totem_used
+            && m.health.indicated_dir.is_none()
+            && !m.teleported
+            && moved <= 0.0001
+            && [self.yaw, self.pitch] == [g.yaw, g.pitch]
+            && self.riding == g.vehicle
+            && self.sleeping == g.bed
+            && self.mode_id() == g.game_mode
+            && self.level.spawn == swap.respawn.1
+            && self.screen == Screen::Playing
+            && self.container.is_none()
+            && self.station.is_none()
+            && self.sign_edit.is_none()
+            && self.book.is_none()
+            && self.command_block_screen.is_none()
+            && self.mount_menu.opened_mob().is_none()
+            && self.craft_size == 2
+            && self.craft_table.is_none()
+            && self.craft_grid.len() == 9
+            && self.craft_grid.iter().all(Option::is_none)
+            && self.message.is_none()
+            && self.ender_open.is_none()
+    }
+
+    /// `leave_guest` then `enter_guest` for the guest in place, when
+    /// `guest_turn_can_go_on`: the record takes what the next turn's start
+    /// reads back (health, food, the sprint), the scoreboard follows the
+    /// statistics, and the body and the game take the record's state again
+    /// as a new turn starts with it.
+    fn go_on_with_guest_turn(&mut self, host: &mut LanHost, swap: &mut GuestSwap) {
+        let g = &mut host.hub.guests[swap.i];
+        let Some(m) = self.player.as_mut() else {
+            return;
+        };
+        // leave_guest.
+        g.health = m.health.health();
+        g.food = m.health.food.food;
+        g.saturation = m.health.food.saturation;
+        if !m.sprinting {
+            g.sprinting = false;
+        }
+        g.spawn = self.spawn.map(|s| [s.x, s.y, s.z]);
+        g.respawn_elsewhere = self.respawn_config.as_ref().map(RespawnConfig::saved);
+        let stat_events = std::mem::take(&mut self.stats.events);
+        let name = if stat_events.is_empty() {
+            String::new()
+        } else {
+            g.name.clone()
+        };
+        // enter_guest.
+        m.position = Vec3::new(g.position[0], g.position[1], g.position[2]);
+        m.ground.on_ground = g.on_ground;
+        m.yaw = g.yaw;
+        m.pitch = g.pitch;
+        m.sprinting = g.sprinting;
+        m.may_fly = g.creative() || g.game_mode == SPECTATOR;
+        m.flying = g.flying;
+        m.fall_flying = g.fall_flying;
+        m.invulnerable = m.may_fly;
+        let current = m.health.health();
+        let kept = current.to_bits() == g.health.to_bits()
+            && current > 0.0
+            && m.attribute("minecraft:max_health")
+                .is_ok_and(|max| current <= max as f32);
+        if !kept {
+            let _ = m.set_health(g.health, false);
+        }
+        m.health.food.food = g.food;
+        m.health.food.saturation = g.saturation;
+        self.eye = g.eye_height() as f32;
+        self.keys.clear();
+        if g.sneaking {
+            self.keys.insert(KeyCode::ShiftLeft);
+        }
+        self.spawn = g.spawn.map(|s| Vec3::new(s[0], s[1], s[2]));
+        self.respawn_config = g.respawn_elsewhere.as_ref().map(RespawnConfig::from_saved);
+        self.left = swap.play.digging.is_some();
+        self.right = self.using.is_some();
+        self.stat_criteria_changed(&name, stat_events);
+        self.stats.unheard = self.score.board.objectives.is_empty();
+        let held = self.inventory.get(self.selected).and_then(Option::as_ref);
+        if !swap.play.wears(&self.armor, held) {
+            let mut equipped: Vec<Option<ItemStack>> = self.armor.to_vec();
+            equipped.push(held.cloned());
+            self.apply_equipment();
+            swap.play.equipped = Some(equipped);
+        }
+        self.update_totem_ready();
+    }
+
     /// The second half of `as_guest`: the guest's state back into their
     /// record, the game's back in place, and what the turn changed sent.
     pub(super) fn leave_guest(&mut self, host: &mut LanHost, swap: GuestSwap) {
@@ -2636,7 +2740,7 @@ impl Game<'_> {
         let (sneaking, sleeping) = (g.sneaking, g.sleeping);
         let riding = g.vehicle.is_some();
         let mut soul = None;
-        let events = self.as_guest(host, conn, |game| {
+        let body = |game: &mut Self| {
             let (rules, motion) = (game.world.health_rules, game.motion);
             let health = &motion.health;
             let freeze_immune = game.wears_freeze_immune();
@@ -2785,17 +2889,29 @@ impl Game<'_> {
             game.record_combat(&events);
             game.wear_armor(&events);
             (events, velocity)
-        });
-        let Some((events, marked)) = events else {
+        };
+        let Some(mut swap) = self.enter_guest(host, conn) else {
             return;
         };
-        if let Some((at, velocity)) = soul {
-            super::lan_particles::send_soul_particle(host, at, velocity);
+        let (events, marked) = body(self);
+        // The sculk events are a turn of their own after the soul particle;
+        // with nothing for the turn's end and the next one's start to do but
+        // sync the body with the record, they go on in this one.
+        let swap = if soul.is_none() && self.guest_turn_can_go_on(host, &swap) {
+            self.go_on_with_guest_turn(host, &mut swap);
+            Some(swap)
+        } else {
+            self.leave_guest(host, swap);
+            if let Some((at, velocity)) = soul {
+                super::lan_particles::send_soul_particle(host, at, velocity);
+            }
+            self.enter_guest(host, conn)
+        };
+        if let Some(swap) = swap {
+            self.sculk_step_on_player();
+            self.tick_player_sculk_events();
+            self.leave_guest(host, swap);
         }
-        self.as_guest(host, conn, |game| {
-            game.sculk_step_on_player();
-            game.tick_player_sculk_events();
-        });
         for event in events {
             match event {
                 MotionEvent::HurtSound(sound) => self.player_hurt_sound(sound, at),
