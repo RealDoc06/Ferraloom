@@ -121,6 +121,9 @@ pub fn thread_cpu() -> Option<std::time::Duration> {
 /// Set once as the game starts, before its helper threads do: they then go
 /// behind the server thread and the render thread (`behind_server`).
 static HELPERS_BEHIND: AtomicBool = AtomicBool::new(false);
+/// Set by a dedicated server: its helpers take the idle class instead of a
+/// nicer value (`put_helpers_idle`).
+static HELPERS_IDLE: AtomicBool = AtomicBool::new(false);
 
 /// How many nice levels a helper thread goes below the process on Linux and Android.
 #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -132,6 +135,19 @@ const BEHIND: i32 = 10;
 pub fn put_helpers_behind() {
     HELPERS_BEHIND.store(true, Ordering::Relaxed);
 }
+/// For a dedicated server: from now on the helper threads that call
+/// `behind_server` take the idle class on Linux rather than ten
+/// nice levels. A nicer thread still holds its core until its slice ends
+/// when the tick's pool wakes a worker there, and a pool pass lasts about as
+/// long, so the tick thread ran most passes alone; an idle-class thread
+/// gives its core up as soon as any ordinary thread wants it. The helpers
+/// then run on what the tick and its pools leave, which on a server is most
+/// of every worker core. Not for a client, whose helpers would wait behind
+/// every other program on the machine. Implies `put_helpers_behind`.
+pub fn put_helpers_idle() {
+    HELPERS_IDLE.store(true, Ordering::Relaxed);
+    put_helpers_behind();
+}
 
 /// Called by a helper thread as it starts (world generation, lighting and
 /// meshing, a connection's packet writer): work no tick or frame waits for.
@@ -141,9 +157,15 @@ pub fn put_helpers_behind() {
 /// the process, or, where nice runs out (a game started under nice 10 or
 /// more), the idle class, which runs the thread only when no ordinary thread
 /// wants its core. A tick or a frame then gets a core when it starts instead
-/// of waiting behind them. Nothing elsewhere. Whether the OS took it.
+/// of waiting behind them. After `put_helpers_idle` (a dedicated server on
+/// Linux) the helper takes the idle class outright. Nothing elsewhere.
+/// Whether the OS took it.
 pub fn behind_server() -> bool {
     worker_affinity();
+    #[cfg(target_os = "linux")]
+    if HELPERS_IDLE.load(Ordering::Relaxed) {
+        return idle();
+    }
     HELPERS_BEHIND.load(Ordering::Relaxed) && behind()
 }
 
@@ -295,7 +317,8 @@ mod tests {
     }
 
     /// A helper goes behind only once a dedicated server asks for it, and
-    /// then, on Linux and Android, 10 nice levels below the process or in the idle class.
+    /// then, on Linux and Android, 10 nice levels below the process or in the
+    /// idle class; asked to idle, on Linux, in the idle class.
     #[test]
     fn helpers_go_behind_only_when_asked() {
         assert!(!std::thread::spawn(super::behind_server).join().unwrap());
@@ -322,6 +345,16 @@ mod tests {
         .unwrap();
         #[cfg(not(any(target_os = "linux", target_os = "android")))]
         assert!(!std::thread::spawn(super::behind_server).join().unwrap());
+        // A dedicated server's helpers take the idle class on Linux.
+        super::put_helpers_idle();
+        #[cfg(target_os = "linux")]
+        std::thread::spawn(|| {
+            assert!(super::behind_server());
+            // SAFETY: reads the calling thread's own policy.
+            assert_eq!(unsafe { libc::sched_getscheduler(0) }, libc::SCHED_IDLE);
+        })
+        .join()
+        .unwrap();
     }
 
     /// The idle hint holds on the three platforms.
