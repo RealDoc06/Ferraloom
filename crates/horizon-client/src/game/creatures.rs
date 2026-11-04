@@ -186,6 +186,21 @@ fn flame_geometry(
 pub(super) fn seen(m: &Mob, player: Option<[i32; 4]>) -> Seen {
     m.seen(player)
 }
+/// The species among a list of mobs, as bits (all of them past the 128th).
+#[derive(Default)]
+struct SpeciesSet([u64; 2], bool);
+impl SpeciesSet {
+    fn insert(&mut self, s: Species) {
+        match s as usize {
+            i if i < 128 => self.0[i / 64] |= 1 << (i % 64),
+            _ => self.1 = true,
+        }
+    }
+    fn has(&self, s: Species) -> bool {
+        let i = s as usize;
+        self.1 || i >= 128 || self.0[i / 64] & (1 << (i % 64)) != 0
+    }
+}
 /// What the mob ticks read of each mob ahead of the serial pass, on the
 /// tick's workers, from the mob as it stands and the blocks: its snapshot
 /// entry, the nearest player to it (the despawn distance), the fluids at
@@ -624,6 +639,10 @@ impl Game<'_> {
             _ => Default::default(),
         };
         let mut guest_events = Vec::new();
+        // The species of every mob the loop meets: until handle_mob_events,
+        // the mobs only lose members, so the species passes after the loop
+        // run only for species among them.
+        let mut present = SpeciesSet::default();
         // The mobs whose bodies go this tick: (id, feet, width, height).
         let mut gone = Vec::new();
         let level_random;
@@ -650,6 +669,7 @@ impl Game<'_> {
             drop(prep);
             let each = horizon_client::spans::scope("creature_loop");
             for i in 0..mobs.len() {
+                present.insert(mobs[i].species());
                 let mut w = MobWorld {
                     others: &snapshot,
                     others_grid: Some(&grid),
@@ -798,12 +818,22 @@ impl Game<'_> {
             self.death_poof(at, width, height);
         }
         self.sync_riders();
-        self.tick_skeleton_traps();
+        // Each of these passes acts only on mobs of its species, so with
+        // none of it among the mobs it does nothing.
+        if present.has(Species::SkeletonHorse) {
+            self.tick_skeleton_traps();
+        }
         self.tick_apparition();
-        self.guardian_bubbles();
-        self.villager_reputation_tick();
+        if present.has(Species::Guardian) || present.has(Species::ElderGuardian) {
+            self.guardian_bubbles();
+        }
+        if present.has(Species::Villager) {
+            self.villager_reputation_tick();
+        }
         self.merchant_tick();
-        self.villager_pickups();
+        if present.has(Species::Villager) {
+            self.villager_pickups();
+        }
         for m in dead {
             self.mob_died(&m);
         }
@@ -821,12 +851,31 @@ impl Game<'_> {
         self.lan_guest_mob_events(guest_events);
         self.tick_projectiles()?;
         self.tick_fangs();
-        self.tick_allays();
-        self.tick_pandas();
-        self.tick_breeze_effects();
-        self.tick_sniffer_effects();
-        self.piglin_pickups();
-        self.sulfur_cube_pickups();
+        // The events may have added or changed mobs: one look at them all
+        // decides the species passes below (none of which makes a mob of
+        // another one's species).
+        let mut present = SpeciesSet::default();
+        for m in &self.mobs {
+            present.insert(m.species());
+        }
+        if present.has(Species::Allay) {
+            self.tick_allays();
+        }
+        if present.has(Species::Panda) {
+            self.tick_pandas();
+        }
+        if present.has(Species::Breeze) {
+            self.tick_breeze_effects();
+        }
+        if present.has(Species::Sniffer) {
+            self.tick_sniffer_effects();
+        }
+        if present.has(Species::Piglin) {
+            self.piglin_pickups();
+        }
+        if present.has(Species::SulfurCube) {
+            self.sulfur_cube_pickups();
+        }
         // Hurt and death sounds of damage dealt outside the mob ticks.
         let mut queued = Vec::new();
         for m in &mut self.mobs {
