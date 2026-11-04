@@ -809,7 +809,12 @@ impl Game<'_> {
                 snapshot[i] = seen(m, uuid);
                 snapshot[i].alive &= kept;
                 grid.update(i, snapshot[i].bounds);
-                horizon_client::mobs::apply_brain_events(&mut mobs, &mut events, from);
+                horizon_client::mobs::apply_brain_events_indexed(
+                    &mut mobs,
+                    &mut events,
+                    from,
+                    Some(&index),
+                );
             }
             drop(tags);
             drop(each);
