@@ -222,19 +222,29 @@ pub(super) struct GameLevel<'g, 'a> {
 const SCANNED_QUERIES: u32 = 1;
 /// The starts a chunk owns, as the reaching test reads them.
 type Starts = std::rc::Rc<[StartView]>;
-/// A structure start's name and boxes, its pieces' boxes side by side: the
-/// reaching test reads them for every position a spawn attempt tries.
+/// A structure start's name and boxes, its pieces' boxes by the chunk
+/// columns they reach: the reaching test reads them for every position a
+/// spawn attempt tries, and a trial chamber has hundreds of pieces.
 struct StartView {
     name: String,
     bounds: BoundingBox,
-    pieces: Box<[BoundingBox]>,
+    pieces: FxHashMap<(i32, i32), Vec<BoundingBox>>,
 }
 impl StartView {
     fn new(start: &horizon_world::worldgen::structure::start::StructureStart) -> Self {
+        let mut pieces = FxHashMap::<(i32, i32), Vec<BoundingBox>>::default();
+        for piece in &start.pieces {
+            let b = piece.bounding_box();
+            for cx in b.min[0] >> 4..=b.max[0] >> 4 {
+                for cz in b.min[2] >> 4..=b.max[2] >> 4 {
+                    pieces.entry((cx, cz)).or_default().push(b);
+                }
+            }
+        }
         Self {
             name: start.name.clone(),
             bounds: start.bounding_box,
-            pieces: start.pieces.iter().map(|p| p.bounding_box()).collect(),
+            pieces,
         }
     }
 }
@@ -246,7 +256,9 @@ impl super::structures::StartBoxes for StartView {
         self.bounds.is_inside(pos)
     }
     fn piece_contains(&self, pos: [i32; 3]) -> bool {
-        self.pieces.iter().any(|b| b.is_inside(pos))
+        self.pieces
+            .get(&(pos[0] >> 4, pos[2] >> 4))
+            .is_some_and(|boxes| boxes.iter().any(|b| b.is_inside(pos)))
     }
 }
 /// How many chunks or mobs a pool thread takes at a time in this pass's reads.
