@@ -669,15 +669,24 @@ impl Mob {
             }
         };
         self.movement_emission(w, moved, events);
-        // Entity.applyEffectsFromBlocks: bubble columns push the mob.
-        if crate::motion::bubble_column_push(
-            w.world,
-            w.registry,
-            w.facts,
-            w.collision,
-            self.bounds(),
-            &mut self.velocity,
-        ) {
+        // Entity.applyEffectsFromBlocks: bubble columns push the mob. A mob
+        // still where it started, with none in the palettes read around it
+        // ahead of the tick, meets none.
+        let none_around = matches!(
+            w.kinds_ahead,
+            Some((at, kinds)) if at == super::ai::start_key(self)
+                && kinds & crate::block_kinds::BUBBLE_COLUMN == 0
+        );
+        if !none_around
+            && crate::motion::bubble_column_push(
+                w.world,
+                w.registry,
+                w.facts,
+                w.collision,
+                self.bounds(),
+                &mut self.velocity,
+            )
+        {
             self.fall_distance = 0.0;
         }
     }
