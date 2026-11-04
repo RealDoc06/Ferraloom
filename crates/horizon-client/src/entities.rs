@@ -64,6 +64,39 @@ impl ItemEntity {
         registry: &horizon_world::registry::BlockRegistry,
         items: &crate::items::Items,
     ) -> ItemEnvironmentTick {
+        self.environment_tick_with(world, facts, registry, items, u16::MAX)
+    }
+    /// The `block_kinds` the palettes over the cells of an item's box at
+    /// `position` may hold (a superset of what its contact checks read).
+    pub fn kinds_around(
+        position: Vec3,
+        world: &World,
+        registry: &horizon_world::registry::BlockRegistry,
+    ) -> u16 {
+        let h = Self::WIDTH / 2.0;
+        let cell = |v: f64| v.floor() as i32;
+        crate::block_kinds::BlockKinds::of(registry).near(
+            world,
+            [cell(position.x - h), cell(position.y), cell(position.z - h)],
+            [
+                cell(position.x + h),
+                cell(position.y + Self::WIDTH),
+                cell(position.z + h),
+            ],
+        )
+    }
+    /// [`Self::environment_tick`] knowing which `block_kinds` may be around
+    /// the item's box ([`Self::kinds_around`]; all of them when unknown):
+    /// the fire and cactus contacts with none of theirs around find none.
+    pub fn environment_tick_with(
+        &mut self,
+        world: &World,
+        facts: &BlockFacts,
+        registry: &horizon_world::registry::BlockRegistry,
+        items: &crate::items::Items,
+        kinds: u16,
+    ) -> ItemEnvironmentTick {
+        use crate::block_kinds::{CACTUS, FIRE, SOUL_FIRE};
         let at = world.block(
             self.position.x.floor() as i32,
             (self.position.y + 0.1).floor() as i32,
@@ -96,7 +129,11 @@ impl ItemEntity {
                 lava_hurt = true;
             }
         }
-        let fire_damage = crate::motion::environment::fire_contact(world, registry, self.bounds());
+        let fire_damage = if kinds & (FIRE | SOUL_FIRE) != 0 {
+            crate::motion::environment::fire_contact(world, registry, self.bounds())
+        } else {
+            0.0
+        };
         if fire_damage > 0.0 && !fire_immune() {
             self.fire_ticks = self.fire_ticks.max(160);
             if !items.resists_fire(&self.stack, "minecraft:in_fire") {
@@ -107,7 +144,8 @@ impl ItemEntity {
         // hurt cooldown, so it loses 1 health every tick it touches a cactus
         // (5 health: gone in 5 ticks). Fire resistance does not help;
         // `ItemStack.canBeHurtBy` only skips it for a damage_resistant stack.
-        if crate::motion::environment::cactus_contact(world, registry, self.bounds())
+        if kinds & CACTUS != 0
+            && crate::motion::environment::cactus_contact(world, registry, self.bounds())
             && !items.resists_cactus(&self.stack)
         {
             self.health -= 1;

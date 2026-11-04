@@ -2710,28 +2710,37 @@ impl Game<'_> {
         // item before its own tick: every item's answer is read ahead on the
         // pool. An item that moved anyway asks again.
         // Its first fluid update reads only its position, its velocity and
-        // the blocks too, and is read ahead the same way.
+        // the blocks too, and is read ahead the same way, as are the block
+        // kinds around it (for an item that does not move, its contact
+        // checks after the move).
         type Ahead = (
             Vec3,
             Vec3,
             bool,
             Option<horizon_client::entities::ItemFluids>,
+            u16,
         );
         let mut ahead: Vec<Ahead> = items
             .iter()
-            .map(|i| (i.position, i.velocity, false, None))
+            .map(|i| (i.position, i.velocity, false, None, u16::MAX))
             .collect();
         {
             let (world, collision) = (&self.world, self.collision);
             let fluids = &self.res.motion().fluids;
-            horizon_threads::pool::for_each_mut(&mut ahead, 64, |(at, velocity, inside, wet)| {
-                if merging {
-                    *inside = ItemEntity::inside_block_at(*at, world, collision);
-                }
-                *wet = Some(horizon_client::entities::ItemFluids::at(
-                    *at, *velocity, world, fluids,
-                ));
-            });
+            let registry = self.pack.assets.registry;
+            horizon_threads::pool::for_each_mut(
+                &mut ahead,
+                64,
+                |(at, velocity, inside, wet, kinds)| {
+                    if merging {
+                        *inside = ItemEntity::inside_block_at(*at, world, collision);
+                    }
+                    *wet = Some(horizon_client::entities::ItemFluids::at(
+                        *at, *velocity, world, fluids,
+                    ));
+                    *kinds = ItemEntity::kinds_around(*at, world, registry);
+                },
+            );
         }
         for i in 0..items.len() {
             if removed[i] {
@@ -2747,7 +2756,7 @@ impl Game<'_> {
             // ItemEntity.tick's noPhysics (servers only): out of a block
             // placed on it, towards the closest open side (#1252).
             let no_physics = merging && {
-                let (at, _, inside, _) = ahead[i];
+                let (at, _, inside, _, _) = ahead[i];
                 let same = [at.x, at.y, at.z].map(f64::to_bits)
                     == [item.position.x, item.position.y, item.position.z].map(f64::to_bits);
                 if same {
@@ -2768,15 +2777,27 @@ impl Game<'_> {
                 &self.res.motion().fluids,
                 ahead[i].3,
             );
+            // The kinds read ahead hold for an item still where it stood.
+            let around = {
+                let (at, ..) = ahead[i];
+                let bits = |v: Vec3| [v.x, v.y, v.z].map(f64::to_bits);
+                if bits(at) == bits(item.position) {
+                    ahead[i].4
+                } else {
+                    u16::MAX
+                }
+            };
             // Entity.applyEffectsFromBlocks: bubble columns lift or drag the item.
-            horizon_client::motion::bubble_column_push(
-                &self.world,
-                self.pack.assets.registry,
-                self.res.facts(),
-                self.collision,
-                item.bounds(),
-                &mut item.velocity,
-            );
+            if around & horizon_client::block_kinds::BUBBLE_COLUMN != 0 {
+                horizon_client::motion::bubble_column_push(
+                    &self.world,
+                    self.pack.assets.registry,
+                    self.res.facts(),
+                    self.collision,
+                    item.bounds(),
+                    &mut item.velocity,
+                );
+            }
             cells.moved(i, item.previous, item.position);
             // ItemEntity.tick: merge every 2 ticks while moving between
             // blocks, every 40 otherwise, before the lifetime check.
@@ -2804,11 +2825,12 @@ impl Game<'_> {
                 cells.remove(i, item.position);
                 continue;
             }
-            let environment = item.environment_tick(
+            let environment = item.environment_tick_with(
                 &self.world,
                 self.res.facts(),
                 self.pack.assets.registry,
                 self.res.items(),
+                around,
             );
             // shortcut: age is the fresh-drop clock; use entity ticks for saved/frozen-age phase parity.
             if environment.should_play_lava_hurt_sound(item.age) {
