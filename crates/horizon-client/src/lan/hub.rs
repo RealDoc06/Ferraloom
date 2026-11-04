@@ -438,6 +438,107 @@ fn tracked(cx: i32, cz: i32, r: i32, x: i32, z: i32) -> bool {
     dx * dx + dz * dz < i64::from(r) * i64::from(r)
 }
 
+/// Guests per piece of `update_chunks`' pass on the pool.
+const VIEW_GRAIN: usize = 16;
+
+/// What a guest's chunk view reads and changes (`update_view`,
+/// `next_batch`): the guest's body stays on the tick's thread, these go to
+/// the pool's.
+struct ChunkView<'a> {
+    chunk: (i32, i32),
+    view_distance: i32,
+    placed_at: u64,
+    unacknowledged: u32,
+    max_unacknowledged: u32,
+    chunks_per_tick: f32,
+    center: &'a mut Option<(i32, i32)>,
+    center_sent: &'a mut Option<(i32, i32)>,
+    sent_chunks: &'a mut Arc<crate::fast_hash::FxHashSet<(i32, i32)>>,
+    sent_bounds: &'a mut super::guest::SentBounds,
+    chunk_queue: &'a mut Vec<(i32, i32)>,
+    batch_quota: &'a mut f32,
+    sender: &'a super::conn::PlayerSender,
+}
+impl<'a> ChunkView<'a> {
+    fn of(g: &'a mut Guest) -> Self {
+        Self {
+            chunk: g.chunk(),
+            view_distance: g.view_distance,
+            placed_at: g.placed_at,
+            unacknowledged: g.unacknowledged,
+            max_unacknowledged: g.max_unacknowledged,
+            chunks_per_tick: g.chunks_per_tick,
+            center: &mut g.center,
+            center_sent: &mut g.center_sent,
+            sent_chunks: &mut g.sent_chunks,
+            sent_bounds: &mut g.sent_bounds,
+            chunk_queue: &mut g.chunk_queue,
+            batch_quota: &mut g.batch_quota,
+            sender: &g.sender,
+        }
+    }
+}
+
+/// ChunkMap.move's view change: the new centre, the chunks that left
+/// the view forgotten and the ones that entered it queued, closest first.
+fn update_view(g: &mut ChunkView) {
+    let (cx, cz) = g.chunk;
+    let r = g.view_distance;
+    if *g.center == Some((cx, cz)) {
+        return;
+    }
+    *g.center = Some((cx, cz));
+    if g.center_sent.take() != Some((cx, cz)) {
+        g.sender
+            .send_packet(&C::SetChunkCacheCenter(play::SetChunkCacheCenter {
+                x: cx,
+                z: cz,
+            }));
+    }
+    // Chunks that left the view.
+    let forget: Vec<_> = g
+        .sent_chunks
+        .iter()
+        .copied()
+        .filter(|&(x, z)| !tracked(cx, cz, r, x, z))
+        .collect();
+    for (x, z) in forget {
+        Arc::make_mut(g.sent_chunks).remove(&(x, z));
+        g.sender
+            .send_packet(&C::ForgetLevelChunk(play::ForgetLevelChunk { pos: [x, z] }));
+    }
+    // `tracked` keeps only chunks under r + 2 away on each axis.
+    g.sent_bounds
+        .within([cx - r - 1, cz - r - 1], [cx + r + 1, cz + r + 1]);
+    requeue(g.chunk_queue, g.sent_chunks, (cx, cz), r);
+}
+
+/// PlayerChunkSender.sendNextChunks' choice: ready chunks, closest first,
+/// as many as the batch quota the client's acknowledgements pace allows,
+/// with their places in the queue.
+fn next_batch<'w>(
+    g: &mut ChunkView,
+    ticks: u64,
+    world: &'w World,
+) -> Option<Vec<(usize, &'w Chunk)>> {
+    if ticks <= g.placed_at + 1 || g.unacknowledged >= g.max_unacknowledged {
+        return None;
+    }
+    *g.batch_quota = (*g.batch_quota + g.chunks_per_tick).min(g.chunks_per_tick.max(1.0));
+    if *g.batch_quota < 1.0 || g.chunk_queue.is_empty() {
+        return None;
+    }
+    let budget = g.batch_quota.floor() as usize;
+    let batch: Vec<_> = g
+        .chunk_queue
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, key)| Some((idx, &**world.chunks.get(key).filter(|c| c.lit)?)))
+        .take(budget)
+        .collect();
+    (!batch.is_empty()).then_some(batch)
+}
+
 /// The view's queue around a new centre: the queued chunks still tracked, then
 /// the tracked ones neither sent nor queued, closest first (a stable sort, so
 /// equally close chunks keep their order).
@@ -1526,15 +1627,26 @@ impl Hub {
     /// packets keep their order.
     fn update_chunks(&mut self, ctx: &TickCtx) {
         let world = &*ctx.world;
-        let mut batches = Vec::new();
-        for i in 0..self.guests.len() {
-            if self.here(&self.guests[i]) {
-                self.update_view(i);
-                if let Some(batch) = self.next_batch(i, world) {
-                    batches.push((i, batch));
-                }
-            }
-        }
+        // Each guest's view and batch are its own, on the pool's threads:
+        // what each sends stays in its order.
+        let (ticks, dimension) = (self.ticks, &self.config.dimension);
+        let mut views: Vec<(usize, ChunkView, Option<Vec<(usize, &Chunk)>>)> = (self.guests)
+            .iter_mut()
+            .enumerate()
+            .filter(|(_, g)| g.placed && g.dimension == *dimension)
+            .map(|(i, g)| (i, ChunkView::of(g), None))
+            .collect();
+        let held = super::conn::holding();
+        horizon_threads::pool::for_each_mut(&mut views, VIEW_GRAIN, |(_, g, batch)| {
+            // Held for the tick's flush, as the tick's thread holds them.
+            let _held = super::conn::Holding::like(held);
+            update_view(g);
+            *batch = next_batch(g, ticks, world);
+        });
+        let batches: Vec<(usize, Vec<(usize, &Chunk)>)> = views
+            .into_iter()
+            .filter_map(|(i, _, batch)| Some((i, batch?)))
+            .collect();
         if batches.is_empty() {
             return;
         }
@@ -1580,62 +1692,6 @@ impl Hub {
                 g.sent_bounds.add(key);
             }
         }
-    }
-
-    /// ChunkMap.move's view change: the new centre, the chunks that left
-    /// the view forgotten and the ones that entered it queued, closest first.
-    fn update_view(&mut self, i: usize) {
-        let (cx, cz) = self.guests[i].chunk();
-        let r = self.guests[i].view_distance;
-        let g = &mut self.guests[i];
-        if g.center == Some((cx, cz)) {
-            return;
-        }
-        g.center = Some((cx, cz));
-        if g.center_sent.take() != Some((cx, cz)) {
-            g.send(&C::SetChunkCacheCenter(play::SetChunkCacheCenter {
-                x: cx,
-                z: cz,
-            }));
-        }
-        // Chunks that left the view.
-        let forget: Vec<_> = g
-            .sent_chunks
-            .iter()
-            .copied()
-            .filter(|&(x, z)| !tracked(cx, cz, r, x, z))
-            .collect();
-        for (x, z) in forget {
-            Arc::make_mut(&mut g.sent_chunks).remove(&(x, z));
-            g.send(&C::ForgetLevelChunk(play::ForgetLevelChunk { pos: [x, z] }));
-        }
-        // `tracked` keeps only chunks under r + 2 away on each axis.
-        g.sent_bounds
-            .within([cx - r - 1, cz - r - 1], [cx + r + 1, cz + r + 1]);
-        requeue(&mut g.chunk_queue, &g.sent_chunks, (cx, cz), r);
-    }
-
-    /// PlayerChunkSender.sendNextChunks' choice: ready chunks, closest first,
-    /// as many as the batch quota the client's acknowledgements pace allows,
-    /// with their places in the queue.
-    fn next_batch<'w>(&mut self, i: usize, world: &'w World) -> Option<Vec<(usize, &'w Chunk)>> {
-        let g = &mut self.guests[i];
-        if self.ticks <= g.placed_at + 1 || g.unacknowledged >= g.max_unacknowledged {
-            return None;
-        }
-        g.batch_quota = (g.batch_quota + g.chunks_per_tick).min(g.chunks_per_tick.max(1.0));
-        if g.batch_quota < 1.0 || g.chunk_queue.is_empty() {
-            return None;
-        }
-        let budget = g.batch_quota.floor() as usize;
-        let batch: Vec<_> = g
-            .chunk_queue
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, key)| Some((idx, &**world.chunks.get(key).filter(|c| c.lit)?)))
-            .take(budget)
-            .collect();
-        (!batch.is_empty()).then_some(batch)
     }
 
     /// `ChunkHolder.broadcastChanges`' light part: the light sections that
