@@ -1442,6 +1442,9 @@ pub struct MoveMemo {
     /// sections is known to be about this memo.
     generation: u64,
     sections: SectionsSeen,
+    /// The fluids and block kinds read ahead of the last tick, with the
+    /// generation they were kept under (see `keep_reads`).
+    reads: Option<(u64, [u64; 7], Fluids, [u64; 4], u16)>,
     moved: Vec3,
     /// Where the mob stood when it looked for its support, and the support.
     support: Option<([u64; 3], Option<[i32; 3]>)>,
@@ -1508,6 +1511,38 @@ impl MoveMemo {
         let dy = f64::from_bits(key[10]);
         let unchanged = self.sections.unchanged(world, Self::cells(bounds, dy));
         Some((self.generation, unchanged))
+    }
+    /// Keep the fluids and block kinds read ahead of this tick for the next
+    /// one. They were read from this tick's blocks; while the held sections
+    /// are unchanged next tick (a section, once replaced, never comes back),
+    /// those blocks are the same, and the reads, of cells inside the held
+    /// ones for the remembered box, answer again.
+    pub fn keep_reads(
+        &mut self,
+        fluids: Option<([u64; 7], Fluids)>,
+        kinds: Option<([u64; 4], u16)>,
+    ) {
+        self.reads = match (self.key, fluids, kinds) {
+            (Some(_), Some((at, fluids)), Some((start, kinds))) => {
+                Some((self.generation, at, fluids, start, kinds))
+            }
+            _ => None,
+        };
+    }
+    /// The reads kept last tick, if `sections` (this memo's
+    /// `sections_ahead`) says its sections are unchanged and the mob asks
+    /// at the remembered box (`fluids_key`) and position (`kinds_key`).
+    pub fn kept_reads(
+        &self,
+        sections: Option<(u64, bool)>,
+        fluids_key: [u64; 7],
+        kinds_key: [u64; 4],
+    ) -> Option<(Fluids, u16)> {
+        let (generation, at, fluids, start, kinds) = self.reads?;
+        let key = self.key.as_ref()?;
+        let same_box = key[3..9] == fluids_key[..6];
+        (sections == Some((generation, true)) && same_box && at == fluids_key && start == kinds_key)
+            .then_some((fluids, kinds))
     }
     /// Keep a resolved move, if its sections can be kept.
     fn remember(&mut self, key: [u64; 14], w: &MobWorld, bounds: Aabb, dy: f64, moved: Vec3) {
