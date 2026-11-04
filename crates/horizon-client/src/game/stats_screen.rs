@@ -203,11 +203,9 @@ impl Game<'_> {
     fn stat_items(&self) -> Vec<String> {
         let mut items: Vec<String> = Vec::new();
         for (ty, _) in COLUMNS {
-            if let Some(m) = self.stats.values.get(&format!("minecraft:{ty}")) {
-                for (k, v) in m {
-                    if *v > 0 && k != "minecraft:air" && !items.contains(k) {
-                        items.push(k.clone());
-                    }
+            for (k, v) in self.stats.of_type(&format!("minecraft:{ty}")) {
+                if v > 0 && k != "minecraft:air" && !items.contains(k) {
+                    items.push(k.clone());
                 }
             }
         }
@@ -220,11 +218,9 @@ impl Game<'_> {
     fn stat_mobs(&self) -> Vec<String> {
         let mut mobs: Vec<String> = Vec::new();
         for ty in ["killed", "killed_by"] {
-            if let Some(m) = self.stats.values.get(&format!("minecraft:{ty}")) {
-                for (k, v) in m {
-                    if *v > 0 && !mobs.contains(k) {
-                        mobs.push(k.clone());
-                    }
+            for (k, v) in self.stats.of_type(&format!("minecraft:{ty}")) {
+                if v > 0 && !mobs.contains(k) {
+                    mobs.push(k.clone());
                 }
             }
         }

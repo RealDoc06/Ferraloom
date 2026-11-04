@@ -2955,7 +2955,7 @@ impl Game<'_> {
                     }
                 }
                 for (ty, key, count) in known {
-                    self.stats.values.entry(ty).or_default().insert(key, count);
+                    self.stats.set(ty, key, count);
                 }
             }
             // ClientPacketListener.setActionBarText, setTitleText,
