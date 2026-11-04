@@ -988,16 +988,29 @@ impl SpawnState {
     /// chunk's centre is within the tracker's 8 chunks of it.
     fn add_local(&mut self, chunk: (i32, i32), category: Category) {
         let i = category.index();
-        let mut filled = false;
+        // Where the players whose cap this fills are.
+        let mut filled: Vec<[f64; 3]> = Vec::new();
         let counts = &mut self.player_counts;
-        self.players.for_each_close_for_spawning(chunk, |p| {
-            counts[p][i] += 1;
-            filled |= counts[p][i] == category.max();
+        self.players.for_each_point_close_for_spawning(chunk, |p| {
+            let count = &mut counts[p.slot as usize][i];
+            *count += 1;
+            if *count == category.max() {
+                filled.push(p.position);
+            }
         });
-        if filled {
+        if !filled.is_empty() {
             self.local = None;
-            self.prepared.clear();
             self.label_open_categories();
+            // Only the chunks close to those players can answer otherwise.
+            let players = &self.players;
+            for (at, asked, open) in &mut self.prepared {
+                if filled
+                    .iter()
+                    .any(|&p| super::player_index::close_for_spawning(*at, p))
+                {
+                    *open = players.close_for_spawning_labels(*at, *asked);
+                }
+            }
         }
     }
     /// Works out on the pool what [`spawn_for_chunk`] will ask about `chunks`,

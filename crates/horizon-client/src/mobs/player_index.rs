@@ -310,6 +310,14 @@ impl PlayerIndex {
             ControlFlow::Continue(())
         });
     }
+    /// [`Self::for_each_close_for_spawning`], with the players themselves.
+    pub fn for_each_point_close_for_spawning(&self, chunk: (i32, i32), mut f: impl FnMut(&Point)) {
+        let (x, z) = chunk_centre(chunk);
+        let _ = self.visit_within(x, z, CLOSE_FOR_SPAWNING_SQR, &mut |p| {
+            f(p);
+            ControlFlow::Continue(())
+        });
+    }
     /// Whether that list has anyone on it.
     pub fn any_close_for_spawning(&self, chunk: (i32, i32)) -> bool {
         let (x, z) = chunk_centre(chunk);
@@ -371,6 +379,11 @@ impl PlayerIndex {
 }
 
 /// `ChunkMap.euclideanDistanceSquared`'s reference point.
+/// `ChunkMap.playerIsCloseEnoughForSpawning` for a player at `position`.
+pub fn close_for_spawning(chunk: (i32, i32), position: [f64; 3]) -> bool {
+    let (x, z) = chunk_centre(chunk);
+    (position[0] - x).powi(2) + (position[2] - z).powi(2) < CLOSE_FOR_SPAWNING_SQR
+}
 fn chunk_centre((cx, cz): (i32, i32)) -> (f64, f64) {
     (f64::from(cx * 16 + 8), f64::from(cz * 16 + 8))
 }
