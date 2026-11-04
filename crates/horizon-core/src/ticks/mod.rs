@@ -16,31 +16,7 @@ use std::{
 
 /// The sets of scheduled `(type, position)` keys: only asked whether they
 /// hold a key, never iterated, so a fast hasher changes no behaviour.
-type KeySet = std::collections::HashSet<(TickTypeId, BlockPos), KeyBuild>;
-type KeyBuild = std::hash::BuildHasherDefault<KeyHasher>;
-/// The Fx hash (rustc's) over the key's integers.
-#[derive(Clone, Copy, Default)]
-struct KeyHasher(u64);
-impl std::hash::Hasher for KeyHasher {
-    #[inline]
-    fn write(&mut self, bytes: &[u8]) {
-        for &b in bytes {
-            self.write_u32(u32::from(b));
-        }
-    }
-    #[inline]
-    fn write_u32(&mut self, i: u32) {
-        self.0 = (self.0.rotate_left(5) ^ u64::from(i)).wrapping_mul(0x51_7cc1_b727_220a_95);
-    }
-    #[inline]
-    fn write_i32(&mut self, i: i32) {
-        self.write_u32(i as u32);
-    }
-    #[inline]
-    fn finish(&self) -> u64 {
-        self.0
-    }
-}
+type KeySet = crate::fx::FxHashSet<(TickTypeId, BlockPos)>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TickTypeId(pub u32);

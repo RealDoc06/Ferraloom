@@ -33,7 +33,8 @@ use std::collections::{HashMap, VecDeque};
 
 #[derive(Default)]
 pub struct DecorationOrder {
-    rank: HashMap<(i32, i32), u64>,
+    /// Never iterated in its own order (see `ordered`), so a fast hasher.
+    rank: horizon_core::fx::FxHashMap<(i32, i32), u64>,
     next: u64,
 }
 
