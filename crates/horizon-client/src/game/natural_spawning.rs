@@ -25,7 +25,7 @@ use horizon_core::{
     geometry::{Aabb, Vec3},
     random::{LegacyRandom, RandomSource, WorldgenRandom},
 };
-use horizon_world::registry::BlockStateId;
+use horizon_world::{registry::BlockStateId, worldgen::structure::BoundingBox};
 use std::{cell::Cell, collections::HashMap, ops::ControlFlow};
 
 /// A player in the level in place, as spawning and despawning see it.
@@ -197,8 +197,35 @@ pub(super) struct GameLevel<'g, 'a> {
     pub(super) box_queries: std::cell::Cell<u32>,
 }
 const SCANNED_QUERIES: u32 = 1;
-type Starts =
-    std::rc::Rc<[std::sync::Arc<horizon_world::worldgen::structure::start::StructureStart>]>;
+/// The starts a chunk owns, as the reaching test reads them.
+type Starts = std::rc::Rc<[StartView]>;
+/// A structure start's name and boxes, its pieces' boxes side by side: the
+/// reaching test reads them for every position a spawn attempt tries.
+struct StartView {
+    name: String,
+    bounds: BoundingBox,
+    pieces: Box<[BoundingBox]>,
+}
+impl StartView {
+    fn new(start: &horizon_world::worldgen::structure::start::StructureStart) -> Self {
+        Self {
+            name: start.name.clone(),
+            bounds: start.bounding_box,
+            pieces: start.pieces.iter().map(|p| p.bounding_box()).collect(),
+        }
+    }
+}
+impl super::structures::StartBoxes for StartView {
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn bounds_contain(&self, pos: [i32; 3]) -> bool {
+        self.bounds.is_inside(pos)
+    }
+    fn piece_contains(&self, pos: [i32; 3]) -> bool {
+        self.pieces.iter().any(|b| b.is_inside(pos))
+    }
+}
 /// How many chunks or mobs a pool thread takes at a time in this pass's reads.
 const PASS_GRAIN: usize = 512;
 /// A mob not removed: its index in `Game::mobs`, box, alive, and whether
@@ -430,9 +457,13 @@ impl NaturalLevel for GameLevel<'_, '_> {
         };
         super::structures::structures_reaching_in(chunk, [x, y, z], wanted, |sx, sz| {
             let mut starts = self.starts.borrow_mut();
-            let owned = starts
-                .entry((sx, sz))
-                .or_insert_with(|| locator.starts_at(sx, sz).into());
+            let owned = starts.entry((sx, sz)).or_insert_with(|| {
+                locator
+                    .starts_at(sx, sz)
+                    .iter()
+                    .map(|s| StartView::new(s))
+                    .collect()
+            });
             Starts::clone(owned)
         })
         .into_iter()
