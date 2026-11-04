@@ -549,4 +549,28 @@ mod tests {
         s.mark_all_dirty();
         assert_eq!(s.take_dirty().len(), 3);
     }
+
+    /// A reset where the type has no counters, and a reload, keep what is
+    /// still to be sent, each once, in type and key order.
+    #[test]
+    fn dirty_statistics_survive_resets_without_counters_and_reloads() {
+        let mut s = Stats::default();
+        s.reset("used", "minecraft:bow");
+        s.add("used", "minecraft:bow", 4);
+        s.reset("broken", "minecraft:axe");
+        s.custom("jump", 1);
+        let mut read = Stats::default();
+        read.set("minecraft:custom".into(), "minecraft:jump".into(), 7);
+        s.take_values(read);
+        let sent: Vec<(String, String, i32)> = [
+            ("minecraft:broken", "minecraft:axe", 0),
+            ("minecraft:custom", "minecraft:jump", 7),
+            ("minecraft:used", "minecraft:bow", 0),
+        ]
+        .iter()
+        .map(|&(t, k, n)| (t.to_owned(), k.to_owned(), n))
+        .collect();
+        assert_eq!(s.take_dirty(), sent);
+        assert!(s.take_dirty().is_empty());
+    }
 }
