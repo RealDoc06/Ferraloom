@@ -907,7 +907,7 @@ fn mob_freeze_meta(
 /// off hand, feet, legs, chest, head, body, saddle).
 fn mob_equipment(
     m: &Mob,
-    hub: &mut Hub,
+    sync: &SyncData,
     out: &mut Vec<(u8, Option<horizon_protocol::item::Stack>)>,
 ) {
     let e = &m.extra;
@@ -939,7 +939,7 @@ fn mob_equipment(
                     None
                 },
             };
-            out.push((slot, hub.stack(&Some(stack))));
+            out.push((slot, sync.stack(&stack)));
         }
     }
     if e.saddled {
@@ -949,7 +949,7 @@ fn mob_equipment(
             damage: 0,
             extra: None,
         });
-        out.push((7, hub.stack(&Some(stack))));
+        out.push((7, sync.stack(&stack)));
     }
 }
 
@@ -1430,9 +1430,10 @@ impl Game<'_> {
                 .or(host_entity);
             mobs.push((m, player_entity, e));
         }
-        // What each state takes from its mob alone, on the pool's threads:
-        // every state is its own, so the list comes out as one thread makes it.
+        // Each state is made from its mob alone, on the pool's threads: every
+        // state is its own, so the list comes out as one thread makes it.
         let (sync, game_time) = (hub.registries(), self.world.game_time);
+        let (sources, knots) = (self.attribute_sources(), &self.knot_ids);
         horizon_threads::pool::for_each_mut(&mut mobs, MOB_STATE_GRAIN, |(m, player_entity, e)| {
             e.reset(m.id as i32, entity_uuid(m.id), m.kind.id.as_str());
             e.position = [m.position.x, m.position.y, m.position.z];
@@ -1452,19 +1453,16 @@ impl Game<'_> {
             e.precise = m.species() == horizon_client::mobs::Species::HappyGhast
                 && horizon_client::mobs::happy_ghast::on_still_timeout(m);
             mob_freeze_meta(m, &mut e.meta, &mut e.defaults);
-        });
-        for (m, player_entity, e) in mobs {
+            mob_equipment(m, sync, &mut e.equipment);
+            sources.mob_attributes(m, &mut e.attributes);
             // The lead's holder: the player the mob sees, another mob or a
             // fence knot (game/lan_entities.rs).
-            let leash = m.extra.leash.and_then(|h| match h {
-                Holder::Player => player_entity,
+            e.leash = m.extra.leash.and_then(|h| match h {
+                Holder::Player => *player_entity,
                 Holder::Mob(id) => Some(id as i32),
-                Holder::Knot(p) => self.knot_ids.get(&p).map(|&id| id as i32),
+                Holder::Knot(p) => knots.get(&p).map(|&id| id as i32),
             });
-            mob_equipment(m, hub, &mut e.equipment);
-            self.mob_attributes(m, &mut e.attributes);
-            e.leash = leash;
-        }
+        });
         for d in &self.dropped {
             let stack = hub.stack_of(&d.stack);
             let e = out.add(d.id as i32, entity_uuid(d.id), "minecraft:item");

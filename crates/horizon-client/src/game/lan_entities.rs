@@ -185,7 +185,9 @@ impl Game<'_> {
                     e.equipment.push((slot as u8, hub.stack(item)));
                 }
             }
-            e.attributes = self.stand_attributes(a.id, &a.equipment);
+            e.attributes = self
+                .attribute_sources()
+                .stand_attributes(a.id, &a.equipment);
             out.push(e);
         }
         for f in &self.item_frames {
