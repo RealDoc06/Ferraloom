@@ -3262,13 +3262,11 @@ impl Game<'_> {
                     || b.has_entity_inside(level.world.air),
                     |chunk| {
                         let index = key.1 - (MIN_Y >> 4);
-                        chunk.sections.get(index as usize).map_or_else(
-                            || b.has_entity_inside(BlockStateId(0)),
-                            |section| {
-                                contact
-                                    .get(key, section, |id| b.has_entity_inside(BlockStateId(id)))
-                            },
-                        )
+                        contact
+                            .get_in(key, chunk, index as usize, |id| {
+                                b.has_entity_inside(BlockStateId(id))
+                            })
+                            .unwrap_or_else(|| b.has_entity_inside(BlockStateId(0)))
                     },
                 )
             };
