@@ -260,6 +260,26 @@ pub enum MotionEvent {
     /// around a drowning player.
     Drown,
 }
+/// The source of a body's attribute instance identities
+/// (`LiveAttributes`' `next_identity`): sent and cloned with the body.
+pub trait AttributeIdentities: FnMut() -> i32 + Send {
+    fn boxed_clone(&self) -> Identities;
+}
+impl<F: FnMut() -> i32 + Clone + Send + 'static> AttributeIdentities for F {
+    fn boxed_clone(&self) -> Identities {
+        Box::new(self.clone())
+    }
+}
+pub type Identities = Box<dyn AttributeIdentities>;
+impl Clone for Identities {
+    fn clone(&self) -> Self {
+        self.boxed_clone()
+    }
+}
+/// A clone is the same body (its attribute map keeps its identity): it is a
+/// copy to take the original's place, as a speculative tick on the pool's
+/// threads does when it is kept (game/lan_motion.rs).
+#[derive(Clone)]
 pub struct PlayerMotion {
     pub swimming: bool,
     pub fire_ticks: i32,
@@ -347,7 +367,7 @@ pub struct PlayerMotion {
     /// server takes it at the end of a guest's turn.
     pub teleported: bool,
     pub events: Vec<MotionEvent>,
-    pub attributes: LiveAttributes<Box<dyn FnMut() -> i32>>,
+    pub attributes: LiveAttributes<Identities>,
     pub impulse: ImpulseContext,
     /// `ServerPlayer.spawnExtraParticlesOnFall`: a mace smash on a grounded
     /// target makes the next landing throw up the block below.
@@ -459,7 +479,7 @@ impl PlayerMotion {
             .map(|(i, _)| i as i32)
             .collect();
         let mut identity = 0i32;
-        let next: Box<dyn FnMut() -> i32> = Box::new(move || {
+        let next: Identities = Box::new(move || {
             identity = identity.wrapping_add(1);
             identity
         });
@@ -470,7 +490,7 @@ impl PlayerMotion {
         resources: &MotionResources,
         position: Vec3,
         hashes: &[i32],
-        next: Box<dyn FnMut() -> i32>,
+        next: Identities,
     ) -> Result<Self> {
         let mut attributes = LiveAttributes::new(
             resources.attributes.clone(),
