@@ -26,18 +26,32 @@ impl VaultLevel for Players<'_, '_> {
         self.game.world.game_time
     }
     fn players(&self) -> Vec<VaultPlayer> {
-        self.game.vault_players()
+        self.game.vault_players(None)
+    }
+    fn players_within(&self, pos: [i32; 3], range: f64) -> Vec<VaultPlayer> {
+        self.game.vault_players(Some((pos, range)))
     }
 }
 
 impl Game<'_> {
-    fn vault_players(&self) -> Vec<VaultPlayer> {
-        let host = self.player.as_ref().map(|p| VaultPlayer {
-            uuid: self.acting_uuid(),
-            block: [p.position.x, p.position.y, p.position.z].map(|v| v.floor() as i32),
-            spectator: self.spectator(),
+    /// The players, or only those within `(pos, range)` (`players_within`).
+    fn vault_players(&self, within: Option<([i32; 3], f64)>) -> Vec<VaultPlayer> {
+        let near = |at: [f64; 3]| {
+            within.is_none_or(|(pos, range)| super::lan_mobs::block_within(at, pos, range))
+        };
+        let host = self.player.as_ref().and_then(|p| {
+            let at = [p.position.x, p.position.y, p.position.z];
+            near(at).then(|| VaultPlayer {
+                uuid: self.acting_uuid(),
+                block: at.map(|v| v.floor() as i32),
+                spectator: self.spectator(),
+            })
         });
-        let guests = self.lan_present().into_iter().map(|g| VaultPlayer {
+        let present = match within {
+            Some((pos, range)) => self.lan_present_within(pos, range),
+            None => self.lan_present(),
+        };
+        let guests = present.into_iter().map(|g| VaultPlayer {
             uuid: g.uuid,
             block: g.position.map(|v| v.floor() as i32),
             spectator: g.spectator,

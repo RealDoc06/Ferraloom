@@ -32,37 +32,10 @@ impl TrialSpawnerLevel for GameLevel<'_, '_> {
         self.game.ui.rules.bool("spawn_mobs")
     }
     fn players(&self) -> Vec<TrialPlayer> {
-        let guests = self.game.lan_present().into_iter().map(|g| TrialPlayer {
-            uuid: g.uuid,
-            block: g.position.map(|v| v.floor() as i32),
-            eye: g.eye,
-            creative: g.creative,
-            spectator: g.spectator,
-            position: g.position,
-            height: g.height,
-            alive: g.alive,
-            // Guests carry no effects yet.
-            omen: None,
-        });
-        let (Some(p), Some(view)) = (self.game.player.as_ref(), self.game.player_view()) else {
-            return guests.collect();
-        };
-        let host = TrialPlayer {
-            uuid: self.game.acting_uuid(),
-            block: [p.position.x, p.position.y, p.position.z].map(|v| v.floor() as i32),
-            eye: view.eye,
-            creative: self.game.creative,
-            spectator: self.game.spectator(),
-            position: [p.position.x, p.position.y, p.position.z],
-            height: p.dimensions.height,
-            alive: self.game.level.health > 0.0,
-            omen: if self.game.potions.effects.get("trial_omen").is_some() {
-                Some(Omen::Trial)
-            } else {
-                self.game.potions.effects.get("bad_omen").map(|_| Omen::Bad)
-            },
-        };
-        std::iter::once(host).chain(guests).collect()
+        self.trial_players(None)
+    }
+    fn players_within(&self, pos: [i32; 3], range: f64) -> Vec<TrialPlayer> {
+        self.trial_players(Some((pos, range)))
     }
     fn visual_hit(&self, from: [f64; 3], to: [f64; 3]) -> Option<[i32; 3]> {
         let v = |p: [f64; 3]| Vec3::new(p[0], p[1], p[2]);
@@ -318,5 +291,50 @@ impl Game<'_> {
             log.push(key);
         }
         self.world.modified.insert((key.0 >> 4, key.2 >> 4));
+    }
+}
+
+impl GameLevel<'_, '_> {
+    /// The players, or only those within `(pos, range)` (`players_within`).
+    fn trial_players(&self, within: Option<([i32; 3], f64)>) -> Vec<TrialPlayer> {
+        let present = match within {
+            Some((pos, range)) => self.game.lan_present_within(pos, range),
+            None => self.game.lan_present(),
+        };
+        let guests = present.into_iter().map(|g| TrialPlayer {
+            uuid: g.uuid,
+            block: g.position.map(|v| v.floor() as i32),
+            eye: g.eye,
+            creative: g.creative,
+            spectator: g.spectator,
+            position: g.position,
+            height: g.height,
+            alive: g.alive,
+            // Guests carry no effects yet.
+            omen: None,
+        });
+        let (Some(p), Some(view)) = (self.game.player.as_ref(), self.game.player_view()) else {
+            return guests.collect();
+        };
+        let at = [p.position.x, p.position.y, p.position.z];
+        if within.is_some_and(|(pos, range)| !super::lan_mobs::block_within(at, pos, range)) {
+            return guests.collect();
+        }
+        let host = TrialPlayer {
+            uuid: self.game.acting_uuid(),
+            block: [p.position.x, p.position.y, p.position.z].map(|v| v.floor() as i32),
+            eye: view.eye,
+            creative: self.game.creative,
+            spectator: self.game.spectator(),
+            position: [p.position.x, p.position.y, p.position.z],
+            height: p.dimensions.height,
+            alive: self.game.level.health > 0.0,
+            omen: if self.game.potions.effects.get("trial_omen").is_some() {
+                Some(Omen::Trial)
+            } else {
+                self.game.potions.effects.get("bad_omen").map(|_| Omen::Bad)
+            },
+        };
+        std::iter::once(host).chain(guests).collect()
     }
 }
