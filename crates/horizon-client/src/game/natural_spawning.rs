@@ -221,7 +221,34 @@ pub(super) struct GameLevel<'g, 'a> {
 }
 const SCANNED_QUERIES: u32 = 1;
 /// The starts a chunk owns, as the reaching test reads them.
-type Starts = std::rc::Rc<[StartView]>;
+type Starts = std::rc::Rc<[std::rc::Rc<StartView>]>;
+type StructureStart = horizon_world::worldgen::structure::start::StructureStart;
+thread_local! {
+    /// [`StartView`]s across ticks, by the address of the start they view.
+    /// The start is held, so its address is not reused, and a start never
+    /// changes behind its `Arc`: a view stays the view of its start.
+    static START_VIEWS: std::cell::RefCell<
+        FxHashMap<usize, (std::sync::Arc<StructureStart>, std::rc::Rc<StartView>)>,
+    > = Default::default();
+}
+/// Views [`START_VIEWS`] keeps before it starts over.
+const KEPT_START_VIEWS: usize = 4096;
+/// The [`StartView`] of `start`, built once while [`START_VIEWS`] keeps it.
+fn start_view(start: &std::sync::Arc<StructureStart>) -> std::rc::Rc<StartView> {
+    START_VIEWS.with(|views| {
+        let mut views = views.borrow_mut();
+        let key = std::sync::Arc::as_ptr(start) as usize;
+        if let Some((_, view)) = views.get(&key) {
+            return view.clone();
+        }
+        if views.len() >= KEPT_START_VIEWS {
+            views.clear();
+        }
+        let view = std::rc::Rc::new(StartView::new(start));
+        views.insert(key, (start.clone(), view.clone()));
+        view
+    })
+}
 /// A structure start's name and boxes, its pieces' boxes by the chunk
 /// columns they reach: the reaching test reads them for every position a
 /// spawn attempt tries, and a trial chamber has hundreds of pieces.
@@ -231,7 +258,7 @@ struct StartView {
     pieces: FxHashMap<(i32, i32), Vec<BoundingBox>>,
 }
 impl StartView {
-    fn new(start: &horizon_world::worldgen::structure::start::StructureStart) -> Self {
+    fn new(start: &StructureStart) -> Self {
         let mut pieces = FxHashMap::<(i32, i32), Vec<BoundingBox>>::default();
         for piece in &start.pieces {
             let b = piece.bounding_box();
@@ -248,7 +275,7 @@ impl StartView {
         }
     }
 }
-impl super::structures::StartBoxes for StartView {
+impl super::structures::StartBoxes for std::rc::Rc<StartView> {
     fn name(&self) -> &str {
         &self.name
     }
@@ -491,13 +518,9 @@ impl NaturalLevel for GameLevel<'_, '_> {
         };
         super::structures::structures_reaching_in(chunk, [x, y, z], wanted, |sx, sz| {
             let mut starts = self.starts.borrow_mut();
-            let owned = starts.entry((sx, sz)).or_insert_with(|| {
-                locator
-                    .starts_at(sx, sz)
-                    .iter()
-                    .map(|s| StartView::new(s))
-                    .collect()
-            });
+            let owned = starts
+                .entry((sx, sz))
+                .or_insert_with(|| locator.starts_at(sx, sz).iter().map(start_view).collect());
             Starts::clone(owned)
         })
         .into_iter()
