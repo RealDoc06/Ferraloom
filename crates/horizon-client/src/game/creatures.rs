@@ -688,6 +688,8 @@ impl Game<'_> {
             let mut difficulty = horizon_client::fast_hash::FxHashMap::default();
             drop(prep);
             let each = horizon_client::spans::scope("creature_loop");
+            // No command runs while the mobs tick: the block tags hold still.
+            let tags = horizon_client::mobs::keep_tag_answers();
             for i in 0..mobs.len() {
                 present.insert(mobs[i].species());
                 let mut w = MobWorld {
@@ -805,6 +807,7 @@ impl Game<'_> {
                 grid.update(i, snapshot[i].bounds);
                 horizon_client::mobs::apply_brain_events(&mut mobs, &mut events, from);
             }
+            drop(tags);
             drop(each);
             let mut flags = keep.into_iter();
             mobs.retain(|_| flags.next().unwrap_or(true));

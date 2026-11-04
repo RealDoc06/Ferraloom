@@ -64,8 +64,26 @@ impl MobWorld<'_> {
             .and_then(|s| s.properties.get(key))
             .map(String::as_str)
     }
+    /// Whether `block` is in the block tag `tag`. While [`keep_tag_answers`] holds,
+    /// the answers are kept by the strings' contents: the tag table hashes
+    /// both with SipHash, and the mob ticks ask the same few many times.
     pub fn has_tag(&self, tag: &str, block: &str) -> bool {
-        self.block_tags.get(tag).is_some_and(|s| s.contains(block))
+        let ask = || self.block_tags.get(tag).is_some_and(|s| s.contains(block));
+        TAGS.with(|cache| {
+            let mut cache = cache.borrow_mut();
+            let Some(answers) = cache.as_mut() else {
+                return ask();
+            };
+            if let Some(&known) = answers.get(tag).and_then(|blocks| blocks.get(block)) {
+                return known;
+            }
+            let known = ask();
+            answers
+                .entry(tag.into())
+                .or_default()
+                .insert(block.into(), known);
+            known
+        })
     }
     /// `findBlocksInBoxByManhattanDistance(at, range_xz, range_y).filterState(..).findFirst()`:
     /// the first block `matches` accepts (given its position and name), going
@@ -367,6 +385,26 @@ impl<'a> Iterator for Nearest<'a> {
         let next = rest.next().map(|(_, s)| s);
         self.sorted = Some(rest);
         next
+    }
+}
+/// `MobWorld::has_tag`'s answers by tag then block, while kept.
+type TagAnswers =
+    crate::fast_hash::FxHashMap<Box<str>, crate::fast_hash::FxHashMap<Box<str>, bool>>;
+thread_local! {
+    static TAGS: std::cell::RefCell<Option<TagAnswers>> = const { std::cell::RefCell::new(None) };
+}
+/// `MobWorld::has_tag`'s answers kept on this thread, fresh, until the
+/// guard drops: for a stretch in which the block tags cannot change (the
+/// mob ticks).
+pub fn keep_tag_answers() -> KeptTags {
+    TAGS.with(|cache| *cache.borrow_mut() = Some(Default::default()));
+    KeptTags(())
+}
+/// The guard [`keep_tag_answers`] returns.
+pub struct KeptTags(());
+impl Drop for KeptTags {
+    fn drop(&mut self) {
+        TAGS.with(|cache| *cache.borrow_mut() = None);
     }
 }
 thread_local! {
