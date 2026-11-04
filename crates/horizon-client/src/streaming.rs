@@ -426,26 +426,56 @@ impl GenerationScan {
                 let r = margin.max(reach + 1);
                 runs.extend((band.z0 - r..=band.z1 + r).map(|z| (z, band.x0 - r, band.x1 + r)));
             }
-            runs.sort_unstable();
-            let mut runs = runs.into_iter().peekable();
-            while let Some((z, x0, mut x1)) = runs.next() {
-                while let Some((_, _, next_x1)) =
-                    runs.next_if(|&(nz, nx0, _)| nz == z && nx0 <= x1.saturating_add(1))
-                {
-                    x1 = x1.max(next_x1);
-                }
-                for x in x0..=x1 {
-                    if !input.ranges.requested(x, z, input.decorates)
-                        || input.world.chunks.contains_key(&(x, z))
-                        || input.generating.contains(&(x, z))
-                        || input.protos.contains_key(&(x, z))
-                        || input.finishing.contains(&(x, z))
+            // A row's runs share its z, so the rows split into stripes of z,
+            // each sorted, merged and scanned on a thread of its own: every
+            // column is looked at in one stripe, and the candidates are sorted
+            // below whatever order the stripes come back in.
+            const STRIPES: usize = 4;
+            let (lo, hi) = runs.iter().fold((i32::MAX, i32::MIN), |(lo, hi), r| {
+                (lo.min(r.0), hi.max(r.0))
+            });
+            let span = (i64::from(hi) - i64::from(lo)) / STRIPES as i64 + 1;
+            type Stripe = (Vec<(i32, i32, i32)>, Vec<(i64, i32, i32)>);
+            let mut stripes: Vec<Stripe> = (0..STRIPES).map(|_| Default::default()).collect();
+            for run in runs {
+                stripes[((i64::from(run.0) - i64::from(lo)) / span) as usize]
+                    .0
+                    .push(run);
+            }
+            let chunks = &input.world.chunks;
+            let (ranges, generating, protos, finishing, ahead) = (
+                &input.ranges,
+                input.generating,
+                input.protos,
+                input.finishing,
+                input.ahead,
+            );
+            let (decorates, loading) = (input.decorates, input.loading);
+            horizon_threads::pool::for_each_mut(&mut stripes, 1, |(runs, found)| {
+                runs.sort_unstable();
+                let mut runs = runs.iter().copied().peekable();
+                while let Some((z, x0, mut x1)) = runs.next() {
+                    while let Some((_, _, next_x1)) =
+                        runs.next_if(|&(nz, nx0, _)| nz == z && nx0 <= x1.saturating_add(1))
                     {
-                        continue;
+                        x1 = x1.max(next_x1);
                     }
-                    let own = input.ranges.priority(x, z, input.loading);
-                    wanted.push((ahead_priority(own, input.ahead, input.loading, x, z), x, z));
+                    for x in x0..=x1 {
+                        if !ranges.requested(x, z, decorates)
+                            || chunks.contains_key(&(x, z))
+                            || generating.contains(&(x, z))
+                            || protos.contains_key(&(x, z))
+                            || finishing.contains(&(x, z))
+                        {
+                            continue;
+                        }
+                        let own = ranges.priority(x, z, loading);
+                        found.push((ahead_priority(own, ahead, loading, x, z), x, z));
+                    }
                 }
+            });
+            for (_, found) in stripes {
+                wanted.extend(found);
             }
             // Forced chunks and their generation neighbourhood.
             let reach = margin - 1;
