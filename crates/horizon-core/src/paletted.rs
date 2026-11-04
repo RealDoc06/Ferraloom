@@ -106,47 +106,6 @@ enum Palette {
     List(Vec<u32>),
     Global,
 }
-/// A container's storage borrowed for reads: [`PalettedContainer::get`]
-/// without the container, for readers that keep many sections side by side.
-#[derive(Clone, Copy, Debug)]
-pub enum PalettedView<'a> {
-    Single(u32),
-    List {
-        bits: u8,
-        words: &'a [u64],
-        list: &'a [u32],
-    },
-    Global {
-        bits: u8,
-        words: &'a [u64],
-    },
-}
-impl<'a> PalettedView<'a> {
-    /// [`PalettedContainer::get`].
-    #[inline(always)]
-    pub fn get(&self, i: usize) -> u32 {
-        match *self {
-            Self::Single(value) => value,
-            Self::List { bits, words, list } => {
-                let (word, shift) = locate(bits, i);
-                list[((words[word] >> shift) & mask(bits)) as usize]
-            }
-            Self::Global { bits, words } => {
-                let (word, shift) = locate(bits, i);
-                ((words[word] >> shift) & mask(bits)) as u32
-            }
-        }
-    }
-    /// [`PalettedContainer::entry_storage`].
-    pub fn entry_storage(&self, i: usize) -> Option<(&'a u64, Option<&'a u32>)> {
-        let (bits, words, list) = match *self {
-            Self::Single(_) => return None,
-            Self::List { bits, words, list } => (bits, words, list.first()),
-            Self::Global { bits, words } => (bits, words, None),
-        };
-        Some((words.get(locate(bits, i).0)?, list))
-    }
-}
 /// `n / per_word` for `n < 4096` by multiplication: `MAGIC[bits].0 = ceil(2^20 /
 /// (64 / bits))` is exact while `n * (64 / bits) < 2^20`. `.1` is the bits a
 /// word's entries fill (`64 / bits * bits`): looked up, not divided for, as a
@@ -339,21 +298,6 @@ impl PalettedContainer {
     }
     pub fn is_global(&self) -> bool {
         matches!(self.palette, Palette::Global)
-    }
-    /// The storage borrowed for reads ([`PalettedView`]).
-    pub fn view(&self) -> PalettedView<'_> {
-        match &self.palette {
-            Palette::Single(value) => PalettedView::Single(*value),
-            Palette::List(list) => PalettedView::List {
-                bits: self.bits,
-                words: &self.words,
-                list,
-            },
-            Palette::Global => PalettedView::Global {
-                bits: self.bits,
-                words: &self.words,
-            },
-        }
     }
     /// What [`Self::get`] of entry `i` reads past the container itself: the
     /// storage word holding it, and the palette's first entries (for prefetch
@@ -1044,33 +988,6 @@ mod tests {
                 println!(
                     "{name} raw={raw}: old {:.3} new {:.3} ns/op",
                     times[0][5], times[1][5]
-                );
-            }
-        }
-    }
-    #[test]
-    fn views_read_as_their_containers() {
-        for (strategy, distinct) in [
-            (BLOCKS, 1u32),
-            (BLOCKS, 2),
-            (BLOCKS, 16),
-            (BLOCKS, 40),
-            (BLOCKS, 300),
-            (BLOCKS, 5000),
-            (BIOMES, 3),
-            (BIOMES, 60),
-        ] {
-            let len = if strategy == BIOMES { 64 } else { 4096 };
-            let values: Vec<u32> = (0..len as u32).map(|i| i * 31 % distinct).collect();
-            let c = PalettedContainer::from_values(strategy, &values);
-            let view = c.view();
-            for i in 0..len {
-                assert_eq!(view.get(i), c.get(i), "{distinct} {i}");
-                assert_eq!(
-                    view.entry_storage(i)
-                        .map(|(w, p)| (w as *const u64, p.map(|p| p as *const u32))),
-                    c.entry_storage(i)
-                        .map(|(w, p)| (w as *const u64, p.map(|p| p as *const u32))),
                 );
             }
         }

@@ -284,10 +284,34 @@ impl Chunk {
         let surface = self.surface.get_or_init(|| self.prime(|v| !air(v)));
         i32::from(surface[column(x, z)])
     }
-    /// The kept WORLD_SURFACE heights by column (`z << 4 | x`), once built
-    /// ([`Self::world_surface`] builds them).
-    pub fn surface_heights(&self) -> Option<&[i16; 256]> {
-        self.surface.get().map(|heights| &**heights)
+    /// Prefetch hint for a pass about to read this column: the section table
+    /// a block read goes through and the field holding the kept surface.
+    pub fn prefetch_header(&self) {
+        // Every line the 192-byte table can straddle.
+        for s in [0, 8, 16, SECTIONS - 1] {
+            horizon_threads::prefetch(&self.sections[s]);
+        }
+        horizon_threads::prefetch(&self.surface);
+    }
+    /// Prefetch hint: the kept WORLD_SURFACE heightmap, once built.
+    pub fn prefetch_surface(&self) {
+        if let Some(heights) = self.surface.get() {
+            for column in (0..256).step_by(32) {
+                horizon_threads::prefetch(&heights[column]);
+            }
+        }
+    }
+    /// Prefetch hint: the block headers of the sections a spawn start can
+    /// land in, up to one above the kept surface's highest column.
+    pub fn prefetch_sections(&self) {
+        let Some(heights) = self.surface.get() else {
+            return;
+        };
+        let top = i32::from(heights.iter().copied().max().unwrap_or(MIN_Y as i16));
+        let last = ((top + 1 - MIN_Y) >> 4).clamp(0, SECTIONS as i32 - 1) as usize;
+        for section in &self.sections[..=last] {
+            horizon_threads::prefetch(&section.blocks);
+        }
     }
     /// Prefetch hint: the storage the block at `x`, `y`, `z` is read from.
     /// Reads the section's header, which may miss itself.

@@ -23,7 +23,6 @@ use horizon_client::{
 };
 use horizon_core::{
     geometry::{Aabb, Vec3},
-    paletted::PalettedView,
     random::{LegacyRandom, RandomSource, WorldgenRandom},
 };
 use horizon_world::{registry::BlockStateId, worldgen::structure::BoundingBox};
@@ -144,41 +143,6 @@ impl<'g> ColumnMemo<'g> {
     }
 }
 
-/// A spawning column as the natural pass reads it, built on the pool in the
-/// pass's order: its surface heights and its sections' block storage side by
-/// side, so a start's surface and block are read without chasing the
-/// chunk's pointers (what the chunk answers: it does not change in a pass).
-struct ColumnView<'g> {
-    chunk: &'g Chunk,
-    /// WORLD_SURFACE by column, `z << 4 | x`.
-    heights: [i16; 256],
-    blocks: [PalettedView<'g>; horizon_client::chunk::SECTIONS],
-}
-impl<'g> ColumnView<'g> {
-    /// None until the chunk's surface is built.
-    fn new(chunk: &'g Chunk) -> Option<Self> {
-        Some(Self {
-            chunk,
-            heights: *chunk.surface_heights()?,
-            blocks: std::array::from_fn(|s| chunk.sections[s].blocks.view()),
-        })
-    }
-    /// `Chunk::get`.
-    fn block(&self, x: i32, y: i32, z: i32) -> u32 {
-        self.storage(y).map_or(0, |blocks| {
-            blocks.get(horizon_client::chunk::index(x, y, z))
-        })
-    }
-    fn storage(&self, y: i32) -> Option<&PalettedView<'g>> {
-        let s = (y - horizon_client::chunk::MIN_Y) >> 4;
-        usize::try_from(s).ok().and_then(|s| self.blocks.get(s))
-    }
-    /// `Chunk::world_surface`.
-    fn surface(&self, x: i32, z: i32) -> i32 {
-        i32::from(self.heights[((z & 15) << 4 | (x & 15)) as usize])
-    }
-}
-
 /// A biome's answers to the questions every attempt asks, by category index.
 struct BiomeRow<'g> {
     mobs: [&'g [SpawnEntry]; Category::ALL.len()],
@@ -207,10 +171,9 @@ pub(super) struct GameLevel<'g, 'a> {
     pub(super) game: &'g Game<'a>,
     pub(super) w: MobWorld<'g>,
     column: ColumnMemo<'g>,
-    /// The natural pass's columns in its order ([`ColumnView`]), and the
-    /// one it spawns in: that one and the next are read through them.
-    views: Vec<((i32, i32), Option<ColumnView<'g>>)>,
-    at: Cell<usize>,
+    /// The column the pass spawns in next, read without leaving the last
+    /// column for it (what `chunks.get` gives for the key).
+    ahead: Cell<Option<((i32, i32), Option<&'g Chunk>)>>,
     /// Every biome's [`BiomeRow`], in the biome list's order, for this pass.
     biome_rows: std::cell::OnceCell<Vec<BiomeRow<'g>>>,
     /// The generator's structure starts by owning chunk, once asked, for
@@ -333,20 +296,12 @@ impl<'g> GameLevel<'g, '_> {
         )
     }
     fn chunk(&self, x: i32, z: i32) -> Option<&'g Chunk> {
-        match self.column.0.get() {
-            Some(last) if last.key == (x >> 4, z >> 4) => last.chunk,
-            _ => match self.view(x, z) {
-                Some(view) => Some(view.chunk),
-                None => self.column.get(&self.w.world.chunks, x, z).chunk,
-            },
+        let key = (x >> 4, z >> 4);
+        match (self.column.0.get(), self.ahead.get()) {
+            (Some(last), _) if last.key == key => last.chunk,
+            (_, Some((at, chunk))) if at == key => chunk,
+            _ => self.column.get(&self.w.world.chunks, x, z).chunk,
         }
-    }
-    /// The [`ColumnView`] of the block's column, when it is the column the
-    /// pass spawns in or the next.
-    fn view(&self, x: i32, z: i32) -> Option<&ColumnView<'g>> {
-        let (key, at) = ((x >> 4, z >> 4), self.at.get());
-        let near = self.views.get(at..self.views.len().min(at + 2))?;
-        near.iter().find(|(k, _)| *k == key)?.1.as_ref()
     }
     fn biome(&self, x: i32, y: i32, z: i32) -> Option<&BiomeInfo> {
         let chunk = self.chunk(x, z)?;
@@ -373,9 +328,6 @@ impl<'g> GameLevel<'g, '_> {
 }
 impl SpawnLevel for GameLevel<'_, '_> {
     fn state(&self, x: i32, y: i32, z: i32) -> BlockStateId {
-        if let Some(view) = self.view(x, z) {
-            return BlockStateId(view.block(x, y, z));
-        }
         self.chunk(x, z)
             .map_or(self.w.world.air, |chunk| chunk.block(x & 15, y, z & 15))
     }
@@ -410,9 +362,6 @@ impl SpawnLevel for GameLevel<'_, '_> {
         self.w.sea_level()
     }
     fn world_surface(&self, x: i32, z: i32) -> i32 {
-        if let Some(view) = self.view(x, z) {
-            return view.surface(x, z);
-        }
         self.chunk(x, z)
             .map_or(horizon_client::chunk::MIN_Y, |chunk| {
                 chunk.world_surface(x, z, |v| self.w.facts.is_air(BlockStateId(v)))
@@ -595,20 +544,8 @@ impl NaturalLevel for GameLevel<'_, '_> {
         self.w.data.state(self.state(x, y, z)).flags & data::LAND != 0
     }
     fn prefetch_block(&self, x: i32, y: i32, z: i32) {
-        let Some(view) = self.view(x, z) else {
-            if let Some(chunk) = self.chunk(x, z) {
-                chunk.prefetch_block(x, y, z);
-            }
-            return;
-        };
-        let storage = view
-            .storage(y)
-            .and_then(|blocks| blocks.entry_storage(horizon_client::chunk::index(x, y, z)));
-        if let Some((word, palette)) = storage {
-            horizon_threads::prefetch(word);
-            if let Some(palette) = palette {
-                horizon_threads::prefetch(palette);
-            }
+        if let Some(chunk) = self.chunk(x, z) {
+            chunk.prefetch_block(x, y, z);
         }
     }
 }
@@ -663,8 +600,7 @@ impl<'a> Game<'a> {
             game: self,
             w: self.mob_world_base(&[]),
             column: ColumnMemo::default(),
-            views: Vec::new(),
-            at: Cell::new(0),
+            ahead: Cell::new(None),
             biome_rows: Default::default(),
             starts: Default::default(),
             locator: Default::default(),
@@ -845,7 +781,7 @@ impl<'a> Game<'a> {
         let mut random = std::mem::replace(&mut self.world.random, LegacyRandom::new(0));
         let mut pending = Vec::new();
         {
-            let mut level = self.natural_level_with_players(Some(players));
+            let level = self.natural_level_with_players(Some(players));
             let mut state = SpawnState::from_counted(spawnable, close, self.counted_mobs());
             let categories = if spawn_mobs {
                 state.filtered_categories(spawn_enemies, self.world.game_time % 400 == 0)
@@ -860,11 +796,24 @@ impl<'a> Game<'a> {
             if !categories.is_empty() {
                 let _span = horizon_client::spans::scope("spawn_chunks");
                 state.prepare_local(&chunks, &categories);
-                level.views = self.spawning_columns(&chunks);
+                let columns = self.spawning_columns(&chunks);
                 for (i, &chunk) in chunks.iter().enumerate() {
-                    level.at.set(i);
-                    let column = level.views[i].1.as_ref().map(|view| view.chunk);
-                    level.column.enter(chunk, column);
+                    // Hints only: the coming columns' headers, surfaces and
+                    // section headers load while this one spawns, ready for
+                    // the next column's foreseen starts.
+                    if let Some(Some(next)) = columns.get(i + 4) {
+                        next.prefetch_header();
+                    }
+                    if let Some(Some(next)) = columns.get(i + 3) {
+                        next.prefetch_surface();
+                    }
+                    if let Some(Some(next)) = columns.get(i + 2) {
+                        next.prefetch_sections();
+                    }
+                    level.column.enter(chunk, columns[i]);
+                    level
+                        .ahead
+                        .set(columns.get(i + 1).map(|&next| (chunks[i + 1], next)));
                     let mut spawn = |l: &GameLevel, r: &SpawnRequest| {
                         let spawned = l.game.finalize_spawned(r, &mut pending);
                         if let Some(s) = &spawned {
@@ -887,19 +836,19 @@ impl<'a> Game<'a> {
         self.world.random = random;
         self.add_spawned(pending, false);
     }
-    /// The [`ColumnView`]s of `chunks`, in their order, built on the pool
-    /// with their WORLD_SURFACE heightmaps (the map and the blocks do not
+    /// The columns of `chunks`, in their order, looked up on the pool with
+    /// their WORLD_SURFACE heightmaps built (the map and the blocks do not
     /// change while a pass holds the game, and the heightmap is a cache).
-    fn spawning_columns(&self, chunks: &[(i32, i32)]) -> Vec<((i32, i32), Option<ColumnView<'_>>)> {
+    fn spawning_columns(&self, chunks: &[(i32, i32)]) -> Vec<Option<&Chunk>> {
         let (map, facts) = (&self.world.chunks, self.res.facts());
         let mut columns: Vec<_> = chunks.iter().map(|&key| (key, None)).collect();
-        horizon_threads::pool::for_each_mut(&mut columns, PASS_GRAIN, |(key, view)| {
-            *view = map.get(key).and_then(|chunk| {
+        horizon_threads::pool::for_each_mut(&mut columns, PASS_GRAIN, |(key, column)| {
+            *column = map.get(key).map(|c| &**c);
+            if let Some(chunk) = column {
                 chunk.world_surface(0, 0, |v| facts.is_air(BlockStateId(v)));
-                ColumnView::new(chunk)
-            });
+            }
         });
-        columns
+        columns.into_iter().map(|(_, column)| column).collect()
     }
     /// `NoiseBasedChunkGenerator.spawnOriginalMobs`: creature packs for a
     /// freshly generated chunk, from the biome at its corner column's top,
