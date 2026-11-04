@@ -1573,6 +1573,7 @@ impl Hub {
             for idx in taken.into_iter().rev() {
                 let key = g.chunk_queue.remove(idx);
                 Arc::make_mut(&mut g.sent_chunks).insert(key);
+                g.sent_bounds.add(key);
             }
         }
     }
@@ -1604,6 +1605,9 @@ impl Hub {
             Arc::make_mut(&mut g.sent_chunks).remove(&(x, z));
             g.send(&C::ForgetLevelChunk(play::ForgetLevelChunk { pos: [x, z] }));
         }
+        // `tracked` keeps only chunks under r + 2 away on each axis.
+        g.sent_bounds
+            .within([cx - r - 1, cz - r - 1], [cx + r + 1, cz + r + 1]);
         requeue(&mut g.chunk_queue, &g.sent_chunks, (cx, cz), r);
     }
 
@@ -1644,7 +1648,9 @@ impl Hub {
         let mut changes: Vec<((i32, i32), u32)> = log.drain().collect();
         changes.sort_unstable();
         for ((x, z), sections) in changes {
-            let tracked = |g: &Guest, x: i32, z: i32| g.sent_chunks.contains(&(x, z));
+            let tracked = |g: &Guest, x: i32, z: i32| {
+                g.sent_bounds.may_hold((x, z)) && g.sent_chunks.contains(&(x, z))
+            };
             let viewers: Vec<usize> = (0..self.guests.len())
                 .filter(|&i| {
                     let g = &self.guests[i];
@@ -1688,7 +1694,10 @@ impl Hub {
         for ((sx, sy, sz), positions) in sections {
             let viewers: Vec<usize> = (0..self.guests.len())
                 .filter(|&i| {
-                    self.here(&self.guests[i]) && self.guests[i].sent_chunks.contains(&(sx, sz))
+                    let g = &self.guests[i];
+                    g.sent_bounds.may_hold((sx, sz))
+                        && self.here(g)
+                        && g.sent_chunks.contains(&(sx, sz))
                 })
                 .collect();
             if viewers.is_empty() {
@@ -2786,6 +2795,7 @@ impl Hub {
         }
         g.tracker.clear();
         Arc::make_mut(&mut g.sent_chunks).clear();
+        g.sent_bounds.clear();
         g.chunk_queue.clear();
         let id = g.entity_id;
         self.respawned(id);
@@ -2811,6 +2821,7 @@ impl Hub {
         g.sent_effects.clear();
         g.center = None;
         Arc::make_mut(&mut g.sent_chunks).clear();
+        g.sent_bounds.clear();
         g.chunk_queue.clear();
         g.tracker.clear();
         self.teleport(i, None);
@@ -2892,6 +2903,7 @@ impl Hub {
         g.dimension = self.config.dimension.clone();
         g.tracker.clear();
         Arc::make_mut(&mut g.sent_chunks).clear();
+        g.sent_bounds.clear();
         g.chunk_queue.clear();
         g.center = None;
         g.yaw = yaw;
@@ -3028,6 +3040,31 @@ fn shared_flags(sneaking: bool, sprinting: bool, body: &BodyFlags) -> i8 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `update_view` cuts a guest's sent bounds to the square around the
+    /// centre: every chunk `tracked` keeps is in it.
+    #[test]
+    fn tracked_chunks_lie_in_the_square_the_sent_bounds_keep() {
+        for (cx, cz, r) in [(0, 0, 2), (-7, 13, 5), (100, -40, 12), (3, 3, 32)] {
+            let mut bounds = crate::lan::guest::SentBounds::default();
+            for x in cx - r - 4..=cx + r + 4 {
+                for z in cz - r - 4..=cz + r + 4 {
+                    bounds.add((x, z));
+                }
+            }
+            bounds.within([cx - r - 1, cz - r - 1], [cx + r + 1, cz + r + 1]);
+            for x in cx - r - 4..=cx + r + 4 {
+                for z in cz - r - 4..=cz + r + 4 {
+                    if tracked(cx, cz, r, x, z) {
+                        assert!(bounds.may_hold((x, z)), "{x} {z} around {cx} {cz} r {r}");
+                    }
+                }
+            }
+            assert!(!bounds.may_hold((cx + r + 2, cz)));
+            bounds.clear();
+            assert!(!bounds.may_hold((cx, cz)));
+        }
+    }
 
     use crate::fast_hash::FxHashSet;
 

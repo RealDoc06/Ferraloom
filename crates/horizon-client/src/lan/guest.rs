@@ -150,6 +150,9 @@ pub struct Guest {
     // Chunks.
     pub center: Option<(i32, i32)>,
     pub sent_chunks: Arc<crate::fast_hash::FxHashSet<(i32, i32)>>,
+    /// A box every chunk of `sent_chunks` lies in, which a broadcast to
+    /// the guests that have a chunk checks before the set.
+    pub sent_bounds: SentBounds,
     pub chunk_queue: Vec<(i32, i32)>,
     /// PlayerChunkSender: batches sent but not yet acknowledged, how many
     /// may be (1 until the client's first acknowledgement, then 10), the
@@ -317,6 +320,7 @@ impl Guest {
             loaded: false,
             center: None,
             sent_chunks: Default::default(),
+            sent_bounds: SentBounds::default(),
             chunk_queue: Vec::new(),
             unacknowledged: 0,
             max_unacknowledged: 1,
@@ -771,5 +775,40 @@ mod tests {
         chestplate.data_mut().trim = Some(("minecraft:x".into(), "coast".into()));
         let stack = stack_to_network(|_| 7, synced_id, &Some(chestplate)).unwrap();
         assert_eq!(stack.component(component::TRIM), None);
+    }
+}
+
+/// Chunk coordinates `[min x, min z, max x, max z]` holding every chunk a
+/// guest was sent: grown by each chunk sent, cut to the view's square when
+/// the view moves, emptied with the set. A superset, so `may_hold` never
+/// turns a chunk away that the set has.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SentBounds([i32; 4]);
+impl Default for SentBounds {
+    fn default() -> Self {
+        Self([i32::MAX, i32::MAX, i32::MIN, i32::MIN])
+    }
+}
+impl SentBounds {
+    pub fn add(&mut self, (x, z): (i32, i32)) {
+        let b = &mut self.0;
+        *b = [b[0].min(x), b[1].min(z), b[2].max(x), b[3].max(z)];
+    }
+    /// Keep to `lo..=hi` (each `[x, z]`), where every chunk left lies.
+    pub fn within(&mut self, lo: [i32; 2], hi: [i32; 2]) {
+        let b = &mut self.0;
+        *b = [
+            b[0].max(lo[0]),
+            b[1].max(lo[1]),
+            b[2].min(hi[0]),
+            b[3].min(hi[1]),
+        ];
+    }
+    pub fn clear(&mut self) {
+        *self = Self::default();
+    }
+    pub fn may_hold(&self, (x, z): (i32, i32)) -> bool {
+        let b = &self.0;
+        (b[0]..=b[2]).contains(&x) && (b[1]..=b[3]).contains(&z)
     }
 }
