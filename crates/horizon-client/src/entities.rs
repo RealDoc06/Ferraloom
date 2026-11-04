@@ -223,6 +223,32 @@ impl ItemEntity {
             _ => Vec3::new(v.x, v.y, push),
         };
     }
+    /// The velocity after `ItemEntity.setUnderwaterMovement` (or its lava
+    /// twin) or gravity, at these fluid heights.
+    pub fn swim_or_fall(v: Vec3, water_height: f64, lava_height: f64) -> Vec3 {
+        if water_height > f64::from(0.1f32) {
+            // ItemEntity.setUnderwaterMovement
+            Vec3::new(
+                v.x * 0.99,
+                v.y + if v.y < 0.06 { 5.0e-4 } else { 0.0 },
+                v.z * 0.99,
+            )
+        } else if lava_height > f64::from(0.1f32) {
+            Vec3::new(
+                v.x * 0.95,
+                v.y + if v.y < 0.06 { 5.0e-4 } else { 0.0 },
+                v.z * 0.95,
+            )
+        } else {
+            Vec3::new(v.x, v.y - 0.04, v.z)
+        }
+    }
+    /// Whether `ItemEntity.tick` moves the item this tick: off the ground,
+    /// sliding, or every fourth tick of its age at rest.
+    pub fn moves(v: Vec3, on_ground: bool, age: u32, id: u32) -> bool {
+        let horizontal = v.x * v.x + v.z * v.z;
+        !on_ground || horizontal > 1.0e-5 || (age + id).is_multiple_of(4)
+    }
     /// Returns false when the item should be removed. `no_physics`: the item
     /// moves through blocks this tick ([`ItemEntity::inside_block`]).
     pub fn tick(
@@ -259,25 +285,8 @@ impl ItemEntity {
             }
             None => self.update_fluids(world, fluids),
         };
-        let in_water = water_height > f64::from(0.1f32);
-        if in_water {
-            // ItemEntity.setUnderwaterMovement
-            self.velocity = Vec3::new(
-                self.velocity.x * 0.99,
-                self.velocity.y + if self.velocity.y < 0.06 { 5.0e-4 } else { 0.0 },
-                self.velocity.z * 0.99,
-            );
-        } else if lava_height > f64::from(0.1f32) {
-            self.velocity = Vec3::new(
-                self.velocity.x * 0.95,
-                self.velocity.y + if self.velocity.y < 0.06 { 5.0e-4 } else { 0.0 },
-                self.velocity.z * 0.95,
-            );
-        } else {
-            self.velocity.y -= 0.04;
-        }
-        let horizontal = self.velocity.x * self.velocity.x + self.velocity.z * self.velocity.z;
-        if !self.on_ground || horizontal > 1.0e-5 || (self.age + self.id).is_multiple_of(4) {
+        self.velocity = Self::swim_or_fall(self.velocity, water_height, lava_height);
+        if Self::moves(self.velocity, self.on_ground, self.age, self.id) {
             let mut scene = SceneCollisions {
                 world,
                 binding: collision,
@@ -287,6 +296,10 @@ impl ItemEntity {
             // Entity.move with noPhysics: straight through, the ground as it was.
             let moved = if no_physics {
                 wanted
+            } else if let Some(moved) =
+                ahead.and_then(|a| a.moved_for(self.position, wanted, self.on_ground))
+            {
+                moved
             } else {
                 scene
                     .resolve(self.bounds(), wanted, 0.0, self.on_ground)
