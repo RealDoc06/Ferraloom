@@ -65,7 +65,14 @@ pub struct BlockEntities {
     out: FxHashSet<Pos>,
     /// `Ticking` by block state id; empty until the game builds it.
     states: Vec<Ticking>,
+    /// Positions whose block entity may have changed (any mutable access,
+    /// insertion or removal) since [`Self::take_touched`], for passes that
+    /// keep answers per block entity. `None` means anything may have
+    /// changed: a bulk access, too many positions, or never taken yet.
+    touched: Option<Vec<Pos>>,
 }
+/// More touched positions than this and the list gives way to `None`.
+const TOUCHED_CAP: usize = 1 << 16;
 
 impl std::ops::Deref for BlockEntities {
     type Target = HashMap<Pos, BlockEntity>;
@@ -165,18 +172,36 @@ impl BlockEntities {
         self.pending.remove(pos);
     }
 
+    fn touch(&mut self, pos: Pos) {
+        if let Some(list) = &mut self.touched {
+            if list.len() < TOUCHED_CAP {
+                list.push(pos);
+            } else {
+                self.touched = None;
+            }
+        }
+    }
+    /// The positions touched since the last call (see `touched`), or `None`
+    /// when anything may have changed. Starts a new list.
+    pub fn take_touched(&mut self) -> Option<Vec<Pos>> {
+        self.touched.replace(Vec::new())
+    }
     pub fn get_mut(&mut self, pos: &Pos) -> Option<&mut BlockEntity> {
+        self.touch(*pos);
         self.map.get_mut(pos)
     }
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (&Pos, &mut BlockEntity)> {
+        self.touched = None;
         self.map.iter_mut()
     }
     pub fn values_mut(&mut self) -> impl Iterator<Item = &mut BlockEntity> {
+        self.touched = None;
         self.map.values_mut()
     }
     /// `LevelChunk.setBlockEntity` (+ `addAndRegisterBlockEntity`): a new
     /// block entity may get a slot; one replacing another keeps its slot.
     pub fn insert(&mut self, pos: Pos, entity: BlockEntity) -> Option<BlockEntity> {
+        self.touch(pos);
         let old = self.map.insert(pos, entity);
         if old.is_none() {
             self.add(pos);
@@ -189,6 +214,7 @@ impl BlockEntities {
         pos: Pos,
         make: impl FnOnce() -> BlockEntity,
     ) -> &mut BlockEntity {
+        self.touch(pos);
         if !self.map.contains_key(&pos) {
             self.add(pos);
         }
@@ -196,12 +222,14 @@ impl BlockEntities {
     }
     /// `LevelChunk.removeBlockEntity`: the block entity and its slot.
     pub fn remove(&mut self, pos: &Pos) -> Option<BlockEntity> {
+        self.touch(*pos);
         self.cancel(pos);
         self.map.remove(pos)
     }
     /// The block entity at `pos`, out of the map for a while: its slot stays
     /// for `put` to bring it back (a tick working on it).
     pub fn take(&mut self, pos: &Pos) -> Option<BlockEntity> {
+        self.touch(*pos);
         let taken = self.map.remove(pos);
         if taken.is_some() {
             self.out.insert(*pos);
@@ -210,6 +238,7 @@ impl BlockEntities {
     }
     /// Brings back what `take` took, in its slot.
     pub fn put(&mut self, pos: Pos, entity: BlockEntity) {
+        self.touch(pos);
         self.out.remove(&pos);
         if self.map.insert(pos, entity).is_none()
             && !self.live.contains_key(&pos)
@@ -221,6 +250,7 @@ impl BlockEntities {
     /// Removes the block entities `keep` refuses, and their slots
     /// (`clearAllBlockEntities` of unloaded chunks).
     pub fn retain(&mut self, mut keep: impl FnMut(&Pos, &mut BlockEntity) -> bool) {
+        self.touched = None;
         let (live, pending, freed) = (&mut self.live, &mut self.pending, &mut self.freed);
         self.map.retain(|p, e| {
             let kept = keep(p, e);
@@ -232,6 +262,7 @@ impl BlockEntities {
         });
     }
     pub fn clear(&mut self) {
+        self.touched = None;
         self.map.clear();
         self.tickers.clear();
         self.live.clear();
@@ -246,6 +277,7 @@ impl BlockEntities {
     pub fn load_chunk(&mut self, entities: Vec<(Pos, BlockEntity)>) {
         let order = chunk_map_order(entities.iter().map(|(p, _)| *p));
         for (p, e) in entities {
+            self.touch(p);
             self.map.insert(p, e);
         }
         for p in order {
@@ -332,6 +364,24 @@ mod tests {
             .into_iter()
             .map(|(p, _)| p)
             .collect()
+    }
+
+    /// Every write is listed until taken; a bulk access lists nothing, as
+    /// anything may have changed.
+    #[test]
+    fn touched_positions_are_listed_until_taken() {
+        let mut b = level();
+        assert_eq!(b.take_touched(), None);
+        b.insert((1, 2, 3), hopper());
+        let _ = b.get_mut(&(1, 2, 3));
+        b.remove(&(4, 5, 6));
+        assert_eq!(
+            b.take_touched(),
+            Some(vec![(1, 2, 3), (1, 2, 3), (4, 5, 6)])
+        );
+        assert_eq!(b.take_touched(), Some(vec![]));
+        b.values_mut().for_each(drop);
+        assert_eq!(b.take_touched(), None);
     }
 
     #[test]
