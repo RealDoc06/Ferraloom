@@ -99,31 +99,57 @@ struct LastColumn<'g> {
     override_bits: Option<u8>,
 }
 #[derive(Default)]
-struct ColumnMemo<'g>(Cell<Option<LastColumn<'g>>>);
+struct ColumnMemo<'g> {
+    last: Cell<Option<LastColumn<'g>>>,
+    /// The columns around the one the pass entered, once read, by `dz * 3 +
+    /// dx`: an attempt's tries wander into its neighbours and back.
+    around: [Cell<Option<LastColumn<'g>>>; 9],
+    centre: Cell<Option<(i32, i32)>>,
+}
 impl<'g> ColumnMemo<'g> {
+    fn slot(&self, key: (i32, i32)) -> Option<&Cell<Option<LastColumn<'g>>>> {
+        let (cx, cz) = self.centre.get()?;
+        let (dx, dz) = (key.0.wrapping_sub(cx) + 1, key.1.wrapping_sub(cz) + 1);
+        ((0..3).contains(&dx) && (0..3).contains(&dz)).then(|| &self.around[(dz * 3 + dx) as usize])
+    }
+    fn keep(&self, column: LastColumn<'g>) {
+        self.last.set(Some(column));
+        if let Some(slot) = self.slot(column.key) {
+            slot.set(Some(column));
+        }
+    }
     /// What `chunks.get` gives for the column holding block `x`, `z`.
     fn get(&self, chunks: &'g ChunkMap, x: i32, z: i32) -> LastColumn<'g> {
         let key = (x >> 4, z >> 4);
-        match self.0.get() {
-            Some(last) if last.key == key => last,
-            _ => {
-                let last = LastColumn {
-                    key,
-                    chunk: chunks.get(&key).map(|c| &**c),
-                    override_bits: None,
-                };
-                self.0.set(Some(last));
-                last
-            }
+        if let Some(last) = self.last.get()
+            && last.key == key
+        {
+            return last;
         }
+        let column = self
+            .slot(key)
+            .and_then(Cell::get)
+            .filter(|c| c.key == key)
+            .unwrap_or_else(|| LastColumn {
+                key,
+                chunk: chunks.get(&key).map(|c| &**c),
+                override_bits: None,
+            });
+        self.keep(column);
+        column
     }
-    /// Makes `chunk` (what `chunks.get` gives for `key`) the last column.
+    /// Makes `chunk` (what `chunks.get` gives for `key`) the last column,
+    /// and the centre of the ones kept around it.
     fn enter(&self, key: (i32, i32), chunk: Option<&'g Chunk>) {
-        self.0.set(Some(LastColumn {
+        self.centre.set(Some(key));
+        for slot in &self.around {
+            slot.set(None);
+        }
+        self.keep(LastColumn {
             key,
             chunk,
             override_bits: None,
-        }));
+        });
     }
     /// The categories whose lists the structures reaching the column may change.
     fn override_bits(&self, chunks: &'g ChunkMap, spawns: &StructureSpawns, x: i32, z: i32) -> u8 {
@@ -138,7 +164,7 @@ impl<'g> ColumnMemo<'g> {
                 .fold(0, |bits, (id, _)| bits | spawns.category_bits(id))
         });
         last.override_bits = Some(bits);
-        self.0.set(Some(last));
+        self.keep(last);
         bits
     }
 }
@@ -894,6 +920,8 @@ mod tests {
             chunks.insert((x, 0), std::sync::Arc::new(chunk));
         }
         let memo = ColumnMemo::default();
+        // Columns 0 to 2 are kept around the centre; 3 and -1 are not.
+        memo.enter((1, 0), chunks.get(&(1, 0)).map(|c| &**c));
         for block_x in [0, 15, 16, 17, 31, 32, 48, 64, 64, -1, -1, 3] {
             let key = (block_x >> 4, 0);
             let expected = chunks.get(&key).map(|c| &**c as *const Chunk);
