@@ -14,7 +14,7 @@ impl Hasher for FxHasher {
     }
     #[inline]
     fn write_u32(&mut self, i: u32) {
-        self.0 = (self.0.rotate_left(5) ^ u64::from(i)).wrapping_mul(0x51_7cc1_b727_220a_95);
+        self.0 = (self.0.rotate_left(5) ^ u64::from(i)).wrapping_mul(0x517c_c1b7_2722_0a95);
     }
     #[inline]
     fn write_i32(&mut self, i: i32) {
