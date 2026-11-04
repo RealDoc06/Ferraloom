@@ -273,7 +273,9 @@ impl<F: FnMut() -> i32 + Clone + Send + 'static> AttributeIdentities for F {
 pub type Identities = Box<dyn AttributeIdentities>;
 impl Clone for Identities {
     fn clone(&self) -> Self {
-        self.boxed_clone()
+        // The closure's own clone: the box is an `AttributeIdentities` too,
+        // and its `boxed_clone` would come back here.
+        (**self).boxed_clone()
     }
 }
 /// A clone is the same body (its attribute map keeps its identity): it is a
@@ -2683,6 +2685,21 @@ impl LivingMotionWorld for MotionWorld<'_, '_, '_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A body's identity source clones with its count: the clone goes on
+    /// from where the original was, and each counts on its own.
+    #[test]
+    fn identity_sources_clone_with_their_count() {
+        let mut identity = 0;
+        let mut source: Identities = Box::new(move || {
+            identity += 1;
+            identity
+        });
+        assert_eq!(source(), 1);
+        let mut copy = source.clone();
+        assert_eq!((copy(), copy()), (2, 3));
+        assert_eq!(source(), 2);
+    }
 
     /// A read-only scene reads the level, and remembers being asked for the
     /// random source or to change the level; the level's own stays as it was.
