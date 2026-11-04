@@ -481,12 +481,24 @@ pub(super) struct Present {
 impl Game<'_> {
     /// Every guest in the world (`ServerLevel.getPlayers` past the host).
     pub(super) fn lan_present(&self) -> Vec<Present> {
+        self.lan_present_where(|_| true)
+    }
+    /// The guests `lan_present` lists whose block (their feet, floored) is
+    /// closer than `range` to `pos`, without building the others: what a
+    /// vault or trial spawner asks of hundreds of players.
+    pub(super) fn lan_present_within(&self, pos: [i32; 3], range: f64) -> Vec<Present> {
+        self.lan_present_where(|g| block_within(g.position, pos, range))
+    }
+    fn lan_present_where(
+        &self,
+        keep: impl Fn(&horizon_client::lan::guest::Guest) -> bool,
+    ) -> Vec<Present> {
         let guests = self
             .lan
             .iter()
             .flat_map(|h| h.hub.guests.iter().filter(|g| h.hub.here(g)));
         guests
-            .filter(|g| g.loaded)
+            .filter(|g| g.loaded && keep(g))
             .map(|g| {
                 let [x, y, z] = g.position;
                 Present {
@@ -508,6 +520,13 @@ impl Game<'_> {
             .or(self.level.player_uuid)
             .unwrap_or_default()
     }
+}
+
+/// `PlayerDetector`'s range test: the block at `at` is closer than `range`
+/// to `pos` (squared block distance).
+pub(super) fn block_within(at: [f64; 3], pos: [i32; 3], range: f64) -> bool {
+    let d = [0, 1, 2].map(|i| f64::from(at[i].floor() as i32 - pos[i]));
+    d[0] * d[0] + d[1] * d[1] + d[2] * d[2] < range * range
 }
 
 /// A guest's bounding box, by its pose (`Avatar.POSES`).

@@ -292,6 +292,12 @@ pub enum TrialEvent {
     },
 }
 
+/// `PlayerDetector`'s range test on block positions.
+fn block_within(block: [i32; 3], pos: [i32; 3], range: f64) -> bool {
+    let d = [0, 1, 2].map(|i| f64::from(block[i] - pos[i]));
+    d[0] * d[0] + d[1] * d[1] + d[2] * d[2] < range * range
+}
+
 /// What a trial spawner reads from the level besides the spawn rules.
 pub trait TrialSpawnerLevel: SpawnerLevel {
     fn game_time(&self) -> i64;
@@ -299,6 +305,14 @@ pub trait TrialSpawnerLevel: SpawnerLevel {
     fn mob_spawning(&self) -> bool;
     /// `level.getPlayers()`, in the server's order.
     fn players(&self) -> Vec<TrialPlayer>;
+    /// The players whose block is closer than `range` to `pos`, in the same
+    /// order: a level with many players lists only those.
+    fn players_within(&self, pos: [i32; 3], range: f64) -> Vec<TrialPlayer> {
+        self.players()
+            .into_iter()
+            .filter(|p| block_within(p.block, pos, range))
+            .collect()
+    }
     /// The block a VISUAL clip from `from` to `to` (no fluids) first hits.
     fn visual_hit(&self, from: [f64; 3], to: [f64; 3]) -> Option<[i32; 3]>;
     /// The block position of a living entity of this dimension, if any.
@@ -519,14 +533,9 @@ impl TrialSpawner {
     /// `PlayerDetector.NO_CREATIVE_PLAYERS.detect`.
     fn detect<L: TrialSpawnerLevel>(&self, l: &L, pos: [i32; 3], line_of_sight: bool) -> Vec<Uuid> {
         let range = f64::from(self.required_player_range);
-        l.players()
+        l.players_within(pos, range)
             .into_iter()
-            .filter(|p| {
-                let d = [0, 1, 2].map(|i| f64::from(p.block[i] - pos[i]));
-                d[0] * d[0] + d[1] * d[1] + d[2] * d[2] < range * range
-                    && !p.creative
-                    && !p.spectator
-            })
+            .filter(|p| !p.creative && !p.spectator)
             .filter(|p| !line_of_sight || in_line_of_sight(l, center(pos), p.eye))
             .map(|p| p.uuid)
             .collect()
