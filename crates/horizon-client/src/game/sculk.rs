@@ -95,6 +95,8 @@ pub(super) struct SculkState {
     pub tracker_loaded: bool,
     /// The mobs' slots while the entity pass posts its events.
     pass: Option<EntityPass>,
+    /// Which sections' palettes hold a redstone ore, per chunk.
+    ore_sections: horizon_client::portal_sections::PortalSections,
 }
 
 /// Where the mobs are, taken once for the entity pass (`tick_entity_events`),
@@ -159,6 +161,10 @@ struct Index {
     /// Each column's positions, in ascending sequence.
     chunks: FxHashMap<(i32, i32), Vec<(u64, Pos)>>,
     next: u64,
+    /// The positions whose block entity may not be an idle sculk entity.
+    /// Every other indexed position holds one that was seen idle, and has
+    /// not been touched since (`BlockEntities::take_touched`).
+    awake: FxHashSet<Pos>,
 }
 fn column(p: Pos) -> (i32, i32) {
     (p.0 >> 4, p.2 >> 4)
@@ -173,8 +179,10 @@ impl Index {
                 .push((self.next, key));
             self.next += 1;
         }
+        self.awake.insert(key);
     }
     fn remove(&mut self, key: &Pos) {
+        self.awake.remove(key);
         if self.seq.remove(key).is_some() {
             let c = column(*key);
             if let Some(list) = self.chunks.get_mut(&c) {
@@ -223,8 +231,20 @@ impl Index {
             if let Some(list) = self.chunks.remove(c) {
                 for (_, p) in list {
                     self.seq.remove(&p);
+                    self.awake.remove(&p);
                 }
             }
+        }
+    }
+    /// Note the block entity positions touched since the last call.
+    fn wake(&mut self, touched: Option<Vec<Pos>>) {
+        match touched {
+            Some(list) => {
+                let seq = &self.seq;
+                self.awake
+                    .extend(list.into_iter().filter(|p| seq.contains_key(p)));
+            }
+            None => self.awake.extend(self.seq.keys().copied()),
         }
     }
 }
@@ -869,11 +889,7 @@ impl Game<'_> {
         // a sculk tick does loads, unloads or lights a chunk or moves a ticket.
         let levels = self.tickets.levels();
         let chunks = &self.world.chunks;
-        // Each column asks itself and its eight neighbours.
-        let mut ticking = FxHashMap::<(i32, i32), bool>::with_capacity_and_hasher(
-            self.sculk.index.chunks.len() * 4,
-            Default::default(),
-        );
+        let mut ticking = FxHashMap::<(i32, i32), bool>::default();
         let mut ticks = |cx: i32, cz: i32| {
             *ticking.entry((cx, cz)).or_insert_with(|| {
                 levels.block_ticking(cx, cz) && chunks.get(&(cx, cz)).is_some_and(|c| c.lit)
@@ -883,25 +899,30 @@ impl Game<'_> {
         // around them tick too. Most sensors and catalysts wait for a
         // vibration or a death: their tick would change nothing, so they
         // are passed over here (a vibration scheduled during these ticks is
-        // chosen on the next tick at the earliest, as in vanilla). A column
-        // that does not tick is passed over whole.
+        // chosen on the next tick at the earliest, as in vanilla). Only the
+        // awake ones can be due: the rest were seen idle and not touched
+        // since, and one seen idle now goes back to sleep.
+        let touched = self.world.block_entities.take_touched();
+        self.sculk.index.wake(touched);
         let entities = &self.world.block_entities;
+        let index = &mut self.sculk.index;
         let mut due: Vec<(u64, (i32, i32, i32), bool)> = Vec::new();
-        for (&(cx, cz), list) in &self.sculk.index.chunks {
+        index.awake.retain(|&key| {
+            let (cx, cz) = column(key);
+            let Some(&seq) = index.seq.get(&key) else {
+                return false;
+            };
+            // Idle, ticking or not: asleep until touched.
+            if matches!(entities.get(&key), Some(BlockEntity::Sculk(e)) if e.idle()) {
+                return false;
+            }
             if !ticks(cx, cz) {
-                continue;
+                return true;
             }
-            let mut adjacent = None;
-            for &(seq, key) in list {
-                if matches!(entities.get(&key), Some(BlockEntity::Sculk(e)) if e.idle()) {
-                    continue;
-                }
-                let adjacent = *adjacent.get_or_insert_with(|| {
-                    (-1..=1).all(|dx| (-1..=1).all(|dz| ticks(cx + dx, cz + dz)))
-                });
-                due.push((seq, key, adjacent));
-            }
-        }
+            let adjacent = (-1..=1).all(|dx| (-1..=1).all(|dz| ticks(cx + dx, cz + dz)));
+            due.push((seq, key, adjacent));
+            true
+        });
         due.sort_unstable_by_key(|d| d.0);
         for (_, key, adjacent) in due {
             self.tick_sculk_block(key, adjacent)?;
@@ -1714,8 +1735,29 @@ impl Game<'_> {
             return;
         }
         let pos = on_pos_legacy(at);
+        if !self.may_be_redstone_ore(pos) {
+            return;
+        }
         let state = self.world.block(pos[0], pos[1], pos[2]);
         self.step_on_redstone_ore_state(pos, state);
+    }
+    /// Whether the block at `pos` may be a redstone ore: false only when its
+    /// section's palette holds none, so no block of it is one.
+    fn may_be_redstone_ore(&mut self, pos: [i32; 3]) -> bool {
+        use horizon_client::chunk::{MIN_Y, SECTIONS};
+        let section = (pos[1] - MIN_Y) >> 4;
+        if !self.sculk.tables.built || !(0..SECTIONS as i32).contains(&section) {
+            return true;
+        }
+        let key = (pos[0] >> 4, pos[2] >> 4);
+        let Some(chunk) = self.world.chunks.get(&key) else {
+            return true;
+        };
+        let ores = &self.sculk.tables.redstone_ore;
+        let mask = self.sculk.ore_sections.get(key, chunk, |v| {
+            ores.get(v as usize).copied().unwrap_or(false)
+        });
+        mask >> section & 1 != 0
     }
     /// `step_on_redstone_ore` with the state at `pos` already read; true when
     /// it attacked the ore (which may have changed the state).
@@ -1760,11 +1802,16 @@ impl Game<'_> {
             .collect();
         for (id, at, on_ground, in_water, species, damaged) in snapshot {
             // The block under the feet, read once for both (again after an
-            // ore was attacked, which may light it).
+            // ore was attacked, which may light it), and only when one needs
+            // it: no ore can be there, and the steps read it themselves.
             let pos = on_pos_legacy(at);
-            let mut below = self.world.block(pos[0], pos[1], pos[2]);
-            if on_ground && self.step_on_redstone_ore_state(pos, below) {
-                below = self.world.block(pos[0], pos[1], pos[2]);
+            let mut below = None;
+            if on_ground && self.may_be_redstone_ore(pos) {
+                let mut state = self.world.block(pos[0], pos[1], pos[2]);
+                if self.step_on_redstone_ore_state(pos, state) {
+                    state = self.world.block(pos[0], pos[1], pos[2]);
+                }
+                below = Some(state);
             }
             let emits = !matches!(species, Species::Shulker);
             if emits {
@@ -1813,7 +1860,7 @@ impl Game<'_> {
         in_water: bool,
         discrete: bool,
         flying: bool,
-        known: Option<(BlockStateId, bool)>,
+        known: Option<(Option<BlockStateId>, bool)>,
     ) {
         let entry = self.sculk.steps.entry(who).or_insert(Steps {
             move_dist: 0.0,
@@ -1843,10 +1890,15 @@ impl Game<'_> {
         if flying || discrete {
             return;
         }
+        // Standing still with no step owed: it travels 0 whatever it stands
+        // on, so nothing below changes.
+        if dx == 0.0 && dy == 0.0 && dz == 0.0 && previous.move_dist <= previous.next_step {
+            return;
+        }
         let horizontal = ((dx * dx + dz * dz).sqrt() * f64::from(0.6f32)) as f32;
         let state = match known {
-            Some((state, _)) => state,
-            None => {
+            Some((Some(state), _)) => state,
+            _ => {
                 let p = on_pos_legacy(at);
                 self.world.block(p[0], p[1], p[2])
             }
@@ -1918,6 +1970,25 @@ mod tests {
         index.remove(&(5, 0, 0));
         index.insert((5, 0, 0));
         assert_eq!(index.ordered(), [(-3, 3, 0), (41, 4, 0), (5, 0, 0)]);
+    }
+
+    /// A position is awake from its insertion until seen idle; a touch, or a
+    /// bulk access (`None`), wakes indexed positions only.
+    #[test]
+    fn touched_positions_wake_indexed_ones() {
+        let mut index = Index::default();
+        index.insert((1, 0, 0));
+        index.insert((2, 0, 0));
+        assert_eq!(index.awake.len(), 2);
+        index.awake.clear();
+        index.wake(Some(vec![(2, 0, 0), (9, 9, 9)]));
+        assert_eq!(index.awake, FxHashSet::from_iter([(2, 0, 0)]));
+        index.remove(&(2, 0, 0));
+        assert!(index.awake.is_empty());
+        index.wake(None);
+        assert_eq!(index.awake, FxHashSet::from_iter([(1, 0, 0)]));
+        index.remove_columns(&HashSet::from([(0, 0)]));
+        assert!(index.awake.is_empty() && index.seq.is_empty());
     }
 
     /// `near` keeps what a scan of the whole index in order would: every

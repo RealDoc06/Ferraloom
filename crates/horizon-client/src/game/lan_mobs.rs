@@ -334,7 +334,14 @@ impl Game<'_> {
     /// `Level.getEntities` see every player in the level, but not spectators
     /// (`Entity.isIgnoringBlockTriggers`).
     pub(super) fn lan_block_trigger_boxes(&self) -> Vec<([f64; 3], [f64; 3])> {
-        let Some(host) = self.lan.as_ref() else {
+        Self::guest_trigger_boxes(self.lan.as_ref())
+    }
+    /// [`Self::lan_block_trigger_boxes`] of a host, for a level adapter that
+    /// holds the host but not the game.
+    pub(super) fn guest_trigger_boxes(
+        host: Option<&super::lan::LanHost>,
+    ) -> Vec<([f64; 3], [f64; 3])> {
+        let Some(host) = host else {
             return Vec::new();
         };
         host.hub
