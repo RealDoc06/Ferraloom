@@ -586,7 +586,7 @@ impl<S: std::hash::BuildHasher> LightWorld for HashMap<(i32, i32), Arc<Chunk>, S
 /// cell access is an array index instead of a chunk lookup. Light a section
 /// gets written is copied out on the first write and stored back by `finish`.
 struct Region<'w> {
-    world: &'w mut dyn LightWorld,
+    world: &'w (dyn LightWorld + Sync),
     slots: Vec<Slot>,
     /// Section key (cx, s, cz) to slot, `NONE` where the chunk isn't lit.
     index: FxHashMap<Pos, u32>,
@@ -600,7 +600,7 @@ struct Slot {
 }
 const NONE: u32 = u32::MAX;
 impl<'w> Region<'w> {
-    fn new(world: &'w mut dyn LightWorld) -> Self {
+    fn new(world: &'w (dyn LightWorld + Sync)) -> Self {
         Self {
             world,
             slots: Vec::new(),
@@ -686,21 +686,55 @@ impl<'w> Region<'w> {
         let i = index(x, y, z);
         light[i] = f(light[i]);
     }
-    /// Store back the light of every section whose values changed.
-    fn finish(self) {
-        for slot in self.slots {
-            let Some(light) = slot.light else {
-                continue;
-            };
-            if (0..4096).all(|i| slot.section.light(i) == light[i]) {
-                continue;
+    /// The light of every section whose values changed, to store back.
+    fn finish(self) -> Vec<(Pos, Box<[u8; 4096]>)> {
+        Self::changed_light(self.slots.into_iter().filter_map(|slot| {
+            let light = slot.light?;
+            Some((slot.key, slot.section, light))
+        }))
+    }
+    /// The sections whose light differs from their stored light. The
+    /// section clones are dropped here, so storing back copies none.
+    fn changed_light(
+        written: impl Iterator<Item = (Pos, Arc<Section>, Box<[u8; 4096]>)>,
+    ) -> Vec<(Pos, Box<[u8; 4096]>)> {
+        written
+            .filter(|(_, section, light)| (0..4096).any(|i| section.light(i) != light[i]))
+            .map(|(key, _, light)| (key, light))
+            .collect()
+    }
+    /// [`Self::finish`] of a block-light and a sky-light relight of the same
+    /// world: each wrote only its half of every light byte, so a section
+    /// both wrote takes its block half from one and its sky half from the
+    /// other, and one only one wrote is that one's.
+    fn finish_layers(block: Self, sky: Self) -> Vec<(Pos, Box<[u8; 4096]>)> {
+        let mut skies: FxHashMap<Pos, (Arc<Section>, Box<[u8; 4096]>)> = sky
+            .slots
+            .into_iter()
+            .filter_map(|slot| Some((slot.key, (slot.section, slot.light?))))
+            .collect();
+        let mut written = Vec::new();
+        for slot in block.slots {
+            match (slot.light, skies.remove(&slot.key)) {
+                (Some(mut light), Some((_, sky))) => {
+                    for (b, s) in light.iter_mut().zip(sky.iter()) {
+                        *b = (*b & 0x0F) | (s & 0xF0);
+                    }
+                    written.push((slot.key, slot.section, light));
+                }
+                (Some(light), None) | (None, Some((_, light))) => {
+                    written.push((slot.key, slot.section, light))
+                }
+                (None, None) => {}
             }
-            // Drop the clone first so the world's section isn't copied.
-            drop(slot.section);
-            let (cx, s, cz) = slot.key;
-            self.world
-                .set_section_light(cx, s as usize, cz, Light::Full(light));
         }
+        // Sections only the sky relight reached.
+        written.extend(
+            skies
+                .into_iter()
+                .map(|(key, (section, light))| (key, section, light)),
+        );
+        Self::changed_light(written.into_iter())
     }
 }
 type Pos = (i32, i32, i32);
@@ -715,6 +749,12 @@ pub struct LightChanges {
     sections: FxHashMap<Pos, u32>,
 }
 impl LightChanges {
+    /// Every change `other` holds as well.
+    pub fn extend(&mut self, other: LightChanges) {
+        for (key, classes) in other.sections {
+            self.add(key, classes);
+        }
+    }
     /// A cell whose stored light changed.
     #[inline]
     pub fn push(&mut self, (x, y, z): Pos) {
@@ -837,22 +877,46 @@ fn lowest_sky_source(world: &mut Region, tables: &LightTables, x: i32, z: i32) -
 /// from the brighter boundary (increase pass). Adds every position whose
 /// stored light changed to `changed`, for remeshing. `force` clears around each position
 /// as if it had been fully lit, for light computed from outdated blocks.
+///
+/// The block and sky layers read the same states and write different halves
+/// of each light byte, so the sky layer runs on a thread beside the block
+/// layer and their light is merged before anything is stored back.
 pub fn relight(
-    world: &mut impl LightWorld,
+    world: &mut (impl LightWorld + Sync),
     tables: &LightTables,
     sky_light: bool,
     positions: &[Pos],
     force: bool,
     changed: &mut LightChanges,
 ) {
-    let mut region = Region::new(world);
-    relight_region(&mut region, tables, sky_light, positions, force, changed);
-    region.finish();
+    let written = {
+        let shared: &(dyn LightWorld + Sync) = world;
+        let mut block = Region::new(shared);
+        if sky_light {
+            let mut sky = Region::new(shared);
+            let mut sky_changed = LightChanges::default();
+            std::thread::scope(|scope| {
+                let beside = scope
+                    .spawn(|| relight_sky(&mut sky, tables, positions, force, &mut sky_changed));
+                relight_block(&mut block, tables, positions, force, changed);
+                beside
+                    .join()
+                    .unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+            });
+            changed.extend(sky_changed);
+            Region::finish_layers(block, sky)
+        } else {
+            relight_block(&mut block, tables, positions, force, changed);
+            block.finish()
+        }
+    };
+    for ((cx, s, cz), light) in written {
+        world.set_section_light(cx, s as usize, cz, Light::Full(light));
+    }
 }
-fn relight_region(
+fn relight_block(
     world: &mut Region,
     tables: &LightTables,
-    sky_light: bool,
     positions: &[Pos],
     force: bool,
     changed: &mut LightChanges,
@@ -860,7 +924,15 @@ fn relight_region(
     crate::spans::time("lt_block", || {
         relight_layer(world, tables, false, positions.to_vec(), force, changed)
     });
-    if sky_light {
+}
+fn relight_sky(
+    world: &mut Region,
+    tables: &LightTables,
+    positions: &[Pos],
+    force: bool,
+    changed: &mut LightChanges,
+) {
+    {
         let mut seeds = positions.to_vec();
         let mut columns: FxHashMap<(i32, i32), i32> = FxHashMap::default();
         crate::spans::time("lt_columns", || {
@@ -1079,7 +1151,7 @@ mod tests {
             }
         });
         let tables = tables();
-        let mut region = Region::new(&mut w);
+        let mut region = Region::new(&w);
         for (x, z) in [(1, 1), (2, 2), (3, 3), (5, 5), (-4, 7)] {
             let expected = walk(&mut region, &tables, x, z);
             assert_eq!(
