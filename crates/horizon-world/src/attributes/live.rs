@@ -69,6 +69,7 @@ pub enum Error {
     ForeignInstance,
     DuplicateModifier(String),
 }
+#[derive(Clone)]
 struct Node {
     handle: Handle,
     key: Key,
@@ -88,6 +89,7 @@ impl Observer for Dirty<'_> {
             .modified(Some(self.handle.clone()), |_, _| Ok(self.syncable))
     }
 }
+#[derive(Clone)]
 struct Data<G> {
     catalog: Arc<Catalog>,
     bases: Arc<[Option<f64>]>,
@@ -274,6 +276,12 @@ impl<G: FnMut() -> i32> AttributeAccess<Key, Handle> for Data<G> {
 /// Owns an entity's instances and pending queues. Holder hashes come from the
 /// registry runtime; instance hashes come from the supplied identity allocator.
 /// Supplying oracle hashes permits reproducible JVM-order differential checks.
+///
+/// A clone is the same map, not another one: it keeps the owner identity, so
+/// the handles of the one are the other's. It is for a copy that takes the
+/// original's place (a speculative run that is kept or thrown away), never
+/// for two maps in use side by side.
+#[derive(Clone)]
 pub struct LiveAttributes<G> {
     map: AttributeMap<Key, Handle>,
     data: Data<G>,
@@ -394,5 +402,58 @@ impl<G: FnMut() -> i32> LiveAttributes<G> {
         definitions: &mut Definitions<Key>,
     ) -> Result<(), effects::Error<Error>> {
         stored::remove(definitions, &mut self.map, &mut self.data)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn catalog() -> Arc<Catalog> {
+        let bits = |v: f64| format!("{:016x}", v.to_bits());
+        let json = serde_json::json!({
+            "data_version": crate::DATA_VERSION,
+            "attributes": [{
+                "id": "minecraft:max_health",
+                "default": bits(20.0),
+                "min": bits(1.0),
+                "max": bits(1024.0),
+                "syncable": true,
+            }],
+            "entities": {"minecraft:player": {"minecraft:max_health": bits(20.0)}},
+        });
+        Arc::new(Catalog::from_json(&json).unwrap())
+    }
+
+    fn counter() -> impl FnMut() -> i32 + Clone {
+        let mut next = 0;
+        move || {
+            next += 1;
+            next
+        }
+    }
+
+    /// A clone is the same map: the original's handles are its own, its
+    /// changes stay its own. A map made anew is another, whose handles
+    /// the first does not take, at the same index or not.
+    #[test]
+    fn a_clone_keeps_the_maps_identity_and_a_new_map_has_its_own() {
+        let catalog = catalog();
+        let mut a =
+            LiveAttributes::new(catalog.clone(), "minecraft:player", &[7], counter()).unwrap();
+        let key = a.key("minecraft:max_health");
+        let handle = a.get_instance(key.clone()).unwrap().unwrap();
+        let mut b = a.clone();
+        assert!(b.lookup(key.as_ref()) == Some(handle.clone()));
+        assert_eq!(b.instance(&handle).unwrap().base_value(), 20.0);
+        b.edit(&handle, |i, o| i.set_base_value(4.0, o)).unwrap();
+        assert_eq!(b.instance(&handle).unwrap().base_value(), 4.0);
+        assert_eq!(a.instance(&handle).unwrap().base_value(), 20.0);
+        let mut c = LiveAttributes::new(catalog, "minecraft:player", &[7], counter()).unwrap();
+        let other = c.get_instance(key).unwrap().unwrap();
+        assert_eq!(other.index(), handle.index());
+        assert!(other != handle);
+        assert!(matches!(c.instance(&handle), Err(Error::ForeignInstance)));
+        assert!(matches!(a.instance(&other), Err(Error::ForeignInstance)));
     }
 }
