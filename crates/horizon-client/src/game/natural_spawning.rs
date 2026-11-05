@@ -261,6 +261,8 @@ pub(super) struct GameLevel<'g, 'a> {
     /// holds the game); the first scans, as the build costs about a scan.
     pub(super) boxes: std::cell::OnceCell<MobBoxes>,
     pub(super) box_queries: std::cell::Cell<u32>,
+    /// [`NaturalLevel::respawn`], which every spawn try past a player asks.
+    respawn: Option<[i32; 3]>,
 }
 const SCANNED_QUERIES: u32 = 1;
 /// The starts a chunk owns, as the reaching test reads them.
@@ -555,17 +557,7 @@ impl NaturalLevel for GameLevel<'_, '_> {
         StructureSpawns::shared(&self.game.options.resources)
     }
     fn respawn(&self) -> Option<[i32; 3]> {
-        // The world spawn point lives in the overworld.
-        if self.game.dim != Dim::Overworld {
-            return None;
-        }
-        self.game.level.spawn.map(|s| {
-            [
-                s[0].floor() as i32,
-                s[1].floor() as i32,
-                s[2].floor() as i32,
-            ]
-        })
+        self.respawn
     }
     fn can_spawn_in_chunk(&self, cx: i32, cz: i32) -> bool {
         self.chunk(cx * 16, cz * 16).is_some()
@@ -698,6 +690,17 @@ impl<'a> Game<'a> {
             pending_ids: Default::default(),
             boxes: Default::default(),
             box_queries: Default::default(),
+            // The world spawn point lives in the overworld.
+            respawn: (self.dim == Dim::Overworld)
+                .then_some(self.level.spawn)
+                .flatten()
+                .map(|s| {
+                    [
+                        s[0].floor() as i32,
+                        s[1].floor() as i32,
+                        s[2].floor() as i32,
+                    ]
+                }),
         }
     }
     /// Creates a mob the spawner accepted, finalized the game's way; the
