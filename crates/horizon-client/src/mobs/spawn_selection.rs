@@ -424,6 +424,10 @@ pub trait NaturalLevel: SpawnLevel {
     /// A hint that the block at a position will be read soon: the level may
     /// start loading it. Must not change anything a read answers.
     fn prefetch_block(&self, _x: i32, _y: i32, _z: i32) {}
+    /// A hint that the section holding a position will be read soon (its
+    /// header, which [`Self::prefetch_block`] then reads). Must not change
+    /// anything a read answers.
+    fn prefetch_section(&self, _x: i32, _y: i32, _z: i32) {}
 }
 
 /// The heightmap types `SpawnPlacements` registers.
@@ -1198,8 +1202,11 @@ impl Lcg {
 /// of them `open`) from random state `seed`, should each attempt end at its
 /// first read, as most do (a solid block, or the bottom of the world): their
 /// surfaces are read and their blocks prefetched together, so the serial
-/// pass meets them in cache. `after` gets the state each category should
-/// leave the random in; once the real one differs, the rest are guesses.
+/// pass meets them in cache. The sections' headers are hinted first, all of
+/// them, and only then their storage, so the misses of every start overlap
+/// instead of queueing one start after another. `after` gets the state each
+/// category should leave the random in; once the real one differs, the rest
+/// are guesses. Hints only: no read or draw changes.
 fn foresee_starts<L: NaturalLevel>(
     l: &L,
     seed: u64,
@@ -1210,17 +1217,22 @@ fn foresee_starts<L: NaturalLevel>(
 ) {
     let mut random = Lcg(seed);
     let min = l.min_y();
-    for (category, after) in categories.iter().zip(after) {
+    let mut starts = [None; Category::ALL.len()];
+    for ((category, after), start) in categories.iter().zip(after).zip(&mut starts) {
         if open & category.bit() != 0 {
             let x = chunk.0 * 16 + random.next_int(16);
             let z = chunk.1 * 16 + random.next_int(16);
             let top = l.heightmap(Heightmap::WorldSurface, x, z) + 1;
             let y = min + random.next_int(top - min + 1);
             if y > min {
-                l.prefetch_block(x, y, z);
+                l.prefetch_section(x, y, z);
+                *start = Some((x, y, z));
             }
         }
         *after = random.0;
+    }
+    for (x, y, z) in starts.into_iter().flatten() {
+        l.prefetch_block(x, y, z);
     }
 }
 
