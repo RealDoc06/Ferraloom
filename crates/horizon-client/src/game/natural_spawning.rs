@@ -99,7 +99,15 @@ struct SpawnColumn<'g> {
 /// How many chunks ahead of the one spawning [`SpawnColumn::prefetch`] runs:
 /// far enough for its lines to arrive, near enough for them to stay.
 const SPAWN_LOOKAHEAD: usize = 2;
-impl SpawnColumn<'_> {
+impl<'g> SpawnColumn<'g> {
+    fn last(self) -> LastColumn<'g> {
+        LastColumn {
+            key: self.key,
+            chunk: self.chunk,
+            surface: self.surface,
+            override_bits: None,
+        }
+    }
     /// Hints what every start in the chunk reads before its block, whatever
     /// the random picks: the chunk's section pointers and its whole surface
     /// map. The chunks are shuffled, so nothing else would load them early.
@@ -145,6 +153,8 @@ struct ColumnMemo<'g> {
     /// dx`: an attempt's tries wander into its neighbours and back.
     around: [Cell<Option<LastColumn<'g>>>; 9],
     centre: Cell<Option<(i32, i32)>>,
+    /// The column the pass enters next, which foreseeing reads ahead.
+    next: Cell<Option<LastColumn<'g>>>,
 }
 impl<'g> ColumnMemo<'g> {
     fn slot(&self, key: (i32, i32)) -> Option<&Cell<Option<LastColumn<'g>>>> {
@@ -170,6 +180,7 @@ impl<'g> ColumnMemo<'g> {
             .slot(key)
             .and_then(Cell::get)
             .filter(|c| c.key == key)
+            .or_else(|| self.next.get().filter(|c| c.key == key))
             .unwrap_or_else(|| LastColumn {
                 key,
                 chunk: chunks.get(&key).map(|c| &**c),
@@ -181,18 +192,14 @@ impl<'g> ColumnMemo<'g> {
     }
     /// Makes `column` (what `chunks.get` gives for its key, with the
     /// chunk's built WORLD_SURFACE map) the last column, and the centre of
-    /// the ones kept around it.
-    fn enter(&self, column: SpawnColumn<'g>) {
+    /// the ones kept around it; `next` (the same) is the one after it.
+    fn enter(&self, column: SpawnColumn<'g>, next: Option<SpawnColumn<'g>>) {
         self.centre.set(Some(column.key));
         for slot in &self.around {
             slot.set(None);
         }
-        self.keep(LastColumn {
-            key: column.key,
-            chunk: column.chunk,
-            surface: column.surface,
-            override_bits: None,
-        });
+        self.next.set(next.map(SpawnColumn::last));
+        self.keep(column.last());
     }
     /// The categories whose lists the structures reaching the column may change.
     fn override_bits(&self, chunks: &'g ChunkMap, spawns: &StructureSpawns, x: i32, z: i32) -> u8 {
@@ -893,7 +900,7 @@ impl<'a> Game<'a> {
                     if let Some(ahead) = columns.get(i + SPAWN_LOOKAHEAD) {
                         ahead.prefetch();
                     }
-                    level.column.enter(column);
+                    level.column.enter(column, columns.get(i + 1).copied());
                     let mut spawn = |l: &GameLevel, r: &SpawnRequest| {
                         let spawned = l.game.finalize_spawned(r, &mut pending);
                         if let Some(s) = &spawned {
@@ -1007,12 +1014,14 @@ mod tests {
             chunks.insert((x, 0), std::sync::Arc::new(chunk));
         }
         let memo = ColumnMemo::default();
-        // Columns 0 to 2 are kept around the centre; 3 and -1 are not.
-        memo.enter(SpawnColumn {
-            key: (1, 0),
-            chunk: chunks.get(&(1, 0)).map(|c| &**c),
+        // Columns 0 to 2 are kept around the centre, 3 is the next to enter;
+        // -1 is none of them.
+        let column = |key| SpawnColumn {
+            key,
+            chunk: chunks.get(&key).map(|c| &**c),
             surface: None,
-        });
+        };
+        memo.enter(column((1, 0)), Some(column((3, 0))));
         for block_x in [0, 15, 16, 17, 31, 32, 48, 64, 64, -1, -1, 3] {
             let key = (block_x >> 4, 0);
             let expected = chunks.get(&key).map(|c| &**c as *const Chunk);

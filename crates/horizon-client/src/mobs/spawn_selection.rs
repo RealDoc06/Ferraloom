@@ -1036,6 +1036,16 @@ impl SpawnState {
                 |(_, _, open)| open,
             )
     }
+    /// The chunk [`Self::prepare_local`] lists after `chunk`, with what it
+    /// worked out for `asked` there (a guess once a cap fills).
+    fn next_open(&self, chunk: (i32, i32), asked: u8) -> Option<((i32, i32), u8)> {
+        self.prepared
+            .iter()
+            .rev()
+            .find(|&&(at, _, _)| at != chunk)
+            .filter(|&&(_, known, _)| known == asked)
+            .map(|&(at, _, open)| (at, open))
+    }
     fn asked(categories: &[Category]) -> u8 {
         categories.iter().fold(0, |bits, c| bits | c.bit())
     }
@@ -1202,11 +1212,15 @@ impl Lcg {
 /// of them `open`) from random state `seed`, should each attempt end at its
 /// first read, as most do (a solid block, or the bottom of the world): their
 /// surfaces are read and their blocks prefetched together, so the serial
-/// pass meets them in cache. The sections' headers are hinted first, all of
-/// them, and only then their storage, so the misses of every start overlap
-/// instead of queueing one start after another. `after` gets the state each
-/// category should leave the random in; once the real one differs, the rest
-/// are guesses. Hints only: no read or draw changes.
+/// pass meets them in cache. `after` gets the state each category should
+/// leave the random in; once the real one differs, the rest are guesses.
+///
+/// The guess goes on into `next`, the chunk to come with its open categories
+/// and all of `spawn_for_chunk`'s, from the state this one should leave: when
+/// every attempt here ends at its first read, that is where the next starts.
+/// The sections' headers of every start are hinted first, and only then
+/// their storage, so all their misses overlap instead of queueing one start
+/// after another. Hints only: no read or draw changes.
 fn foresee_starts<L: NaturalLevel>(
     l: &L,
     seed: u64,
@@ -1214,22 +1228,34 @@ fn foresee_starts<L: NaturalLevel>(
     categories: &[Category],
     chunk: (i32, i32),
     after: &mut [u64],
+    next: Option<((i32, i32), u8, &[Category])>,
 ) {
     let mut random = Lcg(seed);
     let min = l.min_y();
-    let mut starts = [None; Category::ALL.len()];
-    for ((category, after), start) in categories.iter().zip(after).zip(&mut starts) {
+    let start = |random: &mut Lcg, (cx, cz): (i32, i32)| {
+        let x = cx * 16 + random.next_int(16);
+        let z = cz * 16 + random.next_int(16);
+        let top = l.heightmap(Heightmap::WorldSurface, x, z) + 1;
+        let y = min + random.next_int(top - min + 1);
+        (y > min).then(|| {
+            l.prefetch_section(x, y, z);
+            (x, y, z)
+        })
+    };
+    let mut starts = [None; 2 * Category::ALL.len()];
+    let (here, ahead) = starts.split_at_mut(Category::ALL.len());
+    for ((category, after), at) in categories.iter().zip(after).zip(here) {
         if open & category.bit() != 0 {
-            let x = chunk.0 * 16 + random.next_int(16);
-            let z = chunk.1 * 16 + random.next_int(16);
-            let top = l.heightmap(Heightmap::WorldSurface, x, z) + 1;
-            let y = min + random.next_int(top - min + 1);
-            if y > min {
-                l.prefetch_section(x, y, z);
-                *start = Some((x, y, z));
-            }
+            *at = start(&mut random, chunk);
         }
         *after = random.0;
+    }
+    if let Some((next, open, categories)) = next {
+        for (category, at) in categories.iter().zip(ahead) {
+            if open & category.bit() != 0 {
+                *at = start(&mut random, next);
+            }
+        }
     }
     for (x, y, z) in starts.into_iter().flatten() {
         l.prefetch_block(x, y, z);
@@ -1255,8 +1281,11 @@ pub fn spawn_for_chunk<L: NaturalLevel, R: RandomSource + Foresee>(
             && (i == 0 || after.get(i - 1) != Some(&now))
         {
             let open = state.open_for(chunk, asked);
+            let next = state
+                .next_open(chunk, asked)
+                .map(|(next, open)| (next, open, categories));
             let rest = after.get_mut(i..).unwrap_or_default();
-            foresee_starts(l, now, open, &categories[i..], chunk, rest);
+            foresee_starts(l, now, open, &categories[i..], chunk, rest, next);
         }
         let local = state.can_spawn_local_of(asked, category, chunk);
         trace(Event::Local(category, local));
