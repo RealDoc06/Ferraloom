@@ -2718,7 +2718,25 @@ impl Game<'_> {
         }
     }
     fn tick_items(&mut self) {
+        /// What the item ticks read of each item ahead of the serial pass,
+        /// from its position, velocity, ground, age and id and the blocks
+        /// (which this pass never writes): its noPhysics test, its first
+        /// fluid update and move, and the block kinds around it.
+        struct ItemAhead {
+            at: Vec3,
+            velocity: Vec3,
+            on_ground: bool,
+            age: u32,
+            id: u32,
+            inside: bool,
+            wet: Option<horizon_client::entities::ItemFluids>,
+            kinds: u16,
+        }
         let mut items = std::mem::take(&mut self.dropped);
+        // For reading per-item costs off a benchmark's log.
+        if self.world.game_time.rem_euclid(600) == 0 {
+            log::info!("dropped items: {}", items.len());
+        }
         // ServerLevel.tick: only entities in entity-ticking chunks tick.
         let ticking = self.entity_ticking_area();
         let mut removed = vec![false; items.len()];
@@ -2733,27 +2751,41 @@ impl Game<'_> {
         // item before its own tick: every item's answer is read ahead on the
         // pool. An item that moved anyway asks again.
         // Its first fluid update reads only its position, its velocity and
-        // the blocks too, and is read ahead the same way.
-        type Ahead = (
-            Vec3,
-            Vec3,
-            bool,
-            Option<horizon_client::entities::ItemFluids>,
-        );
-        let mut ahead: Vec<Ahead> = items
+        // the blocks too, and is read ahead the same way, as are the block
+        // kinds around it (for an item that does not move, its contact
+        // checks after the move).
+        let mut ahead: Vec<ItemAhead> = items
             .iter()
-            .map(|i| (i.position, i.velocity, false, None))
+            .map(|i| ItemAhead {
+                at: i.position,
+                velocity: i.velocity,
+                on_ground: i.on_ground,
+                age: i.age,
+                id: i.id,
+                inside: false,
+                wet: None,
+                kinds: u16::MAX,
+            })
             .collect();
         {
             let (world, collision) = (&self.world, self.collision);
             let fluids = &self.res.motion().fluids;
-            horizon_threads::pool::for_each_mut(&mut ahead, 64, |(at, velocity, inside, wet)| {
+            let registry = self.pack.assets.registry;
+            horizon_threads::pool::for_each_mut(&mut ahead, 64, |read| {
                 if merging {
-                    *inside = ItemEntity::inside_block_at(*at, world, collision);
+                    read.inside = ItemEntity::inside_block_at(read.at, world, collision);
                 }
-                *wet = Some(horizon_client::entities::ItemFluids::at(
-                    *at, *velocity, world, fluids,
+                read.wet = Some(horizon_client::entities::ItemFluids::at(
+                    read.at,
+                    read.velocity,
+                    read.on_ground,
+                    read.age,
+                    read.id,
+                    world,
+                    fluids,
+                    collision,
                 ));
+                read.kinds = ItemEntity::kinds_around(read.at, world, registry);
             });
         }
         for i in 0..items.len() {
@@ -2770,7 +2802,7 @@ impl Game<'_> {
             // ItemEntity.tick's noPhysics (servers only): out of a block
             // placed on it, towards the closest open side (#1252).
             let no_physics = merging && {
-                let (at, _, inside, _) = ahead[i];
+                let (at, inside) = (ahead[i].at, ahead[i].inside);
                 let same = [at.x, at.y, at.z].map(f64::to_bits)
                     == [item.position.x, item.position.y, item.position.z].map(f64::to_bits);
                 if same {
@@ -2789,17 +2821,28 @@ impl Game<'_> {
                 self.collision,
                 no_physics,
                 &self.res.motion().fluids,
-                ahead[i].3,
+                ahead[i].wet,
             );
+            // The kinds read ahead hold for an item still where it stood.
+            let around = {
+                let bits = |v: Vec3| [v.x, v.y, v.z].map(f64::to_bits);
+                if bits(ahead[i].at) == bits(item.position) {
+                    ahead[i].kinds
+                } else {
+                    u16::MAX
+                }
+            };
             // Entity.applyEffectsFromBlocks: bubble columns lift or drag the item.
-            horizon_client::motion::bubble_column_push(
-                &self.world,
-                self.pack.assets.registry,
-                self.res.facts(),
-                self.collision,
-                item.bounds(),
-                &mut item.velocity,
-            );
+            if around & horizon_client::block_kinds::BUBBLE_COLUMN != 0 {
+                horizon_client::motion::bubble_column_push(
+                    &self.world,
+                    self.pack.assets.registry,
+                    self.res.facts(),
+                    self.collision,
+                    item.bounds(),
+                    &mut item.velocity,
+                );
+            }
             cells.moved(i, item.previous, item.position);
             // ItemEntity.tick: merge every 2 ticks while moving between
             // blocks, every 40 otherwise, before the lifetime check.
@@ -2827,11 +2870,12 @@ impl Game<'_> {
                 cells.remove(i, item.position);
                 continue;
             }
-            let environment = item.environment_tick(
+            let environment = item.environment_tick_with(
                 &self.world,
                 self.res.facts(),
                 self.pack.assets.registry,
                 self.res.items(),
+                around,
             );
             // shortcut: age is the fresh-drop clock; use entity ticks for saved/frozen-age phase parity.
             if environment.should_play_lava_hurt_sound(item.age) {
