@@ -1421,25 +1421,45 @@ pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
 /// as it answers the real distance. In a crowd too big to keep, those kept give
 /// the index's search a distance to beat; an attempt that wanders farther asks
 /// the index outright. Either way the answer is good enough for the checks.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 struct Nearest {
     chunk: Option<(i32, i32)>,
     centre: (f64, f64),
-    nearby: [[f64; 3]; Self::KEPT],
+    /// The kept players' positions by axis, then (in a crowd, which keeps
+    /// [`Self::KEPT`]) the players the index's searches found last: an
+    /// attempt's next tries are a few blocks away, where the same player is
+    /// often near enough to end the search. Every other slot holds a player
+    /// infinitely far, so whole blocks of [`Self::LANES`] can be measured.
+    axes: [[f64; Self::SLOTS]; 3],
     kept: usize,
-    crowded: bool,
-    /// In a crowd, the players the index's searches found last, measured
-    /// with the kept ones: an attempt's next tries are a few blocks away,
-    /// where the same player is often near enough to end the search.
-    found: [[f64; 3]; Self::FOUND],
     found_len: usize,
+    /// The found slot the next search's player replaces (the oldest).
+    found_next: usize,
+    crowded: bool,
+}
+impl Default for Nearest {
+    fn default() -> Self {
+        Self {
+            chunk: None,
+            centre: (0.0, 0.0),
+            axes: [[f64::INFINITY; Self::SLOTS]; 3],
+            kept: 0,
+            found_len: 0,
+            found_next: 0,
+            crowded: false,
+        }
+    }
 }
 impl Nearest {
     /// `right_distance`'s 24² and the despawn distances, 64² and 128².
     const CHECKS: [f64; 3] = [576.0, 4096.0, 16384.0];
     const KEPT: usize = 16;
     const FOUND: usize = 4;
-    /// An attempt this far from the chunk's centre on both axes uses `nearby`.
+    const SLOTS: usize = Self::KEPT + Self::FOUND;
+    /// Players measured together.
+    const LANES: usize = 4;
+    /// An attempt this far from the chunk's centre on both axes uses the
+    /// kept players.
     const MARGIN: f64 = 48.0;
     /// 128 blocks past the corner of that square.
     const RADIUS_SQR: f64 = 196.0 * 196.0;
@@ -1459,36 +1479,56 @@ impl Nearest {
         if (at[0] - cx).abs() > Self::MARGIN || (at[2] - cz).abs() > Self::MARGIN {
             return Some(players.nearest_against(at, &Self::CHECKS));
         }
-        let kept = self.nearby[..self.kept]
-            .iter()
-            .chain(&self.found[..self.found_len])
-            .map(|p| (p[0] - at[0]).powi(2) + (p[1] - at[1]).powi(2) + (p[2] - at[2]).powi(2))
-            .fold(f64::INFINITY, f64::min);
+        let kept = self.measure(at);
         if !self.crowded {
             return Some(kept);
         }
         let (distance, found) = players.nearest_point_against_from(kept, at, &Self::CHECKS);
         if let Some(position) = found {
-            // The newest first; the oldest drops out.
-            self.found.copy_within(..Self::FOUND - 1, 1);
-            self.found[0] = position;
+            let slot = Self::KEPT + self.found_next;
+            for (axis, v) in self.axes.iter_mut().zip(position) {
+                axis[slot] = v;
+            }
+            self.found_next = (self.found_next + 1) % Self::FOUND;
             self.found_len = (self.found_len + 1).min(Self::FOUND);
         }
         Some(distance)
     }
+    /// The squared distance of the nearest kept or found player, or
+    /// infinity. The slots past them hold players infinitely far, which no
+    /// minimum takes.
+    fn measure(&self, at: [f64; 3]) -> f64 {
+        let used = if self.found_len > 0 {
+            Self::KEPT + self.found_len
+        } else {
+            self.kept
+        };
+        let [xs, ys, zs] = &self.axes;
+        let mut best = [f64::INFINITY; Self::LANES];
+        for block in 0..used.div_ceil(Self::LANES) {
+            for (lane, best) in best.iter_mut().enumerate() {
+                let i = block * Self::LANES + lane;
+                let d = (xs[i] - at[0]).powi(2) + (ys[i] - at[1]).powi(2) + (zs[i] - at[2]).powi(2);
+                *best = best.min(d);
+            }
+        }
+        best.into_iter().fold(f64::INFINITY, f64::min)
+    }
     fn keep_players(&mut self, players: &PlayerIndex, chunk: (i32, i32)) {
-        self.chunk = Some(chunk);
-        self.centre = (f64::from(chunk.0 * 16 + 8), f64::from(chunk.1 * 16 + 8));
-        self.kept = 0;
-        self.crowded = false;
-        self.found_len = 0;
+        *self = Self {
+            chunk: Some(chunk),
+            centre: (f64::from(chunk.0 * 16 + 8), f64::from(chunk.1 * 16 + 8)),
+            ..Self::default()
+        };
         let (x, z) = self.centre;
         let _ = players.visit_within(x, z, Self::RADIUS_SQR, &mut |p| {
             if self.kept == Self::KEPT {
                 self.crowded = true;
                 return ControlFlow::Break(());
             }
-            self.nearby[self.kept] = p.position;
+            for (axis, v) in self.axes.iter_mut().zip(p.position) {
+                axis[self.kept] = v;
+            }
             self.kept += 1;
             ControlFlow::Continue(())
         });
