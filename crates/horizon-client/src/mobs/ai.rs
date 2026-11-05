@@ -1140,11 +1140,6 @@ fn push_entities(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
         return;
     }
     let bounds = m.bounds();
-    // The pusher's own isPushable, checked by `e.push(this)` before moving it.
-    let self_pushable = m.alive()
-        && m.species() != Species::Shulker
-        && !on_climbable(m, w)
-        && (m.species() != Species::Creaking || super::creaking::can_move(m));
     let mut targets: Vec<(Who, Vec3)> = Vec::new();
     if let Some(p) = &w.player
         // Entity.push: passengers of the same vehicle never push each other.
@@ -1163,10 +1158,19 @@ fn push_entities(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
     // EntitySelector.pushableBy(this): the teams' collision rules.
     let own = w.teams.of(Who::Mob(m.id));
     targets.retain(|(who, _)| crate::scoreboard::pushable_by(own, w.teams.of(*who), true));
+    if targets.is_empty() {
+        return;
+    }
     // Cramming (maxEntityCramming 24).
     if targets.len() > 23 {
         let _ = m.random.next_int_bound(4);
     }
+    // The pusher's own isPushable, checked by `e.push(this)` before moving
+    // it: read only when something pushes back (it reads the block).
+    let self_pushable = m.alive()
+        && m.species() != Species::Shulker
+        && !on_climbable(m, w)
+        && (m.species() != Species::Creaking || super::creaking::can_move(m));
     for (who, at) in targets {
         // Warden.doPush: touching it angers it, then the push itself.
         if m.species() == Species::Warden {
