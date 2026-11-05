@@ -511,10 +511,14 @@ impl ChunkEncoder {
             .store(if keep { bytes } else { 0 }, Ordering::Relaxed);
     }
 
+    /// Whether the block state `v` is not air.
+    fn is_non_air(&self, v: u32) -> bool {
+        self.coder.flags.get(v as usize).copied().unwrap_or(0) & NON_AIR != 0
+    }
+
     /// LevelChunkSection.hasOnlyAir, negated.
     fn non_air(&self, section: &Section) -> bool {
-        let non_air =
-            |v: u32| self.coder.flags.get(v as usize).copied().unwrap_or(0) & NON_AIR != 0;
+        let non_air = |v: u32| self.is_non_air(v);
         // The palette first: most sections are all air, or one block.
         if !section.blocks.maybe_has(non_air) {
             false
@@ -568,7 +572,12 @@ impl ChunkEncoder {
         sections[self.sections.clone()]
             .iter()
             .enumerate()
-            .filter(|(_, s)| self.cached(s, |e| e.non_air))
+            .filter(|(_, s)| match s.blocks.uniform() {
+                // One block throughout (most sections): `non_air` reads only
+                // it, with no trip through the locked cache.
+                Some(v) => self.is_non_air(v),
+                None => self.cached(s, |e| e.non_air),
+            })
             .fold(0, |bits, (i, _)| bits | 1 << i)
     }
 
@@ -608,22 +617,36 @@ impl ChunkEncoder {
         columns
             .iter()
             .map(|&c| {
+                let mut at = |key: (i32, i32)| {
+                    near.entry(key)
+                        .or_insert_with(|| {
+                            Some(Arc::new(NearColumn {
+                                sections: world.chunks.get(&key)?.sections.clone(),
+                                occupied: Default::default(),
+                            }))
+                        })
+                        .clone()
+                };
                 let around: Vec<_> = AROUND
                     .iter()
-                    .filter_map(|(dx, dz)| {
-                        let key = (c.x + dx, c.z + dz);
-                        near.entry(key)
-                            .or_insert_with(|| {
-                                Some(Arc::new(NearColumn {
-                                    sections: world.chunks.get(&key)?.sections.clone(),
-                                    occupied: Default::default(),
-                                }))
-                            })
-                            .clone()
-                    })
+                    .filter_map(|(dx, dz)| at((c.x + dx, c.z + dz)))
                     .collect();
                 let (x, z) = (c.x, c.z);
-                let sections = c.sections.clone();
+                // The column is its own (0, 0) neighbour, from the level as
+                // the columns are: its sections are held there once.
+                let own = at((x, z))
+                    .filter(|n| {
+                        n.sections
+                            .iter()
+                            .zip(&c.sections)
+                            .all(|(a, b)| Arc::ptr_eq(a, b))
+                    })
+                    .unwrap_or_else(|| {
+                        Arc::new(NearColumn {
+                            sections: c.sections.clone(),
+                            occupied: Default::default(),
+                        })
+                    });
                 let order = Column::from(c).order.to_vec();
                 let tags = self.column_tags(c, &world.block_entities);
                 let encoder = encoder.clone();
@@ -634,7 +657,7 @@ impl ChunkEncoder {
                     let column = Column {
                         x,
                         z,
-                        sections: &sections,
+                        sections: &own.sections,
                         order: &order,
                     };
                     let tag = |pos: &_| tags.iter().find(|t| t.0 == *pos).map(|t| t.1.clone());
