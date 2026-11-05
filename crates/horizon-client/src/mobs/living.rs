@@ -782,6 +782,12 @@ impl Mob {
         if !super::ai::emits_movement(self) || self.extra.mount.is_some() {
             return;
         }
+        // A mob that did not move walks no further, so with no step pending
+        // nothing below happens: it reads only blocks to add nothing.
+        let still = moved.x == 0.0 && moved.y == 0.0 && moved.z == 0.0;
+        if still && self.ai.steps.move_dist <= self.ai.steps.next_step {
+            return;
+        }
         let full = (moved.length() * f64::from(0.6_f32)) as f32;
         let horizontal =
             ((moved.x * moved.x + moved.z * moved.z).sqrt() * f64::from(0.6_f32)) as f32;
