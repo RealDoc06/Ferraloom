@@ -1992,14 +1992,12 @@ impl Mob {
     }
     /// `Entity.makeBoundingBox(position)`.
     pub fn bounds_at(&self, position: Vec3) -> Aabb {
-        let w = f64::from(self.width()) / 2.0;
+        // `dims` widens floats, so these are `width()` and `height()`.
+        let (width, height, _) = self.dims();
+        let w = width / 2.0;
         Aabb::new(
             Vec3::new(position.x - w, position.y, position.z - w),
-            Vec3::new(
-                position.x + w,
-                position.y + f64::from(self.height()),
-                position.z + w,
-            ),
+            Vec3::new(position.x + w, position.y + height, position.z + w),
         )
     }
     pub fn alive(&self) -> bool {
