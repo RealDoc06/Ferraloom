@@ -15,6 +15,7 @@ use horizon_client::{
         Damage, DamageKind, Mob, MobEvent, MobWorld, PlayerView, Seen, SpawnSetup, Species, Who,
         ai::{eating_sound, feed_animal},
         farm::Climate,
+        seen_grid::SpeciesSet,
         spawning::{self, BiomeFacts},
     },
     projectiles::{Hit, Projectile, ProjectileKind, ProjectileWorld},
@@ -192,21 +193,6 @@ fn reads_ticking(ahead: &[(&Mob, MobAhead)]) -> usize {
         .iter()
         .filter(|(_, read)| read.fluids.is_some())
         .count()
-}
-/// The species among a list of mobs, as bits (all of them past the 128th).
-#[derive(Default)]
-struct SpeciesSet([u64; 2], bool);
-impl SpeciesSet {
-    fn insert(&mut self, s: Species) {
-        match s as usize {
-            i if i < 128 => self.0[i / 64] |= 1 << (i % 64),
-            _ => self.1 = true,
-        }
-    }
-    fn has(&self, s: Species) -> bool {
-        let i = s as usize;
-        self.1 || i >= 128 || self.0[i / 64] & (1 << (i % 64)) != 0
-    }
 }
 /// What the mob ticks read of each mob ahead of the serial pass, on the
 /// tick's workers, from the mob as it stands and the blocks: its snapshot
@@ -683,6 +669,8 @@ impl Game<'_> {
             let mut keep = Vec::with_capacity(mobs.len());
             let mut grid =
                 horizon_client::mobs::seen_grid::SeenGrid::new(snapshot.iter().map(|s| s.bounds));
+            // Searches for species none of the mobs is of end at once.
+            grid.keep_species(snapshot.iter().map(|s| s.species));
             // All but the snapshot is the same for every mob of the tick, so
             // build it once: the player view and the teams scan every UUID.
             let base = self.mob_world_base(&[]);
@@ -817,6 +805,7 @@ impl Game<'_> {
                 snapshot[i] = seen(m, uuid);
                 snapshot[i].alive &= kept;
                 grid.update(i, snapshot[i].bounds);
+                grid.note_species(snapshot[i].species);
                 horizon_client::mobs::apply_brain_events_indexed(
                     &mut mobs,
                     &mut events,

@@ -77,13 +77,10 @@ pub fn register(m: &mut Mob) {
     }
     m.ai.targets.add(
         2,
-        NearestTarget::new(
-            Prey::Filter(|s| s.species == Species::Wolf && !s.tame),
-            false,
-        )
-        .interval(16)
-        .reach()
-        .follow_scale(0.25),
+        NearestTarget::new(Prey::SpeciesWhere(&[Species::Wolf], |s| !s.tame), false)
+            .interval(16)
+            .reach()
+            .follow_scale(0.25),
     );
     if trader {
         m.ai.targets

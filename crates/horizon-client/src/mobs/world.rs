@@ -300,6 +300,12 @@ impl MobWorld<'_> {
             all: (!indexed).then(|| self.others.iter()),
         }
     }
+    /// Whether `others` may hold a mob of one of `species`: false only when
+    /// its grid keeps their species and none is among them, so a search
+    /// for them finds nothing.
+    pub fn others_may_hold(&self, species: &[super::Species]) -> bool {
+        self.others_grid.is_none_or(|grid| grid.may_hold(species))
+    }
     pub fn seen(&self, id: u32) -> Option<&Seen> {
         match self.others_index {
             Some(index) => index
