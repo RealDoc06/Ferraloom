@@ -1338,8 +1338,9 @@ pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
     let mut cluster = 0u32;
     for _ in 0..3 {
         let (mut x, mut z) = (x0, z0);
-        // The group's entry, its type and where it was picked.
-        let mut current: Option<(&SpawnEntry, Option<MobType>, [i32; 3])> = None;
+        // The group's entry, its type, and the list and position it was
+        // picked from.
+        let mut current: Option<(&SpawnEntry, Option<MobType>, &[SpawnEntry], [i32; 3])> = None;
         let mut group_index = 0u32;
         let mut max = (random.next_float() * 4.0).ceil() as i32;
         let mut ll = 0;
@@ -1360,22 +1361,23 @@ pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
                 continue;
             }
             if current.is_none() {
-                let list = if category == Category::WaterAmbient
+                let picked = if category == Category::WaterAmbient
                     && l.reduces_water_ambient(x, y, z)
                     && random.next_float() < 0.98
                 {
                     None
                 } else {
-                    weighted_pick(mobs_at(l, category, x, y, z), random)
+                    let list = mobs_at(l, category, x, y, z);
+                    weighted_pick(list, random).map(|entry| (entry, list))
                 };
-                let Some(entry) = list else {
+                let Some((entry, list)) = picked else {
                     break;
                 };
                 max = sample_count(entry, random) as i32;
                 let kind = l.mob_type(&entry.entity);
-                current = Some((entry, kind, [x, y, z]));
+                current = Some((entry, kind, list, [x, y, z]));
             }
-            let (entry, kind, picked_at) = current.unwrap_or_else(|| unreachable!());
+            let (entry, kind, list, picked_at) = current.unwrap_or_else(|| unreachable!());
             // The list the entry was picked from holds it where it was picked.
             let listed = picked_at == [x, y, z];
             let valid = valid_position_for_type(
@@ -1385,6 +1387,7 @@ pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
                 entry,
                 kind,
                 listed,
+                list,
                 [x, y, z],
                 distance,
             );
@@ -1583,6 +1586,8 @@ fn right_distance<L: NaturalLevel>(l: &L, chunk: (i32, i32), pos: [i32; 3], dist
 }
 /// `isValidSpawnPostitionForType`, for the entry's type (`mob_type`).
 /// `listed`: the position is where the entry was picked from `mobsAt`.
+/// `picked`: the list it was picked from, which holds it wherever `mobsAt`
+/// gives that list again (most tries stay in the picked biome).
 #[allow(clippy::too_many_arguments)]
 fn valid_position_for_type<L: NaturalLevel, R: RandomSource>(
     l: &L,
@@ -1591,6 +1596,7 @@ fn valid_position_for_type<L: NaturalLevel, R: RandomSource>(
     entry: &SpawnEntry,
     kind: Option<MobType>,
     listed: bool,
+    picked: &[SpawnEntry],
     pos: [i32; 3],
     distance: f64,
 ) -> bool {
@@ -1605,11 +1611,10 @@ fn valid_position_for_type<L: NaturalLevel, R: RandomSource>(
         return false;
     }
     let [x, y, z] = pos;
-    if !listed
-        && !mobs_at(l, category, x, y, z)
-            .iter()
-            .any(|e| same_spawner(e, entry))
-    {
+    if !listed && {
+        let list = mobs_at(l, category, x, y, z);
+        !std::ptr::eq(list, picked) && !list.iter().any(|e| same_spawner(e, entry))
+    } {
         return false;
     }
     if !spawn_rules::is_spawn_position_ok(species, l, x, y, z) {
