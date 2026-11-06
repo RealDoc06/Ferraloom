@@ -89,12 +89,14 @@ impl ChunkBits {
 }
 
 /// A spawning chunk's column as the pass enters it: what `chunks.get` gives
-/// for its key, and its built WORLD_SURFACE map.
+/// for its key, its built WORLD_SURFACE map, and its structures' override
+/// bits ([`column_override_bits`]) once worked out.
 #[derive(Clone, Copy)]
 struct SpawnColumn<'g> {
     key: (i32, i32),
     chunk: Option<&'g Chunk>,
     surface: Option<&'g [i16; 256]>,
+    override_bits: Option<u8>,
 }
 /// How many chunks ahead of the one spawning [`SpawnColumn::prefetch`] runs:
 /// far enough for its lines to arrive, near enough for them to stay.
@@ -105,7 +107,7 @@ impl<'g> SpawnColumn<'g> {
             key: self.key,
             chunk: self.chunk,
             surface: self.surface,
-            override_bits: None,
+            override_bits: self.override_bits,
         }
     }
     /// Hints what every start in the chunk reads before its block, whatever
@@ -207,16 +209,22 @@ impl<'g> ColumnMemo<'g> {
         if let Some(bits) = last.override_bits {
             return bits;
         }
-        let bits = last.chunk.map_or(0, |chunk| {
-            chunk
-                .structure_refs
-                .iter()
-                .fold(0, |bits, (id, _)| bits | spawns.category_bits(id))
-        });
+        let bits = last
+            .chunk
+            .map_or(0, |chunk| column_override_bits(chunk, spawns));
         last.override_bits = Some(bits);
         self.keep(last);
         bits
     }
+}
+
+/// The categories whose lists the structures referenced by `chunk` may
+/// change ([`StructureSpawns::category_bits`]).
+fn column_override_bits(chunk: &Chunk, spawns: &StructureSpawns) -> u8 {
+    chunk
+        .structure_refs
+        .iter()
+        .fold(0, |bits, (id, _)| bits | spawns.category_bits(id))
 }
 
 /// A biome's answers to the questions every attempt asks, by category index.
@@ -939,15 +947,18 @@ impl<'a> Game<'a> {
     /// The columns of `chunks`, in their order, looked up on the pool with
     /// their WORLD_SURFACE heightmaps built and kept (the map and the blocks
     /// do not change while a pass holds the game, and the heightmap is a
-    /// cache).
+    /// cache), and their structures' override bits, which `mobsAt` asks for
+    /// at most tries and which read every reference's name.
     fn spawning_columns(&self, chunks: &[(i32, i32)]) -> Vec<SpawnColumn<'_>> {
         let (map, facts) = (&self.world.chunks, self.res.facts());
+        let spawns = StructureSpawns::shared(&self.options.resources);
         let mut columns: Vec<_> = chunks
             .iter()
             .map(|&key| SpawnColumn {
                 key,
                 chunk: None,
                 surface: None,
+                override_bits: None,
             })
             .collect();
         horizon_threads::pool::for_each_mut(&mut columns, PASS_GRAIN, |column| {
@@ -956,6 +967,11 @@ impl<'a> Game<'a> {
                 chunk.world_surface(0, 0, |v| facts.is_air(BlockStateId(v)));
                 column.surface = chunk.surface_map();
             }
+            column.override_bits = Some(
+                column
+                    .chunk
+                    .map_or(0, |chunk| column_override_bits(chunk, spawns)),
+            );
         });
         columns
     }
@@ -1033,6 +1049,7 @@ mod tests {
             key,
             chunk: chunks.get(&key).map(|c| &**c),
             surface: None,
+            override_bits: None,
         };
         memo.enter(column((1, 0)), Some(column((3, 0))));
         for block_x in [0, 15, 16, 17, 31, 32, 48, 64, 64, -1, -1, 3] {
