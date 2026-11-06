@@ -609,6 +609,46 @@ fn block_box_positions(lo: BlockPos, hi: BlockPos, out: &mut Vec<BlockPos>) {
         }
     }
 }
+/// The players `GameLevel::can_spread_fire_around` measures from, in square
+/// columns as wide as the rule's radius: only the 3x3 columns around a block
+/// can hold one closer than that.
+struct FirePlayers {
+    radius: f64,
+    columns: horizon_client::fast_hash::FxHashMap<(i64, i64), Vec<[f64; 3]>>,
+}
+impl FirePlayers {
+    fn new(radius: i32, players: impl Iterator<Item = [f64; 3]>) -> Self {
+        let mut fire = Self {
+            radius: f64::from(radius),
+            columns: Default::default(),
+        };
+        for p in players {
+            let column = fire.column(p[0], p[2]);
+            fire.columns.entry(column).or_default().push(p);
+        }
+        fire
+    }
+    fn column(&self, x: f64, z: f64) -> (i64, i64) {
+        let width = self.radius.abs().max(1.0);
+        ((x / width).floor() as i64, (z / width).floor() as i64)
+    }
+    /// `ChunkMap.anyPlayerCloseEnoughTo`: one closer than the radius to the
+    /// block's corner.
+    fn near(&self, pos: BlockPos) -> bool {
+        let at = [f64::from(pos.x), f64::from(pos.y), f64::from(pos.z)];
+        let (cx, cz) = self.column(at[0], at[2]);
+        (-1..=1).any(|dz| {
+            (-1..=1).any(|dx| {
+                self.columns.get(&(cx + dx, cz + dz)).is_some_and(|ps| {
+                    ps.iter().any(|p| {
+                        let d = [p[0] - at[0], p[1] - at[1], p[2] - at[2]];
+                        d[0] * d[0] + d[1] * d[1] + d[2] * d[2] < self.radius * self.radius
+                    })
+                })
+            })
+        })
+    }
+}
 /// The client world as seen by the vanilla block-behaviour library.
 struct GameLevel<'w> {
     world: &'w mut World,
@@ -657,7 +697,7 @@ struct GameLevel<'w> {
     difficulty: i32,
     /// The feet of the players who keep fire spreading around them: the local
     /// player and the LAN guests in this level, spectators aside.
-    fire_players: std::cell::OnceCell<Vec<[f64; 3]>>,
+    fire_players: std::cell::OnceCell<FirePlayers>,
     /// The local player's feet among them.
     fire_host: Option<[f64; 3]>,
     /// Block loot random sequences (`ServerLevel.getRandomSequence`).
@@ -726,18 +766,20 @@ impl GameLevel<'_> {
         self.guest_boxes
             .get_or_init(|| Game::guest_trigger_boxes(self.lan))
     }
-    fn fire_players(&self) -> &[[f64; 3]] {
+    fn fire_players(&self) -> &FirePlayers {
         self.fire_players.get_or_init(|| {
-            self.fire_host
-                .into_iter()
-                .chain(self.lan.iter().flat_map(|h| {
-                    h.hub
-                        .guests
-                        .iter()
-                        .filter(|g| h.hub.here(g) && !g.spectator())
-                        .map(|g| g.position)
-                }))
-                .collect()
+            FirePlayers::new(
+                self.rules.fire_spread_radius_around_player,
+                self.fire_host
+                    .into_iter()
+                    .chain(self.lan.iter().flat_map(|h| {
+                        h.hub
+                            .guests
+                            .iter()
+                            .filter(|g| h.hub.here(g) && !g.spectator())
+                            .map(|g| g.position)
+                    })),
+            )
         })
     }
     fn mob_trigger_boxes(&self) -> impl Iterator<Item = Aabb> + '_ {
@@ -986,16 +1028,7 @@ impl LevelAccess for GameLevel<'_> {
     /// than the `fire_spread_radius_around_player` rule to the block's corner
     /// (`ChunkMap.anyPlayerCloseEnoughTo`); -1 spreads everywhere.
     fn can_spread_fire_around(&self, pos: BlockPos) -> bool {
-        let radius = self.rules.fire_spread_radius_around_player;
-        radius == -1
-            || self.fire_players().iter().any(|p| {
-                let d = [
-                    p[0] - f64::from(pos.x),
-                    p[1] - f64::from(pos.y),
-                    p[2] - f64::from(pos.z),
-                ];
-                d[0] * d[0] + d[1] * d[1] + d[2] * d[2] < f64::from(radius) * f64::from(radius)
-            })
+        self.rules.fire_spread_radius_around_player == -1 || self.fire_players().near(pos)
     }
     fn increased_fire_burnout(&self, pos: BlockPos) -> bool {
         self.world
@@ -15768,6 +15801,33 @@ mod tests {
     use super::*;
     use horizon_client::container_screen::{Button, Clicks, Release, Target};
     use horizon_client::keymapping::{KeyAction, SPRINT, ToggleKeys};
+
+    /// The columns answer as a scan of every player does.
+    #[test]
+    fn fire_players_near_as_a_scan() {
+        use horizon_core::random::{LegacyRandom, RandomSource};
+        let mut r = LegacyRandom::new(9);
+        for radius in [0, 1, 5, 128, 1000] {
+            let players: Vec<[f64; 3]> = (0..60)
+                .map(|_| [0, 1, 2].map(|_| (r.next_double() - 0.5) * 800.0))
+                .collect();
+            let fire = FirePlayers::new(radius, players.iter().copied());
+            let r2 = f64::from(radius) * f64::from(radius);
+            for _ in 0..3000 {
+                let mut v = || (r.next_int_bound(900).unwrap() - 450);
+                let pos = BlockPos::new(v(), v(), v());
+                let scan = players.iter().any(|p| {
+                    let d = [
+                        p[0] - f64::from(pos.x),
+                        p[1] - f64::from(pos.y),
+                        p[2] - f64::from(pos.z),
+                    ];
+                    d[0] * d[0] + d[1] * d[1] + d[2] * d[2] < r2
+                });
+                assert_eq!(fire.near(pos), scan, "{radius} {pos:?}");
+            }
+        }
+    }
 
     /// Before the first change only the hot positions are visited; from it
     /// on, every position still to come in the full sorted walk.
