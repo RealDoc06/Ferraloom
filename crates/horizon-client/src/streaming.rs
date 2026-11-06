@@ -415,10 +415,15 @@ impl GenerationScan {
             // Each area's square of columns, as one run per row. Players'
             // areas overlap (a server's players often stand together), so
             // the runs of a row are merged and each column is looked at once.
+            // Players in one chunk share an area: its rows are made once.
+            let mut areas: Vec<((i32, i32), i32)> =
+                std::iter::once((input.ranges.center, input.ranges.radius))
+                    .chain(input.ranges.extra.iter().copied())
+                    .collect();
+            areas.sort_unstable();
+            areas.dedup();
             let mut runs: Vec<(i32, i32, i32)> = Vec::new();
-            for (center, radius) in std::iter::once((input.ranges.center, input.ranges.radius))
-                .chain(input.ranges.extra.iter().copied())
-            {
+            for (center, radius) in areas {
                 let r = radius + margin.max(reach + 1);
                 runs.extend((center.1 - r..=center.1 + r).map(|z| (z, center.0 - r, center.0 + r)));
             }
