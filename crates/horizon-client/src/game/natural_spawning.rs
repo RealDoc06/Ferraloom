@@ -5,7 +5,7 @@ use super::{Dim, Game};
 use horizon_client::{
     biome::{BiomeInfo, SpawnEntry},
     blocks::BlockFacts,
-    chunk::Chunk,
+    chunk::{Chunk, MIN_Y, SECTIONS},
     chunk_map::ChunkMap,
     collisions::{SceneCollisions, no_collision_empty},
     fast_hash::FxHashMap,
@@ -97,10 +97,17 @@ struct SpawnColumn<'g> {
     chunk: Option<&'g Chunk>,
     surface: Option<&'g [i16; 256]>,
     override_bits: Option<u8>,
+    /// How many sections from the bottom a start can land in: up to one
+    /// above the column's highest surface.
+    start_sections: u8,
 }
 /// How many chunks ahead of the one spawning [`SpawnColumn::prefetch`] runs:
 /// far enough for its lines to arrive, near enough for them to stay.
-const SPAWN_LOOKAHEAD: usize = 2;
+const SPAWN_LOOKAHEAD: usize = 3;
+/// How many chunks ahead [`SpawnColumn::prefetch_headers`] runs: after the
+/// section pointers it reads have arrived, before the starts read through
+/// the headers.
+const HEADER_LOOKAHEAD: usize = 2;
 impl<'g> SpawnColumn<'g> {
     fn last(self) -> LastColumn<'g> {
         LastColumn {
@@ -108,6 +115,22 @@ impl<'g> SpawnColumn<'g> {
             chunk: self.chunk,
             surface: self.surface,
             override_bits: self.override_bits,
+        }
+    }
+    /// The sections a start can land in, by the column's highest surface.
+    fn start_sections(surface: &[i16; 256]) -> u8 {
+        let top = surface.iter().copied().max().map_or(MIN_Y, i32::from) + 1;
+        (((top - MIN_Y) >> 4) + 1).clamp(0, SECTIONS as i32) as u8
+    }
+    /// Hints the block storage headers of every section a start can land in,
+    /// whatever the random picks: the starts' storage hints then read them
+    /// from cache instead of waiting on them. Reads the section pointers
+    /// [`Self::prefetch`] hinted. Hints only: no read or draw changes.
+    fn prefetch_headers(&self) {
+        if let Some(chunk) = self.chunk {
+            for section in &chunk.sections[..usize::from(self.start_sections)] {
+                horizon_threads::prefetch(&section.blocks);
+            }
         }
     }
     /// Hints what every start in the chunk reads before its block, whatever
@@ -943,6 +966,9 @@ impl<'a> Game<'a> {
                     if let Some(ahead) = columns.get(i + SPAWN_LOOKAHEAD) {
                         ahead.prefetch();
                     }
+                    if let Some(ahead) = columns.get(i + HEADER_LOOKAHEAD) {
+                        ahead.prefetch_headers();
+                    }
                     level.column.enter(column, columns.get(i + 1).copied());
                     let mut spawn = |l: &GameLevel, r: &SpawnRequest| {
                         let spawned = l.game.finalize_spawned(r, &mut pending);
@@ -981,6 +1007,7 @@ impl<'a> Game<'a> {
                 chunk: None,
                 surface: None,
                 override_bits: None,
+                start_sections: 0,
             })
             .collect();
         horizon_threads::pool::for_each_mut(&mut columns, PASS_GRAIN, |column| {
@@ -988,6 +1015,7 @@ impl<'a> Game<'a> {
             if let Some(chunk) = column.chunk {
                 chunk.world_surface(0, 0, |v| facts.is_air(BlockStateId(v)));
                 column.surface = chunk.surface_map();
+                column.start_sections = column.surface.map_or(0, SpawnColumn::start_sections);
             }
             column.override_bits = Some(
                 column
@@ -1072,6 +1100,7 @@ mod tests {
             chunk: chunks.get(&key).map(|c| &**c),
             surface: None,
             override_bits: None,
+            start_sections: 0,
         };
         memo.enter(column((1, 0)), Some(column((3, 0))));
         for block_x in [0, 15, 16, 17, 31, 32, 48, 64, 64, -1, -1, 3] {
