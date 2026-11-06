@@ -1973,12 +1973,21 @@ impl ExtraCover {
     ) -> Option<&'a ExtraCover> {
         cover.as_ref().filter(|c| c.extra == extra)
     }
-    /// Make it again if `extra` changed.
+    /// Bring it up to date if `extra` changed: the grid in place where it
+    /// can be (a few players crossed a chunk), else made again.
     fn refresh(cover: &mut Option<ExtraCover>, extra: &[((i32, i32), i32)]) {
         if extra.len() < 2 {
             *cover = None;
-        } else if cover.as_ref().is_none_or(|c| c.extra != extra) {
-            *cover = Some(Self::new(extra));
+            return;
+        }
+        match cover {
+            Some(c) if c.extra == extra => {}
+            Some(c) if c.grid.as_mut().is_some_and(|g| g.update(&c.extra, extra)) => {
+                c.extra.clear();
+                c.extra.extend_from_slice(extra);
+                c.tree = AreaTree::new(extra.iter().copied());
+            }
+            _ => *cover = Some(Self::new(extra)),
         }
     }
     fn new(extra: &[((i32, i32), i32)]) -> Self {
@@ -2005,56 +2014,157 @@ struct CoverGrid {
     depth: u32,
     cells: Box<[i8]>,
 }
+/// Columns `x0..=x1` by `z0..=z1`, inclusive.
+#[derive(Clone, Copy)]
+struct Rect {
+    x0: i64,
+    z0: i64,
+    x1: i64,
+    z1: i64,
+}
+impl Rect {
+    /// The columns within `ExtraCover::REACH` of `area`'s square.
+    fn reach_of(((x, z), r): ((i32, i32), i32)) -> Self {
+        let r = i64::from(r) + i64::from(ExtraCover::REACH);
+        let (x, z) = (i64::from(x), i64::from(z));
+        Self {
+            x0: x - r,
+            z0: z - r,
+            x1: x + r,
+            z1: z + r,
+        }
+    }
+    fn meet(self, o: Self) -> Option<Self> {
+        let m = Self {
+            x0: self.x0.max(o.x0),
+            z0: self.z0.max(o.z0),
+            x1: self.x1.min(o.x1),
+            z1: self.z1.min(o.z1),
+        };
+        (m.x0 <= m.x1 && m.z0 <= m.z1).then_some(m)
+    }
+    fn cells(self) -> u64 {
+        ((self.x1 - self.x0 + 1) * (self.z1 - self.z0 + 1)) as u64
+    }
+}
 impl CoverGrid {
+    /// Columns of room left around the areas when the grid is made, so that
+    /// players moving further out update it in place (`update`).
+    const SLACK: i64 = 16;
     fn new(extra: &[((i32, i32), i32)]) -> Option<Self> {
-        let reach = ExtraCover::REACH;
-        if extra
+        if !extra.iter().all(|&a| Self::sane(a)) {
+            return None;
+        }
+        let bounds = extra
             .iter()
-            .any(|&(_, r)| !(0..=ExtraCover::GRID_RADIUS).contains(&r))
-        {
-            return None;
-        }
-        let k = i64::from(reach);
-        let (mut x0, mut z0, mut x1, mut z1) = (i64::MAX, i64::MAX, i64::MIN, i64::MIN);
-        for &((x, z), r) in extra {
-            let (x, z, r) = (i64::from(x), i64::from(z), i64::from(r) + k);
-            (x0, z0, x1, z1) = (x0.min(x - r), z0.min(z - r), x1.max(x + r), z1.max(z + r));
-        }
-        let (width, depth) = ((x1 - x0 + 1) as u64, (z1 - z0 + 1) as u64);
-        let fits = |lo: i64, hi: i64| lo >= i64::from(i32::MIN) && hi <= i64::from(i32::MAX);
-        if width.saturating_mul(depth) > ExtraCover::CELLS || !fits(x0, x1) || !fits(z0, z1) {
-            return None;
-        }
-        let (x0, z0, width, depth) = (x0 as i32, z0 as i32, width as u32, depth as u32);
-        let mut cells = vec![(reach + 1) as i8; (width * depth) as usize].into_boxed_slice();
-        // Inside a square counts as 0: no margin asked for is below it. Each
-        // row of a square is a run of one value with a slope at either end.
-        let lower = |run: &mut [i8], v: i8| run.iter_mut().for_each(|c| *c = (*c).min(v));
-        for &((cx, cz), r) in extra {
-            let area_reach = r + reach;
-            for dz in -area_reach..=area_reach {
-                let start = (cz + dz - z0) as usize * width as usize + (cx - x0) as usize;
-                let row = &mut cells[start - area_reach as usize..=start + area_reach as usize];
-                let flat = dz.abs().max(r);
-                let centre = area_reach as usize;
-                lower(
-                    &mut row[centre - flat as usize..=centre + flat as usize],
-                    (flat - r) as i8,
-                );
-                for d in flat + 1..=area_reach {
-                    let v = (d - r) as i8;
-                    lower(&mut row[centre - d as usize..=centre - d as usize], v);
-                    lower(&mut row[centre + d as usize..=centre + d as usize], v);
-                }
-            }
-        }
-        Some(Self {
-            x0,
-            z0,
+            .map(|&a| Rect::reach_of(a))
+            .reduce(|a, b| Rect {
+                x0: a.x0.min(b.x0),
+                z0: a.z0.min(b.z0),
+                x1: a.x1.max(b.x1),
+                z1: a.z1.max(b.z1),
+            })?;
+        let fits = |r: Rect| {
+            r.cells() <= ExtraCover::CELLS
+                && r.x0 >= i64::from(i32::MIN)
+                && r.z0 >= i64::from(i32::MIN)
+                && r.x1 <= i64::from(i32::MAX)
+                && r.z1 <= i64::from(i32::MAX)
+        };
+        let k = Self::SLACK;
+        let padded = Rect {
+            x0: bounds.x0 - k,
+            z0: bounds.z0 - k,
+            x1: bounds.x1 + k,
+            z1: bounds.z1 + k,
+        };
+        let r = [padded, bounds].into_iter().find(|&r| fits(r))?;
+        let (width, depth) = ((r.x1 - r.x0 + 1) as u32, (r.z1 - r.z0 + 1) as u32);
+        let mut grid = Self {
+            x0: r.x0 as i32,
+            z0: r.z0 as i32,
             width,
             depth,
-            cells,
-        })
+            cells: vec![(ExtraCover::REACH + 1) as i8; (width * depth) as usize].into_boxed_slice(),
+        };
+        for &area in extra {
+            grid.lower(area, Rect::reach_of(area));
+        }
+        Some(grid)
+    }
+    /// An area a grid can hold: of a radius up to `ExtraCover::GRID_RADIUS`.
+    fn sane(area: ((i32, i32), i32)) -> bool {
+        (0..=ExtraCover::GRID_RADIUS).contains(&area.1)
+    }
+    fn rect(&self) -> Rect {
+        let (x0, z0) = (i64::from(self.x0), i64::from(self.z0));
+        Rect {
+            x0,
+            z0,
+            x1: x0 + i64::from(self.width) - 1,
+            z1: z0 + i64::from(self.depth) - 1,
+        }
+    }
+    /// Lowers the cells of `clip` to how far each lies outside `area`'s
+    /// square (0 inside), where that is less.
+    fn lower(&mut self, ((cx, cz), r): ((i32, i32), i32), clip: Rect) {
+        let Some(c) = Rect::reach_of(((cx, cz), r))
+            .meet(clip)
+            .and_then(|c| c.meet(self.rect()))
+        else {
+            return;
+        };
+        let (cx, cz, r) = (i64::from(cx), i64::from(cz), i64::from(r));
+        let width = self.width as usize;
+        for z in c.z0..=c.z1 {
+            let row = (z - i64::from(self.z0)) as usize * width;
+            let dz = (z - cz).abs();
+            let first = row + (c.x0 - i64::from(self.x0)) as usize;
+            let run = &mut self.cells[first..first + (c.x1 - c.x0 + 1) as usize];
+            for (cell, x) in run.iter_mut().zip(c.x0..) {
+                // Within the area's reach: 0..=REACH.
+                let v = ((x - cx).abs().max(dz) - r).max(0) as i8;
+                *cell = (*cell).min(v);
+            }
+        }
+    }
+    /// Makes the grid `new`'s for the areas `extra` that `old` became,
+    /// redoing only the columns near an area that changed. False, with the
+    /// grid untouched, when one no longer fits or so many changed that
+    /// making it again costs less.
+    fn update(&mut self, old: &[((i32, i32), i32)], extra: &[((i32, i32), i32)]) -> bool {
+        let bounds = self.rect();
+        let mut redo = Vec::new();
+        for i in 0..old.len().max(extra.len()) {
+            let (a, b) = (old.get(i), extra.get(i));
+            if a == b {
+                continue;
+            }
+            for &area in a.into_iter().chain(b) {
+                let rect = Rect::reach_of(area);
+                if !Self::sane(area) || rect.meet(bounds).is_none_or(|m| m.cells() != rect.cells())
+                {
+                    return false;
+                }
+                redo.push(rect);
+            }
+        }
+        if redo.iter().map(|r| r.cells()).sum::<u64>() > self.cells.len() as u64 / 4 {
+            return false;
+        }
+        let width = self.width as usize;
+        for &rect in &redo {
+            for z in rect.z0..=rect.z1 {
+                let first = (z - i64::from(self.z0)) as usize * width
+                    + (rect.x0 - i64::from(self.x0)) as usize;
+                self.cells[first..first + (rect.x1 - rect.x0 + 1) as usize]
+                    .fill((ExtraCover::REACH + 1) as i8);
+            }
+            for &area in extra {
+                self.lower(area, rect);
+            }
+        }
+        true
     }
     /// Whether (x, z) is within `margin` of an area's square, for a
     /// `margin` up to `ExtraCover::REACH`.
@@ -2911,6 +3021,51 @@ mod cover_tests {
                 }
             }
         }
+    }
+
+    /// A grid brought up to date in place answers as one made afresh, as
+    /// players cross chunks, teleport, leave and join.
+    #[test]
+    fn an_updated_grid_answers_as_a_new_one() {
+        let mut seed = 0x2545_F491_4F6C_DD1Du64;
+        let mut extra = areas(&mut seed, 12, 20);
+        let mut cover = None;
+        ExtraCover::refresh(&mut cover, &extra);
+        let mut in_place = 0;
+        for step in 0..300 {
+            let mut next = |m: i32| areas(&mut seed, 1, m)[0];
+            let pick = next(1000).0.0.unsigned_abs() as usize % extra.len();
+            match step % 7 {
+                0 => extra[pick].0 = next(60).0,
+                1 if extra.len() > 2 => drop(extra.remove(pick)),
+                2 => extra.push(next(25)),
+                3 => extra[pick].1 = next(1).1,
+                _ => extra[pick].0.0 += 1 - 2 * (step % 2) as i32,
+            }
+            let before = cover
+                .as_ref()
+                .and_then(|c| c.grid.as_ref().map(|g| g.cells.as_ptr()));
+            ExtraCover::refresh(&mut cover, &extra);
+            let c = cover.as_ref().unwrap();
+            in_place += usize::from(before == c.grid.as_ref().map(|g| g.cells.as_ptr()));
+            let fresh = ExtraCover::new(&extra);
+            for z in -110..=110 {
+                for x in (-110 + (z + step as i32).rem_euclid(3)..=110).step_by(3) {
+                    for m in 0..=ExtraCover::REACH {
+                        assert_eq!(
+                            c.within(x, z, m),
+                            fresh.within(x, z, m),
+                            "{step} ({x}, {z}) {m}"
+                        );
+                    }
+                }
+            }
+            assert_eq!(
+                c.tree.nearest_squared(5, -7, i64::MAX),
+                fresh.tree.nearest_squared(5, -7, i64::MAX)
+            );
+        }
+        assert!(in_place > 100, "{in_place}");
     }
 
     #[test]
