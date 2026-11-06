@@ -378,10 +378,12 @@ pub trait NaturalLevel: SpawnLevel {
     fn biome_spawns(&self, x: i32, y: i32, z: i32) -> Option<&HashMap<String, Vec<SpawnEntry>>>;
     /// The biome's list for a category at a position: what `biome_spawns`
     /// holds under the category's name, or nothing.
-    fn natural_mobs(&self, category: Category, x: i32, y: i32, z: i32) -> &[SpawnEntry] {
-        self.biome_spawns(x, y, z)
-            .and_then(|b| b.get(category.name()))
-            .map_or(&[], Vec::as_slice)
+    fn natural_mobs(&self, category: Category, x: i32, y: i32, z: i32) -> SpawnList<'_> {
+        SpawnList::of(
+            self.biome_spawns(x, y, z)
+                .and_then(|b| b.get(category.name()))
+                .map_or(&[], Vec::as_slice),
+        )
     }
     /// `#reduce_water_ambient_spawns` of the biome at a position.
     fn reduces_water_ambient(&self, x: i32, y: i32, z: i32) -> bool {
@@ -770,7 +772,7 @@ pub fn mobs_at<L: NaturalLevel>(
     x: i32,
     y: i32,
     z: i32,
-) -> &[SpawnEntry] {
+) -> SpawnList<'_> {
     // Only a fortress or a structure overriding this category's spawns can
     // change the list, so only theirs are looked up (the references reaching
     // most chunks are mineshafts, which override nothing).
@@ -788,16 +790,61 @@ pub fn mobs_at<L: NaturalLevel>(
             .any(|s| s.id == "minecraft:fortress" && s.in_bounds)
         && name_at(l, x, y - 1, z) == "minecraft:nether_bricks"
     {
-        return fortress_enemies();
+        return SpawnList::of(fortress_enemies());
     }
     for s in &structures {
         if let Some(o) = overrides.get(&s.id, category)
             && (if o.piece { s.in_piece } else { s.in_bounds })
         {
-            return &o.spawns;
+            return SpawnList::of(&o.spawns);
         }
     }
     l.natural_mobs(category, x, y, z)
+}
+
+/// A list [`mobs_at`] gives, with the running sums of its weights when the
+/// level keeps them: a pick then reads them instead of every entry, twice.
+#[derive(Clone, Copy, Debug)]
+pub struct SpawnList<'a> {
+    pub entries: &'a [SpawnEntry],
+    /// The entries' weights summed up to and including each, as `u32`.
+    pub sums: Option<&'a [u32]>,
+}
+impl<'a> SpawnList<'a> {
+    pub fn of(entries: &'a [SpawnEntry]) -> Self {
+        Self {
+            entries,
+            sums: None,
+        }
+    }
+    /// Running sums of `entries`' weights, or `None` if they overflow.
+    pub fn sums_of(entries: &[SpawnEntry]) -> Option<Vec<u32>> {
+        entries
+            .iter()
+            .scan(Some(0u32), |sum, e| {
+                *sum = sum.and_then(|s| s.checked_add(e.weight));
+                Some(*sum)
+            })
+            .collect()
+    }
+    /// [`weighted_pick`] of the entries: the same draw, the same entry.
+    pub fn pick(self, random: &mut impl RandomSource) -> Option<&'a SpawnEntry> {
+        let Some(sums) = self.sums else {
+            return weighted_pick(self.entries, random);
+        };
+        let total = i64::from(sums.last().copied().unwrap_or(0));
+        if total <= 0 {
+            return None;
+        }
+        let selection = random.next_int_bound(total as i32).ok()?;
+        // The first entry whose sum passes the selection: the sums do not
+        // fall, so it comes after every sum at or below it.
+        let index = sums
+            .iter()
+            .filter(|&&sum| i64::from(sum) <= i64::from(selection))
+            .count();
+        self.entries.get(index)
+    }
 }
 
 /// `WeightedList.getRandom`.
@@ -1368,7 +1415,7 @@ pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
                     None
                 } else {
                     let list = mobs_at(l, category, x, y, z);
-                    weighted_pick(list, random).map(|entry| (entry, list))
+                    list.pick(random).map(|entry| (entry, list.entries))
                 };
                 let Some((entry, list)) = picked else {
                     break;
@@ -1612,7 +1659,7 @@ fn valid_position_for_type<L: NaturalLevel, R: RandomSource>(
     }
     let [x, y, z] = pos;
     if !listed && {
-        let list = mobs_at(l, category, x, y, z);
+        let list = mobs_at(l, category, x, y, z).entries;
         !std::ptr::eq(list, picked) && !list.iter().any(|e| same_spawner(e, entry))
     } {
         return false;
@@ -1790,6 +1837,43 @@ mod tests {
                     real.next_int_bound(bound).unwrap_or(0)
                 );
                 assert_eq!(copy.0, real.state(), "{bound}");
+            }
+        }
+    }
+
+    /// A pick through the running sums draws and picks what the scan does,
+    /// zero weights and empty lists included.
+    #[test]
+    fn picks_by_sums_answer_as_the_weighted_list() {
+        use super::{SpawnList, weighted_pick};
+        use crate::biome::SpawnEntry;
+        use horizon_core::random::LegacyRandom;
+        let mut seed = 0x51ed_2701_u64;
+        let mut draw = |range: u32| {
+            seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+            (seed >> 33) as u32 % range
+        };
+        for _ in 0..500 {
+            let entries: Vec<SpawnEntry> = (0..draw(9))
+                .map(|i| SpawnEntry {
+                    entity: format!("minecraft:mob_{i}"),
+                    weight: if draw(4) == 0 { 0 } else { draw(120) },
+                    min: 1,
+                    max: 1,
+                    constant: true,
+                })
+                .collect();
+            let sums = SpawnList::sums_of(&entries).unwrap();
+            let list = SpawnList {
+                entries: &entries,
+                sums: Some(&sums),
+            };
+            let start = i64::from(draw(1 << 30));
+            let (mut scan, mut summed) = (LegacyRandom::new(start), LegacyRandom::new(start));
+            for _ in 0..20 {
+                let expected = weighted_pick(&entries, &mut scan).map(|e| &e.entity);
+                assert_eq!(list.pick(&mut summed).map(|e| &e.entity), expected);
+                assert_eq!(summed.state(), scan.state());
             }
         }
     }

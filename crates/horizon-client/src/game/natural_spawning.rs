@@ -16,7 +16,7 @@ use horizon_client::{
         seen_grid::SeenGrid,
         spawn_rules::{Dimension, SpawnLevel},
         spawn_selection::{
-            self, Category, CountedCharge, Heightmap, MobType, NaturalLevel, SpawnCost,
+            self, Category, CountedCharge, Heightmap, MobType, NaturalLevel, SpawnCost, SpawnList,
             SpawnRequest, SpawnState, Spawned, StructureAt, StructureSpawns, counted_by_state,
         },
     },
@@ -230,6 +230,11 @@ fn column_override_bits(chunk: &Chunk, spawns: &StructureSpawns) -> u8 {
 /// A biome's answers to the questions every attempt asks, by category index.
 struct BiomeRow<'g> {
     mobs: [&'g [SpawnEntry]; Category::ALL.len()],
+    /// Each list's [`SpawnList::sums_of`], side by side in one allocation:
+    /// the lists' entries are far apart, and a pick read all of them.
+    sums: Vec<u32>,
+    /// Where each list's sums start in `sums`, if they did not overflow.
+    sums_at: [Option<u32>; Category::ALL.len()],
     reduces_water_ambient: bool,
 }
 /// A biome's list for every category, by category index.
@@ -240,12 +245,29 @@ fn mobs_by_category(
 }
 impl<'g> BiomeRow<'g> {
     fn new(biome: &'g BiomeInfo, data: &MobData) -> Self {
+        let mobs = mobs_by_category(&biome.spawns);
+        let mut sums = Vec::new();
+        let sums_at = mobs.map(|list| {
+            let at = sums.len() as u32;
+            sums.extend(SpawnList::sums_of(list)?);
+            Some(at)
+        });
         Self {
-            mobs: mobs_by_category(&biome.spawns),
+            mobs,
+            sums,
+            sums_at,
             reduces_water_ambient: data
                 .biome_tags
                 .get("minecraft:reduce_water_ambient_spawns")
                 .is_some_and(|members| members.contains(&biome.name)),
+        }
+    }
+    fn list(&self, category: Category) -> SpawnList<'_> {
+        let entries = self.mobs[category as usize];
+        SpawnList {
+            entries,
+            sums: self.sums_at[category as usize]
+                .and_then(|at| self.sums.get(at as usize..at as usize + entries.len())),
         }
     }
 }
@@ -516,9 +538,9 @@ impl NaturalLevel for GameLevel<'_, '_> {
         self.mob_types.borrow_mut().insert(entity.to_owned(), kind);
         kind
     }
-    fn natural_mobs(&self, category: Category, x: i32, y: i32, z: i32) -> &[SpawnEntry] {
+    fn natural_mobs(&self, category: Category, x: i32, y: i32, z: i32) -> SpawnList<'_> {
         self.biome_row(x, y, z)
-            .map_or(&[], |row| row.mobs[category as usize])
+            .map_or(SpawnList::of(&[]), |row| row.list(category))
     }
     fn reduces_water_ambient(&self, x: i32, y: i32, z: i32) -> bool {
         self.biome_row(x, y, z)
