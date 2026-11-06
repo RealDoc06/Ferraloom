@@ -512,6 +512,10 @@ fn zombified_piglin_step(m: &mut Mob, cx: &mut Cx) {
 /// `Entity.isInPowderSnow`: the mob's box, shrunk by `1.0E-5` as in
 /// `checkInsideBlocks`, touches powder snow.
 fn in_powder_snow(m: &Mob, w: &super::MobWorld) -> bool {
+    // None in the palettes around the mob's box: no cell to read.
+    if super::ai::start_kinds(m, w) & crate::block_kinds::POWDER_SNOW == 0 {
+        return false;
+    }
     let b = m.bounds().deflate(Vec3::new(1e-5, 1e-5, 1e-5));
     let (min, max) = (b.min_position(), b.max_position());
     for x in min.x.floor() as i32..=max.x.floor() as i32 {
