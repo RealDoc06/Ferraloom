@@ -1985,14 +1985,19 @@ impl ExtraCover {
             *cover = None;
             return;
         }
-        match cover {
-            Some(c) if c.extra == extra => {}
-            Some(c) if c.grid.as_mut().is_some_and(|g| g.update(&c.extra, extra)) => {
-                c.extra.clear();
-                c.extra.extend_from_slice(extra);
-                c.tree = AreaTree::new(extra.iter().copied());
-            }
-            _ => *cover = Some(Self::new(extra)),
+        let Some(c) = cover.as_mut() else {
+            *cover = Some(Self::new(extra));
+            return;
+        };
+        if c.extra == extra {
+            return;
+        }
+        if c.grid.as_mut().is_some_and(|g| g.update(&c.extra, extra)) {
+            c.extra.clear();
+            c.extra.extend_from_slice(extra);
+            c.tree = AreaTree::new(extra.iter().copied());
+        } else {
+            *cover = Some(Self::new(extra));
         }
     }
     fn new(extra: &[((i32, i32), i32)]) -> Self {
