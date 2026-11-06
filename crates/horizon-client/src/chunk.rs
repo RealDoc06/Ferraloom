@@ -284,6 +284,11 @@ impl Chunk {
         let surface = self.surface.get_or_init(|| self.prime(|v| !air(v)));
         i32::from(surface[column(x, z)])
     }
+    /// The WORLD_SURFACE heightmap [`Self::world_surface`] reads, by column
+    /// (`z << 4 | x`), if it is built (it is not built here).
+    pub fn surface_map(&self) -> Option<&[i16; 256]> {
+        self.surface.get().map(|map| &**map)
+    }
     /// Prefetch hint: the storage the block at `x`, `y`, `z` is read from.
     /// Reads the section's header, which may miss itself.
     pub fn prefetch_block(&self, x: i32, y: i32, z: i32) {
