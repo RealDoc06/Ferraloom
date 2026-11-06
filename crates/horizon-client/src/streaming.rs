@@ -415,23 +415,20 @@ impl GenerationScan {
             // Each area's square of columns, as one run per row. Players'
             // areas overlap (a server's players often stand together), so
             // the runs of a row are merged and each column is looked at once.
-            // Players in one chunk share an area: its rows are made once.
-            let mut areas: Vec<((i32, i32), i32)> =
-                std::iter::once((input.ranges.center, input.ranges.radius))
-                    .chain(input.ranges.extra.iter().copied())
-                    .collect();
-            areas.sort_unstable();
-            areas.dedup();
-            let mut runs: Vec<(i32, i32, i32)> = Vec::new();
-            for (center, radius) in areas {
-                let r = radius + margin.max(reach + 1);
-                runs.extend((center.1 - r..=center.1 + r).map(|z| (z, center.0 - r, center.0 + r)));
-            }
-            if let Some(band) = input.ranges.band {
-                let r = margin.max(reach + 1);
-                runs.extend((band.z0 - r..=band.z1 + r).map(|z| (z, band.x0 - r, band.x1 + r)));
-            }
-            runs.sort_unstable();
+            let r = margin.max(reach + 1);
+            let squares = std::iter::once((input.ranges.center, input.ranges.radius))
+                .chain(input.ranges.extra.iter().copied())
+                .map(|((x, z), radius)| {
+                    let r = radius + r;
+                    (x - r, x + r, z - r, z + r)
+                })
+                .chain(
+                    input
+                        .ranges
+                        .band
+                        .map(|b| (b.x0 - r, b.x1 + r, b.z0 - r, b.z1 + r)),
+                );
+            let runs = row_runs(squares.collect());
             let mut runs = runs.into_iter().peekable();
             while let Some((z, x0, mut x1)) = runs.next() {
                 while let Some((_, _, next_x1)) =
@@ -498,6 +495,51 @@ impl GenerationScan {
             Some(wanted)
         }
     }
+}
+/// The rows of the squares `(x0, x1, z0, z1)` (inclusive) as runs
+/// `(z, x0, x1)`, by row and then by `x0`. Players in one chunk share a
+/// square, made into runs once.
+fn row_runs(mut squares: Vec<(i32, i32, i32, i32)>) -> Vec<(i32, i32, i32)> {
+    squares.sort_unstable();
+    squares.dedup();
+    let rows = |s: &(i32, i32, i32, i32)| (i64::from(s.3) - i64::from(s.2) + 1).max(0) as usize;
+    let total: usize = squares.iter().map(rows).sum();
+    let (Some(z0), Some(z1)) = (
+        squares.iter().map(|s| s.2).min(),
+        squares.iter().map(|s| s.3).max(),
+    ) else {
+        return Vec::new();
+    };
+    let span = (i64::from(z1) - i64::from(z0) + 1) as usize;
+    if span > 4 * total + 64 {
+        // Squares far apart: sorted, not counted by row.
+        let mut runs: Vec<_> = squares
+            .iter()
+            .flat_map(|&(x0, x1, za, zb)| (za..=zb).map(move |z| (z, x0, x1)))
+            .collect();
+        runs.sort_unstable();
+        return runs;
+    }
+    // A counting sort by row of squares already in `x0` order keeps each
+    // row in that order.
+    let mut start = vec![0usize; span + 1];
+    for s in &squares {
+        for z in s.2..=s.3 {
+            start[(z - z0) as usize + 1] += 1;
+        }
+    }
+    for i in 1..=span {
+        start[i] += start[i - 1];
+    }
+    let mut runs = vec![(0, 0, 0); total];
+    for &(x0, x1, za, zb) in &squares {
+        for z in za..=zb {
+            let at = &mut start[(z - z0) as usize];
+            runs[*at] = (z, x0, x1);
+            *at += 1;
+        }
+    }
+    runs
 }
 pub struct WorkerContext {
     pub assets: Arc<crate::assets::Assets>,
@@ -3031,6 +3073,32 @@ mod cover_tests {
                 }
             }
         }
+    }
+
+    /// Counted by row, the runs are the sorted ones up to the order of runs
+    /// sharing a row and a start.
+    #[test]
+    fn row_runs_are_sorted_by_row_and_start() {
+        let mut seed = 0x51_7CC1_B727_220Au64;
+        for case in 0..200 {
+            let spread = [5, 40, 100_000][case % 3];
+            let squares: Vec<_> = areas(&mut seed, 1 + case % 30, spread)
+                .into_iter()
+                .map(|((x, z), r)| (x - r, x + r + case as i32 % 3, z - r, z + r))
+                .collect();
+            let mut expected: Vec<_> = squares
+                .iter()
+                .collect::<std::collections::BTreeSet<_>>()
+                .into_iter()
+                .flat_map(|&(x0, x1, z0, z1)| (z0..=z1).map(move |z| (z, x0, x1)))
+                .collect();
+            expected.sort_unstable();
+            let mut runs = row_runs(squares);
+            assert!(runs.is_sorted_by_key(|&(z, x0, _)| (z, x0)), "case {case}");
+            runs.sort_unstable();
+            assert_eq!(runs, expected, "case {case}");
+        }
+        assert!(row_runs(Vec::new()).is_empty());
     }
 
     /// A grid brought up to date in place answers as one made afresh, as
