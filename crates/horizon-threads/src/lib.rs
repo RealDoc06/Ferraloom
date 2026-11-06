@@ -20,6 +20,32 @@ pub fn prefetch<T: ?Sized>(value: &T) {
     let _ = value;
 }
 
+/// [`prefetch`] for every cache line `value` covers, up to the first
+/// [`PREFETCH_ALL_LINES`] of them, so a big value can't flood the cache.
+#[inline(always)]
+pub fn prefetch_all<T: ?Sized>(value: &T) {
+    #[cfg(target_arch = "x86_64")]
+    {
+        let start = (value as *const T).cast::<u8>();
+        let lines = std::mem::size_of_val(value)
+            .div_ceil(64)
+            .min(PREFETCH_ALL_LINES);
+        for line in 0..lines {
+            // SAFETY: as in `prefetch`; the addresses stay within `value`
+            // (`wrapping_add` makes no claim about them).
+            unsafe {
+                core::arch::x86_64::_mm_prefetch::<{ core::arch::x86_64::_MM_HINT_T0 }>(
+                    start.wrapping_add(line * 64).cast(),
+                );
+            }
+        }
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    let _ = value;
+}
+/// The most lines one [`prefetch_all`] loads.
+pub const PREFETCH_ALL_LINES: usize = 8;
+
 #[cfg(target_os = "linux")]
 mod affinity;
 #[cfg(target_os = "linux")]
