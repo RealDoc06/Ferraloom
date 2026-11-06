@@ -2065,6 +2065,10 @@ struct CoverGrid {
     width: u32,
     depth: u32,
     cells: Box<[i8]>,
+    /// Per column, how many areas lie at each distance `0..=REACH` from it:
+    /// `cells` is the least with a count, so an area that leaves takes only
+    /// its own share away.
+    counts: Box<[[u16; ExtraCover::REACH as usize + 1]]>,
 }
 /// Columns `x0..=x1` by `z0..=z1`, inclusive.
 #[derive(Clone, Copy)]
@@ -2132,15 +2136,17 @@ impl CoverGrid {
         };
         let r = [padded, bounds].into_iter().find(|&r| fits(r))?;
         let (width, depth) = ((r.x1 - r.x0 + 1) as u32, (r.z1 - r.z0 + 1) as u32);
+        let size = (width * depth) as usize;
         let mut grid = Self {
             x0: r.x0 as i32,
             z0: r.z0 as i32,
             width,
             depth,
-            cells: vec![(ExtraCover::REACH + 1) as i8; (width * depth) as usize].into_boxed_slice(),
+            cells: vec![(ExtraCover::REACH + 1) as i8; size].into_boxed_slice(),
+            counts: vec![[0; ExtraCover::REACH as usize + 1]; size].into_boxed_slice(),
         };
         for &area in extra {
-            grid.lower(area, Rect::reach_of(area));
+            grid.count(area, true);
         }
         Some(grid)
     }
@@ -2157,64 +2163,72 @@ impl CoverGrid {
             z1: z0 + i64::from(self.depth) - 1,
         }
     }
-    /// Lowers the cells of `clip` to how far each lies outside `area`'s
-    /// square (0 inside), where that is less.
-    fn lower(&mut self, ((cx, cz), r): ((i32, i32), i32), clip: Rect) {
-        let Some(c) = Rect::reach_of(((cx, cz), r))
-            .meet(clip)
-            .and_then(|c| c.meet(self.rect()))
-        else {
-            return;
-        };
+    /// Adds `area` to (or takes it from) the counts of the columns within
+    /// its reach, which the grid holds, keeping `cells` their least.
+    fn count(&mut self, ((cx, cz), r): ((i32, i32), i32), add: bool) {
+        let c = Rect::reach_of(((cx, cz), r));
         let (cx, cz, r) = (i64::from(cx), i64::from(cz), i64::from(r));
         let width = self.width as usize;
         for z in c.z0..=c.z1 {
-            let row = (z - i64::from(self.z0)) as usize * width;
+            let first =
+                (z - i64::from(self.z0)) as usize * width + (c.x0 - i64::from(self.x0)) as usize;
             let dz = (z - cz).abs();
-            let first = row + (c.x0 - i64::from(self.x0)) as usize;
-            let run = &mut self.cells[first..first + (c.x1 - c.x0 + 1) as usize];
-            for (cell, x) in run.iter_mut().zip(c.x0..) {
-                // Within the area's reach: 0..=REACH.
-                let v = ((x - cx).abs().max(dz) - r).max(0) as i8;
-                *cell = (*cell).min(v);
+            let span = first..first + (c.x1 - c.x0 + 1) as usize;
+            let cells = self.cells[span.clone()].iter_mut();
+            for ((cell, counts), x) in cells.zip(&mut self.counts[span]).zip(c.x0..) {
+                // How far outside the square: 0..=REACH within its reach.
+                let v = ((x - cx).abs().max(dz) - r).max(0) as usize;
+                if add {
+                    counts[v] += 1;
+                    *cell = (*cell).min(v as i8);
+                } else {
+                    counts[v] -= 1;
+                    if counts[v] == 0 && *cell == v as i8 {
+                        *cell = counts
+                            .iter()
+                            .position(|&n| n > 0)
+                            .map_or(ExtraCover::REACH as i8 + 1, |l| l as i8);
+                    }
+                }
             }
         }
     }
     /// Makes the grid `new`'s for the areas `extra` that `old` became,
-    /// redoing only the columns near an area that changed. False, with the
-    /// grid untouched, when one no longer fits or so many changed that
-    /// making it again costs less.
+    /// counting in only the areas that came and went. False, with the grid
+    /// untouched, when one that came doesn't fit.
     fn update(&mut self, old: &[((i32, i32), i32)], extra: &[((i32, i32), i32)]) -> bool {
         let bounds = self.rect();
-        let mut redo = Vec::new();
-        for i in 0..old.len().max(extra.len()) {
-            let (a, b) = (old.get(i), extra.get(i));
-            if a == b {
-                continue;
-            }
-            for &area in a.into_iter().chain(b) {
-                let rect = Rect::reach_of(area);
-                if !Self::sane(area) || rect.meet(bounds).is_none_or(|m| m.cells() != rect.cells())
-                {
-                    return false;
-                }
-                redo.push(rect);
+        let (mut gone, mut came) = (old.to_vec(), extra.to_vec());
+        gone.sort_unstable();
+        came.sort_unstable();
+        // The multiset difference, either way: order doesn't matter.
+        let (mut i, mut j) = (0, 0);
+        let (mut left, mut right) = (Vec::new(), Vec::new());
+        while i < gone.len() || j < came.len() {
+            let (a, b) = (gone.get(i), came.get(j));
+            if a.is_some() && a == b {
+                i += 1;
+                j += 1;
+            } else if b.is_none() || a.is_some_and(|a| Some(a) < b) {
+                left.push(gone[i]);
+                i += 1;
+            } else {
+                right.push(came[j]);
+                j += 1;
             }
         }
-        if redo.iter().map(|r| r.cells()).sum::<u64>() > self.cells.len() as u64 / 4 {
+        let fits = |&area: &((i32, i32), i32)| {
+            let rect = Rect::reach_of(area);
+            Self::sane(area) && rect.meet(bounds).is_some_and(|m| m.cells() == rect.cells())
+        };
+        if !right.iter().all(fits) {
             return false;
         }
-        let width = self.width as usize;
-        for &rect in &redo {
-            for z in rect.z0..=rect.z1 {
-                let first = (z - i64::from(self.z0)) as usize * width
-                    + (rect.x0 - i64::from(self.x0)) as usize;
-                self.cells[first..first + (rect.x1 - rect.x0 + 1) as usize]
-                    .fill((ExtraCover::REACH + 1) as i8);
-            }
-            for &area in extra {
-                self.lower(area, rect);
-            }
+        for area in left {
+            self.count(area, false);
+        }
+        for area in right {
+            self.count(area, true);
         }
         true
     }
@@ -3102,7 +3116,7 @@ mod cover_tests {
     }
 
     /// A grid brought up to date in place answers as one made afresh, as
-    /// players cross chunks, teleport, leave and join.
+    /// players cross chunks, teleport, leave, join and are listed anew.
     #[test]
     fn an_updated_grid_answers_as_a_new_one() {
         let mut seed = 0x2545_F491_4F6C_DD1Du64;
@@ -3118,6 +3132,8 @@ mod cover_tests {
                 1 if extra.len() > 2 => drop(extra.remove(pick)),
                 2 => extra.push(next(25)),
                 3 => extra[pick].1 = next(1).1,
+                // Guests listed in another order: the same areas.
+                5 => extra.rotate_left(pick),
                 _ => extra[pick].0.0 += 1 - 2 * (step % 2),
             }
             let before = cover
@@ -3143,7 +3159,7 @@ mod cover_tests {
                 fresh.tree.nearest_squared(5, -7, i64::MAX)
             );
         }
-        assert!(in_place > 100, "{in_place}");
+        assert!(in_place > 200, "{in_place}");
     }
 
     #[test]
