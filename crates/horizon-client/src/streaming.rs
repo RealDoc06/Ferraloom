@@ -3118,7 +3118,7 @@ mod cover_tests {
                 1 if extra.len() > 2 => drop(extra.remove(pick)),
                 2 => extra.push(next(25)),
                 3 => extra[pick].1 = next(1).1,
-                _ => extra[pick].0.0 += 1 - 2 * (step % 2) as i32,
+                _ => extra[pick].0.0 += 1 - 2 * (step % 2),
             }
             let before = cover
                 .as_ref()
@@ -3128,7 +3128,7 @@ mod cover_tests {
             in_place += usize::from(before == c.grid.as_ref().map(|g| g.cells.as_ptr()));
             let fresh = ExtraCover::new(&extra);
             for z in -110..=110 {
-                for x in (-110 + (z + step as i32).rem_euclid(3)..=110).step_by(3) {
+                for x in (-110 + (z + step).rem_euclid(3)..=110).step_by(3) {
                     for m in 0..=ExtraCover::REACH {
                         assert_eq!(
                             c.within(x, z, m),

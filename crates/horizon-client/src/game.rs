@@ -15814,7 +15814,7 @@ mod tests {
             let fire = FirePlayers::new(radius, players.iter().copied());
             let r2 = f64::from(radius) * f64::from(radius);
             for _ in 0..3000 {
-                let mut v = || (r.next_int_bound(900).unwrap() - 450);
+                let mut v = || r.next_int_bound(900).unwrap() - 450;
                 let pos = BlockPos::new(v(), v(), v());
                 let scan = players.iter().any(|p| {
                     let d = [
