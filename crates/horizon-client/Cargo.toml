@@ -109,6 +109,11 @@ path = "examples/probe/main.rs"
 [lints]
 workspace = true
 
+# The global allocator on Linux servers: glibc malloc took ~6% of the tick thread at 500 players, and
+# jemalloc cut the mean tick ~5 ms there for ~0.3 GB more RSS (bench 2026-11-06). Not built for MSVC.
+[target.'cfg(target_os = "linux")'.dependencies]
+tikv-jemallocator = "0.6"
+
 [dev-dependencies]
 horizon-items = { path = "../horizon-items", features = ["test-support"] }
 # Every WGSL shader translated as wgpu's DirectX 12 backend does (gfx.rs tests).
