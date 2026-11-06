@@ -565,15 +565,16 @@ enum GuestUse {
     Entity(Hand),
 }
 
-/// The client world as seen by the vanilla block-behaviour library.
-/// Visit every position of `hot` and `cold` once, in `key` order, where
-/// `cold` positions are known to need no visit until `visit` reports a change
-/// (it returns whether anything changed since the walk began). Until then
-/// only `hot` is sorted; after the first change the rest of `cold` joins the
-/// positions still to come.
-fn walk_set_aside<P: Copy + PartialEq, K: Ord>(
+/// Visit every position of `hot` and of the `cold` groups once, in `key`
+/// order, where `cold` positions are known to need no visit until `visit`
+/// reports a change (it returns whether anything changed since the walk
+/// began). Until then only `hot` is sorted and `cold` is never expanded
+/// (`expand` pushes a group's positions); after the first change the rest of
+/// `cold` joins the positions still to come.
+fn walk_set_aside<P: Copy + PartialEq, C, K: Ord>(
     mut hot: Vec<P>,
-    mut cold: Vec<P>,
+    mut cold: Vec<C>,
+    expand: impl Fn(&C, &mut Vec<P>),
     key: impl Fn(&P) -> K,
     mut visit: impl FnMut(P) -> bool,
 ) {
@@ -586,7 +587,11 @@ fn walk_set_aside<P: Copy + PartialEq, K: Ord>(
         if visit(pos) && !cold.is_empty() {
             let mut rest = hot.split_off(i);
             let at = key(&pos);
-            rest.extend(cold.drain(..).filter(|p| key(p) > at));
+            let mut spilled = Vec::new();
+            for group in cold.drain(..) {
+                expand(&group, &mut spilled);
+            }
+            rest.extend(spilled.into_iter().filter(|p| key(p) > at));
             rest.sort_unstable_by_key(&key);
             rest.dedup();
             hot = rest;
@@ -594,6 +599,17 @@ fn walk_set_aside<P: Copy + PartialEq, K: Ord>(
         }
     }
 }
+/// Pushes every block position from `lo` to `hi` (inclusive), x then y then z.
+fn block_box_positions(lo: BlockPos, hi: BlockPos, out: &mut Vec<BlockPos>) {
+    for x in lo.x..=hi.x {
+        for y in lo.y..=hi.y {
+            for z in lo.z..=hi.z {
+                out.push(BlockPos::new(x, y, z));
+            }
+        }
+    }
+}
+/// The client world as seen by the vanilla block-behaviour library.
 struct GameLevel<'w> {
     world: &'w mut World,
     facts: &'w BlockFacts,
@@ -3327,7 +3343,9 @@ impl Game<'_> {
             // (sorted, from where the walk is) if a callback writes, after
             // which any section may have gained a hook.
             let start = level.world.revision;
-            let (mut touched, mut cold): (Vec<BlockPos>, Vec<BlockPos>) = (Vec::new(), Vec::new());
+            // A cold box is kept as its corners: most are never expanded.
+            let (mut touched, mut cold): (Vec<BlockPos>, Vec<(BlockPos, BlockPos)>) =
+                (Vec::new(), Vec::new());
             for bounds in level.mob_trigger_boxes().chain(level.other_trigger_boxes()) {
                 let (lo, hi) = (bounds.min_position(), bounds.max_position());
                 let (x0, x1) = ((lo.x + 1e-7).floor() as i32, (hi.x - 1e-7).floor() as i32);
@@ -3341,18 +3359,17 @@ impl Game<'_> {
                         (z0 >> 4..=z1 >> 4).any(|sz| hot(&mut contact, level, (sx, sy, sz)))
                     })
                 });
-                let list = if any_hot { &mut touched } else { &mut cold };
-                for x in x0..=x1 {
-                    for y in y0..=y1 {
-                        for z in z0..=z1 {
-                            list.push(BlockPos::new(x, y, z));
-                        }
-                    }
+                let (lo, hi) = (BlockPos::new(x0, y0, z0), BlockPos::new(x1, y1, z1));
+                if any_hot {
+                    block_box_positions(lo, hi, &mut touched);
+                } else {
+                    cold.push((lo, hi));
                 }
             }
             walk_set_aside(
                 touched,
                 cold,
+                |&(lo, hi), out| block_box_positions(lo, hi, out),
                 |p| (p.x, p.y, p.z),
                 |pos| {
                     if hot(&mut contact, level, section_of(pos)) {
@@ -15763,6 +15780,7 @@ mod tests {
             walk_set_aside(
                 hot.clone(),
                 cold.clone(),
+                |&c, out| out.push(c),
                 |p| *p,
                 |p| {
                     visited.push(p);
