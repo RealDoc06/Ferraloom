@@ -1266,8 +1266,10 @@ impl Lcg {
 /// and all of `spawn_for_chunk`'s, from the state this one should leave: when
 /// every attempt here ends at its first read, that is where the next starts.
 /// The sections' headers of every start are hinted first, and only then
-/// their storage, so all their misses overlap instead of queueing one start
-/// after another. Hints only: no read or draw changes.
+/// this chunk's storage, so all their misses overlap instead of queueing one
+/// start after another. The next chunk's storage is left to [`Ahead::hint`]
+/// once this chunk has spawned: its headers have arrived by then, so reading
+/// them does not wait. Hints only: no read or draw changes.
 fn foresee_starts<L: NaturalLevel>(
     l: &L,
     seed: u64,
@@ -1276,7 +1278,7 @@ fn foresee_starts<L: NaturalLevel>(
     chunk: (i32, i32),
     after: &mut [u64],
     next: Option<((i32, i32), u8, &[Category])>,
-) {
+) -> Ahead {
     let mut random = Lcg(seed);
     let min = l.min_y();
     let start = |random: &mut Lcg, (cx, cz): (i32, i32)| {
@@ -1289,23 +1291,44 @@ fn foresee_starts<L: NaturalLevel>(
             (x, y, z)
         })
     };
-    let mut starts = [None; 2 * Category::ALL.len()];
-    let (here, ahead) = starts.split_at_mut(Category::ALL.len());
-    for ((category, after), at) in categories.iter().zip(after).zip(here) {
+    let mut here = [None; Category::ALL.len()];
+    for ((category, after), at) in categories.iter().zip(after).zip(&mut here) {
         if open & category.bit() != 0 {
             *at = start(&mut random, chunk);
         }
         *after = random.0;
     }
+    let mut ahead = Ahead {
+        state: random.0,
+        starts: [None; Category::ALL.len()],
+    };
     if let Some((next, open, categories)) = next {
-        for (category, at) in categories.iter().zip(ahead) {
+        for (category, at) in categories.iter().zip(&mut ahead.starts) {
             if open & category.bit() != 0 {
                 *at = start(&mut random, next);
             }
         }
     }
-    for (x, y, z) in starts.into_iter().flatten() {
+    for (x, y, z) in here.into_iter().flatten() {
         l.prefetch_block(x, y, z);
+    }
+    ahead
+}
+/// The next chunk's starts [`foresee_starts`] guessed, whose headers it
+/// hinted, and the random state they were guessed from.
+struct Ahead {
+    state: u64,
+    starts: [Option<(i32, i32, i32)>; Category::ALL.len()],
+}
+impl Ahead {
+    /// Hints the starts' storage, if the random is where they were guessed
+    /// from (else they are not the next chunk's starts).
+    fn hint<L: NaturalLevel>(&self, l: &L, now: Option<u64>) {
+        if now == Some(self.state) {
+            for (x, y, z) in self.starts.into_iter().flatten() {
+                l.prefetch_block(x, y, z);
+            }
+        }
     }
 }
 
@@ -1323,6 +1346,7 @@ pub fn spawn_for_chunk<L: NaturalLevel, R: RandomSource + Foresee>(
     let asked = SpawnState::asked(categories);
     // The random state foreseen after each category ([`foresee_starts`]).
     let mut after = [0u64; Category::ALL.len()];
+    let mut ahead = None;
     for (i, &category) in categories.iter().enumerate() {
         if let Some(now) = random.legacy_state()
             && (i == 0 || after.get(i - 1) != Some(&now))
@@ -1332,13 +1356,24 @@ pub fn spawn_for_chunk<L: NaturalLevel, R: RandomSource + Foresee>(
                 .next_open(chunk, asked)
                 .map(|(next, open)| (next, open, categories));
             let rest = after.get_mut(i..).unwrap_or_default();
-            foresee_starts(l, now, open, &categories[i..], chunk, rest, next);
+            ahead = Some(foresee_starts(
+                l,
+                now,
+                open,
+                &categories[i..],
+                chunk,
+                rest,
+                next,
+            ));
         }
         let local = state.can_spawn_local_of(asked, category, chunk);
         trace(Event::Local(category, local));
         if local {
             spawn_category_for_chunk(l, random, state, category, chunk, spawn, trace);
         }
+    }
+    if let Some(ahead) = ahead {
+        ahead.hint(l, random.legacy_state());
     }
 }
 /// `NaturalSpawner.spawnCategoryForChunk`: `getRandomPosWithin` (a column of
