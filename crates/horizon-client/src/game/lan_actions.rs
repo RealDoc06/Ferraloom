@@ -253,6 +253,18 @@ impl Rules for ItemRules<'_> {
     }
 }
 
+/// Whether `guest_server_tick` acts on this event of the guest's body after
+/// the turn (a sound, particles or a packet for the players around).
+fn needs_host(event: &MotionEvent) -> bool {
+    matches!(
+        event,
+        MotionEvent::HurtSound(_)
+            | MotionEvent::Fall(_)
+            | MotionEvent::Drown
+            | MotionEvent::HoneySlide { .. }
+    )
+}
+
 fn direction(face: i32) -> [i32; 3] {
     match face {
         0 => [0, -1, 0],
@@ -585,7 +597,9 @@ impl Game<'_> {
     /// no totem went off, no hurt direction, teleport, turn, move, vehicle,
     /// bed, game mode or level spawn changed, and nothing opened (a screen,
     /// container, table, station, sign, book, mount menu, ender chest or
-    /// action bar message).
+    /// action bar message). No entity event or cooldown is queued either:
+    /// `leave_guest` sends those after the turn's packets, so a packet the
+    /// next turn queued would go ahead of them.
     fn guest_turn_can_go_on(&self, host: &LanHost, swap: &GuestSwap) -> bool {
         let (Some(m), Some(g)) = (self.player.as_ref(), host.hub.guests.get(swap.i)) else {
             return false;
@@ -616,6 +630,8 @@ impl Game<'_> {
             && self.craft_grid.iter().all(Option::is_none)
             && self.message.is_none()
             && self.ender_open.is_none()
+            && self.guest_entity_events.is_empty()
+            && self.guest_cooldowns.is_empty()
     }
 
     /// `leave_guest` then `enter_guest` for the guest in place, when
@@ -2477,18 +2493,30 @@ impl Game<'_> {
                 play.attack_item = held;
             }
             self.guest_delayed_destroy(host, conn);
-            self.guest_server_tick(host, conn);
+            let turn = self.guest_server_tick(host, conn);
             // Player.tick's statistics and ServerPlayer.tick's triggers, then
             // PlayerAdvancements.flushDirty.
-            let sleeping = host.hub.guests[gi].sleeping;
-            self.as_guest(host, conn, |g| {
+            let tick_end = |g: &mut Self, sleeping: bool| {
                 g.tick_fishing();
                 g.tick_maps();
                 g.tick_lodestone_compasses();
                 g.count_tick_stats(sleeping);
                 g.tick_advancements();
                 g.update_player_attributes();
-            });
+            };
+            match turn {
+                // Still the guest's turn: `leave_guest` would have set the
+                // record's `sleeping` from the bed in place.
+                Some(swap) => {
+                    let sleeping = self.sleeping.is_some();
+                    tick_end(self, sleeping);
+                    self.leave_guest(host, swap);
+                }
+                None => {
+                    let sleeping = host.hub.guests[gi].sleeping;
+                    self.as_guest(host, conn, |g| tick_end(g, sleeping));
+                }
+            }
             self.lan_map_updates(host, conn);
             host.hub.flush_progress(conn);
             self.guest_dig_feedback(host, conn);
@@ -2709,7 +2737,12 @@ impl Game<'_> {
     /// hazards (drowning, lava, fire blocks, suffocation, the void), and
     /// regeneration and the food tick (ServerPlayer.doTick). Their hurt
     /// sounds are heard at the guest.
-    fn guest_server_tick(&mut self, host: &mut LanHost, conn: u32) {
+    ///
+    /// The guest's turn comes back still in place when nothing after it
+    /// needs the host (no event for the players around, no velocity to send)
+    /// and `guest_turn_can_go_on`: `tick_guests` goes on with the tick's last
+    /// turn in it, with one swap fewer.
+    fn guest_server_tick(&mut self, host: &mut LanHost, conn: u32) -> Option<GuestSwap> {
         self.guest_vehicle_tick(host, conn);
         // The last move's fall stands in for the server's delta movement.
         let fell = host
@@ -2718,9 +2751,7 @@ impl Game<'_> {
             .and_then(|g| g.moves.last().map(|m| m.0[1]))
             .unwrap_or(0.0);
         self.guest_glide_tick(host, conn, fell);
-        let Some(g) = host.hub.guest_mut(conn) else {
-            return;
-        };
+        let g = host.hub.guest_mut(conn)?;
         let moves = std::mem::take(&mut g.moves);
         let from_ground = if moves.is_empty() {
             g.on_ground
@@ -2733,7 +2764,7 @@ impl Game<'_> {
                 self.as_guest(host, conn, |game| game.tick_mob_effects());
             }
             self.as_guest(host, conn, |game| game.handle_shoulder_entities());
-            return;
+            return None;
         }
         let in_wall = !g.sleeping && self.in_wall(g.position, g.eye_height());
         let at = g.position;
@@ -2890,9 +2921,7 @@ impl Game<'_> {
             game.wear_armor(&events);
             (events, velocity)
         };
-        let Some(mut swap) = self.enter_guest(host, conn) else {
-            return;
-        };
+        let mut swap = self.enter_guest(host, conn)?;
         let (events, marked) = body(self);
         // The sculk events are a turn of their own after the soul particle;
         // with nothing for the turn's end and the next one's start to do but
@@ -2907,9 +2936,16 @@ impl Game<'_> {
             }
             self.enter_guest(host, conn)
         };
-        if let Some(swap) = swap {
+        if let Some(mut swap) = swap {
             self.sculk_step_on_player();
             self.tick_player_sculk_events();
+            if marked.is_none()
+                && !events.iter().any(needs_host)
+                && self.guest_turn_can_go_on(host, &swap)
+            {
+                self.go_on_with_guest_turn(host, &mut swap);
+                return Some(swap);
+            }
             self.leave_guest(host, swap);
         }
         for event in events {
@@ -2969,6 +3005,7 @@ impl Game<'_> {
                 velocity: [v.x, v.y, v.z],
             }));
         }
+        None
     }
 
     /// ServerGamePacketListenerImpl.handlePlayerCommand START_FALL_FLYING:

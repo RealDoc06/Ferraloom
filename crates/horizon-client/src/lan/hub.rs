@@ -404,9 +404,8 @@ impl TrackPass {
                 slot.fill(out);
             }
         }
-        // Freed here rather than on the tick, which only wants the rest back.
+        // The players' states go back to the tick to be written over.
         drop(entities);
-        self.players.clear();
         crate::spans::summary_add_span(
             "beside_track",
             started.0.elapsed().as_secs_f32() * 1000.0,
@@ -1830,8 +1829,12 @@ impl Hub {
         &self.sync
     }
 
+    /// A player's state, written over `state` (last tick's, whose vectors
+    /// and strings are reused); its equipment and attributes are the
+    /// caller's to fill.
     fn player_state(
         &self,
+        state: &mut EntityState,
         id: i32,
         uuid: u128,
         position: [f64; 3],
@@ -1843,10 +1846,8 @@ impl Hub {
         bed: Option<[i32; 3]>,
         skin: u8,
         health: f32,
-        equipment: Vec<(u8, Option<horizon_protocol::item::Stack>)>,
-        attributes: Vec<play::AttributeSnapshot>,
         effects: &[EffectInstance],
-    ) -> EntityState {
+    ) {
         let (sneaking, sprinting, sleeping) = flags;
         let shared = shared_flags(sneaking, sprinting, &body);
         // Player.getDesiredPose (and updatePlayerPose's crawl): sleeping,
@@ -1864,7 +1865,8 @@ impl Hub {
         } else {
             0
         };
-        let mut meta = Vec::new();
+        let meta = &mut state.meta;
+        meta.clear();
         if shared != 0 {
             meta.push((0, serializer::BYTE, Value::Byte(shared)));
         }
@@ -1893,39 +1895,37 @@ impl Hub {
                     .map(|e| (e.id, e.ambient)),
             ),
         );
-        EntityState {
-            id,
-            uuid,
-            kind: "minecraft:player".into(),
-            position,
-            yaw: rot.0,
-            pitch: rot.1,
-            head_yaw: rot.2,
-            on_ground,
-            velocity: [0.0; 3],
-            data: 0,
-            meta,
-            // The effect swirls go back to none.
-            defaults: vec![
-                (10, serializer::PARTICLES, Value::Particles(Vec::new())),
-                (11, serializer::BOOLEAN, Value::Bool(false)),
-            ],
-            equipment,
-            attributes,
-            precise: false,
-            needs_sync: false,
-            leash: None,
+        (state.id, state.uuid) = (id, uuid);
+        if state.kind != "minecraft:player" {
+            state.kind.clear();
+            state.kind.push_str("minecraft:player");
         }
+        state.position = position;
+        (state.yaw, state.pitch, state.head_yaw) = rot;
+        state.on_ground = on_ground;
+        state.velocity = [0.0; 3];
+        state.data = 0;
+        // The effect swirls go back to none.
+        state.defaults.clear();
+        state.defaults.extend([
+            (10, serializer::PARTICLES, Value::Particles(Vec::new())),
+            (11, serializer::BOOLEAN, Value::Bool(false)),
+        ]);
+        state.precise = false;
+        state.needs_sync = false;
+        state.leash = None;
     }
 
+    /// The stacks a player wears and holds, by wire slot, into `out`.
     fn equipment_of(
         &mut self,
+        out: &mut Vec<(u8, Option<horizon_protocol::item::Stack>)>,
         main: &Option<ItemStack>,
         off: &Option<ItemStack>,
         armor: [&Option<ItemStack>; 4],
-    ) -> Vec<(u8, Option<horizon_protocol::item::Stack>)> {
+    ) {
         // Armor is stored head..feet; the wire slots are feet(2) legs(3) chest(4) head(5).
-        let mut out = Vec::new();
+        out.clear();
         let slots = [
             (0u8, main),
             (1, off),
@@ -1939,19 +1939,34 @@ impl Hub {
                 out.push((slot, self.stack(item)));
             }
         }
-        out
+    }
+
+    /// The next of last tick's player states to write over, or a new one.
+    fn next_state<'a>(all: &'a mut Vec<EntityState>, n: &mut usize) -> &'a mut EntityState {
+        if *n == all.len() {
+            all.push(EntityState::default());
+        }
+        *n += 1;
+        &mut all[*n - 1]
     }
 
     /// All entities as one client sees them: the world's, the host, the other guests.
     fn track_entities(&mut self, ctx: &mut TickCtx) {
+        // Last tick's player states, written over in place.
         let mut all = std::mem::take(&mut self.entity_players);
-        all.clear();
+        let mut n = 0;
         if let Some(h) = ctx.host {
-            let equipment = {
-                let e = &h.equipment;
-                self.equipment_of(&e[0], &e[1], [&e[5], &e[4], &e[3], &e[2]])
-            };
-            all.push(self.player_state(
+            let state = Self::next_state(&mut all, &mut n);
+            let e = &h.equipment;
+            self.equipment_of(
+                &mut state.equipment,
+                &e[0],
+                &e[1],
+                [&e[5], &e[4], &e[3], &e[2]],
+            );
+            state.attributes.clone_from(&h.attributes);
+            self.player_state(
+                state,
                 h.entity_id,
                 h.uuid,
                 h.position,
@@ -1963,10 +1978,8 @@ impl Hub {
                 h.bed,
                 0x7F,
                 h.health,
-                equipment,
-                h.attributes.clone(),
                 &[],
-            ));
+            );
         }
         // Out of the hub while their states are made: what a state reads of
         // the hub (the registries, the item ids) is not theirs, and their
@@ -1976,35 +1989,36 @@ impl Hub {
             if !self.here(g) {
                 continue;
             }
+            let state = Self::next_state(&mut all, &mut n);
             let main = g.inventory.get(g.selected).unwrap_or(&None);
             let armor = &g.armor;
-            let equipment = self.equipment_of(
+            self.equipment_of(
+                &mut state.equipment,
                 main,
                 &g.offhand,
                 [&armor[0], &armor[1], &armor[2], &armor[3]],
             );
-            all.push(
-                self.player_state(
-                    g.entity_id,
-                    g.uuid,
-                    g.position,
-                    (g.yaw, g.pitch, g.head_yaw),
-                    g.on_ground,
-                    (g.sneaking, g.sprinting, g.sleeping),
-                    guest_body(g),
-                    g.living_flags,
-                    g.bed,
-                    g.info.model_customisation,
-                    g.health,
-                    equipment,
-                    g.motion
-                        .as_ref()
-                        .map(|m| super::attributes::syncable(&m.attributes))
-                        .unwrap_or_default(),
-                    &g.effects.list,
-                ),
+            match g.motion.as_ref() {
+                Some(m) => super::attributes::syncable_into(&m.attributes, &mut state.attributes),
+                None => state.attributes.clear(),
+            }
+            self.player_state(
+                state,
+                g.entity_id,
+                g.uuid,
+                g.position,
+                (g.yaw, g.pitch, g.head_yaw),
+                g.on_ground,
+                (g.sneaking, g.sprinting, g.sleeping),
+                guest_body(g),
+                g.living_flags,
+                g.bed,
+                g.info.model_customisation,
+                g.health,
+                &g.effects.list,
             );
         }
+        all.truncate(n);
         self.guests = guests;
         if let Some(states) = self.entity_states.take() {
             return self.track_beside(all, states);
@@ -2046,7 +2060,6 @@ impl Hub {
             g.sender.send_bodies(out.drain(..));
         }
         self.entity_out = outs;
-        all.clear();
         self.entity_players = all;
         self.entities.insert(self.config.dimension.clone(), level);
     }
