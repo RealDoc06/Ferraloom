@@ -1861,7 +1861,13 @@ pub struct MobWorld<'a> {
     pub kinds_ahead: Option<([u64; 4], u16)>,
     /// The ticking mob's `MoveMemo::sections_ahead`, read ahead.
     pub memo_ahead: Option<(u64, bool)>,
+    /// Blocks the ticking mob's tick reads where it stands, read ahead of it
+    /// (the block at its eyes and the one below that affects its movement),
+    /// for [`MobWorld::block_ahead`].
+    pub blocks_ahead: Option<BlocksAhead>,
 }
+/// Block states by position, read ahead of a mob's tick.
+pub type BlocksAhead = [([i32; 3], horizon_world::registry::BlockStateId); 2];
 /// `Entity.getTeam` of the player and of the mobs on a team.
 #[derive(Clone, Debug, Default)]
 pub struct Teams<'a> {
@@ -2273,6 +2279,38 @@ impl Mob {
         events: &mut Vec<MobEvent>,
     ) -> bool {
         ai::tick(self, w, level_random, events)
+    }
+    /// Starts loading what this mob's tick reads first, one `stage` at a
+    /// time (0: its own fields, 1: its AI, 2: its goal lists, 3: the goals),
+    /// each reading only pointers the stage before loaded. The serial mob
+    /// ticks stall on each mob's memory, so they ask for the next mobs'
+    /// a few mobs ahead. A hint: it changes nothing.
+    pub fn prefetch(&self, stage: u8) {
+        use horizon_threads::prefetch_all as load;
+        match stage {
+            0 => {
+                load(self);
+                load(&self.extra);
+                load(&self.anim);
+                load(&self.attrs);
+                load(&self.fluids);
+            }
+            1 => {
+                load(&*self.ai);
+                load(&self.ai.goals);
+                load(&self.ai.targets);
+                load(&self.ai.nav);
+                load(&self.ai.move_memo);
+            }
+            2 => {
+                self.ai.goals.prefetch_list();
+                self.ai.targets.prefetch_list();
+            }
+            _ => {
+                self.ai.goals.prefetch_goals();
+                self.ai.targets.prefetch_goals();
+            }
+        }
     }
     pub fn distance_to(&self, p: [f64; 3]) -> f64 {
         let d = [

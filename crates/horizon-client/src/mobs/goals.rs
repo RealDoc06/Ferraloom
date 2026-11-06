@@ -80,6 +80,17 @@ pub struct GoalSelector {
     pub disabled: u8,
 }
 impl GoalSelector {
+    /// Starts loading the list of goals (a hint, see [`Mob::prefetch`]).
+    pub fn prefetch_list(&self) {
+        horizon_threads::prefetch_all(self.goals.as_slice());
+    }
+    /// Starts loading each goal (a hint, see [`Mob::prefetch`]); reads the
+    /// list, so it comes after [`Self::prefetch_list`].
+    pub fn prefetch_goals(&self) {
+        for g in &self.goals {
+            horizon_threads::prefetch_all(&*g.goal);
+        }
+    }
     pub fn add(&mut self, priority: i32, goal: impl Goal + 'static) {
         self.goals.push(Wrapped {
             priority,

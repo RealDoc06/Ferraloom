@@ -655,6 +655,19 @@ pub fn start_key(m: &Mob) -> [u64; 4] {
     }
     key_at(m.position, m.width(), m.height())
 }
+/// The blocks a mob's tick reads where it stands, in
+/// [`MobWorld::blocks_ahead`] order: at its eyes and below it.
+pub fn blocks_ahead_at(m: &Mob) -> [[i32; 3]; 2] {
+    [eye_block_pos(m), m.block_below_affecting_movement()]
+}
+/// The block at the mob's eyes (`LivingEntity.baseTick`'s suffocation).
+fn eye_block_pos(m: &Mob) -> [i32; 3] {
+    [
+        m.position.x.floor() as i32,
+        m.eye_y().floor() as i32,
+        m.position.z.floor() as i32,
+    ]
+}
 /// [`start_key`] of a mob of `width` and `height` starting at `at`.
 pub fn key_at(at: Vec3, width: f32, height: f32) -> [u64; 4] {
     let size = u64::from(width.to_bits()) << 32 | u64::from(height.to_bits());
@@ -769,12 +782,8 @@ fn base_tick(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
     if m.alive() {
         // LivingEntity.baseTick: suffocation inside full blocks. Entity.isInWall
         // is false under noPhysics, which Vex.tick holds while it ticks.
-        let (ex, ey, ez) = (
-            m.position.x.floor() as i32,
-            m.eye_y().floor() as i32,
-            m.position.z.floor() as i32,
-        );
-        let at_eye = w.facts.get(w.world.block(ex, ey, ez));
+        let [ex, ey, ez] = eye_block_pos(m);
+        let at_eye = w.facts.get(w.block_ahead(ex, ey, ez));
         if at_eye.full_collision
             && at_eye.solid_render
             && m.width() < 1.0

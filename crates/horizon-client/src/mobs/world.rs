@@ -283,6 +283,14 @@ impl MobWorld<'_> {
             }),
         }
     }
+    /// The block at `x, y, z`: from [`MobWorld::blocks_ahead`] when it was
+    /// read ahead there (the blocks hold still while the mobs tick), else
+    /// from the world.
+    pub fn block_ahead(&self, x: i32, y: i32, z: i32) -> BlockStateId {
+        self.blocks_ahead
+            .and_then(|blocks| blocks.into_iter().find(|(at, _)| *at == [x, y, z]))
+            .map_or_else(|| self.world.block(x, y, z), |(_, state)| state)
+    }
     /// The other mobs whose boxes may meet `area` (callers test the boxes),
     /// in snapshot order: through the grid when there is one, else all.
     pub fn others_near(&self, area: Aabb) -> impl Iterator<Item = &Seen> {
