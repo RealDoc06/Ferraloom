@@ -631,10 +631,7 @@ impl Game<'_> {
                     };
                 read.fluids = Some((fluids_key, fluids));
                 read.kinds = Some((kinds_key, kinds));
-                read.blocks = Some(
-                    horizon_client::mobs::ai::blocks_ahead_at(m)
-                        .map(|[x, y, z]| ([x, y, z], world.block(x, y, z))),
-                );
+                read.blocks = Some(horizon_client::mobs::BlocksAhead::read(m, world));
             });
         }
         // How many mobs there are and how many tick, now and then, for

@@ -1861,13 +1861,34 @@ pub struct MobWorld<'a> {
     pub kinds_ahead: Option<([u64; 4], u16)>,
     /// The ticking mob's `MoveMemo::sections_ahead`, read ahead.
     pub memo_ahead: Option<(u64, bool)>,
-    /// Blocks the ticking mob's tick reads where it stands, read ahead of it
-    /// (the block at its eyes and the one below that affects its movement),
-    /// for [`MobWorld::block_ahead`].
+    /// Blocks the ticking mob's tick reads where it stands, read ahead of it,
+    /// for [`MobWorld::block_ahead`] and [`MobWorld::light_ahead`].
     pub blocks_ahead: Option<BlocksAhead>,
 }
-/// Block states by position, read ahead of a mob's tick.
-pub type BlocksAhead = [([i32; 3], horizon_world::registry::BlockStateId); 2];
+/// What a mob's tick reads of the blocks where it stands, read ahead of the
+/// tick: at its eyes (suffocation, brightness, sky) and the block below that
+/// affects its movement (friction). Each holds for its position only.
+#[derive(Clone, Copy, Debug)]
+pub struct BlocksAhead {
+    pub eye: [i32; 3],
+    pub eye_block: horizon_world::registry::BlockStateId,
+    pub eye_light: u8,
+    pub below: [i32; 3],
+    pub below_block: horizon_world::registry::BlockStateId,
+}
+impl BlocksAhead {
+    /// Reads them for a mob standing as `m` does.
+    pub fn read(m: &Mob, world: &crate::world::World) -> Self {
+        let ([ex, ey, ez], below) = (ai::eye_block_pos(m), m.block_below_affecting_movement());
+        Self {
+            eye: [ex, ey, ez],
+            eye_block: world.block(ex, ey, ez),
+            eye_light: world.light(ex, ey, ez),
+            below,
+            below_block: world.block(below[0], below[1], below[2]),
+        }
+    }
+}
 /// `Entity.getTeam` of the player and of the mobs on a team.
 #[derive(Clone, Debug, Default)]
 pub struct Teams<'a> {

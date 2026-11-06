@@ -655,13 +655,9 @@ pub fn start_key(m: &Mob) -> [u64; 4] {
     }
     key_at(m.position, m.width(), m.height())
 }
-/// The blocks a mob's tick reads where it stands, in
-/// [`MobWorld::blocks_ahead`] order: at its eyes and below it.
-pub fn blocks_ahead_at(m: &Mob) -> [[i32; 3]; 2] {
-    [eye_block_pos(m), m.block_below_affecting_movement()]
-}
-/// The block at the mob's eyes (`LivingEntity.baseTick`'s suffocation).
-fn eye_block_pos(m: &Mob) -> [i32; 3] {
+/// The block at the mob's eyes (`LivingEntity.baseTick`'s suffocation,
+/// `Monster.getLightLevelDependentMagicValue`).
+pub(super) fn eye_block_pos(m: &Mob) -> [i32; 3] {
     [
         m.position.x.floor() as i32,
         m.eye_y().floor() as i32,
