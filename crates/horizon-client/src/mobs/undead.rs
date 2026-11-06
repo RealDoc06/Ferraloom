@@ -45,7 +45,7 @@ pub fn register(m: &mut Mob) {
             t.add(
                 5,
                 NearestTarget::new(
-                    super::goals::Prey::Filter(|s| s.species == Species::Turtle && s.baby),
+                    super::goals::Prey::SpeciesWhere(&[Species::Turtle], |s| s.baby),
                     true,
                 )
                 .interval(10),
@@ -107,7 +107,7 @@ pub fn register(m: &mut Mob) {
             t.add(
                 5,
                 NearestTarget::new(
-                    super::goals::Prey::Filter(|s| s.species == Species::Turtle && s.baby),
+                    super::goals::Prey::SpeciesWhere(&[Species::Turtle], |s| s.baby),
                     true,
                 )
                 .interval(10),
@@ -137,7 +137,7 @@ pub fn register(m: &mut Mob) {
             t.add(
                 3,
                 NearestTarget::new(
-                    super::goals::Prey::Filter(|s| s.species == Species::Turtle && s.baby),
+                    super::goals::Prey::SpeciesWhere(&[Species::Turtle], |s| s.baby),
                     true,
                 )
                 .interval(10),

@@ -1262,6 +1262,8 @@ pub enum Prey {
     Species(Vec<Species>),
     /// Any mob matching a predicate on its snapshot.
     Filter(fn(&Seen) -> bool),
+    /// A mob of one of the species matching a predicate.
+    SpeciesWhere(&'static [Species], fn(&Seen) -> bool),
 }
 /// NearestAttackableTargetGoal (+ TargetGoal's continue rules).
 #[derive(Clone, Debug)]
@@ -1428,6 +1430,9 @@ impl Goal for NearestTarget {
                     self.found = Some(Who::Player);
                 }
             }
+            // None of the species in the snapshot: the search finds nothing.
+            Prey::Species(list) if !cx.w.others_may_hold(list) => {}
+            Prey::SpeciesWhere(list, _) if !cx.w.others_may_hold(list) => {}
             prey => {
                 let pos = Vec3::new(m.position.x, m.eye_y(), m.position.z);
                 let id = m.id;
@@ -1441,6 +1446,7 @@ impl Goal for NearestTarget {
                         && match prey {
                             Prey::Species(list) => list.contains(&s.species),
                             Prey::Filter(f) => f(s),
+                            Prey::SpeciesWhere(list, f) => list.contains(&s.species) && f(s),
                             Prey::Player => false,
                         }
                 });
@@ -1704,6 +1710,11 @@ impl Goal for AvoidEntity {
                             && (p.position.y - m.position.y).abs() <= max + 3.0
                     })
                     .map(|p| p.position)
+            }
+            // None of the species in the snapshot: the search finds nothing.
+            Avoid::Species(list) if !cx.w.others_may_hold(list) => {
+                self.found = None;
+                None
             }
             Avoid::Species(list) => {
                 let id = m.id;
