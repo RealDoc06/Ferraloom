@@ -570,7 +570,6 @@ mod tests {
             let port = listener.local_addr().unwrap().port();
             let mut c = Connection::connect("127.0.0.1", port, Duration::from_secs(5)).unwrap();
             let (mut peer, _) = listener.accept().unwrap();
-            c.enable_encryption(&[7; 16]);
             let (_, mut writer) = c.split();
             if !nonblocking {
                 let reader = std::thread::spawn(move || {

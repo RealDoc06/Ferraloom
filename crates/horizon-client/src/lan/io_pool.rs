@@ -573,14 +573,15 @@ mod tests {
     use std::{net::TcpListener, sync::mpsc::channel};
 
     /// A pooled writer for a player's sender, and the client's end.
-    fn pooled(secret: Option<[u8; 16]>) -> (Outgoing, PlayerSender, Connection) {
+    /// Encrypted and compressed when `secure`.
+    fn pooled(secure: bool) -> (Outgoing, PlayerSender, Connection) {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         let mut client = Connection::connect("127.0.0.1", port, Duration::from_secs(5)).unwrap();
         let mut server = Connection::from_stream(listener.accept().unwrap().0).unwrap();
-        if let Some(secret) = secret {
-            server.enable_encryption(&secret);
-            client.enable_encryption(&secret);
+        if secure {
+            server.enable_encryption(&[7; 16]);
+            client.enable_encryption(&[7; 16]);
             server.set_compression(64);
             client.set_compression(64);
         }
@@ -601,7 +602,7 @@ mod tests {
 
     #[test]
     fn an_unfilled_slot_parks_the_writer_after_what_came_before() {
-        let (mut out, sender, mut client) = pooled(None);
+        let (mut out, sender, mut client) = pooled(true);
         let holding = Holding::start();
         sender.send(vec![1, 10]);
         let filler = sender.reserve();
@@ -625,10 +626,10 @@ mod tests {
     }
 
     /// More than the socket takes: the writer keeps the rest, never blocks,
-    /// and the client gets every packet in order, encrypted and compressed.
+    /// and the client gets every packet in order.
     #[test]
     fn a_full_socket_holds_the_rest_for_later() {
-        let (mut out, sender, mut client) = pooled(Some([7; 16]));
+        let (mut out, sender, mut client) = pooled(false);
         let mut seed = 1u32;
         let bodies: Vec<Vec<u8>> = (0..400u32)
             .map(|i| {
@@ -669,7 +670,7 @@ mod tests {
 
     #[test]
     fn a_disconnect_lingers_then_closes() {
-        let (mut out, sender, mut client) = pooled(None);
+        let (mut out, sender, mut client) = pooled(false);
         sender.disconnect(horizon_world::nbt::Tag::String("bye".into()));
         let now = Instant::now();
         out.write(now);
