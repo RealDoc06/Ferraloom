@@ -154,6 +154,28 @@ impl RandomTickSections {
         );
         cached.sections
     }
+    /// Reads what the turns of the chunks at `keys` will read first (their
+    /// entries here, their resident chunks and their cells), with no read
+    /// waiting on another: the cache misses of many chunks then overlap,
+    /// where the turns, one after the other, would wait on each in turn.
+    /// It changes nothing, so its answer is never needed.
+    pub fn warm<L: RandomTickChunks + ?Sized>(&self, keys: &[(i32, i32)], level: &L) {
+        let mut seen = 0usize;
+        for key in keys {
+            if let Some(cached) = self.chunks.get(key) {
+                seen ^= cached.chunk.as_ptr() as usize;
+                let mut bits = cached.sections.0;
+                while bits != 0 {
+                    seen ^= cached.cells[bits.trailing_zeros() as usize] as usize;
+                    bits &= bits - 1;
+                }
+            }
+            if let Some(chunk) = level.chunk_at(*key) {
+                seen ^= Arc::as_ptr(chunk) as usize;
+            }
+        }
+        std::hint::black_box(seen);
+    }
     /// The [`RandomTickSource`] for the chunk at `key`, for one chunk's turn.
     pub fn visit<'a>(
         &'a mut self,

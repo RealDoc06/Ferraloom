@@ -3391,10 +3391,14 @@ impl Game<'_> {
             // Out of the level for the turn: the random ticks don't read it.
             let mut sections = std::mem::take(level.random_tick_sections);
             let facts = level.facts;
-            for key in ticking {
-                let pos = horizon_core::position::ChunkPos::new(key.0, key.1);
-                let mut visit = sections.visit(key, facts, b);
-                b.tick_chunk_random_from(level, ticks, pos, &mut visit);
+            // A batch's data is read ahead of its turns, all at once.
+            for batch in ticking.chunks(32) {
+                sections.warm(batch, &*level);
+                for &key in batch {
+                    let pos = horizon_core::position::ChunkPos::new(key.0, key.1);
+                    let mut visit = sections.visit(key, facts, b);
+                    b.tick_chunk_random_from(level, ticks, pos, &mut visit);
+                }
             }
             *level.random_tick_sections = sections;
             b.run_block_events(level, ticks);
