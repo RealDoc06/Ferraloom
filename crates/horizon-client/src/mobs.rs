@@ -2311,6 +2311,8 @@ impl Mob {
         match stage {
             0 => {
                 load(self);
+                // The pointer stage 1 follows, wherever the layout put it.
+                load(&self.ai);
                 load(&self.extra);
                 load(&self.anim);
                 load(&self.attrs);
