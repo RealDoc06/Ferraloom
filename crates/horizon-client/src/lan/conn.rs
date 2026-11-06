@@ -1222,14 +1222,16 @@ const SHARED_FRAME_MIN: usize = 8 << 10;
 const SHARED_FRAME_BYTES: usize = 32 << 20;
 
 /// Compressed frame contents by the body they were made from: its length,
-/// two independently keyed 64-bit hashes of it, and the threshold.
+/// a randomly seeded 128-bit XXH3 hash of it, and the threshold. (XXH3 runs
+/// at memory speed; two SipHash passes over every large body took 15% of the
+/// writers' time at 500 players.)
 struct SharedFrames {
-    hashers: (std::hash::RandomState, std::hash::RandomState),
+    seed: u64,
     frames: Mutex<FrameCache>,
     /// [`SHARED_FRAME_BYTES`].
     limit: usize,
 }
-type FrameKey = (usize, u64, u64, usize);
+type FrameKey = (usize, u128, usize);
 #[derive(Default)]
 struct FrameCache {
     frames: crate::fast_hash::FxHashMap<FrameKey, Arc<[u8]>>,
@@ -1243,7 +1245,7 @@ impl SharedFrames {
     }
     fn new(limit: usize) -> Self {
         Self {
-            hashers: Default::default(),
+            seed: std::hash::BuildHasher::hash_one(&std::hash::RandomState::new(), limit),
             frames: Mutex::default(),
             limit,
         }
@@ -1251,11 +1253,9 @@ impl SharedFrames {
     /// `frame::contents(body, Some(threshold))`, compressed only when no
     /// connection has sent the same body lately.
     fn contents(&self, body: &[u8], threshold: usize) -> horizon_protocol::Result<Arc<[u8]>> {
-        use std::hash::BuildHasher;
         let key = (
             body.len(),
-            self.hashers.0.hash_one(body),
-            self.hashers.1.hash_one(body),
+            xxhash_rust::xxh3::xxh3_128_with_seed(body, self.seed),
             threshold,
         );
         let cache = || self.frames.lock().unwrap_or_else(PoisonError::into_inner);
