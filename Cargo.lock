@@ -1513,6 +1513,7 @@ dependencies = [
  "wgpu",
  "winit",
  "winresource",
+ "xxhash-rust",
  "zip",
 ]
 
