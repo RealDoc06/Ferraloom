@@ -1680,7 +1680,8 @@ impl Game<'_> {
         self.tick_player_sculk_events();
         self.sculk.pass = Some(EntityPass::new(&self.mobs));
         self.tick_mob_sculk_events();
-        self.sculk.pass = None;
+        let pass = self.sculk.pass.take();
+        self.forget_gone_mob_events(pass);
         // Dropped items are entities too: Entity.applyEffectsFromBlocks.
         let items: Vec<[f64; 3]> = self
             .dropped
@@ -1832,11 +1833,22 @@ impl Game<'_> {
                 }
             }
         }
-        let alive: FxHashSet<u32> = self.mobs.iter().map(|m| m.id).collect();
-        self.sculk.damaged.retain(|id, _| alive.contains(id));
+    }
+    /// Drops the step and damage records of mobs no longer in the level. The
+    /// pass's ids answer when the mob list is still the one it was made from.
+    fn forget_gone_mob_events(&mut self, pass: Option<EntityPass>) {
+        let fresh;
+        let alive = match &pass {
+            Some(pass) if pass.matches(&self.mobs) => &pass.slots,
+            _ => {
+                fresh = EntityPass::new(&self.mobs);
+                &fresh.slots
+            }
+        };
+        self.sculk.damaged.retain(|id, _| alive.contains_key(id));
         self.sculk.steps.retain(|who, _| match who {
             Who::Player => true,
-            Who::Mob(id) => alive.contains(id),
+            Who::Mob(id) => alive.contains_key(id),
         });
     }
     fn in_water_at(&self, at: [f64; 3]) -> bool {
