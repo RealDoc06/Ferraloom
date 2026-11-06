@@ -3,9 +3,9 @@
 //! jockeys, strider jockeys, zombie horsemen) and the skeleton horse trap.
 //! Saving riders under `Passengers` lives in `persist.rs`.
 use super::Game;
+use horizon_client::fast_hash::{FxHashMap, FxHashSet};
 use horizon_client::mobs::{Species, riders};
 use horizon_core::{geometry::Vec3, random::RandomSource};
-use std::collections::HashMap;
 
 /// `Zombie.finalizeSpawn`: a baby zombie takes a chicken one time in twenty,
 /// and another one time in twenty of the rest.
@@ -47,14 +47,22 @@ impl Game<'_> {
                 m.extra.boarding_cooldown -= 1;
             }
         }
-        let boats: std::collections::HashSet<u32> = self.boats.iter().map(|b| b.id).collect();
-        let index: HashMap<u32, usize> = self
+        // Most ticks nobody rides: then every rider link is simply clear.
+        if self.mobs.iter().all(|m| m.extra.mount.is_none()) {
+            for m in &mut self.mobs {
+                m.extra.rider = None;
+            }
+            self.position_riders();
+            return;
+        }
+        let boats: FxHashSet<u32> = self.boats.iter().map(|b| b.id).collect();
+        let index: FxHashMap<u32, usize> = self
             .mobs
             .iter()
             .enumerate()
             .map(|(i, m)| (m.id, i))
             .collect();
-        let mut riding: HashMap<u32, u32> = HashMap::new();
+        let mut riding: FxHashMap<u32, u32> = FxHashMap::default();
         for i in 0..self.mobs.len() {
             let Some(v) = self.mobs[i].extra.mount else {
                 continue;
@@ -83,7 +91,10 @@ impl Game<'_> {
     /// no passenger's position.
     pub(super) fn position_riders(&mut self) {
         self.seat_boat_mobs();
-        let index: HashMap<u32, usize> = self
+        if self.mobs.iter().all(|m| m.extra.mount.is_none()) {
+            return;
+        }
+        let index: FxHashMap<u32, usize> = self
             .mobs
             .iter()
             .enumerate()

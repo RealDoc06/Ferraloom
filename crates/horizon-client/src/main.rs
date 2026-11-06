@@ -9,6 +9,12 @@ use horizon_client::{crash, logging};
 /// reads it, so the linker keeps it.
 static MOD_API_LEVEL: [u8; 27] = horizon_mods::api_level::MARK;
 
+/// jemalloc instead of glibc malloc on Linux: its per-thread caches suit the tick pool's short-lived
+/// allocations and the server's thousand connection threads.
+#[cfg(target_os = "linux")]
+#[global_allocator]
+static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
 fn main() {
     std::hint::black_box(&MOD_API_LEVEL);
     horizon_client::telemetry::mark_start();
