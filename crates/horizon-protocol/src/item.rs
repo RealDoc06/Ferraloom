@@ -716,14 +716,32 @@ mod tests {
         let stack = Some(Stack {
             item: 7,
             count: 1,
-            added: vec![(component::DAMAGE, Component::Int(300)), (component::REPAIR_COST, Component::Int(5))],
+            added: vec![
+                (component::DAMAGE, Component::Int(300)),
+                (component::REPAIR_COST, Component::Int(5)),
+            ],
             removed: vec![component::MAX_DAMAGE],
         });
         let mut w = Writer::new();
         UntrustedSlot::write(&stack, &mut w);
         // Each value is a one-byte VarInt length, then the value (300 is two VarInt bytes).
-        assert_eq!(w.data, [1, 7, 2, 1, component::DAMAGE as u8, 2, 0xAC, 0x02,
-            component::REPAIR_COST as u8, 1, 5, component::MAX_DAMAGE as u8]);
+        assert_eq!(
+            w.data,
+            [
+                1,
+                7,
+                2,
+                1,
+                component::DAMAGE as u8,
+                2,
+                0xAC,
+                0x02,
+                component::REPAIR_COST as u8,
+                1,
+                5,
+                component::MAX_DAMAGE as u8
+            ]
+        );
         let mut r = Reader::new(&w.data);
         assert_eq!(UntrustedSlot::read(&mut r).unwrap(), stack);
         assert_eq!(r.remaining(), 0);
