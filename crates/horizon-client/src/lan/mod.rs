@@ -18,6 +18,8 @@ pub mod discovery;
 pub mod entity;
 pub mod guest;
 pub mod hub;
+#[cfg(target_os = "linux")]
+mod io_pool;
 pub mod menu;
 pub mod playerdata;
 mod recipes;

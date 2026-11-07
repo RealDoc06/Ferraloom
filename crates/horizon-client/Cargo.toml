@@ -69,9 +69,10 @@ ureq = { version = "2", default-features = false, features = ["tls"] }
 unicode-bidi = "0.3.18"
 
 [target.'cfg(unix)'.dependencies]
-# The server thread's CPU time per tick (`HORIZON_SPIKES`, spans.rs) and
-# the profiler's open-file limit (profiler.rs).
-rustix = { version = "1", default-features = false, features = ["std", "time", "thread", "process"] }
+# The server thread's CPU time per tick (`HORIZON_SPIKES`, spans.rs),
+# the profiler's open-file limit (profiler.rs) and the play state's epoll
+# lanes (lan/io_pool.rs).
+rustix = { version = "1", default-features = false, features = ["std", "time", "thread", "process", "event"] }
 
 [target.'cfg(windows)'.dependencies]
 # DirectX 12, where Vulkan has no adapter or device, or by choice (`graphicsApi`, graphics.rs).

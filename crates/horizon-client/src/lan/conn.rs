@@ -3,9 +3,12 @@
 //! configuration phase (ServerStatusPacketListenerImpl,
 //! ServerLoginPacketListenerImpl, ServerConfigurationPacketListenerImpl). A
 //! player that completes configuration continues in the play state: the
-//! reader forwards decoded packets to the game thread while a writer thread
-//! frames, compresses and encrypts what the game queues, and answers the
-//! keep-alive schedule on its own so a long frame never times a client out.
+//! reader forwards decoded packets to the game thread while a writer frames,
+//! compresses and encrypts what the game queues, and answers the keep-alive
+//! schedule on its own so a long frame never times a client out. On Linux a
+//! socket's reader and writer are a few shared event-driven threads
+//! (`io_pool`); elsewhere, and for an in-memory connection, each has a
+//! thread of its own.
 use super::{
     Joined, NetEvent, Out, Shared,
     data::{CORE_PACK, SyncData},
@@ -34,7 +37,7 @@ use std::{
 
 /// ServerCommonPacketListenerImpl.KEEPALIVE_TIME and the disconnect timeout.
 const KEEP_ALIVE_EVERY: Duration = Duration::from_secs(15);
-const KEEP_ALIVE_TIMEOUT: Duration = Duration::from_secs(30);
+pub(super) const KEEP_ALIVE_TIMEOUT: Duration = Duration::from_secs(30);
 /// Packets queued for one client beyond this many bytes disconnect it.
 const MAX_PENDING: usize = 96 << 20;
 /// Vanilla's server-side disconnect during login is a JSON component.
@@ -249,12 +252,18 @@ impl std::fmt::Debug for LaterBody {
     }
 }
 
+/// Tells a connection's writer it has something to do: packets queued, or a
+/// slot filled. Only a pooled writer (`io_pool`) needs telling; a writer
+/// thread waits on its channel and its slots.
+pub(super) type Wake = Arc<dyn Fn() + Send + Sync>;
+
 /// A place in a connection's queue for packets a pass beside the tick is still
 /// making: what the tick queues after it goes out after them, and the writer
-/// thread waits here for them. The owner fills it ([`SlotFiller`]).
+/// waits here for them. The owner fills it ([`SlotFiller`]).
 pub struct Slot {
-    bodies: std::sync::OnceLock<Vec<PacketBody>>,
+    pub(super) bodies: std::sync::OnceLock<Vec<PacketBody>>,
     pending: Arc<AtomicUsize>,
+    wake: Option<Wake>,
 }
 impl std::fmt::Debug for Slot {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -270,12 +279,19 @@ impl SlotFiller {
     pub fn fill(&self, bodies: Vec<PacketBody>) {
         let bytes: usize = bodies.iter().map(PacketBody::queued_bytes).sum();
         self.0.pending.fetch_add(bytes, Ordering::Relaxed);
-        let _ = self.0.bodies.set(bodies);
+        self.set(bodies);
+    }
+    fn set(&self, bodies: Vec<PacketBody>) {
+        if self.0.bodies.set(bodies).is_ok()
+            && let Some(wake) = &self.0.wake
+        {
+            wake();
+        }
     }
 }
 impl Drop for SlotFiller {
     fn drop(&mut self) {
-        let _ = self.0.bodies.set(Vec::new());
+        self.set(Vec::new());
     }
 }
 
@@ -299,7 +315,7 @@ pub enum PacketBody {
 
 impl PacketBody {
     /// What it counts for in the connection's queue until it is written.
-    fn queued_bytes(&self) -> usize {
+    pub(super) fn queued_bytes(&self) -> usize {
         match self {
             Self::Later(_) => super::chunks::LATER_BODY_BYTES,
             // Counted when it is filled.
@@ -371,6 +387,8 @@ pub struct PlayerSender {
     held: Arc<Mutex<Vec<PacketBody>>>,
     /// What [`flush_all`] gave the post thread and it hasn't passed on yet.
     posted: Arc<AtomicUsize>,
+    /// Told after every [`Out`] and slot this sends: a pooled writer's.
+    wake: Option<Wake>,
 }
 impl PlayerSender {
     pub fn new(tx: Sender<Out>, pending: Arc<AtomicUsize>) -> Self {
@@ -379,6 +397,7 @@ impl PlayerSender {
             pending,
             held: Arc::default(),
             posted: Arc::default(),
+            wake: None,
         }
     }
     fn held(&self) -> std::sync::MutexGuard<'_, Vec<PacketBody>> {
@@ -413,6 +432,7 @@ impl PlayerSender {
         let slot = Arc::new(Slot {
             bodies: Default::default(),
             pending: self.pending.clone(),
+            wake: self.wake.clone(),
         });
         self.send_body(PacketBody::Slot(slot.clone()));
         SlotFiller(slot)
@@ -447,10 +467,13 @@ impl PlayerSender {
         self.flush();
         self.deliver(Out::Disconnect(reason));
     }
-    /// To the writer thread, after anything still with the post thread.
+    /// To the writer, after anything still with the post thread.
     fn deliver(&self, out: Out) {
         if self.posted.load(Ordering::Acquire) == 0 {
             let _ = self.tx.send(out);
+            if let Some(wake) = &self.wake {
+                wake();
+            }
         } else {
             post(vec![self.posting(out)]);
         }
@@ -461,6 +484,7 @@ impl PlayerSender {
             tx: self.tx.clone(),
             out,
             posted: self.posted.clone(),
+            wake: self.wake.clone(),
         }
     }
 }
@@ -488,10 +512,14 @@ struct Posted {
     tx: Sender<Out>,
     out: Out,
     posted: Arc<AtomicUsize>,
+    wake: Option<Wake>,
 }
 impl Posted {
     fn hand_over(self) {
         let _ = self.tx.send(self.out);
+        if let Some(wake) = &self.wake {
+            wake();
+        }
         self.posted.fetch_sub(1, Ordering::AcqRel);
     }
 }
@@ -1116,16 +1144,57 @@ fn offer_pack(
 
 fn play(c: Connection, shared: &Arc<Shared>, parts: Parts, address: std::net::SocketAddr) {
     let conn_id = shared.next_id();
-    let events = shared.events.clone();
-    let _ = c.reader.set_read_timeout(Some(KEEP_ALIVE_TIMEOUT));
-    let (mut reader, writer) = c.split();
     let (tx, rx) = channel();
     let pending = Arc::new(AtomicUsize::new(0));
     let latency = Arc::new(AtomicI32::new(0));
-    let alive = Arc::new(AtomicI64::new(-1));
-    let sender = PlayerSender::new(tx.clone(), pending.clone());
+    #[cfg_attr(not(target_os = "linux"), expect(unused_mut))]
+    let mut sender = PlayerSender::new(tx.clone(), pending.clone());
+    #[cfg(target_os = "linux")]
+    let seat = (!c.is_memory()).then(super::io_pool::seat).flatten();
+    #[cfg(target_os = "linux")]
+    if let Some(seat) = &seat {
+        sender.wake = Some(seat.wake());
+    }
+    let joined = Joined {
+        conn: conn_id,
+        uuid: parts.uuid,
+        name: parts.name.clone(),
+        properties: parts.properties,
+        info: parts.info,
+        brand: parts.brand,
+        sender,
+        latency: latency.clone(),
+        address,
+    };
+    let player = Player {
+        conn: conn_id,
+        uuid: parts.uuid,
+        name: parts.name,
+        shared: shared.clone(),
+        events: shared.events.clone(),
+        tx,
+        alive: Arc::new(AtomicI64::new(-1)),
+        latency,
+        pending,
+        required_pack: shared
+            .config
+            .resource_pack
+            .as_ref()
+            .is_some_and(|p| p.required),
+    };
+    #[cfg(target_os = "linux")]
+    if let Some(seat) = seat {
+        seat.serve(c, rx, player, joined);
+        return;
+    }
+    let _ = c.reader.set_read_timeout(Some(KEEP_ALIVE_TIMEOUT));
+    let (mut reader, writer) = c.split();
     let writer_thread = {
-        let (alive, latency, pending) = (alive.clone(), latency.clone(), pending.clone());
+        let (alive, latency, pending) = (
+            player.alive.clone(),
+            player.latency.clone(),
+            player.pending.clone(),
+        );
         std::thread::Builder::new()
             .name(format!("horizon-lan-out-{conn_id}"))
             .spawn(move || {
@@ -1136,81 +1205,104 @@ fn play(c: Connection, shared: &Arc<Shared>, parts: Parts, address: std::net::So
             })
             .ok()
     };
-    let name = parts.name.clone();
-    let joined = Joined {
-        conn: conn_id,
-        uuid: parts.uuid,
-        name: parts.name,
-        properties: parts.properties,
-        info: parts.info,
-        brand: parts.brand,
-        sender,
-        latency,
-        address,
-    };
-    let required_pack = shared
-        .config
-        .resource_pack
-        .as_ref()
-        .is_some_and(|p| p.required);
-    let reason = if events.send(NetEvent::Joined(Box::new(joined))).is_ok() {
-        match read_loop(&mut reader, conn_id, &events, &alive, required_pack) {
-            Ok(reason) => reason,
-            Err(rejected) => {
-                let (reason, text) = pack_rejected(shared, &name, rejected);
-                let _ = tx.send(Out::Disconnect(reason));
-                text
-            }
-        }
+    let ended = if player
+        .events
+        .send(NetEvent::Joined(Box::new(joined)))
+        .is_ok()
+    {
+        read_loop(&mut reader, &player)
     } else {
-        "server closed".to_owned()
+        Ok("server closed".to_owned())
     };
-    let _ = tx.send(Out::Close);
-    let _ = events.send(NetEvent::Left(conn_id, reason));
+    player.reader_ended(ended);
     if let Some(t) = writer_thread {
         let _ = t.join();
     }
-    shared.release(parts.uuid);
+    shared.release(player.uuid);
 }
 
-/// Forward the player's packets until the connection ends: why it did, or
-/// the id of a required resource pack the player declined (with
-/// `required_pack`), which disconnects them.
-fn read_loop(
-    reader: &mut ConnReader,
-    conn: u32,
-    events: &Sender<NetEvent>,
-    alive: &AtomicI64,
+/// Why a player's reader stopped: the reason the game hears, or the id of a
+/// required resource pack the player declined, which disconnects them.
+pub(super) type Ended = Result<String, u128>;
+
+/// A player in the play state, as both its reader and its writer know it.
+pub(super) struct Player {
+    pub conn: u32,
+    pub uuid: u128,
+    name: String,
+    pub shared: Arc<Shared>,
+    pub events: Sender<NetEvent>,
+    /// The connection's own queue, for the reader's last words.
+    pub tx: Sender<Out>,
+    /// The id of the last keep-alive the client answered.
+    pub alive: Arc<AtomicI64>,
+    pub latency: Arc<AtomicI32>,
+    pub pending: Arc<AtomicUsize>,
     required_pack: bool,
-) -> Result<String, u128> {
-    loop {
-        let (id, payload) = match reader.recv() {
-            Ok(p) => p,
-            // The client closed the connection: Connection.channelInactive
-            // without details, multiplayer.disconnect.generic.
-            Err(e)
-                if e.0 == "Connection closed by the server"
-                    || e.0.contains("reset by peer")
-                    || e.0.contains("aborted") =>
-            {
-                return Ok("Disconnected".to_owned());
-            }
-            Err(e) => return Ok(e.to_string()),
-        };
-        match play::Serverbound::decode(id, &payload) {
-            Ok(play::Serverbound::KeepAlive(k)) => alive.store(k.id, Ordering::Relaxed),
+}
+impl Player {
+    /// Take one packet the client sent: keep-alive answers here, the rest to
+    /// the game. Why the connection ends, when this one ends it.
+    pub fn receive(&self, id: i32, payload: &[u8]) -> Result<(), Ended> {
+        match play::Serverbound::decode(id, payload) {
+            Ok(play::Serverbound::KeepAlive(k)) => self.alive.store(k.id, Ordering::Relaxed),
             Ok(play::Serverbound::ResourcePack(r))
-                if r.action == PACK_DECLINED && required_pack =>
+                if r.action == PACK_DECLINED && self.required_pack =>
             {
-                return Err(r.id);
+                return Err(Err(r.id));
             }
             Ok(p) => {
-                if events.send(NetEvent::Packet(conn, Box::new(p))).is_err() {
-                    return Ok("server closed".to_owned());
+                if self
+                    .events
+                    .send(NetEvent::Packet(self.conn, Box::new(p)))
+                    .is_err()
+                {
+                    return Err(Ok("server closed".to_owned()));
                 }
             }
             // A malformed packet disconnects like vanilla's decoder exception.
-            Err(e) => return Ok(format!("Invalid packet {id}: {e}")),
+            Err(e) => return Err(Ok(format!("Invalid packet {id}: {e}"))),
+        }
+        Ok(())
+    }
+    /// The reader stopped: the writer sends what is left (a declined pack's
+    /// disconnect) and closes, and the game hears the player left.
+    pub fn reader_ended(&self, ended: Ended) {
+        let reason = match ended {
+            Ok(reason) => reason,
+            Err(rejected) => {
+                let (reason, text) = pack_rejected(&self.shared, &self.name, rejected);
+                let _ = self.tx.send(Out::Disconnect(reason));
+                text
+            }
+        };
+        let _ = self.tx.send(Out::Close);
+        let _ = self.events.send(NetEvent::Left(self.conn, reason));
+    }
+}
+
+/// Why a failed read ends the connection. The client closing it is
+/// Connection.channelInactive without details: multiplayer.disconnect.generic.
+pub(super) fn read_failed(e: horizon_protocol::Error) -> String {
+    if e.0 == "Connection closed by the server"
+        || e.0.contains("reset by peer")
+        || e.0.contains("aborted")
+    {
+        "Disconnected".to_owned()
+    } else {
+        e.to_string()
+    }
+}
+
+/// Forward the player's packets until the connection ends.
+fn read_loop(reader: &mut ConnReader, player: &Player) -> Ended {
+    loop {
+        let (id, payload) = match reader.recv() {
+            Ok(p) => p,
+            Err(e) => return Ok(read_failed(e)),
+        };
+        if let Err(ended) = player.receive(id, &payload) {
+            return ended;
         }
     }
 }
@@ -1291,6 +1383,24 @@ fn send_body(writer: &mut ConnWriter, body: &[u8]) -> horizon_protocol::Result<(
     }
 }
 
+/// Frame one body's packets after what the writer holds. False when the
+/// connection is to close: a packet failed, or the client is too far behind.
+pub(super) fn frame_body(
+    writer: &mut ConnWriter,
+    pending: &AtomicUsize,
+    body: &PacketBody,
+) -> bool {
+    // A later body counted for a guess until now: its bytes from here.
+    if matches!(body, PacketBody::Later(_)) {
+        pending.fetch_add(body.len(), Ordering::Relaxed);
+        pending.fetch_sub(body.queued_bytes(), Ordering::Relaxed);
+    }
+    body.packets().all(|packet| {
+        pending.fetch_sub(packet.len(), Ordering::Relaxed);
+        send_body(writer, packet).is_ok() && pending.load(Ordering::Relaxed) <= MAX_PENDING
+    })
+}
+
 /// Write what the game queued together, for one system call rather than one
 /// per packet: the stream's bytes are the same. False when the connection is
 /// to close: it failed, or the client is too far behind.
@@ -1307,20 +1417,71 @@ fn write_bodies(
             return false;
         }
         writer.start_batch();
-        body.wait().iter().all(|body| {
-            // A later body counted for a guess until now: its bytes from here.
-            if matches!(body, PacketBody::Later(_)) {
-                pending.fetch_add(body.len(), Ordering::Relaxed);
-                pending.fetch_sub(body.queued_bytes(), Ordering::Relaxed);
-            }
-            body.packets().all(|packet| {
-                pending.fetch_sub(packet.len(), Ordering::Relaxed);
-                send_body(writer, packet).is_ok() && pending.load(Ordering::Relaxed) <= MAX_PENDING
-            })
-        })
+        body.wait()
+            .iter()
+            .all(|body| frame_body(writer, pending, body))
     });
     writer.finish_batch().is_ok() && written
 }
+
+/// ServerCommonPacketListenerImpl's keep-alive, which the writer answers for:
+/// one every [`KEEP_ALIVE_EVERY`], answered within [`KEEP_ALIVE_TIMEOUT`],
+/// each answer's round trip averaged into the latency.
+pub(super) struct KeepAlive {
+    start: Instant,
+    sent_at: Option<(i64, Instant)>,
+    next: Instant,
+}
+/// What [`KeepAlive::due`] asks the writer to send.
+pub(super) enum Due {
+    /// A keep-alive.
+    Send(Vec<u8>),
+    /// The timeout's disconnect, after which the connection closes.
+    TimedOut(Vec<u8>),
+}
+impl KeepAlive {
+    pub fn new() -> Self {
+        let start = Instant::now();
+        Self {
+            start,
+            sent_at: None,
+            next: start + KEEP_ALIVE_EVERY,
+        }
+    }
+    /// Take the client's answer, and what is to be sent now, if anything.
+    pub fn due(&mut self, alive: &AtomicI64, latency: &AtomicI32) -> Option<Due> {
+        let now = Instant::now();
+        if let Some((id, at)) = self.sent_at {
+            if alive.load(Ordering::Relaxed) == id {
+                let ms = i32::try_from(at.elapsed().as_millis()).unwrap_or(i32::MAX);
+                let old = latency.load(Ordering::Relaxed);
+                latency.store((old * 3 + ms) / 4, Ordering::Relaxed);
+                self.sent_at = None;
+            } else if at.elapsed() > KEEP_ALIVE_TIMEOUT {
+                let reason = translatable("disconnect.timeout", &[]);
+                let packet = play::Clientbound::Disconnect(cfg::Disconnect { reason });
+                return Some(Due::TimedOut(packet.encode()));
+            }
+        }
+        if self.sent_at.is_some() || now < self.next {
+            return None;
+        }
+        let id = i64::try_from(self.start.elapsed().as_millis()).unwrap_or(0);
+        self.sent_at = Some((id, now));
+        self.next = now + KEEP_ALIVE_EVERY;
+        Some(Due::Send(
+            play::Clientbound::KeepAlive(cfg::KeepAlive { id }).encode(),
+        ))
+    }
+}
+
+/// A play disconnect with this reason.
+pub(super) fn disconnect_packet(reason: horizon_world::nbt::Tag) -> Vec<u8> {
+    play::Clientbound::Disconnect(cfg::Disconnect { reason }).encode()
+}
+
+/// How long a disconnect has to reach the client before the socket closes.
+pub(super) const DISCONNECT_LINGER: Duration = Duration::from_millis(50);
 
 fn write_loop(
     mut writer: ConnWriter,
@@ -1329,9 +1490,7 @@ fn write_loop(
     latency: Arc<AtomicI32>,
     pending: Arc<AtomicUsize>,
 ) {
-    let start = Instant::now();
-    let mut sent_at: Option<(i64, Instant)> = None;
-    let mut next = Instant::now() + KEEP_ALIVE_EVERY;
+    let mut keep_alive = KeepAlive::new();
     loop {
         match rx.recv_timeout(Duration::from_millis(200)) {
             Ok(Out::Packet(body)) => {
@@ -1345,41 +1504,24 @@ fn write_loop(
                 }
             }
             Ok(Out::Disconnect(reason)) => {
-                let _ = writer
-                    .send(&play::Clientbound::Disconnect(cfg::Disconnect { reason }).encode());
-                std::thread::sleep(Duration::from_millis(50));
+                let _ = writer.send(&disconnect_packet(reason));
+                std::thread::sleep(DISCONNECT_LINGER);
                 break;
             }
             Ok(Out::Close) | Err(RecvTimeoutError::Disconnected) => break,
             Err(RecvTimeoutError::Timeout) => {}
         }
-        let now = Instant::now();
-        if let Some((id, at)) = sent_at {
-            if alive.load(Ordering::Relaxed) == id {
-                let ms = i32::try_from(at.elapsed().as_millis()).unwrap_or(i32::MAX);
-                let old = latency.load(Ordering::Relaxed);
-                latency.store((old * 3 + ms) / 4, Ordering::Relaxed);
-                sent_at = None;
-            } else if at.elapsed() > KEEP_ALIVE_TIMEOUT {
-                let _ = writer.send(
-                    &play::Clientbound::Disconnect(cfg::Disconnect {
-                        reason: translatable("disconnect.timeout", &[]),
-                    })
-                    .encode(),
-                );
+        match keep_alive.due(&alive, &latency) {
+            Some(Due::Send(packet)) => {
+                if writer.send(&packet).is_err() {
+                    break;
+                }
+            }
+            Some(Due::TimedOut(packet)) => {
+                let _ = writer.send(&packet);
                 break;
             }
-        }
-        if sent_at.is_none() && now >= next {
-            let id = i64::try_from(start.elapsed().as_millis()).unwrap_or(0);
-            if writer
-                .send(&play::Clientbound::KeepAlive(cfg::KeepAlive { id }).encode())
-                .is_err()
-            {
-                break;
-            }
-            sent_at = Some((id, now));
-            next = now + KEEP_ALIVE_EVERY;
+            None => {}
         }
     }
     writer.shutdown();
@@ -1520,6 +1662,42 @@ mod tests {
         let packets: Vec<_> = bodies.iter().flat_map(|b| b.packets()).collect();
         assert_eq!(packets, [&[1][..], &[2, 3], &[2, 3], &[4]]);
         assert_eq!(made.load(Ordering::Relaxed), 1);
+    }
+
+    /// A pooled writer hears of every batch and slot it can now write.
+    #[test]
+    fn a_pooled_sender_wakes_its_writer() {
+        let (tx, _rx) = channel();
+        let mut sender = PlayerSender::new(tx, Arc::default());
+        let wakes = Arc::new(AtomicUsize::new(0));
+        sender.wake = Some({
+            let wakes = wakes.clone();
+            Arc::new(move || {
+                wakes.fetch_add(1, Ordering::Relaxed);
+            })
+        });
+        let woken = || wakes.load(Ordering::Relaxed);
+        sender.send(vec![1]);
+        assert_eq!(woken(), 1);
+        let holding = Holding::start();
+        sender.send(vec![2]);
+        let filler = sender.reserve();
+        let dropped = sender.reserve();
+        assert_eq!(woken(), 1);
+        drop(holding);
+        // Through the post thread.
+        flush_all([&sender]);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while woken() < 2 {
+            assert!(Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+        filler.fill(Vec::new());
+        assert_eq!(woken(), 3);
+        drop(filler);
+        assert_eq!(woken(), 3);
+        drop(dropped);
+        assert_eq!(woken(), 4);
     }
 
     #[test]
