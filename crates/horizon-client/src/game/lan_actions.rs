@@ -268,6 +268,51 @@ impl Rules for ItemRules<'_> {
     }
 }
 
+/// `tick_guests`' parts, each summed over the guests into one span while
+/// spans are summed (a span for each guest would cost more than some parts).
+struct GuestParts {
+    last: Option<std::time::Instant>,
+    sums: [f32; GuestPart::NAMES.len()],
+}
+#[derive(Clone, Copy)]
+enum GuestPart {
+    /// The menus, stations and advancements before the guests.
+    Menus,
+    /// A guest's sleep, death and hands, up to their server tick.
+    Hands,
+    /// `guest_server_tick`: the turn with the body.
+    Body,
+    TickEnd,
+    /// Maps, progress, cracks, pickups, orbs and death (and a dead guest's turn).
+    After,
+}
+impl GuestPart {
+    const NAMES: [&str; 5] = ["lg_menus", "lg_hands", "lg_body", "lg_tick_end", "lg_after"];
+}
+impl GuestParts {
+    fn start() -> Self {
+        Self {
+            last: horizon_client::spans::summing().then(std::time::Instant::now),
+            sums: [0.0; GuestPart::NAMES.len()],
+        }
+    }
+    /// The time since the last mark goes to `part`.
+    fn mark(&mut self, part: GuestPart) {
+        if let Some(last) = self.last.as_mut() {
+            let now = std::time::Instant::now();
+            self.sums[part as usize] += (now - *last).as_secs_f32() * 1000.0;
+            *last = now;
+        }
+    }
+    fn finish(self) {
+        if self.last.is_some() {
+            for (name, ms) in GuestPart::NAMES.into_iter().zip(self.sums) {
+                horizon_client::spans::summary_add_span(name, ms, ms);
+            }
+        }
+    }
+}
+
 /// Whether `guest_server_tick` acts on this event of the guest's body after
 /// the turn (a sound, particles or a packet for the players around).
 fn needs_host(event: &MotionEvent) -> bool {
@@ -2397,6 +2442,7 @@ impl Game<'_> {
 
     /// Per tick, for every guest: dig, use items, pick up drops, die.
     pub(super) fn tick_guests(&mut self, host: &mut LanHost) {
+        let mut parts = GuestParts::start();
         self.lan_merchant_tick(host);
         self.lan_stations_tick(host);
         self.lan_tables_tick(host);
@@ -2415,7 +2461,10 @@ impl Game<'_> {
             self.refresh_hook_targets(host);
         }
         let pickups = PickupCells::new(&self.dropped);
+        parts.mark(GuestPart::Menus);
         for conn in conns {
+            // What a guest left by `continue` did counts with the after part.
+            parts.mark(GuestPart::After);
             let Some(gi) = host.hub.guest_index(conn) else {
                 continue;
             };
@@ -2508,7 +2557,9 @@ impl Game<'_> {
                 play.attack_item = held;
             }
             self.guest_delayed_destroy(host, conn);
+            parts.mark(GuestPart::Hands);
             let turn = self.guest_server_tick(host, conn);
+            parts.mark(GuestPart::Body);
             // Player.tick's statistics and ServerPlayer.tick's triggers, then
             // PlayerAdvancements.flushDirty.
             let tick_end = |g: &mut Self, sleeping: bool| {
@@ -2532,13 +2583,16 @@ impl Game<'_> {
                     self.as_guest(host, conn, |g| tick_end(g, sleeping));
                 }
             }
+            parts.mark(GuestPart::TickEnd);
             self.lan_map_updates(host, conn);
             host.hub.flush_progress(conn);
             self.guest_dig_feedback(host, conn);
             self.guest_pickups(host, gi, &pickups);
             self.guest_orbs(host, gi);
             self.guest_die(host, gi, conn);
+            parts.mark(GuestPart::After);
         }
+        parts.finish();
     }
 
     /// `ServerPlayer.die` for a guest whose health has run out: the death

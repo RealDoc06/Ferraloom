@@ -1726,7 +1726,7 @@ impl Game<'_> {
                 .take()
                 .expect("the hub is back after the quiet commands");
         }
-        self.lan_flush_effects(&mut host);
+        horizon_client::spans::time("lan_effects", || self.lan_flush_effects(&mut host));
         if !paused {
             horizon_client::spans::time("lan_guests", || self.tick_guests(&mut host));
         }
