@@ -954,20 +954,29 @@ fn relight_layer(
         }
     });
     while let Some(p) = increase.pop_front() {
-        let Some((from, packed)) = world.cell(p.0, p.1, p.2) else {
+        let Some(l) = level(world, sky, p) else {
             continue;
         };
-        let l = if sky { packed >> 4 } else { packed & 15 };
         if l <= 1 {
             continue;
         }
+        // Read only for a neighbour the light could still brighten.
+        let mut source = None;
         for (d, (ox, oy, oz)) in OFFSETS.iter().enumerate() {
             let q = (p.0 + ox, p.1 + oy, p.2 + oz);
+            // Every step loses at least 1: a neighbour at `l - 1` or more
+            // stays as it is, whatever its block.
+            if level(world, sky, q).is_none_or(|ql| ql >= l - 1) {
+                continue;
+            }
             let Some((to, packed)) = world.cell(q.0, q.1, q.2) else {
                 continue;
             };
             let ql = if sky { packed >> 4 } else { packed & 15 };
             let next = l.saturating_sub(tables.cells[to as usize].dampening.max(1));
+            let Some(from) = *source.get_or_insert_with(|| world.state(p.0, p.1, p.2)) else {
+                continue;
+            };
             if next > ql && !tables.blocked(from as usize, to as usize, d) {
                 set_level(world, sky, q, next);
                 changed.push(q);
