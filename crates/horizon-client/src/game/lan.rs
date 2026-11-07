@@ -5,6 +5,7 @@
 use super::{Game, shield::OFFHAND_SLOT};
 use horizon_client::{
     Result,
+    entities::ItemEntity,
     fast_hash::FxHashMap,
     items::ItemStack,
     lan::{
@@ -354,6 +355,9 @@ impl MobLook {
                 .is_none_or(|before| swing.is_some_and(|time| time < before));
     }
 }
+
+/// Dropped items per piece of `lan_entities`' pass on the pool.
+const ITEM_STATE_GRAIN: usize = 256;
 
 /// Mobs per piece of `lan_entities`' (and the riders' and the mob effects')
 /// pass on the pool.
@@ -1505,18 +1509,24 @@ impl Game<'_> {
                 Holder::Knot(p) => knots.get(&p).map(|&id| id as i32),
             });
         });
-        for d in &self.dropped {
-            let stack = hub.stack_of(&d.stack);
-            let e = out.add(d.id as i32, entity_uuid(d.id), "minecraft:item");
+        // The items' states on the pool too, each from its item alone.
+        let mut items: Vec<(&ItemEntity, bool, &mut EntityState)> = (self.dropped.iter())
+            .zip(out.take(self.dropped.len()))
+            .map(|(d, e)| (d, self.entity_glowing(d.id), e))
+            .collect();
+        let stacks = hub.stacks();
+        horizon_threads::pool::for_each_mut(&mut items, ITEM_STATE_GRAIN, |(d, glowing, e)| {
+            e.reset(d.id as i32, entity_uuid(d.id), "minecraft:item");
             e.position = [d.position.x, d.position.y, d.position.z];
             e.on_ground = d.on_ground;
             e.velocity = [d.velocity.x, d.velocity.y, d.velocity.z];
             // Entity.DATA_SHARED_FLAGS_ID: glowing 0x40 (the Glowing tag).
-            if self.entity_glowing(d.id) {
+            if *glowing {
                 e.meta.push((0, serializer::BYTE, Value::Byte(0x40)));
             }
+            let stack = stacks.of(&d.stack);
             e.meta.push((8, serializer::ITEM_STACK, Value::Item(stack)));
-        }
+        });
         for o in &self.orbs {
             let e = out.add(o.id as i32, entity_uuid(o.id), "minecraft:experience_orb");
             e.position = [o.position.x, o.position.y, o.position.z];
