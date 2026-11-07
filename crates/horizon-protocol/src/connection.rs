@@ -568,7 +568,7 @@ mod tests {
         let stream = |nonblocking: bool| {
             let listener = TcpListener::bind("127.0.0.1:0").unwrap();
             let port = listener.local_addr().unwrap().port();
-            let mut c = Connection::connect("127.0.0.1", port, Duration::from_secs(5)).unwrap();
+            let c = Connection::connect("127.0.0.1", port, Duration::from_secs(5)).unwrap();
             let (mut peer, _) = listener.accept().unwrap();
             let (_, mut writer) = c.split();
             if !nonblocking {
