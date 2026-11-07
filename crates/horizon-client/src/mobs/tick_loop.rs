@@ -496,6 +496,12 @@ impl MobLoop {
         let grid_before = (self.grid.species_added(), self.grid.reach().to_bits());
         let mut stats = Stats::default();
         for i in 0..n {
+            // Each turn reads its mob and its results, which other threads
+            // wrote: start loading the next ones'.
+            if let Some(Some(next)) = specs.get(i + 2) {
+                horizon_threads::prefetch_all(next);
+                horizon_threads::prefetch_all(&self.mobs[i + 2]);
+            }
             let Some(mut spec) = specs[i].take() else {
                 self.step(cx, i, Some(&mut track));
                 continue;
