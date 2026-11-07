@@ -26,12 +26,12 @@
 use super::{
     BlocksAhead, Mob, MobEvent, MobWorld, Others, PendingPushes, PlayerView, Seen, ai, living,
     raider,
-    seen_grid::{SeenGrid, SpeciesSet},
+    seen_grid::{ColumnSet, SeenGrid, SpeciesSet},
     spawning::LocalDifficulty,
 };
 use crate::fast_hash::FxHashMap;
 use horizon_core::{
-    geometry::{Aabb, Vec3},
+    geometry::Vec3,
     random::{LegacyRandom, RandomSource},
 };
 use std::{cell::RefCell, collections::HashSet};
@@ -172,15 +172,20 @@ struct Spec {
     guest: Option<u32>,
 }
 
-/// The snapshot entries that differ from what they were before the loop.
+/// The snapshot entries that differ from what they were before the loop,
+/// and the grid columns they were and are in.
 struct Dirty {
     slots: Vec<bool>,
     any: bool,
+    columns: ColumnSet,
 }
 impl Dirty {
-    fn mark(&mut self, i: usize) {
+    /// Entry `i`, which was in column `was` and is in `is`, changed.
+    fn mark(&mut self, i: usize, was: (i32, i32), is: (i32, i32)) {
         self.slots[i] = true;
         self.any = true;
+        self.columns.insert(was);
+        self.columns.insert(is);
     }
     fn has(&self, i: u32) -> bool {
         self.slots[i as usize]
@@ -321,7 +326,8 @@ impl MobLoop {
                 if let Some(track) = track.as_deref_mut()
                     && self.snapshot[i].alive
                 {
-                    track.dirty.mark(i);
+                    let at = self.grid.column_of(i);
+                    track.dirty.mark(i, at, at);
                 }
                 self.snapshot[i].alive = false;
             }
@@ -384,12 +390,13 @@ impl MobLoop {
             (entry, changed)
         });
         self.snapshot[i] = entry;
+        let was = self.grid.column_of(i);
         self.grid.update(i, self.snapshot[i].bounds);
         self.grid.note_species(self.snapshot[i].species);
         match track {
             Some(track) => {
                 if changed {
-                    track.dirty.mark(i);
+                    track.dirty.mark(i, was, self.grid.column_of(i));
                 }
                 // A mob changed before its turn ticks again from the changed
                 // state.
@@ -470,13 +477,13 @@ impl MobLoop {
             dirty: Dirty {
                 slots: vec![false; n],
                 any: false,
+                columns: ColumnSet::default(),
             },
             touched: vec![false; n],
             backups,
             replaced: Vec::new(),
         };
-        let species = self.grid.species_added();
-        let mut list = Vec::new();
+        let grid_before = (self.grid.species_added(), self.grid.reach().to_bits());
         let mut stats = Stats::default();
         for i in 0..n {
             let Some(mut spec) = specs[i].take() else {
@@ -486,9 +493,7 @@ impl MobLoop {
             stats.speculated += 1;
             let holds = !track.touched[i]
                 && !self.pushes.has(self.mobs[i].id)
-                && spec
-                    .reads
-                    .hold(&self.grid, &track.dirty, species, &mut list)
+                && spec.reads.hold(&self.grid, &track.dirty, grid_before)
                 && (spec.random.is_none() || same_random(&self.random, &start));
             if !holds {
                 stats.reran += 1;
@@ -660,10 +665,8 @@ pub struct Reads {
     impure: bool,
     /// Entries read by slot.
     slots: Vec<u32>,
-    /// Grid queries: the area, whether the grid answered it, and its answer
-    /// as a range of `lists`.
-    queries: Vec<(Aabb, bool, u32, u32)>,
-    lists: Vec<u32>,
+    /// The grid columns of each grid query.
+    queries: Vec<((i32, i32), (i32, i32))>,
 }
 impl Reads {
     pub(crate) fn all(&mut self) {
@@ -675,22 +678,21 @@ impl Reads {
     pub(crate) fn slot(&mut self, i: u32) {
         self.slots.push(i);
     }
-    /// A grid query over `area`, with the grid's candidates, or None when
-    /// the grid sent it to every entry.
-    pub(crate) fn query(&mut self, area: Aabb, candidates: Option<&[u32]>) {
-        let start = self.lists.len() as u32;
-        match candidates {
-            Some(list) => self.lists.extend_from_slice(list),
+    /// A grid query over `area`, with the grid's columns for it, or None
+    /// when the grid sent it to every entry.
+    pub(crate) fn query(&mut self, columns: Option<((i32, i32), (i32, i32))>) {
+        match columns {
+            Some(columns) => self.queries.push(columns),
             None => self.all = true,
         }
-        let end = self.lists.len() as u32;
-        self.queries.push((area, candidates.is_some(), start, end));
     }
     /// Whether the serial loop, at this point, would give the tick the same
-    /// answers: no entry it read changed, and the grid answers its queries
-    /// as before (`species`: the grid's count of added species before).
-    fn hold(&self, grid: &SeenGrid, dirty: &Dirty, species: u32, list: &mut Vec<u32>) -> bool {
-        if self.impure || (self.species && grid.species_added() != species) {
+    /// answers: no entry it read changed, and each grid query reads the same
+    /// columns, to which no changed entry came and from which none went, so
+    /// it finds the same entries, unchanged (`before`: the grid's count of
+    /// added species and its reach, as bits, before the loop).
+    fn hold(&self, grid: &SeenGrid, dirty: &Dirty, before: (u32, u64)) -> bool {
+        if self.impure || (self.species && grid.species_added() != before.0) {
             return false;
         }
         // The grid changes only with the boxes of changed entries.
@@ -700,11 +702,13 @@ impl Reads {
         if self.all || self.slots.iter().any(|&i| dirty.has(i)) {
             return false;
         }
-        self.queries.iter().all(|&(area, indexed, start, end)| {
-            grid.candidates(area, list) == indexed
-                && *list == self.lists[start as usize..end as usize]
-                && !list.iter().any(|&i| dirty.has(i))
-        })
+        // A wider reach widens every query.
+        if !self.queries.is_empty() && grid.reach().to_bits() != before.1 {
+            return false;
+        }
+        self.queries
+            .iter()
+            .all(|&(lo, hi)| !grid.too_wide(lo, hi) && !dirty.columns.meets(lo, hi))
     }
 }
 

@@ -340,7 +340,13 @@ impl MobWorld<'_> {
         if !indexed {
             near.clear();
         }
-        tick_loop::note(|r| r.query(area, indexed.then_some(near.as_slice())));
+        tick_loop::note(|r| {
+            r.query(
+                indexed
+                    .then(|| self.others_grid.and_then(|g| g.columns_for(area)))
+                    .flatten(),
+            )
+        });
         Near {
             list: near,
             at: 0,
