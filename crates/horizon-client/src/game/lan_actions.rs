@@ -12,7 +12,7 @@ use horizon_client::{
     command::vanilla,
     containers::BlockEntity,
     entities::{Experience, ItemEntity},
-    fast_hash::FxHashSet,
+    fast_hash::FxHashMap,
     first_person::{Hand, SwingAnimation},
     items::ItemStack,
     lan::{
@@ -185,38 +185,53 @@ pub(super) struct GuestSwap {
 }
 
 /// Where the items guests can take lay when the guests' tick began, in cells
-/// of 4 by 4 blocks: most guests stand far from any, and a server has hundreds
-/// of guests and thousands of items. Items only move in their own tick, and
-/// what a guest's turn drops goes at the end of the list.
+/// of 4 by 4 blocks, by their places in the list: most guests stand far from
+/// any, and a server has hundreds of guests and thousands of items. Items only
+/// move in their own tick, and what a guest's turn drops goes at the end of
+/// the list.
 struct PickupCells {
-    cells: FxHashSet<(i32, i32)>,
+    cells: FxHashMap<(i32, i32), Vec<usize>>,
+    /// The list's length and last item then: a list that differs since (an
+    /// item taken or dropped) has its items looked at one by one.
+    len: usize,
     last: Option<u32>,
 }
 impl PickupCells {
     fn new(items: &[ItemEntity]) -> Self {
+        let mut cells: FxHashMap<(i32, i32), Vec<usize>> = FxHashMap::default();
+        for (i, d) in items
+            .iter()
+            .enumerate()
+            .filter(|(_, d)| d.pickup_delay == 0)
+        {
+            let cell = (
+                d.position.x.floor() as i32 >> 2,
+                d.position.z.floor() as i32 >> 2,
+            );
+            cells.entry(cell).or_default().push(i);
+        }
         Self {
-            cells: items
-                .iter()
-                .filter(|d| d.pickup_delay == 0)
-                .map(|d| {
-                    (
-                        d.position.x.floor() as i32 >> 2,
-                        d.position.z.floor() as i32 >> 2,
-                    )
-                })
-                .collect(),
+            cells,
+            len: items.len(),
             last: items.last().map(|d| d.id),
         }
     }
-    /// False when no item in reach of `at` (1.5 blocks across) can be taken,
-    /// which a look at every item would find too.
-    fn may_reach(&self, items: &[ItemEntity], at: [f64; 3]) -> bool {
-        if items.last().map(|d| d.id) != self.last {
-            return true;
+    /// The places, in order, of the items that may be in reach of `at` (1.5
+    /// blocks across): every item a look at the whole list would find, or
+    /// `None` when the list changed and that look is needed.
+    fn near(&self, items: &[ItemEntity], at: [f64; 3]) -> Option<Vec<usize>> {
+        if items.len() != self.len || items.last().map(|d| d.id) != self.last {
+            return None;
         }
         let cell = |v: f64| v.floor() as i32 >> 2;
-        (cell(at[0] - 2.0)..=cell(at[0] + 2.0))
-            .any(|x| (cell(at[2] - 2.0)..=cell(at[2] + 2.0)).any(|z| self.cells.contains(&(x, z))))
+        let mut near = Vec::new();
+        for x in cell(at[0] - 2.0)..=cell(at[0] + 2.0) {
+            for z in cell(at[2] - 2.0)..=cell(at[2] + 2.0) {
+                near.extend(self.cells.get(&(x, z)).into_iter().flatten());
+            }
+        }
+        near.sort_unstable();
+        Some(near)
     }
 }
 
@@ -3269,13 +3284,16 @@ impl Game<'_> {
                 horizon_client::lan::playerdata::uuid_ints(g.uuid),
             )
         };
-        if mode == SPECTATOR || !cells.may_reach(&self.dropped, position) {
+        if mode == SPECTATOR {
             return;
         }
-        let near: Vec<usize> = self
-            .dropped
-            .iter()
-            .enumerate()
+        let candidates = cells.near(&self.dropped, position);
+        if candidates.as_ref().is_some_and(Vec::is_empty) {
+            return;
+        }
+        let near: Vec<usize> = (candidates.unwrap_or_else(|| (0..self.dropped.len()).collect()))
+            .into_iter()
+            .map(|i| (i, &self.dropped[i]))
             .filter(|(_, d)| {
                 d.pickup_delay == 0
                     && d.target.is_none_or(|t| t == uuid)
@@ -3619,7 +3637,7 @@ mod pickup_tests {
     }
 
     #[test]
-    fn the_cells_never_hide_an_item_in_reach() {
+    fn the_cells_give_every_item_in_reach_in_order() {
         let mut seed = 0x2545_f491_u64;
         let mut draw = |range: i32| {
             seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
@@ -3632,10 +3650,18 @@ mod pickup_tests {
         let mut skipped = 0;
         for _ in 0..4000 {
             let at = [draw(640), 64.0, draw(640)];
-            if !cells.may_reach(&items, at) {
-                skipped += 1;
-                assert!(!items.iter().any(|d| reaches(d, at)));
-            }
+            let all: Vec<usize> = (0..items.len())
+                .filter(|&i| reaches(&items[i], at))
+                .collect();
+            let near = cells.near(&items, at).expect("the list is as it was");
+            assert_eq!(
+                near.iter()
+                    .copied()
+                    .filter(|&i| reaches(&items[i], at))
+                    .collect::<Vec<_>>(),
+                all
+            );
+            skipped += usize::from(near.is_empty());
         }
         assert!(skipped > 0);
     }
@@ -3645,8 +3671,17 @@ mod pickup_tests {
         let mut items = vec![item(1, 0.0, 0.0, 0)];
         let cells = PickupCells::new(&items);
         let far = [1000.0, 64.0, 1000.0];
-        assert!(!cells.may_reach(&items, far));
+        assert_eq!(cells.near(&items, far), Some(Vec::new()));
         items.push(item(2, 1000.0, 1000.0, 0));
-        assert!(cells.may_reach(&items, far));
+        assert_eq!(cells.near(&items, far), None);
+        // One taken in the middle moves the others' places.
+        let mut items = vec![
+            item(1, 0.0, 0.0, 0),
+            item(2, 0.0, 0.0, 0),
+            item(3, 0.0, 0.0, 0),
+        ];
+        let cells = PickupCells::new(&items);
+        items.remove(1);
+        assert_eq!(cells.near(&items, [0.0; 3]), None);
     }
 }
