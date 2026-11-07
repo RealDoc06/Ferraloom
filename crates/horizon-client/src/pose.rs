@@ -141,7 +141,16 @@ impl MotionWorld<'_, '_, '_> {
     /// Dry Player.updatePlayerPose after movement: crawl when neither standing
     /// nor crouching fits; leave the current pose if even crawling cannot fit.
     pub fn update_player_pose(&mut self) -> Result<()> {
-        if !self.can_fit_pose(Pose::Swimming)? {
+        // A body in the open fits every pose: no entities, no border near,
+        // only air around its tallest box.
+        let open = self.entities.is_empty() && {
+            let at = self.player.position;
+            let bounds = self.player.dimensions_for_pose(Pose::Standing)?.bounds(at);
+            let border = self.player.border.as_ref();
+            border.is_none_or(|b| !b.is_inside_close_to_border(at.x, at.z, bounds))
+                && self.scene.only_air_near(bounds)
+        };
+        if !open && !self.can_fit_pose(Pose::Swimming)? {
             return Ok(());
         }
         // Player.getDesiredPose: sleeping, swimming, gliding, Riptide's spin.
@@ -158,7 +167,7 @@ impl MotionWorld<'_, '_, '_> {
         } else {
             Pose::Standing
         };
-        let pose = if self.player.spectator || self.can_fit_pose(desired)? {
+        let pose = if open || self.player.spectator || self.can_fit_pose(desired)? {
             desired
         } else if self.can_fit_pose(Pose::Crouching)? {
             Pose::Crouching

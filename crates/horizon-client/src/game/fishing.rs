@@ -19,7 +19,7 @@ use horizon_core::{
     random::RandomSource,
 };
 use horizon_protocol::entity_data::{Value, serializer};
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use super::lan_actions::GuestPlay;
 
@@ -947,7 +947,7 @@ impl Game<'_> {
     pub(super) fn lan_hook_states(
         &self,
         host_entity: Option<i32>,
-        play: &HashMap<u32, GuestPlay>,
+        play: &horizon_client::fast_hash::FxHashMap<u32, Box<GuestPlay>>,
         hub: &Hub,
         out: &mut States,
     ) {

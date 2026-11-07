@@ -172,12 +172,16 @@ impl Game<'_> {
     }
     /// `PiglinAi.isWearingSafeArmor`.
     pub(super) fn wearing_gold(&self) -> bool {
+        self.safe_from_piglins(&self.armor)
+    }
+    /// Whether `armor` holds some golden armour, on whoever wears it.
+    pub(super) fn safe_from_piglins(&self, armor: &[Option<ItemStack>]) -> bool {
         let tag = self
             .res
             .items()
             .item_tags
             .get("minecraft:piglin_safe_armor");
-        self.armor
+        armor
             .iter()
             .flatten()
             .any(|s| tag.is_some_and(|t| t.contains(&*s.item)))

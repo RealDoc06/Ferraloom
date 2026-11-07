@@ -2,7 +2,7 @@
 //! chunk availability, state metadata, suffocation predicates and context dispatch.
 use crate::{collision_context::CollisionContext, registry::BlockStateId};
 use horizon_core::{
-    geometry::{Aabb, ShapeError, ShapeOp, Vec3, VoxelShape},
+    geometry::{Aabb, Collider, ShapeError, ShapeOp, Vec3, VoxelShape},
     position::{BlockPos, ChunkPos},
 };
 
@@ -15,6 +15,10 @@ pub struct CollisionBlock {
     /// the block without asking for its shape. Providers whose shapes come
     /// from elsewhere leave it false.
     pub empty_shape: bool,
+    /// The shape is `Shapes.block()` under every context: a scan keeps the
+    /// unit cube without asking for the shape. Providers whose shapes come
+    /// from elsewhere leave it false.
+    pub block_shape: bool,
 }
 
 pub trait BlockCollisionWorld {
@@ -53,6 +57,27 @@ pub trait BlockCollisionWorld {
     fn may_reach_out(&mut self, _chunk: Self::Chunk, _section_y: i32) -> Result<bool, Self::Error> {
         Ok(true)
     }
+    /// Whether every block of the section is `CollisionBlock::empty_shape`,
+    /// so a scan keeps none of them. True lets the scan pass the section's
+    /// cells without reading them.
+    fn section_is_empty(
+        &mut self,
+        _chunk: Self::Chunk,
+        _section_y: i32,
+    ) -> Result<bool, Self::Error> {
+        Ok(false)
+    }
+}
+
+/// What a section's palette says of the cells a scan visits in it.
+#[derive(Clone, Copy, PartialEq)]
+enum SectionCells {
+    /// None can be kept.
+    Empty,
+    /// Only those in the box's own cells can be kept.
+    InsideOnly,
+    /// Any can be kept.
+    All,
 }
 
 #[derive(Debug)]
@@ -101,8 +126,8 @@ pub struct BlockCollisionScan<'w, 'c, W: BlockCollisionWorld> {
     budget: usize,
     chunk: Option<(ChunkPos, W::Chunk)>,
     section: Option<(ChunkPos, i32, W::Chunk)>,
-    /// `may_reach_out` of the last section an outer cell was in.
-    reach: Option<(ChunkPos, i32, bool)>,
+    /// `SectionCells` of the last section visited.
+    cells: Option<(ChunkPos, i32, SectionCells)>,
     failed: bool,
 }
 impl<'w, 'c, W: BlockCollisionWorld> BlockCollisionScan<'w, 'c, W> {
@@ -152,7 +177,7 @@ impl<'w, 'c, W: BlockCollisionWorld> BlockCollisionScan<'w, 'c, W> {
             count,
             budget: candidate_budget,
             chunk: None,
-            reach: None,
+            cells: None,
             section: None,
             failed: false,
         })
@@ -177,7 +202,24 @@ impl<'w, 'c, W: BlockCollisionWorld> BlockCollisionScan<'w, 'c, W> {
         }
     }
 
-    fn find_next(&mut self) -> Result<Option<BlockCollisionHit>, CollisionScanError<W::Error>> {
+    /// The next block collider, as the iterator's next hit but with a full
+    /// block left as its position (`Collider::Block`) rather than moved.
+    pub fn next_collider(
+        &mut self,
+    ) -> Option<Result<(BlockPos, Collider), CollisionScanError<W::Error>>> {
+        if self.failed {
+            return None;
+        }
+        match self.find_next() {
+            Ok(hit) => hit.map(Ok),
+            Err(error) => {
+                self.failed = true;
+                Some(Err(error))
+            }
+        }
+    }
+
+    fn find_next(&mut self) -> Result<Option<(BlockPos, Collider)>, CollisionScanError<W::Error>> {
         while self.index < self.count {
             if self.index >= self.budget {
                 return Err(CollisionScanError::VisitBudget);
@@ -194,11 +236,9 @@ impl<'w, 'c, W: BlockCollisionWorld> BlockCollisionScan<'w, 'c, W> {
                     self.cursor[2] += 1;
                 }
             }
-            let kind = relative
-                .into_iter()
-                .zip(self.sizes)
-                .filter(|(p, size)| *p == 0 || *p == size - 1)
-                .count();
+            let kind = usize::from(relative[0] == 0 || relative[0] == width - 1)
+                + usize::from(relative[1] == 0 || relative[1] == height - 1)
+                + usize::from(relative[2] == 0 || relative[2] == depth - 1);
             if kind == 3 {
                 continue;
             }
@@ -233,37 +273,51 @@ impl<'w, 'c, W: BlockCollisionWorld> BlockCollisionScan<'w, 'c, W> {
             // An outer cell only counts for a block reaching out of its own
             // cell: most sections hold none, so their outer cells go unread
             // (the result is the same, with a fifth of the block reads for a
-            // mob's box).
-            if kind != 0 {
-                let section_y = p.y >> 4;
-                let reaches = match self.reach {
-                    Some((at, y, reaches)) if at == chunk_position && y == section_y => reaches,
-                    _ => {
-                        let reaches = self
+            // mob's box). A section of air and the like needs no cell read.
+            let cells = match self.cells {
+                Some((at, y, cells)) if at == chunk_position && y == section_y => cells,
+                _ => {
+                    let cells = if !self.only_suffocating
+                        && self
                             .world
-                            .may_reach_out(chunk, section_y)
-                            .map_err(CollisionScanError::World)?;
-                        self.reach = Some((chunk_position, section_y, reaches));
-                        reaches
-                    }
-                };
-                if !reaches {
+                            .section_is_empty(chunk, section_y)
+                            .map_err(CollisionScanError::World)?
+                    {
+                        SectionCells::Empty
+                    } else if self
+                        .world
+                        .may_reach_out(chunk, section_y)
+                        .map_err(CollisionScanError::World)?
+                    {
+                        SectionCells::All
+                    } else {
+                        SectionCells::InsideOnly
+                    };
+                    self.cells = Some((chunk_position, section_y, cells));
+                    cells
+                }
+            };
+            let row_passes = cells == SectionCells::Empty
+                || cells == SectionCells::InsideOnly
+                    && kind != 0
                     // On a row along the box's bottom, top or sides every
-                    // cell is outer: the rest of it in this chunk is passed
-                    // at once (never beyond the budget, which still ends the
-                    // scan where it would have).
-                    if relative[1] == 0
+                    // cell is outer.
+                    && (relative[1] == 0
                         || relative[1] == height - 1
                         || relative[2] == 0
-                        || relative[2] == depth - 1
-                    {
-                        let rest = (width - 1 - relative[0])
-                            .min(15 - (p.x & 15) as usize)
-                            .min(self.budget.saturating_sub(self.index));
-                        self.skip(rest);
-                    }
-                    continue;
-                }
+                        || relative[2] == depth - 1);
+            if row_passes {
+                // The rest of the row in this chunk is passed at once (never
+                // beyond the budget, which still ends the scan where it would
+                // have).
+                let rest = (width - 1 - relative[0])
+                    .min(15 - (p.x & 15) as usize)
+                    .min(self.budget.saturating_sub(self.index));
+                self.skip(rest);
+                continue;
+            }
+            if cells == SectionCells::InsideOnly && kind != 0 {
+                continue;
             }
             let block = self
                 .world
@@ -283,18 +337,27 @@ impl<'w, 'c, W: BlockCollisionWorld> BlockCollisionScan<'w, 'c, W> {
             if block.empty_shape {
                 continue;
             }
+            let offset = Vec3::new(f64::from(p.x), f64::from(p.y), f64::from(p.z));
+            // Native adds one in floating point, including at i32::MAX.
+            let unit_cube_meets = || {
+                let top = Vec3::new(offset.x + 1.0, offset.y + 1.0, offset.z + 1.0);
+                self.bounds.intersects_corners(offset, top)
+            };
+            if block.block_shape {
+                if !unit_cube_meets() {
+                    continue;
+                }
+                return Ok(Some((p, Collider::Block(p))));
+            }
             let shape = self
                 .world
                 .context_shape(block, p, &self.context)
                 .map_err(CollisionScanError::World)?;
-            let offset = Vec3::new(f64::from(p.x), f64::from(p.y), f64::from(p.z));
             let moved = if shape.is_block() {
-                // Native adds one in floating point, including at i32::MAX.
-                let top = Vec3::new(offset.x + 1.0, offset.y + 1.0, offset.z + 1.0);
-                if !self.bounds.intersects_corners(offset, top) {
+                if !unit_cube_meets() {
                     continue;
                 }
-                shape.moved(offset)
+                Collider::Block(p)
             } else {
                 // Shapes whose bounds miss the box share no volume with it:
                 // joinIsNotEmpty(AND) is false without moving them.
@@ -318,12 +381,9 @@ impl<'w, 'c, W: BlockCollisionWorld> BlockCollisionScan<'w, 'c, W> {
                 {
                     continue;
                 }
-                moved
+                Collider::Shape(moved)
             };
-            return Ok(Some(BlockCollisionHit {
-                position: p,
-                shape: moved,
-            }));
+            return Ok(Some((p, moved)));
         }
         Ok(None)
     }
@@ -331,16 +391,12 @@ impl<'w, 'c, W: BlockCollisionWorld> BlockCollisionScan<'w, 'c, W> {
 impl<W: BlockCollisionWorld> Iterator for BlockCollisionScan<'_, '_, W> {
     type Item = Result<BlockCollisionHit, CollisionScanError<W::Error>>;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.failed {
-            return None;
-        }
-        match self.find_next() {
-            Ok(hit) => hit.map(Ok),
-            Err(error) => {
-                self.failed = true;
-                Some(Err(error))
-            }
-        }
+        self.next_collider().map(|hit| {
+            hit.map(|(position, collider)| BlockCollisionHit {
+                position,
+                shape: collider.into_shape(),
+            })
+        })
     }
 }
 impl<W: BlockCollisionWorld> std::iter::FusedIterator for BlockCollisionScan<'_, '_, W> {}

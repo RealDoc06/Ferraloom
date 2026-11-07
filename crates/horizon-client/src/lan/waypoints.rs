@@ -10,7 +10,7 @@
 //! `waypoint_transmit_range` and tracks or untracks the waypoint, as
 //! `LivingEntity.onAttributeUpdated` does; joining or leaving a team remakes the
 //! connections with the team's colour (`ServerScoreboard.updatePlayerWaypoint`).
-use super::conn::PacketBody;
+use super::conn::{PacketBody, SlotFiller};
 use crate::fast_hash::FxHashMap as HashMap;
 use horizon_protocol::packets::play::{
     Clientbound as C, TrackedWaypoint, WaypointId, WaypointTarget, waypoint_operation,
@@ -357,9 +357,14 @@ struct Snapshot {
     local: Option<u32>,
 }
 
+/// Each connection's place for its packets of a pass beside the tick, which
+/// the helpers share: the last to finish leaves those no shard filled empty.
+type Slots = std::sync::Arc<HashMap<u32, SlotFiller>>;
+
 struct Work {
     shard: ReceiverShard,
     snapshot: std::sync::Arc<Snapshot>,
+    slots: Option<Slots>,
 }
 
 /// A persistent helper parked on a mailbox between passes. Only its owned
@@ -381,9 +386,13 @@ impl Helper {
                 while let Ok(Work {
                     mut shard,
                     snapshot,
+                    slots,
                 }) = work.recv()
                 {
                     shard.tick(&snapshot);
+                    if let Some(slots) = slots {
+                        shard.fill(&slots);
+                    }
                     // Release the input before publishing completion, so the caller
                     // can recover its original vector without cloning any players.
                     drop(snapshot);
@@ -436,6 +445,27 @@ impl ReceiverShard {
         );
         self.ready.finish();
     }
+
+    /// Each connection's packets of this shard, to its slot. A connection's
+    /// receiver lives on one shard, so nothing else fills it.
+    fn fill(&mut self, slots: &HashMap<u32, SlotFiller>) {
+        self.ready.out.sort_by_key(|(conn, _)| *conn);
+        let mut out = self.ready.out.drain(..).peekable();
+        while let Some((conn, first)) = out.next() {
+            let mut bodies: Vec<PacketBody> = Vec::with_capacity(1);
+            let mut delivery = Some(first);
+            while let Some(d) = delivery.take() {
+                // The local connection never takes a pass beside the tick.
+                if let Delivery::Encoded(body) = d {
+                    bodies.push(body);
+                }
+                delivery = out.next_if(|(next, _)| *next == conn).map(|(_, d)| d);
+            }
+            if let Some(slot) = slots.get(&conn) {
+                slot.fill(bodies);
+            }
+        }
+    }
 }
 
 /// Receiver rows of ServerWaypointManager evaluated on the server's helper lane.
@@ -446,6 +476,8 @@ pub struct ParallelWaypoints {
     geometry: Vec<Geometry>,
     shards: Vec<ReceiverShard>,
     helpers: Vec<Helper>,
+    /// The pass running beside the tick (`start_level`).
+    beside: Option<std::sync::Arc<Snapshot>>,
     #[cfg(test)]
     threads: Option<usize>,
 }
@@ -456,6 +488,7 @@ impl Default for ParallelWaypoints {
             geometry: Vec::new(),
             shards: vec![ReceiverShard::default()],
             helpers: Vec::new(),
+            beside: None,
             #[cfg(test)]
             threads: None,
         }
@@ -511,12 +544,72 @@ impl ParallelWaypoints {
             helper.send(Work {
                 shard: std::mem::take(shard),
                 snapshot: snapshot.clone(),
+                slots: None,
             });
         }
         self.shards[0].tick(snapshot);
         for (helper, shard) in self.helpers.iter().zip(&mut self.shards[1..]) {
             *shard = helper.receive();
         }
+    }
+
+    /// [`Self::tick_level_into`] with every shard on a helper: the pass runs
+    /// on after this returns, each connection's packets going to its slot in
+    /// `slots`. No local receiver can be among the players, its updates having
+    /// to be applied by the caller. [`Self::finish_level`] ends it.
+    pub fn start_level(
+        &mut self,
+        players: &mut Vec<Player>,
+        away: &std::sync::Arc<Vec<(u128, u32)>>,
+        respawned: &std::sync::Arc<Vec<u128>>,
+        locator_bar: bool,
+        slots: HashMap<u32, SlotFiller>,
+    ) {
+        self.finish_level(players);
+        let threads = worker_lanes();
+        #[cfg(test)]
+        let threads = self.threads.unwrap_or(threads);
+        if self.shards.len() == 1 && threads > 1 {
+            self.split(threads);
+        }
+        let mut geometry = std::mem::take(&mut self.geometry);
+        geometry.clear();
+        geometry.extend(players.iter().map(Geometry::new));
+        let snapshot = std::sync::Arc::new(Snapshot {
+            geometry,
+            players: std::mem::take(players),
+            away: away.clone(),
+            respawned: respawned.clone(),
+            enabled: locator_bar,
+            local: None,
+        });
+        while self.helpers.len() < self.shards.len() {
+            self.helpers.push(Helper::new());
+        }
+        let slots = std::sync::Arc::new(slots);
+        for (helper, shard) in self.helpers.iter().zip(&mut self.shards) {
+            helper.send(Work {
+                shard: std::mem::take(shard),
+                snapshot: snapshot.clone(),
+                slots: Some(slots.clone()),
+            });
+        }
+        self.beside = Some(snapshot);
+    }
+
+    /// Wait for the pass [`Self::start_level`] started, if any, and give
+    /// back its players. Slots still empty are empty for good.
+    pub fn finish_level(&mut self, players: &mut Vec<Player>) {
+        let Some(snapshot) = self.beside.take() else {
+            return;
+        };
+        for (helper, shard) in self.helpers.iter().zip(&mut self.shards) {
+            *shard = helper.receive();
+        }
+        let snapshot =
+            std::sync::Arc::into_inner(snapshot).expect("waypoint helpers released their snapshot");
+        *players = snapshot.players;
+        self.geometry = snapshot.geometry;
     }
 
     /// One pass over a level's players. `out` gets each connection's packets
@@ -532,12 +625,8 @@ impl ParallelWaypoints {
         local: Option<u32>,
         out: &mut Vec<(u32, Delivery)>,
     ) {
-        let threads = horizon_threads::worker_threads()
-            .map_or_else(
-                || std::thread::available_parallelism().map_or(1, |n| n.get()),
-                |helpers| helpers + 1,
-            )
-            .min(8);
+        self.finish_level(players);
+        let threads = worker_lanes();
         #[cfg(test)]
         let threads = self.threads.unwrap_or(threads);
         if self.shards.len() == 1 && threads > 1 {
@@ -568,6 +657,16 @@ impl ParallelWaypoints {
         *players = snapshot.players;
         self.geometry = snapshot.geometry;
     }
+}
+
+/// The shards a pass makes: one for each thread that can run one.
+fn worker_lanes() -> usize {
+    horizon_threads::worker_threads()
+        .map_or_else(
+            || std::thread::available_parallelism().map_or(1, |n| n.get()),
+            |helpers| helpers + 1,
+        )
+        .min(8)
 }
 
 /// Tick geometry shared by every shard; arithmetic matches Player's positions.
@@ -1583,6 +1682,74 @@ mod tests {
             conns.entry(conn).or_default().push(packet.encode());
         }
         conns
+    }
+
+    /// A pass left running beside the tick gives each connection, in the slot
+    /// the tick reserved, what a pass on the tick gives it; a connection
+    /// with nothing this tick doesn't hold up what comes after its slot.
+    #[test]
+    fn a_pass_beside_the_tick_fills_each_slot_with_the_same_packets() {
+        use crate::lan::{Holding, Out, PlayerSender};
+        let mut on_tick = ParallelWaypoints {
+            threads: Some(4),
+            ..ParallelWaypoints::default()
+        };
+        let mut beside = ParallelWaypoints {
+            threads: Some(4),
+            ..ParallelWaypoints::default()
+        };
+        let connections: Vec<_> = (1..=20u32)
+            .map(|conn| {
+                let (tx, rx) = std::sync::mpsc::channel();
+                (conn, PlayerSender::new(tx, Default::default()), rx)
+            })
+            .collect();
+        let at = |frame: u128| -> Vec<Player> {
+            (1..=20u128)
+                .map(|id| {
+                    // Half of them stand still, and so are sent nothing.
+                    let walk = if id % 2 == 0 { frame as f64 * 1.3 } else { 0.0 };
+                    player(id, id as u32, [id as f64 + walk, 64.0, 0.5])
+                })
+                .collect()
+        };
+        let away = std::sync::Arc::new(Vec::new());
+        let none = std::sync::Arc::new(Vec::new());
+        let mut players_beside = Vec::new();
+        for frame in 0..30 {
+            let mut players = at(frame);
+            let mut out = Vec::new();
+            on_tick.tick_level_into(&mut players, &away, &none, true, None, &mut out);
+            let mut expected = by_connection(out);
+
+            beside.finish_level(&mut players_beside);
+            players_beside = at(frame);
+            let holding = Holding::start();
+            let slots = connections
+                .iter()
+                .map(|(conn, sender, _)| (*conn, sender.reserve()))
+                .collect();
+            connections
+                .iter()
+                .for_each(|(_, sender, _)| sender.send(vec![255]));
+            drop(holding);
+            beside.start_level(&mut players_beside, &away, &none, true, slots);
+            for (conn, sender, rx) in &connections {
+                sender.flush();
+                let Out::Packets(bodies) = rx.recv().unwrap() else {
+                    panic!("expected a held batch")
+                };
+                let packets: Vec<Vec<u8>> = bodies
+                    .iter()
+                    .flat_map(|b| b.wait())
+                    .flat_map(|b| b.packets())
+                    .map(<[u8]>::to_vec)
+                    .collect();
+                let mut want = expected.remove(conn).unwrap_or_default();
+                want.push(vec![255]);
+                assert_eq!(packets, want, "connection {conn}, frame {frame}");
+            }
+        }
     }
 
     /// The row pass against the serial phases: moves over all three connection

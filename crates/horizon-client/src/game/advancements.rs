@@ -424,6 +424,22 @@ impl Game<'_> {
     }
     /// `SimpleCriterionTrigger.trigger`: test each open criterion of the
     /// trigger and award what it completes.
+    /// Whether `trigger(name, ..)` would test a criterion: one of the
+    /// trigger's is neither granted nor in a done advancement. A trigger
+    /// that fires every tick builds what its test reads only then.
+    pub(super) fn trigger_open(&mut self, name: &str) -> bool {
+        if self.remote.is_some() || self.no_player_here() {
+            return false;
+        }
+        self.load_advancements();
+        let tree = self.adv.tree.clone();
+        tree.by_trigger.get(name).is_some_and(|list| {
+            list.iter().any(|&(ai, ci)| {
+                let a = &tree.list[ai];
+                !self.adv.progress.has(&a.id, &a.criteria[ci].name) && !self.adv.progress.done(a)
+            })
+        })
+    }
     pub(super) fn trigger(&mut self, name: &str, test: impl Fn(&Value, &dyn adv::World) -> bool) {
         if self.remote.is_some() || self.no_player_here() {
             return;
@@ -446,10 +462,25 @@ impl Game<'_> {
         let mut hits = Vec::new();
         {
             let view = View(self);
+            // Nothing is granted until every criterion is tested, so an
+            // advancement's progress is looked at once for its run of
+            // criteria (the list is in tree order).
+            let mut done: Option<(usize, bool)> = None;
             for &(ai, ci) in list {
                 let a = &tree.list[ai];
                 let c = &a.criteria[ci];
-                if self.adv.progress.has(&a.id, &c.name) || self.adv.progress.done(a) {
+                if self.adv.progress.has(&a.id, &c.name) {
+                    continue;
+                }
+                let finished = match done {
+                    Some((at, finished)) if at == ai => finished,
+                    _ => {
+                        let finished = self.adv.progress.done(a);
+                        done = Some((ai, finished));
+                        finished
+                    }
+                };
+                if finished {
                     continue;
                 }
                 if test(&c.conditions, &view) {
@@ -574,7 +605,7 @@ impl Game<'_> {
     /// `InventoryChangeTrigger`, checked when the inventory changes.
     pub(super) fn check_inventory_trigger(&mut self) {
         use std::hash::{Hash, Hasher};
-        let mut h = std::collections::hash_map::DefaultHasher::new();
+        let mut h = horizon_client::fast_hash::FxHasher::default();
         for s in self
             .inventory
             .iter()
@@ -653,16 +684,18 @@ impl Game<'_> {
         }
         self.check_inventory_trigger();
         // ServerPlayer.tick: PlayerTrigger.TICK every tick.
-        let me = self.player_entity();
-        self.trigger("minecraft:tick", |c, w| {
-            let ctx = adv::Entities {
-                this: Some(&me),
-                origin: me.position,
-                tool: None,
-                block_pos: None,
-            };
-            adv::conditions(&c["player"], &ctx, w)
-        });
+        if self.trigger_open("minecraft:tick") {
+            let me = self.player_entity();
+            self.trigger("minecraft:tick", |c, w| {
+                let ctx = adv::Entities {
+                    this: Some(&me),
+                    origin: me.position,
+                    tool: None,
+                    block_pos: None,
+                };
+                adv::conditions(&c["player"], &ctx, w)
+            });
+        }
         // ServerPlayer.onEffectAdded and onEffectsRemoved keep the start of a
         // levitation; tick fires LEVITATION while there is one.
         let levitating = self
@@ -685,7 +718,7 @@ impl Game<'_> {
         if let Some((start, since)) = self.adv.levitation {
             self.trigger_levitation(start, (self.ticks - since) as i64);
         }
-        if self.ticks.is_multiple_of(20) {
+        if self.ticks.is_multiple_of(20) && self.trigger_open("minecraft:location") {
             let me = self.player_entity();
             self.trigger("minecraft:location", |c, w| {
                 let ctx = adv::Entities {

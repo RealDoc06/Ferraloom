@@ -7,7 +7,8 @@ use horizon_client::{
     boss_overlay,
     bossbar::{self, BossBars},
     command::{Arg, Context},
-    mobs::Species,
+    fast_hash::FxHashSet,
+    mobs::{Mob, Species},
     save,
     scoreboard::{self as sb, Comp, json_to_tag},
     scoreboard_cmd::format_list,
@@ -16,7 +17,7 @@ use horizon_client::{
 use horizon_core::random::RandomSource;
 use horizon_protocol::packets::play::{self, BossAction, Clientbound as C};
 use horizon_world::nbt::Tag;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 #[derive(Default)]
 pub(super) struct BossState {
@@ -415,11 +416,32 @@ impl Game<'_> {
         self.load_bossbars();
         let now = boss_overlay::now_millis();
         let viewers = self.boss_viewers();
-        let live: HashSet<u128> = viewers.iter().map(|v| v.uuid).collect();
-        self.bosses.sent.retain(|id, _| live.contains(id));
+        if !self.bosses.sent.is_empty() {
+            let live: FxHashSet<u128> = viewers.iter().map(|v| v.uuid).collect();
+            self.bosses.sent.retain(|id, _| live.contains(id));
+        }
+        let withers: Vec<&Mob> = self
+            .mobs
+            .iter()
+            .filter(|m| m.species() == Species::Wither && m.alive() && !m.removed)
+            .collect();
+        let offers: Vec<Vec<Offer>> = viewers
+            .iter()
+            .map(|viewer| self.boss_events_for(viewer, &withers))
+            .collect();
         let mut packets = Vec::new();
-        for viewer in &viewers {
-            let desired = self.boss_events_for(viewer);
+        for (viewer, desired) in viewers.iter().zip(offers) {
+            // Nothing to show, and nothing shown: no packets (and no record
+            // that would only say so).
+            if desired.is_empty()
+                && self
+                    .bosses
+                    .sent
+                    .get(&viewer.uuid)
+                    .is_none_or(HashMap::is_empty)
+            {
+                continue;
+            }
             for event in self.diff_boss_events(viewer, desired) {
                 if viewer.local {
                     self.boss_overlay.apply(&event, now);
@@ -458,8 +480,10 @@ impl Game<'_> {
             });
         }
         if let Some(host) = &self.lan {
+            // Each player once: a set, for a server's hundreds of guests.
+            let mut listed: FxHashSet<u128> = out.iter().map(|v| v.uuid).collect();
             for g in host.hub.guests.iter().filter(|g| g.placed) {
-                if out.iter().any(|v| v.uuid == g.uuid) {
+                if !listed.insert(g.uuid) {
                     continue;
                 }
                 out.push(Viewer {
@@ -477,8 +501,9 @@ impl Game<'_> {
         out
     }
     /// Custom bars (`CustomBossEvents.onPlayerConnect` sends them as a player
-    /// joins), then the dragon, withers and the raid.
-    fn boss_events_for(&self, viewer: &Viewer) -> Vec<Offer> {
+    /// joins), then the dragon, `withers` (the level's living ones, gathered
+    /// once a tick: a level has few, and every viewer asks) and the raid.
+    fn boss_events_for(&self, viewer: &Viewer, withers: &[&Mob]) -> Vec<Offer> {
         let mut out = Vec::new();
         for b in &self.bosses.bars.bars {
             if !b.visible || !b.players.contains(&viewer.ints) {
@@ -513,11 +538,7 @@ impl Game<'_> {
         }
         if viewer.here {
             let range = f64::from(10.min(viewer.view_chunks.max(0)) * 16);
-            for m in self
-                .mobs
-                .iter()
-                .filter(|m| m.species() == Species::Wither && m.alive() && !m.removed)
-            {
+            for m in withers {
                 let (dx, dz) = (m.position.x - viewer.at[0], m.position.z - viewer.at[2]);
                 if dx * dx + dz * dz > range * range {
                     continue;

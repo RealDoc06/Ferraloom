@@ -1073,7 +1073,7 @@ pub fn main() -> horizon_client::Result<()> {
                 sprinting: false,
                 riding: false,
                 hero: false,
-                effects: Vec::new(),
+                effects: std::sync::Arc::from([]),
                 uuid: PLAYER_UUID,
                 allies: Default::default(),
                 remote: false,
@@ -1128,6 +1128,8 @@ pub fn main() -> horizon_client::Result<()> {
                     sea_level: -63,
                     items: Some(&items),
                     lid_openers: &lid_openers,
+                    fluids_ahead: None,
+                    kinds_ahead: None,
                 }
             };
         }

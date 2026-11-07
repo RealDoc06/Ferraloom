@@ -568,13 +568,15 @@ impl Game<'_> {
         let pos = (p.x.floor() as i32, p.y.floor() as i32, p.z.floor() as i32);
         let biome = self.biome_name_at(p).unwrap_or_default();
         let seed = horizon_client::structure_blocks::loot_seed(tag);
-        cart.loot = Some(horizon_client::structure_blocks::roll_container(
-            &mut cart.items,
-            loot.as_deref(),
-            table,
-            seed,
-            pos,
-            &biome,
+        cart.loot = Some(std::sync::Arc::new(
+            horizon_client::structure_blocks::roll_container(
+                &mut cart.items,
+                loot.as_deref(),
+                table,
+                seed,
+                pos,
+                &biome,
+            ),
         ));
     }
     fn remember(&mut self, id: u32, uuid: Option<[i32; 4]>, tag: Tag) {

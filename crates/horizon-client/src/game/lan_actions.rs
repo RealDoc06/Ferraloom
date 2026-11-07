@@ -11,7 +11,8 @@ use super::{
 use horizon_client::{
     command::vanilla,
     containers::BlockEntity,
-    entities::Experience,
+    entities::{Experience, ItemEntity},
+    fast_hash::FxHashSet,
     first_person::{Hand, SwingAnimation},
     items::ItemStack,
     lan::{
@@ -120,8 +121,8 @@ pub(super) struct GuestCommand {
 pub(super) struct GuestSwap {
     conn: u32,
     i: usize,
-    play: GuestPlay,
-    player: Option<PlayerMotion>,
+    play: Box<GuestPlay>,
+    player: Option<Box<PlayerMotion>>,
     /// The guest's eye height and the game's.
     eye: (f32, f32),
     yaw: f32,
@@ -183,10 +184,53 @@ pub(super) struct GuestSwap {
     modifiers: Vec<(String, String)>,
 }
 
+/// Where the items guests can take lay when the guests' tick began, in cells
+/// of 4 by 4 blocks: most guests stand far from any, and a server has hundreds
+/// of guests and thousands of items. Items only move in their own tick, and
+/// what a guest's turn drops goes at the end of the list.
+struct PickupCells {
+    cells: FxHashSet<(i32, i32)>,
+    last: Option<u32>,
+}
+impl PickupCells {
+    fn new(items: &[ItemEntity]) -> Self {
+        Self {
+            cells: items
+                .iter()
+                .filter(|d| d.pickup_delay == 0)
+                .map(|d| {
+                    (
+                        d.position.x.floor() as i32 >> 2,
+                        d.position.z.floor() as i32 >> 2,
+                    )
+                })
+                .collect(),
+            last: items.last().map(|d| d.id),
+        }
+    }
+    /// False when no item in reach of `at` (1.5 blocks across) can be taken,
+    /// which a look at every item would find too.
+    fn may_reach(&self, items: &[ItemEntity], at: [f64; 3]) -> bool {
+        if items.last().map(|d| d.id) != self.last {
+            return true;
+        }
+        let cell = |v: f64| v.floor() as i32 >> 2;
+        (cell(at[0] - 2.0)..=cell(at[0] + 2.0))
+            .any(|x| (cell(at[2] - 2.0)..=cell(at[2] + 2.0)).any(|z| self.cells.contains(&(x, z))))
+    }
+}
+
 impl GuestPlay {
     /// The item in use: its slot and for how many ticks.
     pub(super) fn using(&self) -> Option<(usize, u32)> {
         self.using
+    }
+    /// Whether the equipment modifiers were last put on for this armour and
+    /// main hand (`apply_equipment`).
+    fn wears(&self, armor: &[Option<ItemStack>; 4], held: Option<&ItemStack>) -> bool {
+        self.equipped
+            .as_ref()
+            .is_some_and(|e| e.len() == 5 && e[..4] == armor[..] && e[4].as_ref() == held)
     }
 }
 
@@ -307,10 +351,21 @@ impl Game<'_> {
         // FireworkRocketItem.use boosts only a gliding player.
         motion.fall_flying = g.fall_flying;
         motion.invulnerable = motion.may_fly;
-        let _ = motion.set_health(g.health, false);
+        // LivingEntity.setHealth clamps to the maximum and stores what
+        // differs: the body holding the record's health already, at most the
+        // maximum and above zero, is left as it is.
+        let current = motion.health.health();
+        let kept = current.to_bits() == g.health.to_bits()
+            && current > 0.0
+            && motion
+                .attribute("minecraft:max_health")
+                .is_ok_and(|max| current <= max as f32);
+        if !kept {
+            let _ = motion.set_health(g.health, false);
+        }
         motion.health.food.food = g.food;
         motion.health.food.saturation = g.saturation;
-        let mut player = Some(*motion);
+        let mut player = Some(motion);
         std::mem::swap(&mut self.player, &mut player);
         let eye = (g.eye_height() as f32, self.eye);
         self.eye = eye.0;
@@ -350,7 +405,15 @@ impl Game<'_> {
         // opens shows as the 3x3 size.
         let craft_size = std::mem::replace(&mut self.craft_size, 2);
         let craft_table = self.craft_table.take();
-        let craft_grid = std::mem::replace(&mut self.craft_grid, vec![None; 9]);
+        let spare_grid = std::mem::take(&mut self.spare_craft_grid);
+        let craft_grid = std::mem::replace(
+            &mut self.craft_grid,
+            if spare_grid.is_empty() {
+                vec![None; 9]
+            } else {
+                spare_grid
+            },
+        );
         let container = self.container.take();
         let mining = std::mem::replace(&mut self.mining, play.mining.take());
         let destroy_delay = std::mem::replace(&mut self.destroy_delay, play.destroy_delay);
@@ -392,6 +455,7 @@ impl Game<'_> {
         std::mem::swap(&mut self.level.recipe_book, &mut g.recipe_book);
         std::mem::swap(&mut self.level.player_extra, &mut g.saved);
         std::mem::swap(&mut self.stats, &mut play.stats);
+        self.stats.unheard = self.score.board.objectives.is_empty();
         std::mem::swap(&mut self.hook, &mut play.hook);
         let adv_loaded = std::mem::replace(&mut self.adv.loaded, true);
         let last_inventory = std::mem::replace(&mut self.adv.last_inventory, play.last_inventory);
@@ -399,7 +463,11 @@ impl Game<'_> {
         let death_cause = std::mem::replace(&mut self.ui.death_cause, play.death_cause.take());
         let acting = (
             self.lan_acting.replace(conn),
-            self.lan_acting_name.replace(g.name.clone()),
+            self.lan_acting_name.replace({
+                let mut name = std::mem::take(&mut self.spare_acting_name);
+                name.clone_from(&g.name);
+                name
+            }),
             self.lan_acting_uuid.replace(g.uuid),
         );
         let packets = std::mem::take(&mut self.guest_packets);
@@ -411,9 +479,10 @@ impl Game<'_> {
             std::mem::take(&mut play.modifiers),
         );
         // Its worn armour on its attributes, when it changed.
-        let mut equipped: Vec<Option<ItemStack>> = self.armor.to_vec();
-        equipped.push(self.inventory.get(self.selected).cloned().flatten());
-        if play.equipped.as_ref() != Some(&equipped) {
+        let held = self.inventory.get(self.selected).and_then(Option::as_ref);
+        if !play.wears(&self.armor, held) {
+            let mut equipped: Vec<Option<ItemStack>> = self.armor.to_vec();
+            equipped.push(held.cloned());
             self.apply_equipment();
             play.equipped = Some(equipped);
         }
@@ -477,6 +546,38 @@ impl Game<'_> {
             modifiers,
             combat: host_combat,
         })
+    }
+
+    /// Whether a turn for `g` that does nothing would leave everything as it
+    /// is: then what it would read can be read from the record (`lan_mobs`'s
+    /// `guest_view`) without the swap. `enter_guest` and `leave_guest` sync the
+    /// body with the record each way, which leaves nothing that the next
+    /// real turn would not do first, unless one of these is waiting.
+    pub(super) fn guest_swap_is_idle(
+        &self,
+        host: &LanHost,
+        g: &horizon_client::lan::guest::Guest,
+        m: &PlayerMotion,
+    ) -> bool {
+        let Some(play) = host.play.get(&g.conn) else {
+            return false;
+        };
+        self.lan_acting != Some(g.conn)
+            && self.hand == Hand::Main
+            && self.ender_open.is_none()
+            && self.guest_cooldowns.is_empty()
+            && self.guest_combat.contains_key(&g.conn)
+            && m.health.health().to_bits() == g.health.to_bits()
+            && !m.health.totem_used
+            && m.health.indicated_dir.is_none()
+            && !m.teleported
+            && (g.vehicle.is_some() || g.vehicle_good.is_none())
+            && g.sleeping == g.bed.is_some()
+            && play.stats.events.is_empty()
+            && play.wears(
+                &g.armor,
+                g.inventory.get(g.selected).and_then(Option::as_ref),
+            )
     }
 
     /// The second half of `as_guest`: the guest's state back into their
@@ -575,7 +676,9 @@ impl Game<'_> {
                 }),
             );
         }
-        (self.lan_acting, self.lan_acting_name, self.lan_acting_uuid) = acting;
+        self.spare_acting_name =
+            std::mem::replace(&mut self.lan_acting_name, acting.1).unwrap_or_default();
+        (self.lan_acting, self.lan_acting_uuid) = (acting.0, acting.2);
         play.death_cause = std::mem::replace(&mut self.ui.death_cause, death_cause);
         // An ender chest the guest opened: the menu shows their inventory
         // itself (lan_open_container), not a stand-in block entity.
@@ -587,7 +690,11 @@ impl Game<'_> {
         let opened_table = (std::mem::replace(&mut self.craft_size, craft_size) == 3)
             .then_some(guest_table)
             .flatten();
-        self.craft_grid = craft_grid;
+        // The guest's grid, emptied, for the next turn.
+        let mut grid = std::mem::replace(&mut self.craft_grid, craft_grid);
+        grid.clear();
+        grid.resize(9, None);
+        self.spare_craft_grid = grid;
         let opened_station = std::mem::replace(&mut self.station, host_station);
         let bed = std::mem::replace(&mut self.sleeping, sleeping);
         let guest_sleep_timer = std::mem::replace(&mut self.sleep_timer, sleep_timer);
@@ -653,7 +760,11 @@ impl Game<'_> {
         play.last_inventory = std::mem::replace(&mut self.adv.last_inventory, last_inventory);
         play.levitation = std::mem::replace(&mut self.adv.levitation, levitation);
         let stat_events = std::mem::take(&mut play.stats.events);
-        let name = g.name.clone();
+        let name = if stat_events.is_empty() {
+            String::new()
+        } else {
+            g.name.clone()
+        };
         self.potions.swap_player(&mut g.effects, &mut play.potions);
         if let Some(key) = host_ender {
             self.world
@@ -704,7 +815,7 @@ impl Game<'_> {
             }
             let teleported = std::mem::take(&mut m.teleported);
             let moved: f64 = (0..3).map(|k| (at[k] - g.position[k]).powi(2)).sum();
-            g.motion = Some(Box::new(m));
+            g.motion = Some(m);
             // Entity.teleportTo takes a rider out of its vehicle.
             let left_vehicle = match g.vehicle.filter(|_| teleported) {
                 Some(v) => {
@@ -2168,6 +2279,7 @@ impl Game<'_> {
         if host.play.values().any(|p| p.hook.is_some()) {
             self.refresh_hook_targets(host);
         }
+        let pickups = PickupCells::new(&self.dropped);
         for conn in conns {
             let Some(gi) = host.hub.guest_index(conn) else {
                 continue;
@@ -2253,9 +2365,8 @@ impl Game<'_> {
             let held = g
                 .inventory
                 .get(g.selected)
-                .cloned()
-                .flatten()
-                .map(|s| s.item);
+                .and_then(Option::as_ref)
+                .map(|s| s.item.clone());
             let play = host.play.entry(conn).or_default();
             if play.attack_item != held {
                 play.attack_ticks = 0;
@@ -2277,7 +2388,7 @@ impl Game<'_> {
             self.lan_map_updates(host, conn);
             host.hub.flush_progress(conn);
             self.guest_dig_feedback(host, conn);
-            self.guest_pickups(host, gi);
+            self.guest_pickups(host, gi, &pickups);
             self.guest_orbs(host, gi);
             self.guest_die(host, gi, conn);
         }
@@ -2994,7 +3105,7 @@ impl Game<'_> {
     }
 
     /// Dropped items touching a guest go into their inventory.
-    fn guest_pickups(&mut self, host: &mut LanHost, gi: usize) {
+    fn guest_pickups(&mut self, host: &mut LanHost, gi: usize, cells: &PickupCells) {
         let (conn, mode, position, id, uuid) = {
             let g = &host.hub.guests[gi];
             (
@@ -3005,7 +3116,7 @@ impl Game<'_> {
                 horizon_client::lan::playerdata::uuid_ints(g.uuid),
             )
         };
-        if mode == SPECTATOR || self.dropped.is_empty() {
+        if mode == SPECTATOR || !cells.may_reach(&self.dropped, position) {
             return;
         }
         let near: Vec<usize> = self
@@ -3218,7 +3329,7 @@ impl Game<'_> {
     /// and `stopUsingItem` set DATA_LIVING_ENTITY_FLAGS).
     pub(super) fn lan_living_flags(&mut self, host: &mut LanHost) {
         for g in &mut host.hub.guests {
-            let using = host.play.get(&g.conn).and_then(GuestPlay::using);
+            let using = host.play.get(&g.conn).and_then(|p| p.using());
             g.living_flags = super::lan::living_flags(using);
         }
     }
@@ -3245,7 +3356,11 @@ impl Game<'_> {
     /// else, the host's to the guests), and `LivingEntity.updateSwingTime`
     /// for the guests' bodies here.
     pub(super) fn lan_swings(&mut self, host: &mut LanHost) {
-        let conns: Vec<u32> = host.play.keys().copied().collect();
+        // In the guests' order: the swings' packets go out the same way each run.
+        let conns: Vec<u32> = (host.hub.guests.iter())
+            .map(|g| g.conn)
+            .filter(|conn| host.play.contains_key(conn))
+            .collect();
         for conn in conns {
             let Some(g) = host.hub.guest(conn) else {
                 continue;
@@ -3317,4 +3432,68 @@ fn swing_packet(id: i32, hand: Hand, animation: SwingAnimation) -> C {
         kind: i32::from(animation.kind),
         duration: animation.duration,
     })
+}
+
+#[cfg(test)]
+mod pickup_tests {
+    use super::*;
+
+    fn item(id: u32, x: f64, z: f64, pickup_delay: u32) -> ItemEntity {
+        let position = Vec3::new(x, 64.0, z);
+        ItemEntity {
+            health: 5,
+            fire_ticks: 0,
+            id,
+            stack: ItemStack::new("minecraft:stone", 1),
+            thrower: None,
+            target: None,
+            position,
+            previous: position,
+            velocity: Vec3::ZERO,
+            on_ground: true,
+            age: 0,
+            pickup_delay,
+            bob_offset: 0.0,
+            ticks: 0,
+        }
+    }
+
+    /// `guest_pickups`' own test of reach, without the height and the target.
+    fn reaches(d: &ItemEntity, at: [f64; 3]) -> bool {
+        d.pickup_delay == 0
+            && (d.position.x - at[0]).abs() < 1.5
+            && (d.position.z - at[2]).abs() < 1.5
+    }
+
+    #[test]
+    fn the_cells_never_hide_an_item_in_reach() {
+        let mut seed = 0x2545_f491_u64;
+        let mut draw = |range: i32| {
+            seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+            f64::from(((seed >> 33) as i32).rem_euclid(range)) / 8.0 - 40.0
+        };
+        let items: Vec<ItemEntity> = (0..300)
+            .map(|id| item(id, draw(640), draw(640), u32::from(id % 4 == 0)))
+            .collect();
+        let cells = PickupCells::new(&items);
+        let mut skipped = 0;
+        for _ in 0..4000 {
+            let at = [draw(640), 64.0, draw(640)];
+            if !cells.may_reach(&items, at) {
+                skipped += 1;
+                assert!(!items.iter().any(|d| reaches(d, at)));
+            }
+        }
+        assert!(skipped > 0);
+    }
+
+    #[test]
+    fn an_item_dropped_since_counts_wherever_it_lies() {
+        let mut items = vec![item(1, 0.0, 0.0, 0)];
+        let cells = PickupCells::new(&items);
+        let far = [1000.0, 64.0, 1000.0];
+        assert!(!cells.may_reach(&items, far));
+        items.push(item(2, 1000.0, 1000.0, 0));
+        assert!(cells.may_reach(&items, far));
+    }
 }

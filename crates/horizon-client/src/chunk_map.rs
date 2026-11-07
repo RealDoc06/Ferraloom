@@ -1,5 +1,8 @@
 //! Resident chunk membership, with a token for consumers that cache its keys.
-use crate::{chunk::Chunk, fast_hash::FxHashMap};
+use crate::{
+    chunk::Chunk,
+    fast_hash::{FxHashMap, FxHashSet},
+};
 use std::{
     collections::hash_map::{Iter, ValuesMut},
     ops::Deref,
@@ -22,12 +25,16 @@ fn next_revision() -> u64 {
 pub struct ChunkMap {
     columns: Columns,
     revision: u64,
+    /// The keys of columns that came in `fresh`, until [`Self::spawned_fresh`]
+    /// clears them: nothing else sets the flag once a column is resident.
+    fresh: FxHashSet<Key>,
 }
 impl Default for ChunkMap {
     fn default() -> Self {
         Self {
             columns: Columns::default(),
             revision: next_revision(),
+            fresh: FxHashSet::default(),
         }
     }
 }
@@ -36,6 +43,11 @@ impl ChunkMap {
         self.revision
     }
     pub fn insert(&mut self, key: Key, chunk: Arc<Chunk>) -> Option<Arc<Chunk>> {
+        if chunk.fresh {
+            self.fresh.insert(key);
+        } else if !self.fresh.is_empty() {
+            self.fresh.remove(&key);
+        }
         let previous = self.columns.insert(key, chunk);
         if previous.is_none() {
             self.revision = next_revision();
@@ -43,6 +55,7 @@ impl ChunkMap {
         previous
     }
     pub fn remove(&mut self, key: &Key) -> Option<Arc<Chunk>> {
+        self.fresh.remove(key);
         let previous = self.columns.remove(key);
         if previous.is_some() {
             self.revision = next_revision();
@@ -51,8 +64,35 @@ impl ChunkMap {
     }
     pub fn clear(&mut self) {
         if !self.columns.is_empty() {
+            self.fresh.clear();
             self.columns.clear();
             self.revision = next_revision();
+        }
+    }
+    /// The fresh, lit columns, in the map's iteration order, without reading
+    /// any other column.
+    pub fn fresh_and_lit(&self) -> Vec<Key> {
+        let ready: FxHashSet<Key> = self
+            .fresh
+            .iter()
+            .filter(|key| self.columns.get(*key).is_some_and(|c| c.fresh && c.lit))
+            .copied()
+            .collect();
+        if ready.is_empty() {
+            return Vec::new();
+        }
+        self.columns
+            .keys()
+            .filter(|key| ready.contains(*key))
+            .take(ready.len())
+            .copied()
+            .collect()
+    }
+    /// A column's generation spawns are done: it is no longer fresh.
+    pub fn spawned_fresh(&mut self, key: &Key) {
+        self.fresh.remove(key);
+        if let Some(column) = self.columns.get_mut(key) {
+            Arc::make_mut(column).fresh = false;
         }
     }
     pub fn get_mut(&mut self, key: &Key) -> Option<&mut Arc<Chunk>> {
@@ -87,6 +127,37 @@ impl crate::light::LightWorld for ChunkMap {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn fresh_and_lit_matches_a_scan_of_the_map() {
+        let scan = |map: &ChunkMap| -> Vec<Key> {
+            map.iter()
+                .filter(|(_, c)| c.fresh && c.lit)
+                .map(|(k, _)| *k)
+                .collect()
+        };
+        let column = |x: i32, fresh: bool, lit: bool| {
+            let mut chunk = Chunk::empty(x, 0);
+            chunk.fresh = fresh;
+            chunk.lit = lit;
+            Arc::new(chunk)
+        };
+        let mut map = ChunkMap::default();
+        for x in 0..200 {
+            map.insert((x, 0), column(x, x % 3 == 0, x % 2 == 0));
+        }
+        assert_eq!(map.fresh_and_lit().len(), 34);
+        assert_eq!(map.fresh_and_lit(), scan(&map));
+        // Lighting a fresh column later, as the light engine does.
+        Arc::make_mut(map.get_mut(&(3, 0)).unwrap()).lit = true;
+        // Replaced by a loaded column, then unloaded.
+        map.insert((6, 0), column(6, false, true));
+        map.remove(&(12, 0));
+        map.spawned_fresh(&(18, 0));
+        assert!(!map.get(&(18, 0)).unwrap().fresh);
+        assert_eq!(map.fresh_and_lit(), scan(&map));
+        map.clear();
+        assert!(map.fresh_and_lit().is_empty());
+    }
     #[test]
     fn membership_tokens_track_keys_and_map_replacement_only() {
         let mut map = ChunkMap::default();

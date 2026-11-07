@@ -1645,6 +1645,10 @@ pub struct PendingPushes {
 }
 impl PendingPushes {
     const LIST_MAX: usize = 64;
+    /// No push is waiting for any mob.
+    pub fn is_empty(&self) -> bool {
+        self.list.is_empty() && self.by_mob.is_empty()
+    }
     pub fn push(&mut self, id: u32, v: Vec3) {
         if self.by_mob.is_empty() && self.list.len() < Self::LIST_MAX {
             self.list.push((id, v));
@@ -1747,8 +1751,9 @@ pub struct PlayerView {
     pub riding: bool,
     /// The Hero of the Village effect.
     pub hero: bool,
-    /// The active effects, without namespace (`slowness`, `poison`...).
-    pub effects: Vec<&'static str>,
+    /// The active effects, without namespace (`slowness`, `poison`...),
+    /// shared: every mob near the player clones its view each tick.
+    pub effects: Arc<[&'static str]>,
     /// The player's UUID (villagers' gossip is keyed by it).
     pub uuid: [i32; 4],
     /// The mobs on the player's team (`isAlliedTo`): combat targeting
@@ -1828,6 +1833,12 @@ pub struct MobWorld<'a> {
     pub items: Option<&'a crate::items::Items>,
     /// `ChestBlockEntity.getOpenCount`: the players with each chest open.
     pub lid_openers: &'a HashMap<(i32, i32, i32), i32>,
+    /// The ticking mob's [`MobWorld::fluids`] read ahead of its tick: the
+    /// box corners and eye height asked (as bits) and the answer.
+    pub fluids_ahead: Option<([u64; 7], living::Fluids)>,
+    /// The ticking mob's `block_kinds` around its box where it stood
+    /// before its tick ([`ai::start_key`] and the kinds), read ahead.
+    pub kinds_ahead: Option<([u64; 4], u16)>,
 }
 /// `Entity.getTeam` of the player and of the mobs on a team.
 #[derive(Clone, Debug, Default)]

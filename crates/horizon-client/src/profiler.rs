@@ -55,15 +55,33 @@ pub fn start() {
 
 fn collect(settings: Settings) -> Result<(), Box<dyn std::error::Error>> {
     std::thread::sleep(Duration::from_secs(settings.warmup));
+    // A server holds a socket per player: with hundreds online the default
+    // soft limit of 1024 descriptors leaves none for the sampler's file.
+    #[cfg(unix)]
+    {
+        use rustix::process::{Resource, Rlimit, getrlimit, setrlimit};
+        let limit = getrlimit(Resource::Nofile);
+        if let Err(error) = setrlimit(
+            Resource::Nofile,
+            Rlimit {
+                current: limit.maximum,
+                maximum: limit.maximum,
+            },
+        ) {
+            log::warn!("CPU profile: open-file limit unchanged: {error}");
+        }
+    }
     let guard = pprof::ProfilerGuardBuilder::default()
         .frequency(settings.hz)
         .build()?;
+    crate::spans::summary_start();
     log::info!(
         "CPU profile sampling for {}s at {} Hz",
         settings.seconds,
         settings.hz
     );
     std::thread::sleep(Duration::from_secs(settings.seconds));
+    let spans = crate::spans::summary_finish();
     // Remove the sampler and signal trampoline before attributing the interrupted leaf.
     let report = guard
         .report()
@@ -82,6 +100,7 @@ fn collect(settings: Settings) -> Result<(), Box<dyn std::error::Error>> {
         "profile-{}",
         SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs()
     );
+    std::fs::write(format!("{stem}.spans.txt"), spans)?;
     report.flamegraph(File::create(format!("{stem}.svg"))?)?;
     let mut out = File::create(format!("{stem}.txt"))?;
     let mut threads = BTreeMap::new();

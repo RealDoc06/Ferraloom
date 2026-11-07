@@ -5,9 +5,39 @@ use std::collections::HashSet;
 
 struct Sweep<'v, V> {
     visitor: &'v mut V,
-    visited: HashSet<i64>,
+    visited: Visited,
     work: usize,
     limit: usize,
+}
+
+/// The packed positions a sweep has visited. A body's move crosses a few
+/// dozen blocks, which a short list holds and scans faster than a hash
+/// set; a long one moves to a set.
+#[derive(Default)]
+struct Visited {
+    few: Vec<i64>,
+    many: Option<HashSet<i64>>,
+}
+impl Visited {
+    /// How many positions the list holds before they go to a set.
+    const FEW: usize = 64;
+    /// `HashSet::insert`: false when `pos` was there already.
+    fn insert(&mut self, pos: i64) -> bool {
+        if let Some(many) = &mut self.many {
+            return many.insert(pos);
+        }
+        if self.few.contains(&pos) {
+            return false;
+        }
+        if self.few.len() == Self::FEW {
+            let mut many: HashSet<i64> = self.few.drain(..).collect();
+            many.insert(pos);
+            self.many = Some(many);
+        } else {
+            self.few.push(pos);
+        }
+        true
+    }
 }
 impl<V: FnMut(BlockPos, i32) -> bool> Sweep<'_, V> {
     fn spend(&mut self) -> Result<(), TraversalError> {
@@ -81,7 +111,7 @@ pub fn sweep_intersected_blocks(
     }
     let mut sweep = Sweep {
         visitor: &mut visitor,
-        visited: HashSet::new(),
+        visited: Visited::default(),
         work: 0,
         limit: max_work,
     };
@@ -220,5 +250,14 @@ mod tests {
             sweep_intersected_blocks(Vec3::ZERO, Vec3::ZERO, box_, 1, |_, _| true),
             Err(TraversalError::VisitLimit)
         );
+    }
+    #[test]
+    fn visited_positions_stay_unique_past_the_short_list() {
+        let mut visited = Visited::default();
+        for pos in 0..200 {
+            assert!(visited.insert(pos));
+        }
+        assert!((0..200).all(|pos| !visited.insert(pos)));
+        assert!(visited.many.is_some());
     }
 }

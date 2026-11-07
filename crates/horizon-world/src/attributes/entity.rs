@@ -17,6 +17,31 @@ impl AttributeId {
         self.0 as i32
     }
 }
+/// The Fx hash (rustc's) over a name's bytes, for `Catalog::ids`.
+#[derive(Clone, Copy, Default)]
+pub struct NameHasher(u64);
+impl std::hash::Hasher for NameHasher {
+    fn write(&mut self, bytes: &[u8]) {
+        const SEED: u64 = 0xf135_7aea_2e62_a9c5;
+        let words = bytes.chunks_exact(8);
+        let rest = words.remainder();
+        let mut add = |word: u64| self.0 = self.0.wrapping_add(word).wrapping_mul(SEED);
+        for word in words {
+            let mut full = [0u8; 8];
+            full.copy_from_slice(word);
+            add(u64::from_le_bytes(full));
+        }
+        if !rest.is_empty() {
+            let mut word = [0u8; 8];
+            word[..rest.len()].copy_from_slice(rest);
+            add(u64::from_le_bytes(word));
+        }
+    }
+    fn finish(&self) -> u64 {
+        self.0
+    }
+}
+type NameHash = std::hash::BuildHasherDefault<NameHasher>;
 #[derive(Debug)]
 pub struct RegisteredAttribute {
     pub name: String,
@@ -26,7 +51,9 @@ pub struct RegisteredAttribute {
 #[derive(Debug)]
 pub struct Catalog {
     attributes: Vec<RegisteredAttribute>,
-    ids: BTreeMap<String, AttributeId>,
+    /// Looked up by name for every attribute read (`LiveAttributes::key`),
+    /// never walked: hashed, with a hash quick on short names.
+    ids: std::collections::HashMap<String, AttributeId, NameHash>,
     defaults: BTreeMap<String, Arc<[Option<f64>]>>,
 }
 fn string(v: &Value) -> io::Result<&str> {
@@ -53,7 +80,7 @@ impl Catalog {
             return Err(invalid("attribute catalog data version mismatch"));
         }
         let mut attributes = Vec::new();
-        let mut ids = BTreeMap::new();
+        let mut ids = std::collections::HashMap::default();
         for a in v["attributes"]
             .as_array()
             .ok_or_else(|| invalid("missing attributes"))?

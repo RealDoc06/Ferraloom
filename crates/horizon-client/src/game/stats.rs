@@ -20,6 +20,10 @@ pub(super) struct Stats {
     /// Statistic changes (type, key, amount; `None` = reset) for the
     /// scoreboard criteria to follow.
     pub(super) events: Vec<(String, String, Option<i32>)>,
+    /// No scoreboard objective was there to follow the changes when the
+    /// player's turn began (`enter_guest`): none are kept in `events`, as
+    /// `ServerStatsCounter.setValue` finds no objective for them.
+    pub(super) unheard: bool,
     /// Changed since the client was last sent them (`StatsCounter`'s dirty
     /// set), by type.
     dirty: BTreeMap<String, BTreeSet<String>>,
@@ -28,7 +32,7 @@ pub(super) struct Stats {
 /// `minecraft:` and `name`, given to `f` from the stack when short: some
 /// counters go up every tick for every player, and they are found without
 /// a string made for each.
-fn namespaced<T>(name: &str, f: impl FnOnce(&str) -> T) -> T {
+pub(super) fn namespaced<T>(name: &str, f: impl FnOnce(&str) -> T) -> T {
     const NAMESPACE: &str = "minecraft:";
     let mut buf = [0u8; 96];
     let len = NAMESPACE.len() + name.len();
@@ -53,13 +57,24 @@ fn entry<'a, V: Default>(map: &'a mut BTreeMap<String, V>, key: &str) -> &'a mut
 impl Stats {
     pub(super) fn add(&mut self, ty: &str, key: &str, n: i32) {
         namespaced(ty, |ty| {
-            let v = entry(entry(&mut self.values, ty), key);
-            *v = v.saturating_add(n);
-            self.events.push((ty.to_owned(), key.to_owned(), Some(n)));
+            // A counter already there (most of those that go up every tick)
+            // is found in one look at each map.
+            if let Some(v) = self.values.get_mut(ty).and_then(|m| m.get_mut(key)) {
+                *v = v.saturating_add(n);
+            } else {
+                let v = entry(entry(&mut self.values, ty), key);
+                *v = v.saturating_add(n);
+            }
+            if !self.unheard {
+                self.events.push((ty.to_owned(), key.to_owned(), Some(n)));
+            }
             self.mark_dirty(ty, key);
         });
     }
     fn mark_dirty(&mut self, ty: &str, key: &str) {
+        if self.dirty.get(ty).is_some_and(|keys| keys.contains(key)) {
+            return;
+        }
         let keys = entry(&mut self.dirty, ty);
         if !keys.contains(key) {
             keys.insert(key.to_owned());
@@ -77,8 +92,10 @@ impl Stats {
             m.insert(key.to_owned(), 0);
         }
         self.mark_dirty(&format!("minecraft:{ty}"), key);
-        self.events
-            .push((format!("minecraft:{ty}"), key.to_owned(), None));
+        if !self.unheard {
+            self.events
+                .push((format!("minecraft:{ty}"), key.to_owned(), None));
+        }
     }
     pub(super) fn custom(&mut self, key: &str, n: i32) {
         namespaced(key, |key| self.add("custom", key, n));

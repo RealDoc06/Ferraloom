@@ -1,12 +1,20 @@
 //! Tick scheduler membership, invalidated by resident key changes or resets.
-use crate::chunk_map::ChunkMap;
+use crate::{chunk_map::ChunkMap, fast_hash::FxHashSet};
 use std::collections::HashSet;
 
 type Key = (i32, i32);
 
+/// The 3x3 chunks centred on a chunk.
+fn around(x: i32, z: i32) -> impl Iterator<Item = Key> {
+    (-1..=1).flat_map(move |dz| (-1..=1).map(move |dx| (x + dx, z + dz)))
+}
+
 #[derive(Default)]
 pub struct TickChunkMembership {
-    keys: HashSet<Key>,
+    keys: FxHashSet<Key>,
+    /// The resident chunks whose eight neighbours are resident too, kept by the
+    /// same deltas so the tick doesn't probe the map nine times per chunk.
+    surrounded: FxHashSet<Key>,
     revision: Option<u64>,
     added: Vec<Key>,
     removed: Vec<Key>,
@@ -20,6 +28,7 @@ impl TickChunkMembership {
     /// not change. Keep this invalidation with the keys so callers cannot forget.
     pub fn clear(&mut self) {
         self.keys.clear();
+        self.surrounded.clear();
         self.revision = None;
         self.added.clear();
         self.removed.clear();
@@ -49,8 +58,28 @@ impl TickChunkMembership {
                 self.added.push(key);
             }
         }
+        for &(x, z) in &self.removed {
+            for key in around(x, z) {
+                self.surrounded.remove(&key);
+            }
+        }
+        for &(x, z) in &self.added {
+            for key in around(x, z) {
+                if !self.surrounded.contains(&key)
+                    && around(key.0, key.1).all(|near| chunks.contains_key(&near))
+                {
+                    self.surrounded.insert(key);
+                }
+            }
+        }
         self.revision = Some(revision);
         true
+    }
+
+    /// Whether `key` and its eight neighbours were resident at the last
+    /// [`Self::synchronize`].
+    pub fn surrounded(&self, key: Key) -> bool {
+        self.surrounded.contains(&key)
     }
 
     /// Allows registration to borrow the owning Game without cloning its set.
@@ -115,7 +144,16 @@ mod tests {
         } else {
             assert!(expected_added.is_empty() && expected_removed.is_empty());
         }
-        assert_eq!(cache.keys, loaded);
+        assert_eq!(cache.keys.iter().copied().collect::<HashSet<_>>(), loaded);
+        let surrounded: HashSet<_> = loaded
+            .iter()
+            .copied()
+            .filter(|&(x, z)| around(x, z).all(|near| loaded.contains(&near)))
+            .collect();
+        assert_eq!(
+            cache.surrounded.iter().copied().collect::<HashSet<_>>(),
+            surrounded
+        );
         *old = loaded;
     }
 

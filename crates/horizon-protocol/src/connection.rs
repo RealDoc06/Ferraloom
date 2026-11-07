@@ -179,6 +179,9 @@ pub struct ConnWriter {
     encrypt: Option<Cfb8>,
     pub threshold: Option<usize>,
     counters: Arc<Counters>,
+    /// Frames not written yet: see [`Self::start_batch`].
+    unsent: Vec<u8>,
+    batching: bool,
 }
 /// `InetAddress.getByName` under Java's default `java.net.preferIPv6Addresses=false`: IPv4
 /// addresses first, whatever order the system resolver gives (macOS lists IPv6 first). Vanilla
@@ -244,6 +247,8 @@ impl Connection {
                 encrypt: None,
                 threshold: None,
                 counters,
+                unsent: Vec::new(),
+                batching: false,
             },
         })
     }
@@ -314,21 +319,50 @@ impl ConnWriter {
     /// Send a frame whose contents [`frame::contents`] made with this
     /// writer's threshold.
     pub fn send_contents(&mut self, contents: &[u8]) -> Result<()> {
-        let mut framed = frame::prefixed(contents);
+        let start = self.unsent.len();
+        frame::prefix_to(&mut self.unsent, contents);
         if let Some(c) = &mut self.encrypt {
-            c.encrypt(&mut framed);
+            c.encrypt(&mut self.unsent[start..]);
         }
-        self.stream.write_all(&framed)?;
         self.counters.sent.fetch_add(1, Ordering::Relaxed);
         self.counters
             .bytes_out
-            .fetch_add(framed.len() as i64, Ordering::Relaxed);
+            .fetch_add((self.unsent.len() - start) as i64, Ordering::Relaxed);
+        if self.batching && self.unsent.len() < BATCH_BYTES {
+            return Ok(());
+        }
+        self.write_unsent()
+    }
+    /// The frames sent from here to [`Self::finish_batch`] go out together,
+    /// with fewer system calls and packets on the network: the same bytes
+    /// in the same order.
+    pub fn start_batch(&mut self) {
+        self.batching = true;
+    }
+    /// Write what the batch held.
+    pub fn finish_batch(&mut self) -> Result<()> {
+        self.batching = false;
+        self.write_unsent()
+    }
+    fn write_unsent(&mut self) -> Result<()> {
+        if self.unsent.is_empty() {
+            return Ok(());
+        }
+        let written = self.stream.write_all(&self.unsent);
+        self.unsent.clear();
+        // A chunk's frame doesn't stay for every connection's every tick.
+        self.unsent.shrink_to(BATCH_BYTES);
+        written?;
         Ok(())
     }
     pub fn shutdown(&self) {
         self.stream.shutdown();
     }
 }
+
+/// What a batch holds before it writes what it has: a batch takes no more
+/// memory than this per connection.
+const BATCH_BYTES: usize = 64 << 10;
 
 #[cfg(test)]
 mod tests {
@@ -398,6 +432,43 @@ mod tests {
         let c = Connection::connect_addresses("test", vec![v6, closed], Duration::from_secs(5))
             .unwrap();
         assert_eq!(peer(&c), v6);
+    }
+
+    /// Encrypted, compressed frames in a batch are the bytes they'd be sent
+    /// one by one, nothing is left behind and a batch's size is bounded.
+    #[test]
+    fn a_batch_writes_the_same_bytes_as_frames_sent_one_by_one() {
+        let bodies: Vec<Vec<u8>> = (0..60u32)
+            .map(|i| vec![i as u8; (i as usize * 97) % 9000 + 1])
+            .collect();
+        let stream = |batched: bool| {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let reader = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut all = Vec::new();
+                std::io::Read::read_to_end(&mut stream, &mut all).unwrap();
+                all
+            });
+            let mut c = Connection::connect("127.0.0.1", port, Duration::from_secs(5)).unwrap();
+            c.enable_encryption(&[7; 16]);
+            c.set_compression(64);
+            let (read_half, mut writer) = c.split();
+            if batched {
+                writer.start_batch();
+            }
+            for body in &bodies {
+                writer.send(body).unwrap();
+                assert!(writer.unsent.len() < BATCH_BYTES);
+            }
+            writer.finish_batch().unwrap();
+            writer.send(b"after").unwrap();
+            assert!(writer.unsent.is_empty());
+            writer.shutdown();
+            drop((read_half, writer));
+            reader.join().unwrap()
+        };
+        assert_eq!(stream(true), stream(false));
     }
 
     #[test]

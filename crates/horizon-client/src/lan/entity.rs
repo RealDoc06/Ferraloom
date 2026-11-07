@@ -118,6 +118,16 @@ impl States {
         e.reset(id, uuid, kind);
         e
     }
+    /// The next `n` states, as they were left: each is `reset` before it
+    /// is written (`add`), which passes on other threads do for their own.
+    pub fn take(&mut self, n: usize) -> &mut [EntityState] {
+        let start = self.len;
+        self.len += n;
+        if self.list.len() < self.len {
+            self.list.resize_with(self.len, EntityState::default);
+        }
+        &mut self.list[start..self.len]
+    }
     pub fn push(&mut self, e: EntityState) {
         match self.list.get_mut(self.len) {
             Some(slot) => *slot = e,
@@ -160,7 +170,7 @@ fn acceleration_power(kind: &str) -> Option<f64> {
 }
 
 /// Who rides what this tick (`Entity.getPassengers`, `isPassenger`).
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Riding {
     /// Each vehicle's passengers, in order.
     pub passengers: crate::fast_hash::FxHashMap<i32, Vec<i32>>,
@@ -763,6 +773,8 @@ pub struct Entities {
     /// `entity-broadcast-range-percentage` (None: 100), which scales every
     /// type's tracking range (MinecraftServer.getScaledTrackingDistance).
     pub range_percent: Option<i32>,
+    /// It ticks on a thread beside the tick's (`Hub::track_entities`).
+    pub background: bool,
     states: crate::fast_hash::FxHashMap<i32, ServerEntity>,
     /// The level tick, stamped on every entity still in the level.
     tick: u32,
@@ -1029,9 +1041,12 @@ impl Entities {
             };
             let mut work: Vec<(&mut Viewer, &mut ViewerPass)> =
                 viewers.iter_mut().zip(&mut self.passes).collect();
-            horizon_threads::pool::for_each_mut(&mut work, VIEWER_GRAIN, |(v, pass)| {
-                shared.check(v, pass);
-            });
+            let check = |(v, pass): &mut (&mut Viewer, &mut ViewerPass)| shared.check(v, pass);
+            if self.background {
+                horizon_threads::pool::for_each_mut_background(&mut work, VIEWER_GRAIN, check);
+            } else {
+                horizon_threads::pool::for_each_mut(&mut work, VIEWER_GRAIN, check);
+            }
         }
         self.any.clear();
         self.any.resize(entities.len(), 0);
@@ -1083,7 +1098,7 @@ impl Entities {
             let (active, arena) = (&self.active, &self.arena);
             let mut work: Vec<(&mut Viewer, &ViewerPass)> =
                 viewers.iter_mut().zip(&self.passes).collect();
-            horizon_threads::pool::for_each_mut(&mut work, VIEWER_GRAIN, |(v, pass)| {
+            let fan_out = |(v, pass): &mut (&mut Viewer, &ViewerPass)| {
                 let (bytes, ends) = v.tracker.run_capacity;
                 let (mut bytes, mut ends) = (Vec::with_capacity(bytes), Vec::with_capacity(ends));
                 for a in active {
@@ -1101,7 +1116,12 @@ impl Entities {
                 if !ends.is_empty() {
                     v.out.push(PacketBody::Run { bytes, ends });
                 }
-            });
+            };
+            if self.background {
+                horizon_threads::pool::for_each_mut_background(&mut work, VIEWER_GRAIN, fan_out);
+            } else {
+                horizon_threads::pool::for_each_mut(&mut work, VIEWER_GRAIN, fan_out);
+            }
         }
         self.states.retain(|_, s| s.seen == now);
     }

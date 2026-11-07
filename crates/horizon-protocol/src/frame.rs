@@ -50,9 +50,14 @@ pub fn contents(body: &[u8], threshold: Option<usize>) -> Result<Vec<u8>> {
 /// A frame: the length prefix, then the [`contents`].
 pub fn prefixed(contents: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(contents.len() + 3);
-    write_varint(&mut out, contents.len() as i32);
-    out.extend_from_slice(contents);
+    prefix_to(&mut out, contents);
     out
+}
+
+/// Append a frame to `out`.
+pub fn prefix_to(out: &mut Vec<u8>, contents: &[u8]) {
+    write_varint(out, contents.len() as i32);
+    out.extend_from_slice(contents);
 }
 
 /// Split one complete frame off the front of `buffer`, if available.

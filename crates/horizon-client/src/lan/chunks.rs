@@ -88,22 +88,26 @@ pub fn block_entity_type(name: &str) -> Option<&'static str> {
     })
 }
 
-/// Per-state facts and registry ids for encoding chunks.
+/// Per-state facts and registry ids for encoding chunks. A clone shares its
+/// tables and caches; what a column's body reads of it goes with the body
+/// when it is made later (`later_bodies`).
+#[derive(Clone)]
 pub struct ChunkEncoder {
     /// What encoding a section needs.
-    coder: SectionCoder,
+    coder: Arc<SectionCoder>,
     /// Block entity type id per state (-1 for none).
-    entity_types: Vec<i16>,
+    entity_types: Arc<Vec<i16>>,
     /// The block registry id of each state's block, for BlockEvent.
-    pub block_ids: Vec<i32>,
+    pub block_ids: Arc<Vec<i32>>,
     /// The save's tables, for the heightmaps.
     pub tables: Option<Arc<crate::save::SaveTables>>,
-    /// Sections already looked at, by address (see `Encoded`).
-    cache: std::sync::Mutex<FxHashMap<usize, Encoded>>,
+    /// Sections already looked at, by address (see `Encoded`), in shards:
+    /// every writer thread comes here for the sections of its columns.
+    cache: Arc<[SectionCache; CACHE_SHARDS]>,
     /// The size of what `cache` holds of sections and light.
-    cache_bytes: AtomicUsize,
+    cache_bytes: Arc<AtomicUsize>,
     /// Each column's heightmaps, with the sections they were made from.
-    heights: std::sync::Mutex<HashMap<(i32, i32), Heights>>,
+    heights: Arc<std::sync::Mutex<HashMap<(i32, i32), Heights>>>,
     /// The level's sections among a column's: all of them in the Overworld,
     /// y 0 to 255 in the Nether and the End (`DimensionType` min_y and height).
     sections: std::ops::Range<usize>,
@@ -119,8 +123,44 @@ struct SectionCoder {
     biome_bits: u8,
 }
 
-/// A column's client heightmaps, valid while it holds the same sections.
+type SectionCache = std::sync::Mutex<FxHashMap<usize, Encoded>>;
+
+/// A column as its body reads it. The level's other state doesn't come in, so
+/// a body can be made from its sections after the level has moved on.
+#[derive(Clone, Copy)]
+struct Column<'a> {
+    x: i32,
+    z: i32,
+    sections: &'a [Arc<Section>],
+    /// `ChunkAccess.pendingBlockEntities`' order, for a column from a save.
+    order: &'a [(i32, i32, i32)],
+}
+
+impl<'a> From<&'a Chunk> for Column<'a> {
+    fn from(chunk: &'a Chunk) -> Self {
+        Self {
+            x: chunk.x,
+            z: chunk.z,
+            sections: &chunk.sections,
+            order: chunk
+                .saved
+                .as_ref()
+                .map_or(&[], |s| s.block_entity_order.as_slice()),
+        }
+    }
+}
+
+/// A neighbouring column's sections when a later body was asked for, and
+/// their non-air bits once one of the bodies has looked.
+struct NearColumn {
+    sections: [Arc<Section>; SECTIONS],
+    occupied: std::sync::OnceLock<u64>,
+}
+
+/// A column's client heightmaps, valid while it holds the same sections and
+/// the level has the same height.
 struct Heights {
+    level: (i32, i32),
     sections: Vec<std::sync::Weak<Section>>,
     maps: ColumnHeightmaps,
 }
@@ -132,13 +172,15 @@ type ColumnHeightmaps = Arc<Vec<(i32, Vec<i64>)>>;
 /// from.
 fn cached_heights(
     heights: &HashMap<(i32, i32), Heights>,
-    chunk: &Chunk,
+    chunk: Column,
+    level: (i32, i32),
 ) -> Option<ColumnHeightmaps> {
     let h = heights.get(&(chunk.x, chunk.z))?;
-    let same = h.sections.len() == chunk.sections.len()
+    let same = h.level == level
+        && h.sections.len() == chunk.sections.len()
         && h.sections
             .iter()
-            .zip(&chunk.sections)
+            .zip(chunk.sections)
             .all(|(w, s)| std::ptr::eq(w.as_ptr(), Arc::as_ptr(s)));
     same.then(|| h.maps.clone())
 }
@@ -148,6 +190,7 @@ fn cached_heights(
 fn keep_heights(
     heights: &mut HashMap<(i32, i32), Heights>,
     key: (i32, i32),
+    level: (i32, i32),
     sections: &[Arc<Section>],
     maps: &ColumnHeightmaps,
 ) {
@@ -160,6 +203,7 @@ fn keep_heights(
     heights.insert(
         key,
         Heights {
+            level,
             sections: sections.iter().map(Arc::downgrade).collect(),
             maps: maps.clone(),
         },
@@ -306,6 +350,11 @@ impl SectionCoder {
 const CACHE_SWEEP: usize = 1 << 18;
 /// Bytes of encoded sections and light kept before all of them are let go.
 const CACHE_BYTES: usize = 128 << 20;
+/// Shards of the section cache: few enough to sweep, many enough that the
+/// writer threads seldom meet.
+const CACHE_SHARDS: usize = 64;
+/// What a later body counts for in a connection's queue until it is made.
+pub const LATER_BODY_BYTES: usize = 16 << 10;
 /// Heightmap columns kept before the ones no longer resident are dropped.
 const HEIGHTS_SWEEP: usize = 1 << 13;
 
@@ -368,16 +417,16 @@ impl ChunkEncoder {
             })
             .collect();
         Self {
-            coder: SectionCoder {
+            coder: Arc::new(SectionCoder {
                 flags,
                 biome_ids,
                 biome_bits: ceil_log2(biome_registry.len()),
-            },
-            entity_types,
-            block_ids,
+            }),
+            entity_types: Arc::new(entity_types),
+            block_ids: Arc::new(block_ids),
             tables: None,
-            cache: Default::default(),
-            cache_bytes: AtomicUsize::new(0),
+            cache: Arc::new(std::array::from_fn(|_| Default::default())),
+            cache_bytes: Arc::default(),
             heights: Default::default(),
             sections: 0..SECTIONS,
             sky: true,
@@ -386,14 +435,15 @@ impl ChunkEncoder {
 
     /// The client heightmaps (Heightmap.prime over the column), from the
     /// cache while the column's sections are unchanged.
-    fn heightmaps(&self, chunk: &Chunk, tables: &crate::save::SaveTables) -> ColumnHeightmaps {
-        if let Some(maps) = cached_heights(&self.heights.lock().unwrap(), chunk) {
+    fn heightmaps(&self, chunk: Column, tables: &crate::save::SaveTables) -> ColumnHeightmaps {
+        let level = self.level();
+        if let Some(maps) = cached_heights(&self.heights.lock().unwrap(), chunk, level) {
             return maps;
         }
-        let (min_y, height) = self.level();
+        let (min_y, height) = level;
         // Not under the lock: other threads make other columns' meanwhile.
         let maps = Arc::new(crate::save::client_heightmaps_in(
-            &chunk.sections,
+            chunk.sections,
             tables,
             min_y,
             height,
@@ -401,7 +451,8 @@ impl ChunkEncoder {
         keep_heights(
             &mut self.heights.lock().unwrap(),
             (chunk.x, chunk.z),
-            &chunk.sections,
+            level,
+            chunk.sections,
             &maps,
         );
         maps
@@ -417,40 +468,47 @@ impl ChunkEncoder {
 
     /// The cached entry for a section, made with `non_air` when missing.
     fn cached<T>(&self, section: &Arc<Section>, read: impl FnOnce(&mut Encoded) -> T) -> T {
-        read(self.entry(&mut self.cache.lock().unwrap(), section))
+        let at = Arc::as_ptr(section) as usize;
+        // Allocations are aligned: the multiply brings all the address to the top bits.
+        let shard = &self.cache[at.wrapping_mul(0x9E37_79B9_7F4A_7C15) >> (usize::BITS - 6)];
+        let mut cache = shard.lock().unwrap();
+        if cache.len() >= CACHE_SWEEP / CACHE_SHARDS
+            || self.cache_bytes.load(Ordering::Relaxed) >= CACHE_BYTES
+        {
+            drop(cache);
+            self.sweep();
+            cache = shard.lock().unwrap();
+        }
+        read(cache.entry(at).or_insert_with(|| Encoded {
+            section: Arc::downgrade(section),
+            non_air: self.non_air(section),
+            wire: None,
+            light: None,
+        }))
     }
 
-    /// A section's entry in the locked cache, made with `non_air` when missing.
-    fn entry<'a>(
-        &self,
-        cache: &'a mut FxHashMap<usize, Encoded>,
-        section: &Arc<Section>,
-    ) -> &'a mut Encoded {
-        if cache.len() >= CACHE_SWEEP || self.cache_bytes.load(Ordering::Relaxed) >= CACHE_BYTES {
+    /// Drop the entries of sections no longer resident, and when what's left
+    /// is still too much, its bytes (what it tells of the section stays).
+    fn sweep(&self) {
+        let mut bytes = 0;
+        for shard in self.cache.iter() {
+            let mut cache = shard.lock().unwrap();
             cache.retain(|_, e| e.section.strong_count() > 0);
-            if cache.len() >= CACHE_SWEEP / 2 {
+            if cache.len() >= CACHE_SWEEP / CACHE_SHARDS / 2 {
                 cache.clear();
             }
-            let bytes = cache.values().map(Encoded::bytes).sum::<usize>();
-            let keep = bytes < CACHE_BYTES / 2;
-            if !keep {
-                // What's left is resident: its bytes go, what it tells of
-                // the section stays.
-                for e in cache.values_mut() {
+            bytes += cache.values().map(Encoded::bytes).sum::<usize>();
+        }
+        let keep = bytes < CACHE_BYTES / 2;
+        if !keep {
+            for shard in self.cache.iter() {
+                for e in shard.lock().unwrap().values_mut() {
                     (e.wire, e.light) = (None, None);
                 }
             }
-            self.cache_bytes
-                .store(if keep { bytes } else { 0 }, Ordering::Relaxed);
         }
-        cache
-            .entry(Arc::as_ptr(section) as usize)
-            .or_insert_with(|| Encoded {
-                section: Arc::downgrade(section),
-                non_air: self.non_air(section),
-                wire: None,
-                light: None,
-            })
+        self.cache_bytes
+            .store(if keep { bytes } else { 0 }, Ordering::Relaxed);
     }
 
     /// LevelChunkSection.hasOnlyAir, negated.
@@ -490,7 +548,7 @@ impl ChunkEncoder {
         self.sections = lo..(lo + n).min(SECTIONS);
         self.sky = sky;
         // The heightmaps depend on the level's height.
-        self.heights.get_mut().unwrap().clear();
+        self.heights.lock().unwrap().clear();
     }
     pub fn entity_type(&self, state: u32) -> Option<i32> {
         self.entity_types
@@ -505,18 +563,13 @@ impl ChunkEncoder {
             .is_none_or(|f| f & NON_AIR == 0)
     }
 
-    /// The chunk column with its light and block entities.
     /// The non-air sections of a column as bits (LevelChunkSection.hasOnlyAir).
-    fn occupied(&self, chunk: &Chunk) -> u64 {
-        let mut bits = 0u64;
-        // One lock for the column: body_in asks for nine columns' sections.
-        let mut cache = self.cache.lock().unwrap();
-        for (i, s) in chunk.sections[self.sections.clone()].iter().enumerate() {
-            if self.entry(&mut cache, s).non_air {
-                bits |= 1 << i;
-            }
-        }
-        bits
+    fn occupied(&self, sections: &[Arc<Section>]) -> u64 {
+        sections[self.sections.clone()]
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| self.cached(s, |e| e.non_air))
+            .fold(0, |bits, (i, _)| bits | 1 << i)
     }
 
     /// The non-air sections of the column and its neighbours, as bits.
@@ -524,7 +577,7 @@ impl ChunkEncoder {
         AROUND
             .iter()
             .filter_map(|(dx, dz)| world.chunks.get(&(chunk.x + dx, chunk.z + dz)))
-            .fold(0, |around, c| around | self.occupied(c))
+            .fold(0, |around, c| around | self.occupied(&c.sections))
     }
 
     /// The chunk column with its light and block entities, as the body
@@ -534,55 +587,94 @@ impl ChunkEncoder {
     /// sections and light layers go straight to it, with no packet built and
     /// copied again first.
     pub fn body_in(&self, chunk: &Chunk, world: &crate::world::World) -> Vec<u8> {
-        self.body(chunk, &world.block_entities, self.around(chunk, world))
+        let tag = |pos: &_| world.block_entities.get(pos).and_then(entity_tag);
+        self.body(chunk.into(), tag, self.around(chunk, world))
     }
 
-    /// [`Self::body_in`] of these columns, on the pool's threads too: a batch
-    /// of new terrain costs mostly its sections' first encoding. Nothing reads
-    /// what another column makes but through the cache, which gives the same
-    /// bytes, so the bodies don't depend on who made them.
-    pub fn bodies_in(&self, columns: &[&Chunk], world: &crate::world::World) -> Vec<Vec<u8>> {
+    /// [`Self::body_in`] of these columns as the level has them now, each to
+    /// be made by whoever first needs its bytes: on the writer threads, off
+    /// the tick. Sections are immutable behind their `Arc`s (an edit moves
+    /// the column to a new one) and the block entity tags are read here, so
+    /// the level moving on doesn't change the bytes, and nothing reads what
+    /// another column makes but through the cache, which gives the same bytes.
+    pub fn later_bodies(
+        &self,
+        columns: &[&Chunk],
+        world: &crate::world::World,
+    ) -> Vec<Arc<super::conn::LaterBody>> {
+        let encoder = Arc::new(self.clone());
         // Neighbours are often shared: each column's sections are looked at once.
-        let mut near = FxHashMap::default();
-        let mut occupied: Vec<(&Chunk, u64)> = Vec::new();
-        for c in columns {
-            for (dx, dz) in AROUND {
-                let key = (c.x + dx, c.z + dz);
-                if let std::collections::hash_map::Entry::Vacant(e) = near.entry(key)
-                    && let Some(n) = world.chunks.get(&key)
-                {
-                    e.insert(occupied.len());
-                    occupied.push((&**n, 0));
-                }
-            }
-        }
-        horizon_threads::pool::for_each_mut(&mut occupied, 8, |(n, bits)| {
-            *bits = self.occupied(n);
-        });
-        let mut bodies: Vec<(&Chunk, u64, Vec<u8>)> = columns
+        let mut near: FxHashMap<(i32, i32), Option<Arc<NearColumn>>> = FxHashMap::default();
+        columns
             .iter()
             .map(|&c| {
-                let around = AROUND
+                let around: Vec<_> = AROUND
                     .iter()
-                    .filter_map(|(dx, dz)| near.get(&(c.x + dx, c.z + dz)))
-                    .fold(0, |bits, &i| bits | occupied[i].1);
-                (c, around, Vec::new())
+                    .filter_map(|(dx, dz)| {
+                        let key = (c.x + dx, c.z + dz);
+                        near.entry(key)
+                            .or_insert_with(|| {
+                                Some(Arc::new(NearColumn {
+                                    sections: world.chunks.get(&key)?.sections.clone(),
+                                    occupied: Default::default(),
+                                }))
+                            })
+                            .clone()
+                    })
+                    .collect();
+                let (x, z) = (c.x, c.z);
+                let sections = c.sections.clone();
+                let order = Column::from(c).order.to_vec();
+                let tags = self.column_tags(c, &world.block_entities);
+                let encoder = encoder.clone();
+                Arc::new(super::conn::LaterBody::new(Box::new(move || {
+                    let around = around.iter().fold(0, |bits, n| {
+                        bits | *n.occupied.get_or_init(|| encoder.occupied(&n.sections))
+                    });
+                    let column = Column {
+                        x,
+                        z,
+                        sections: &sections,
+                        order: &order,
+                    };
+                    let tag = |pos: &_| tags.iter().find(|t| t.0 == *pos).map(|t| t.1.clone());
+                    encoder.body(column, tag, around)
+                })))
             })
-            .collect();
-        let block_entities = &world.block_entities;
-        horizon_threads::pool::for_each_mut(&mut bodies, 1, |(c, around, body)| {
-            *body = self.body(c, block_entities, *around);
-        });
-        bodies.into_iter().map(|(_, _, body)| body).collect()
+            .collect()
     }
 
-    fn body(
+    /// The update tags of a column's block entities, by position. The palette
+    /// tells most sections have none without looking at their blocks.
+    fn column_tags(
         &self,
         chunk: &Chunk,
         block_entities: &HashMap<(i32, i32, i32), BlockEntity>,
+    ) -> Vec<((i32, i32, i32), Tag)> {
+        let entity = |v: u32| self.coder.flags.get(v as usize).copied().unwrap_or(0) & ENTITY != 0;
+        let mut tags = Vec::new();
+        for (i, s) in chunk.sections.iter().enumerate() {
+            if !self.sections.contains(&i) || !s.blocks.maybe_has(entity) {
+                continue;
+            }
+            for &(index, _) in self.section_wire(s).1.iter() {
+                let pos = block_position(chunk.x, chunk.z, i, index);
+                if let Some(tag) = block_entities.get(&pos).and_then(entity_tag) {
+                    tags.push((pos, tag));
+                }
+            }
+        }
+        tags
+    }
+
+    /// A column's packet, with its block entities' tags from `tag`.
+    fn body(
+        &self,
+        chunk: Column,
+        tag: impl Fn(&(i32, i32, i32)) -> Option<Tag>,
         around: u64,
     ) -> Vec<u8> {
-        let (wires, entities) = self.blocks(chunk, block_entities);
+        let (wires, entities) = self.blocks(chunk, tag);
         let heightmaps = self.heightmaps_of(chunk);
         let lights = self.light_sections(chunk, around);
         let buffer: usize = wires.iter().map(|w| w.len()).sum();
@@ -624,7 +716,7 @@ impl ChunkEncoder {
     pub fn light_update(&self, chunk: &Chunk, changed: u32) -> Vec<u8> {
         let first = self.sections.start;
         let lights: Vec<(usize, SectionLight)> = self
-            .light_sections(chunk, u64::MAX)
+            .light_sections(chunk.into(), u64::MAX)
             .into_iter()
             .filter(|&(b, _)| {
                 // Light section b holds the column's section first + b - 1.
@@ -657,12 +749,13 @@ impl ChunkEncoder {
         chunk: &Chunk,
         block_entities: &HashMap<(i32, i32, i32), BlockEntity>,
     ) -> LevelChunkWithLight {
-        let (wires, block_entities) = self.blocks(chunk, block_entities);
+        let tag = |pos: &_| block_entities.get(pos).and_then(entity_tag);
+        let (wires, block_entities) = self.blocks(chunk.into(), tag);
         LevelChunkWithLight {
             x: chunk.x,
             z: chunk.z,
             chunk: ChunkData {
-                heightmaps: self.heightmaps_of(chunk).to_vec(),
+                heightmaps: self.heightmaps_of(chunk.into()).to_vec(),
                 buffer: wires.concat(),
                 block_entities,
             },
@@ -677,7 +770,7 @@ impl ChunkEncoder {
         }
     }
 
-    fn heightmaps_of(&self, chunk: &Chunk) -> ColumnHeightmaps {
+    fn heightmaps_of(&self, chunk: Column) -> ColumnHeightmaps {
         self.tables
             .as_ref()
             .map(|t| self.heightmaps(chunk, t))
@@ -688,8 +781,8 @@ impl ChunkEncoder {
     /// the packet's order.
     fn blocks(
         &self,
-        chunk: &Chunk,
-        block_entities: &HashMap<(i32, i32, i32), BlockEntity>,
+        chunk: Column,
+        tag: impl Fn(&(i32, i32, i32)) -> Option<Tag>,
     ) -> (Vec<Arc<[u8]>>, Vec<BlockEntityInfo>) {
         let mut wires = Vec::with_capacity(self.sections.len());
         let mut entity_infos = Vec::new();
@@ -707,22 +800,13 @@ impl ChunkEncoder {
                 let Some(kind) = self.entity_type(state) else {
                     continue;
                 };
-                let (x, y, z) = (
-                    i32::from(index & 15),
-                    i32::from(index >> 8),
-                    i32::from(index >> 4 & 15),
-                );
-                let wy = MIN_Y + (i as i32) * 16 + y;
-                let pos = (chunk.x * 16 + x, wy, chunk.z * 16 + z);
+                let pos = block_position(chunk.x, chunk.z, i, index);
                 entity_infos.push(BlockEntityInfo {
-                    packed_xz: ((x << 4) | z) as i8,
-                    y: wy as i16,
+                    packed_xz: (((pos.0 & 15) << 4) | (pos.2 & 15)) as i8,
+                    y: pos.1 as i16,
                     kind,
                     // BlockEntityInfo.create: an empty update tag is not sent.
-                    tag: block_entities
-                        .get(&pos)
-                        .and_then(entity_tag)
-                        .unwrap_or(Tag::End),
+                    tag: tag(&pos).unwrap_or(Tag::End),
                 });
             }
             wires.push(encoded);
@@ -730,9 +814,8 @@ impl ChunkEncoder {
         // A loaded chunk's block entities enter its maps in the save's order
         // (ChunkAccess.pendingBlockEntities, then LevelChunk.blockEntities):
         // keys that share a bucket keep that order. Others follow in scan order.
-        if let Some(order) = chunk.saved.as_ref().map(|s| &s.block_entity_order)
-            && !order.is_empty()
-        {
+        let order = chunk.order;
+        if !order.is_empty() {
             let at = |e: &BlockEntityInfo| {
                 let pos = (
                     chunk.x * 16 + i32::from(e.packed_xz as u8 >> 4),
@@ -759,10 +842,10 @@ impl ChunkEncoder {
     /// the cache while it is unchanged (uniform light is quicker to fill than
     /// to keep).
     fn light_data(&self, chunk: &Chunk, around: u64) -> LightData {
-        light_data_of(&self.light_sections(chunk, around), self.sky)
+        light_data_of(&self.light_sections(chunk.into(), around), self.sky)
     }
 
-    fn light_sections(&self, chunk: &Chunk, around: u64) -> Vec<(usize, SectionLight)> {
+    fn light_sections(&self, chunk: Column, around: u64) -> Vec<(usize, SectionLight)> {
         light_sections(&chunk.sections[self.sections.clone()], around, |s| {
             if let Light::Uniform(v) = s.light {
                 return SectionLight::Uniform(v);
@@ -777,6 +860,15 @@ impl ChunkEncoder {
             }))
         })
     }
+}
+
+/// The block at `index` (y, then z, then x) of a column's section `i`.
+fn block_position(chunk_x: i32, chunk_z: i32, i: usize, index: u16) -> (i32, i32, i32) {
+    (
+        chunk_x * 16 + i32::from(index & 15),
+        MIN_Y + (i as i32) * 16 + i32::from(index >> 8),
+        chunk_z * 16 + i32::from(index >> 4 & 15),
+    )
 }
 
 /// The order LevelChunk.getBlockEntities() iterates in: a fastutil
@@ -1096,7 +1188,7 @@ mod tests {
         let mut chunk = Chunk::empty(0, 0);
         chunk.set(1, MIN_Y + 2, 3, 1);
         let before = encoder.encode(&chunk, &HashMap::new());
-        assert_eq!(encoder.occupied(&chunk), 1);
+        assert_eq!(encoder.occupied(&chunk.sections), 1);
         assert_eq!(
             &*encoder.section_wire(&chunk.sections[0]).0,
             fresh(&encoder, &chunk.sections[0])
@@ -1104,7 +1196,7 @@ mod tests {
         // An edit moves the section: the cache sees a new one.
         chunk.set(4, MIN_Y + 20, 4, 2);
         chunk.set(1, MIN_Y + 2, 3, 0);
-        assert_eq!(encoder.occupied(&chunk), 2);
+        assert_eq!(encoder.occupied(&chunk.sections), 2);
         let after = encoder.encode(&chunk, &HashMap::new());
         assert_ne!(before.chunk.buffer, after.chunk.buffer);
         let mut expected = Vec::new();
@@ -1219,16 +1311,17 @@ mod tests {
             .block_entities;
         assert_eq!(sent.len(), 3);
         assert!(sent.iter().any(|e| e.tag != Tag::End));
+        let tag = |pos: &_| entities.get(pos).and_then(entity_tag);
         for around in [0, 1, 0b1010_0000, 1 << 23, u64::MAX] {
             assert_eq!(
-                encoder.body(&chunk, &entities, around),
+                encoder.body((&chunk).into(), tag, around),
                 packet(&encoder, around),
                 "around {around:#b}"
             );
         }
         encoder.set_dimension(0, 256, false);
         assert_eq!(
-            encoder.body(&chunk, &entities, u64::MAX),
+            encoder.body((&chunk).into(), tag, u64::MAX),
             packet(&encoder, u64::MAX)
         );
     }
@@ -1275,10 +1368,8 @@ mod tests {
         let mut keys: Vec<(i32, i32)> =
             (-2..2).flat_map(|x| (-2..2).map(move |z| (x, z))).collect();
         keys.push(keys[5]);
-        let chunks: Vec<&Chunk> = keys
-            .iter()
-            .map(|k| &**world.chunks.get(k).unwrap())
-            .collect();
+        let snapshot = world.chunks.clone();
+        let chunks: Vec<&Chunk> = keys.iter().map(|k| &**snapshot.get(k).unwrap()).collect();
         // (air, fluid, blocks motion, blocks motion and is not leaves) per state.
         let tables = Arc::new(crate::save::SaveTables::for_heightmaps(
             crate::assets::Properties::for_tests(&[
@@ -1293,11 +1384,23 @@ mod tests {
         let expected: Vec<Vec<u8>> = chunks.iter().map(|c| alone.body_in(c, &world)).collect();
         let mut together = ChunkEncoder::new(states, &builtin, &[], &[]);
         together.tables = Some(tables);
-        assert_eq!(together.bodies_in(&chunks, &world), expected);
+        let made = |later: Vec<Arc<super::super::conn::LaterBody>>| {
+            let bodies = later.into_iter().map(super::super::conn::PacketBody::Later);
+            bodies.map(|b| b.to_vec()).collect::<Vec<_>>()
+        };
+        assert_eq!(made(together.later_bodies(&chunks, &world)), expected);
         // Again, from the cache.
-        assert_eq!(together.bodies_in(&chunks, &world), expected);
+        assert_eq!(made(together.later_bodies(&chunks, &world)), expected);
         assert_eq!(together.heights.lock().unwrap().len(), 16);
-        assert!(together.bodies_in(&[], &world).is_empty());
+        assert!(together.later_bodies(&[], &world).is_empty());
+        // Bodies asked for now are the level as it is now, whatever comes next.
+        let later = together.later_bodies(&chunks, &world);
+        for key in &keys {
+            let chunk = Arc::make_mut(world.chunks.get_mut(key).unwrap());
+            chunk.set(1, MIN_Y + 3, 1, 2);
+        }
+        world.block_entities.clear();
+        assert_eq!(made(later), expected);
     }
 
     #[test]

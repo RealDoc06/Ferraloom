@@ -253,12 +253,22 @@ pub struct Packed {
     pub data: Option<Vec<u64>>,
 }
 
+/// [`PalettedContainer::palette_fact`]'s answer, 0 until asked.
+#[derive(Debug, Default)]
+struct PaletteFact(std::sync::atomic::AtomicU8);
+impl Clone for PaletteFact {
+    fn clone(&self) -> Self {
+        Self(self.0.load(std::sync::atomic::Ordering::Relaxed).into())
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct PalettedContainer {
     strategy: Strategy,
     bits: u8,
     palette: Palette,
     words: Vec<u64>,
+    fact: PaletteFact,
 }
 impl PalettedContainer {
     /// `new PalettedContainer(initialValue, strategy)`.
@@ -268,6 +278,7 @@ impl PalettedContainer {
             bits: 0,
             palette: Palette::Single(value),
             words: Vec::new(),
+            fact: PaletteFact::default(),
         }
     }
     pub fn strategy(&self) -> Strategy {
@@ -287,6 +298,17 @@ impl PalettedContainer {
     }
     pub fn is_global(&self) -> bool {
         matches!(self.palette, Palette::Global)
+    }
+    /// What [`Self::get`] of entry `i` reads past the container itself: the
+    /// storage word holding it, and the palette's first entries (for prefetch
+    /// hints). `None` for a single value.
+    pub fn entry_storage(&self, i: usize) -> Option<(&u64, Option<&u32>)> {
+        let list = match &self.palette {
+            Palette::Single(_) => return None,
+            Palette::List(list) => list.first(),
+            Palette::Global => None,
+        };
+        Some((self.words.get(locate(self.bits, i).0)?, list))
     }
     #[inline(always)]
     fn raw(&self, i: usize) -> usize {
@@ -314,7 +336,14 @@ impl PalettedContainer {
     pub fn get(&self, i: usize) -> u32 {
         match &self.palette {
             Palette::Single(value) => *value,
-            Palette::List(list) => list[self.raw(i)],
+            Palette::List(list) => {
+                // Without `raw`'s branch per width: sections of mixed widths
+                // mispredict it (10.9 against 6.8 ns per read over 64 sections).
+                let (magic, filled) = MAGIC[usize::from(self.bits)];
+                let word = (i as u32 * magic) >> 20;
+                let shift = i as u32 * u32::from(self.bits) - word * filled;
+                list[((self.words[word as usize] >> shift) & mask(self.bits)) as usize]
+            }
             Palette::Global => self.raw(i) as u32,
         }
     }
@@ -393,6 +422,7 @@ impl PalettedContainer {
                     id
                 } else if list.len() < 1 << self.bits {
                     list.push(value);
+                    *self.fact.0.get_mut() = 0;
                     list.len() - 1
                 } else {
                     self.resize(self.bits + 1, value)
@@ -453,6 +483,7 @@ impl PalettedContainer {
         }
         let id = id_in(&mut palette, last);
         self.palette = palette;
+        *self.fact.0.get_mut() = 0;
         self.bits = storage_bits;
         self.words = words;
         id as usize
@@ -503,6 +534,7 @@ impl PalettedContainer {
                 bits,
                 words: pack_words(bits, ids.len(), ids.iter().copied()),
                 palette: Palette::List(palette),
+                fact: PaletteFact::default(),
             },
             Config::Global => {
                 let bits = strategy.global_bits;
@@ -511,6 +543,7 @@ impl PalettedContainer {
                     bits,
                     words: pack_words(bits, ids.len(), ids.iter().map(|&id| palette[id as usize])),
                     palette: Palette::Global,
+                    fact: PaletteFact::default(),
                 }
             }
         }
@@ -549,6 +582,7 @@ impl PalettedContainer {
                     bits,
                     palette: Palette::List(palette),
                     words,
+                    fact: PaletteFact::default(),
                 };
                 container.check_indices()?;
                 Ok(container)
@@ -558,6 +592,7 @@ impl PalettedContainer {
                 bits: storage_bits,
                 palette: Palette::Global,
                 words,
+                fact: PaletteFact::default(),
             }),
         }
     }
@@ -650,6 +685,7 @@ impl PalettedContainer {
                 bits,
                 words: data.to_vec(),
                 palette: Palette::List(palette),
+                fact: PaletteFact::default(),
             };
             container.check_indices()?;
             return Ok(container);
@@ -674,6 +710,20 @@ impl PalettedContainer {
             Palette::Single(value) => predicate(*value),
             Palette::List(list) => list.iter().any(|&v| predicate(v)),
             Palette::Global => (0..1u32 << self.bits.min(31)).any(predicate),
+        }
+    }
+    /// A non-zero byte `compute` derives from the palette ([`Self::maybe_has`]
+    /// and the like), computed once until the palette changes. One caller per
+    /// container: there is one such byte, whatever is asked of it.
+    pub fn palette_fact(&self, compute: impl FnOnce(&Self) -> u8) -> u8 {
+        use std::sync::atomic::Ordering::Relaxed;
+        match self.fact.0.load(Relaxed) {
+            0 => {
+                let fact = compute(self);
+                self.fact.0.store(fact, Relaxed);
+                fact
+            }
+            fact => fact,
         }
     }
     /// Whether any entry satisfies `predicate`. Unlike [`Self::maybe_has`],
@@ -717,6 +767,43 @@ impl PalettedContainer {
         }
         (0..entries).any(|i| matching[self.raw(i)])
     }
+    /// Sets bit `i % 64` of `out[i / 64]` to whether entry `i` satisfies
+    /// `predicate`, asking it once per palette entry where there is a palette.
+    /// Returns whether any entry does.
+    pub fn fill_matching(&self, mut predicate: impl FnMut(u32) -> bool, out: &mut [u64]) -> bool {
+        let entries = self.strategy.entries();
+        assert_eq!(out.len(), entries.div_ceil(64));
+        out.fill(0);
+        match &self.palette {
+            Palette::Single(value) => {
+                let every = u64::from(predicate(*value)).wrapping_neg();
+                out.fill(every);
+                if entries % 64 != 0 {
+                    out[entries / 64] &= (1 << (entries % 64)) - 1;
+                }
+            }
+            Palette::List(list) => {
+                let matching: Vec<u64> = list.iter().map(|&v| u64::from(predicate(v))).collect();
+                if matching.contains(&1) {
+                    let (bits, m) = (usize::from(self.bits), mask(self.bits));
+                    let per = 64 / bits;
+                    for (w, &word) in self.words.iter().enumerate() {
+                        for slot in 0..per.min(entries.saturating_sub(w * per)) {
+                            let i = w * per + slot;
+                            out[i / 64] |=
+                                matching[(word >> (slot * bits) & m) as usize] << (i % 64);
+                        }
+                    }
+                }
+            }
+            Palette::Global => {
+                for i in 0..entries {
+                    out[i / 64] |= u64::from(predicate(self.raw(i) as u32)) << (i % 64);
+                }
+            }
+        }
+        out.iter().any(|&word| word != 0)
+    }
     /// Heap bytes held by the palette and the storage.
     pub fn heap_bytes(&self) -> usize {
         self.words.capacity() * 8
@@ -735,8 +822,68 @@ impl PartialEq for PalettedContainer {
 }
 
 #[cfg(test)]
+mod palette_fact_tests {
+    use super::*;
+
+    /// The byte is forgotten whenever the palette gains or loses an entry.
+    #[test]
+    fn a_palette_fact_follows_the_palette() {
+        let strategy = Strategy::blocks(15);
+        let has_seven = |c: &PalettedContainer| 1 + u8::from(c.maybe_has(|v| v == 7));
+        let mut c = PalettedContainer::new(strategy, 0);
+        assert_eq!(c.palette_fact(has_seven), 1);
+        // Asked again, the answer is remembered, whatever the closure says.
+        assert_eq!(c.palette_fact(|_| 9), 1);
+        c.set(0, 7);
+        assert_eq!(c.palette_fact(has_seven), 2);
+        for v in 100..140 {
+            assert_eq!(c.palette_fact(has_seven), 2);
+            c.set(v as usize, v);
+        }
+        assert_eq!(c.palette_fact(has_seven), 2);
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fill_matching_agrees_with_get_in_every_storage() {
+        let strategy = Strategy::blocks(16);
+        let wanted = |v: u32| v % 7 == 3;
+        for distinct in [1u32, 2, 16, 40, 300, 5000] {
+            let values: Vec<u32> = (0..4096u32).map(|i| i * 31 % distinct).collect();
+            let mut container = PalettedContainer::from_values(strategy, &values);
+            for edit in [false, true] {
+                if edit {
+                    // A palette entry no block uses any more doesn't match.
+                    for i in 0..4096 {
+                        if wanted(container.get(i)) {
+                            container.set(i, 0);
+                        }
+                    }
+                }
+                let mut bits = [u64::MAX; 64];
+                let any = container.fill_matching(wanted, &mut bits);
+                let mut found = false;
+                for i in 0..4096 {
+                    let expected = wanted(container.get(i));
+                    assert_eq!(
+                        bits[i / 64] >> (i % 64) & 1 == 1,
+                        expected,
+                        "{distinct} {i}"
+                    );
+                    found |= expected;
+                }
+                assert_eq!(any, found);
+            }
+        }
+        let mut bits = [0; 64];
+        assert!(PalettedContainer::new(strategy, 3).fill_matching(wanted, &mut bits));
+        assert_eq!(bits, [u64::MAX; 64]);
+    }
+
     const BLOCKS: Strategy = Strategy::blocks(16);
     const BIOMES: Strategy = Strategy::biomes(7);
 
@@ -769,6 +916,7 @@ mod tests {
                     bits,
                     palette: Palette::Global,
                     words: pack_words(bits, n, ids.iter().copied()),
+                    fact: PaletteFact::default(),
                 };
                 for (i, &id) in ids.iter().enumerate() {
                     assert_eq!(c.raw(i), old_raw(&c, i));
@@ -784,6 +932,7 @@ mod tests {
                 bits,
                 palette: Palette::List((0..1u32 << bits).map(|i| i * 37).collect()),
                 words: pack_words(bits, n, ids.iter().copied()),
+                fact: PaletteFact::default(),
             };
             for i in 0..n {
                 assert_eq!(c.get(i), old_get(&c, i));
@@ -840,6 +989,18 @@ mod tests {
                     "{name} raw={raw}: old {:.3} new {:.3} ns/op",
                     times[0][5], times[1][5]
                 );
+            }
+        }
+    }
+    #[test]
+    fn entry_storage_is_the_word_get_reads() {
+        for distinct in [1u32, 2, 16, 40, 300, 5000] {
+            let values: Vec<u32> = (0..4096u32).map(|i| i * 31 % distinct).collect();
+            let c = PalettedContainer::from_values(BLOCKS, &values);
+            for i in [0, 1, 63, 64, 1000, 4095] {
+                let got = c.entry_storage(i).map(|(w, _)| w as *const u64);
+                let expected = (c.bits != 0).then(|| &c.words[locate(c.bits, i).0] as *const u64);
+                assert_eq!(got, expected, "{distinct} {i}");
             }
         }
     }
@@ -1068,6 +1229,7 @@ mod tests {
                     bits,
                     palette: Palette::List(palette),
                     words: data.to_vec(),
+                    fact: PaletteFact::default(),
                 },
                 _ => PalettedContainer::build(strategy, palette, &ids),
             })

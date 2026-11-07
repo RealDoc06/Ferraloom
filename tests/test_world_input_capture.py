@@ -32,7 +32,7 @@ class WorldInputCaptureTests(unittest.TestCase):
         game = (ROOT / "crates/horizon-client/src/game.rs").read_text(encoding="utf-8")
         remote = (ROOT / "crates/horizon-client/src/game/remote.rs").read_text(encoding="utf-8")
         spawn = method(game, "spawn_player")
-        self.assertLess(spawn.index("self.player = Some(player)"),
+        self.assertLess(spawn.index("self.player = Some(Box::new(player))"),
                         spawn.index("self.capture_loaded_world()"))
         tick = remote[remote.index("    pub(super) fn tick_remote("):]
         ready = tick[tick.index("if self.remote.as_ref().is_some_and(|r| !r.loaded_sent)"):]

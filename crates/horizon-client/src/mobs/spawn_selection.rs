@@ -126,13 +126,23 @@ impl Category {
         }
     }
     pub fn from_name(name: &str) -> Self {
-        Self::ALL
-            .into_iter()
-            .find(|c| c.name() == name)
-            .unwrap_or(Self::Misc)
+        match name {
+            "monster" => Self::Monster,
+            "creature" => Self::Creature,
+            "ambient" => Self::Ambient,
+            "axolotls" => Self::Axolotls,
+            "underground_water_creature" => Self::UndergroundWaterCreature,
+            "water_creature" => Self::WaterCreature,
+            "water_ambient" => Self::WaterAmbient,
+            _ => Self::Misc,
+        }
     }
     fn index(self) -> usize {
         self as usize
+    }
+    /// The category's bit in a set of categories.
+    pub const fn bit(self) -> u8 {
+        1 << self as usize
     }
     /// `getMaxInstancesPerChunk`.
     pub fn max(self) -> i32 {
@@ -366,6 +376,22 @@ pub trait NaturalLevel: SpawnLevel {
     fn mob_type(&self, entity: &str) -> Option<MobType>;
     /// The `natural_mob_spawns` lists by category at a position.
     fn biome_spawns(&self, x: i32, y: i32, z: i32) -> Option<&HashMap<String, Vec<SpawnEntry>>>;
+    /// The biome's list for a category at a position: what `biome_spawns`
+    /// holds under the category's name, or nothing.
+    fn natural_mobs(&self, category: Category, x: i32, y: i32, z: i32) -> &[SpawnEntry] {
+        self.biome_spawns(x, y, z)
+            .and_then(|b| b.get(category.name()))
+            .map_or(&[], Vec::as_slice)
+    }
+    /// `#reduce_water_ambient_spawns` of the biome at a position.
+    fn reduces_water_ambient(&self, x: i32, y: i32, z: i32) -> bool {
+        self.biome_tag("minecraft:reduce_water_ambient_spawns", x, y, z)
+    }
+    /// False when no structure reaching the column can change `category`'s
+    /// list, so [`mobs_at`] needs no structure lookup.
+    fn structures_may_override(&self, _category: Category, _x: i32, _z: i32) -> bool {
+        true
+    }
     /// The `natural_mob_spawns` spawn cost of a type at a position.
     fn spawn_cost(&self, entity: &str, x: i32, y: i32, z: i32) -> Option<SpawnCost>;
     /// The `creature_world_gen_spawn_probability` attribute at a position.
@@ -395,6 +421,9 @@ pub trait NaturalLevel: SpawnLevel {
     fn heightmap(&self, kind: Heightmap, x: i32, z: i32) -> i32;
     /// `isPathfindable(PathComputationType.LAND)` of the block.
     fn pathfindable_land(&self, x: i32, y: i32, z: i32) -> bool;
+    /// A hint that the block at a position will be read soon: the level may
+    /// start loading it. Must not change anything a read answers.
+    fn prefetch_block(&self, _x: i32, _y: i32, _z: i32) {}
 }
 
 /// The heightmap types `SpawnPlacements` registers.
@@ -679,6 +708,21 @@ impl StructureSpawns {
     pub fn get(&self, structure: &str, category: &str) -> Option<&Override> {
         self.overrides.get(structure)?.get(category)
     }
+    /// The bits ([`Category::bit`]) of the categories whose [`mobs_at`] looks
+    /// a structure up: those it overrides, and monsters for a fortress.
+    pub fn category_bits(&self, structure: &str) -> u8 {
+        let fortress = if structure == "minecraft:fortress" {
+            Category::Monster.bit()
+        } else {
+            0
+        };
+        self.overrides.get(structure).map_or(fortress, |map| {
+            Category::ALL
+                .into_iter()
+                .filter(|c| map.contains_key(c.name()))
+                .fold(fortress, |bits, c| bits | c.bit())
+        })
+    }
 }
 
 /// A structure whose references reach a position's chunk.
@@ -726,6 +770,9 @@ pub fn mobs_at<L: NaturalLevel>(
     // Only a fortress or a structure overriding this category's spawns can
     // change the list, so only theirs are looked up (the references reaching
     // most chunks are mineshafts, which override nothing).
+    if !l.structures_may_override(category, x, z) {
+        return l.natural_mobs(category, x, y, z);
+    }
     let overrides = l.structure_spawns();
     let monster = category == Category::Monster;
     let structures = l.structures_at(x, y, z, &|id| {
@@ -746,13 +793,14 @@ pub fn mobs_at<L: NaturalLevel>(
             return &o.spawns;
         }
     }
-    l.biome_spawns(x, y, z)
-        .and_then(|b| b.get(category.name()))
-        .map_or(&[], Vec::as_slice)
+    l.natural_mobs(category, x, y, z)
 }
 
 /// `WeightedList.getRandom`.
-pub fn weighted_pick(list: &[SpawnEntry], random: &mut impl RandomSource) -> Option<SpawnEntry> {
+pub fn weighted_pick<'e>(
+    list: &'e [SpawnEntry],
+    random: &mut impl RandomSource,
+) -> Option<&'e SpawnEntry> {
     let total: i64 = list.iter().map(|e| i64::from(e.weight)).sum();
     if total <= 0 {
         return None;
@@ -761,7 +809,7 @@ pub fn weighted_pick(list: &[SpawnEntry], random: &mut impl RandomSource) -> Opt
     for e in list {
         selection -= i64::from(e.weight);
         if selection < 0 {
-            return Some(e.clone());
+            return Some(e);
         }
     }
     None
@@ -793,6 +841,20 @@ pub struct Counted<'a> {
     /// `isPersistenceRequired() || requiresCustomPersistence()`.
     pub persistent: bool,
 }
+/// A counted entity's contribution to `createState`, its charge already read
+/// from the biome at its block (`None`: the type has no spawn cost there).
+#[derive(Clone, Copy, Debug)]
+pub struct CountedCharge {
+    pub block: [i32; 3],
+    pub category: Category,
+    pub is_mob: bool,
+    pub charge: Option<f64>,
+}
+/// Whether `createState` counts it: not a persistent mob, not MISC. The chunk
+/// must also be loaded.
+pub fn counted_by_state(category: Category, is_mob: bool, persistent: bool) -> bool {
+    !(is_mob && persistent || category == Category::Misc)
+}
 /// `NaturalSpawner.SpawnState` with its `PotentialCalculator` and
 /// `LocalMobCapCalculator`.
 #[derive(Clone, Debug)]
@@ -805,12 +867,19 @@ pub struct SpawnState {
     players: PlayerIndex,
     /// `LocalMobCapCalculator.playerMobCounts`, by the index's slots.
     player_counts: Vec<[i32; 8]>,
-    /// The last chunk asked about and the categories open to its players. A
-    /// count only rises in a pass, so this holds until a player's cap fills.
-    local: Option<((i32, i32), u8)>,
-    last_checked: Option<([i32; 3], String, f64)>,
+    /// The last chunk asked about, the categories asked about, and those of
+    /// them open to its players. A count only rises in a pass, so this holds
+    /// until a player's cap fills.
+    local: Option<((i32, i32), u8, u8)>,
+    /// The answers [`Self::prepare_local`] worked out for the chunks to come,
+    /// last chunk first, until a cap fills.
+    prepared: Vec<((i32, i32), u8, u8)>,
     /// Reused across the tick's positions; holds the chunk's players.
     nearest: Nearest,
+    /// The next chunk's starts, foreseen while the one before spawned from
+    /// the state it should leave: the chunk, that state and [`foresee_starts`]'
+    /// states after each category.
+    foreseen: Option<((i32, i32), u64, [u64; Category::ALL.len()])>,
 }
 /// Every spawning category's bit.
 const SPAWNING_BITS: u8 = {
@@ -834,6 +903,30 @@ impl SpawnState {
         entities: &[Counted],
         chunk_loaded: impl Fn(i32, i32) -> bool,
     ) -> Self {
+        let counted = entities
+            .iter()
+            .filter(|e| {
+                counted_by_state(e.category, e.is_mob, e.persistent)
+                    && chunk_loaded(e.block[0] >> 4, e.block[2] >> 4)
+            })
+            .map(|e| {
+                let [x, y, z] = e.block;
+                CountedCharge {
+                    block: e.block,
+                    category: e.category,
+                    is_mob: e.is_mob,
+                    charge: l.spawn_cost(e.entity, x, y, z).map(|c| c.charge),
+                }
+            });
+        Self::from_counted(spawnable_chunks, players, counted)
+    }
+    /// The rest of `createState`, over what it counts in the level's order
+    /// (the charges' order is the potential's floating-point sum).
+    pub fn from_counted(
+        spawnable_chunks: i32,
+        players: PlayerIndex,
+        counted: impl IntoIterator<Item = CountedCharge>,
+    ) -> Self {
         let mut state = Self {
             spawnable_chunks,
             counts: [0; 8],
@@ -841,21 +934,16 @@ impl SpawnState {
             player_counts: vec![[0; 8]; players.len()],
             players,
             local: None,
-            last_checked: None,
+            prepared: Vec::new(),
+            foreseen: None,
             nearest: Nearest::default(),
         };
         // The local caps are sums, so a chunk's mobs can go in together.
         let mut mobs_by_chunk = FxHashMap::<(i32, i32), [i32; 8]>::default();
-        for e in entities {
-            if e.is_mob && e.persistent || e.category == Category::Misc {
-                continue;
-            }
-            let [x, y, z] = e.block;
-            if !chunk_loaded(x >> 4, z >> 4) {
-                continue;
-            }
-            if let Some(cost) = l.spawn_cost(e.entity, x, y, z) {
-                state.add_charge(e.block, cost.charge);
+        for e in counted {
+            let [x, _, z] = e.block;
+            if let Some(charge) = e.charge {
+                state.add_charge(e.block, charge);
             }
             if e.is_mob {
                 mobs_by_chunk.entry((x >> 4, z >> 4)).or_insert([0; 8])[e.category.index()] += 1;
@@ -908,8 +996,47 @@ impl SpawnState {
         });
         if filled {
             self.local = None;
+            self.prepared.clear();
             self.label_open_categories();
         }
+    }
+    /// Works out on the pool what [`spawn_for_chunk`] will ask about `chunks`,
+    /// in the order it will ask, for `categories`.
+    pub fn prepare_local(&mut self, chunks: &[(i32, i32)], categories: &[Category]) {
+        let asked = Self::asked(categories);
+        self.prepared.clear();
+        self.prepared
+            .extend(chunks.iter().rev().map(|&chunk| (chunk, asked, 0)));
+        let players = &self.players;
+        horizon_threads::pool::for_each_mut(&mut self.prepared, 256, |(chunk, asked, open)| {
+            *open = players.close_for_spawning_labels(*chunk, *asked);
+        });
+    }
+    /// What [`Self::can_spawn_local_of`] would answer for every category in
+    /// `asked` at `chunk` now, without asking or keeping anything.
+    fn open_for(&self, chunk: (i32, i32), asked: u8) -> u8 {
+        [self.local, self.prepared.last().copied()]
+            .into_iter()
+            .flatten()
+            .find(|&(at, known, _)| at == chunk && known == asked)
+            .map_or_else(
+                || self.players.close_for_spawning_labels(chunk, asked),
+                |(_, _, open)| open,
+            )
+    }
+    /// The prepared answers of the chunk [`spawn_for_chunk`] asks about
+    /// after `chunk`.
+    fn next_prepared(&self, chunk: (i32, i32)) -> Option<((i32, i32), u8, u8)> {
+        let mut ahead = self.prepared.iter().rev();
+        let next = ahead.next()?;
+        if next.0 == chunk {
+            ahead.next().copied()
+        } else {
+            Some(*next)
+        }
+    }
+    fn asked(categories: &[Category]) -> u8 {
+        categories.iter().fold(0, |bits, c| bits | c.bit())
     }
     /// `canSpawnForCategoryGlobal`.
     pub fn can_spawn_global(&self, category: Category) -> bool {
@@ -919,16 +1046,27 @@ impl SpawnState {
     /// `canSpawnForCategoryLocal` (`LocalMobCapCalculator.canSpawn`), for a
     /// spawning category: any close player below their cap.
     pub fn can_spawn_local(&mut self, category: Category, cx: i32, cz: i32) -> bool {
-        let chunk = (cx, cz);
+        self.can_spawn_local_of(SPAWNING_BITS, category, (cx, cz))
+    }
+    /// The same, knowing the chunk will be asked about no category outside
+    /// `asked`: a player's full cap in another (creatures, most ticks) cannot
+    /// keep the search going.
+    fn can_spawn_local_of(&mut self, asked: u8, category: Category, chunk: (i32, i32)) -> bool {
         let open = match self.local {
-            Some((at, open)) if at == chunk => open,
+            Some((at, known, open)) if at == chunk && known == asked => open,
             _ => {
-                let open = self.players.close_for_spawning_labels(chunk, SPAWNING_BITS);
-                self.local = Some((chunk, open));
+                let open = match self.prepared.last() {
+                    Some(&(at, known, open)) if at == chunk && known == asked => {
+                        self.prepared.pop();
+                        open
+                    }
+                    _ => self.players.close_for_spawning_labels(chunk, asked),
+                };
+                self.local = Some((chunk, asked, open));
                 open
             }
         };
-        open & 1 << category.index() != 0
+        open & category.bit() != 0
     }
     /// `getFilteredSpawningCategories`.
     pub fn filtered_categories(
@@ -946,16 +1084,13 @@ impl SpawnState {
             .collect()
     }
     /// `SpawnState.canSpawn`: the spawn potential's energy change must stay
-    /// within the type's budget where it has a spawn cost.
-    fn can_spawn<L: NaturalLevel>(&mut self, l: &L, entity: &str, pos: [i32; 3]) -> bool {
+    /// within the type's budget where it has a spawn cost. Gives the charge
+    /// [`Self::after_spawn`] adds (vanilla's `lastCharge`) if it may spawn.
+    fn can_spawn<L: NaturalLevel>(&self, l: &L, entity: &str, pos: [i32; 3]) -> Option<f64> {
         match l.spawn_cost(entity, pos[0], pos[1], pos[2]) {
-            None => {
-                self.last_checked = Some((pos, entity.to_owned(), 0.0));
-                true
-            }
+            None => Some(0.0),
             Some(cost) => {
-                self.last_checked = Some((pos, entity.to_owned(), cost.charge));
-                self.energy_change(pos, cost.charge) <= cost.energy_budget
+                (self.energy_change(pos, cost.charge) <= cost.energy_budget).then_some(cost.charge)
             }
         }
     }
@@ -980,20 +1115,9 @@ impl SpawnState {
         }
         change * charge
     }
-    /// `SpawnState.afterSpawn`.
-    fn after_spawn<L: NaturalLevel>(
-        &mut self,
-        l: &L,
-        entity: &str,
-        category: Category,
-        pos: [i32; 3],
-    ) {
-        let charge = match &self.last_checked {
-            Some((p, t, c)) if *p == pos && t == entity => *c,
-            _ => l
-                .spawn_cost(entity, pos[0], pos[1], pos[2])
-                .map_or(0.0, |c| c.charge),
-        };
+    /// `SpawnState.afterSpawn`, right after [`Self::can_spawn`] at the same
+    /// position for the same type (so vanilla's `lastCheckedPos` always holds).
+    fn after_spawn(&mut self, category: Category, pos: [i32; 3], charge: f64) {
         self.add_charge(pos, charge);
         self.counts[category.index()] += 1;
         self.add_local((pos[0] >> 4, pos[2] >> 4), category);
@@ -1036,9 +1160,76 @@ pub struct Spawned {
     pub school: bool,
 }
 
+/// A random natural spawning can look ahead in without drawing from it: the
+/// 48-bit state of a `java.util.Random`, or `None` to look nowhere.
+pub trait Foresee {
+    fn legacy_state(&self) -> Option<u64>;
+}
+impl Foresee for horizon_core::random::LegacyRandom {
+    fn legacy_state(&self) -> Option<u64> {
+        Some(self.state())
+    }
+}
+/// `java.util.Random`'s `next(31)` and `nextInt(bound)` on a copy of its
+/// state: a lookahead that neither moves nor traces the real random.
+#[derive(Clone, Copy)]
+struct Lcg(u64);
+impl Lcg {
+    fn bits31(&mut self) -> i32 {
+        self.0 = self.0.wrapping_mul(0x5_deec_e66d).wrapping_add(11) & ((1 << 48) - 1);
+        (self.0 >> 17) as i32
+    }
+    /// `nextInt(bound)`, and nothing drawn for a bound below 1 (the callers'
+    /// `unwrap_or(0)`).
+    fn next_int(&mut self, bound: i32) -> i32 {
+        if bound <= 0 {
+            return 0;
+        }
+        if bound & (bound - 1) == 0 {
+            return ((i64::from(bound) * i64::from(self.bits31())) >> 31) as i32;
+        }
+        loop {
+            let bits = self.bits31();
+            let value = bits % bound;
+            if bits.wrapping_sub(value).wrapping_add(bound - 1) >= 0 {
+                return value;
+            }
+        }
+    }
+}
+/// The starts `spawn_category_for_chunk` will pick for `categories` (those
+/// of them `open`) from random state `seed`, should each attempt end at its
+/// first read, as most do (a solid block, or the bottom of the world): their
+/// surfaces are read and their blocks prefetched together, so the serial
+/// pass meets them in cache. `after` gets the state each category should
+/// leave the random in; once the real one differs, the rest are guesses.
+fn foresee_starts<L: NaturalLevel>(
+    l: &L,
+    seed: u64,
+    open: u8,
+    categories: &[Category],
+    chunk: (i32, i32),
+    after: &mut [u64],
+) {
+    let mut random = Lcg(seed);
+    let min = l.min_y();
+    for (category, after) in categories.iter().zip(after) {
+        if open & category.bit() != 0 {
+            let x = chunk.0 * 16 + random.next_int(16);
+            let z = chunk.1 * 16 + random.next_int(16);
+            let top = l.heightmap(Heightmap::WorldSurface, x, z) + 1;
+            let y = min + random.next_int(top - min + 1);
+            if y > min {
+                l.prefetch_block(x, y, z);
+            }
+        }
+        *after = random.0;
+    }
+}
+
 /// `NaturalSpawner.spawnForChunk` for the categories already filtered.
 #[allow(clippy::too_many_arguments)]
-pub fn spawn_for_chunk<L: NaturalLevel, R: RandomSource>(
+pub fn spawn_for_chunk<L: NaturalLevel, R: RandomSource + Foresee>(
     l: &L,
     random: &mut R,
     state: &mut SpawnState,
@@ -1047,8 +1238,41 @@ pub fn spawn_for_chunk<L: NaturalLevel, R: RandomSource>(
     spawn: &mut dyn FnMut(&L, &SpawnRequest) -> Option<Spawned>,
     trace: &mut (impl FnMut(Event) + ?Sized),
 ) {
-    for &category in categories {
-        let local = state.can_spawn_local(category, chunk.0, chunk.1);
+    let asked = SpawnState::asked(categories);
+    // The random state foreseen after each category ([`foresee_starts`]),
+    // and whether the chunk before foresaw this one's start rightly.
+    let mut after = [0u64; Category::ALL.len()];
+    let foreseen = match state.foreseen.take() {
+        Some((at, seed, foreseen)) if at == chunk && random.legacy_state() == Some(seed) => {
+            after = foreseen;
+            true
+        }
+        _ => false,
+    };
+    for (i, &category) in categories.iter().enumerate() {
+        if let Some(now) = random.legacy_state()
+            && !(if i == 0 {
+                foreseen
+            } else {
+                after.get(i - 1) == Some(&now)
+            })
+        {
+            let open = state.open_for(chunk, asked);
+            let rest = after.get_mut(i..).unwrap_or_default();
+            foresee_starts(l, now, open, &categories[i..], chunk, rest);
+        }
+        // The next chunk, from the state this one should leave, so its
+        // blocks load while this one spawns.
+        if i == 0
+            && let Some((next, known, open)) = state.next_prepared(chunk)
+            && known == asked
+            && let Some(&seed) = after.get(categories.len() - 1)
+        {
+            let mut next_after = [0u64; Category::ALL.len()];
+            foresee_starts(l, seed, open, categories, next, &mut next_after);
+            state.foreseen = Some((next, seed, next_after));
+        }
+        let local = state.can_spawn_local_of(asked, category, chunk);
         trace(Event::Local(category, local));
         if local {
             spawn_category_for_chunk(l, random, state, category, chunk, spawn, trace);
@@ -1057,6 +1281,7 @@ pub fn spawn_for_chunk<L: NaturalLevel, R: RandomSource>(
 }
 /// `NaturalSpawner.spawnCategoryForChunk`: `getRandomPosWithin` (a column of
 /// the chunk, a height up to one above the world surface).
+#[inline(never)]
 pub fn spawn_category_for_chunk<L: NaturalLevel, R: RandomSource>(
     l: &L,
     random: &mut R,
@@ -1079,6 +1304,7 @@ pub fn spawn_category_for_chunk<L: NaturalLevel, R: RandomSource>(
 /// `NaturalSpawner.spawnCategoryForPosition` with the spawn state's
 /// `canSpawn` and `afterSpawn`.
 #[allow(clippy::too_many_arguments)]
+#[inline(never)]
 pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
     l: &L,
     random: &mut R,
@@ -1098,7 +1324,7 @@ pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
     for _ in 0..3 {
         let (mut x, mut z) = (x0, z0);
         // The group's entry, its type and where it was picked.
-        let mut current: Option<(SpawnEntry, Option<MobType>, [i32; 3])> = None;
+        let mut current: Option<(&SpawnEntry, Option<MobType>, [i32; 3])> = None;
         let mut group_index = 0u32;
         let mut max = (random.next_float() * 4.0).ceil() as i32;
         let mut ll = 0;
@@ -1120,7 +1346,7 @@ pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
             }
             if current.is_none() {
                 let list = if category == Category::WaterAmbient
-                    && l.biome_tag("minecraft:reduce_water_ambient_spawns", x, y, z)
+                    && l.reduces_water_ambient(x, y, z)
                     && random.next_float() < 0.98
                 {
                     None
@@ -1130,31 +1356,35 @@ pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
                 let Some(entry) = list else {
                     break;
                 };
-                max = sample_count(&entry, random) as i32;
+                max = sample_count(entry, random) as i32;
                 let kind = l.mob_type(&entry.entity);
                 current = Some((entry, kind, [x, y, z]));
             }
-            let (entry, kind, picked_at) = current.as_ref().unwrap_or_else(|| unreachable!());
+            let (entry, kind, picked_at) = current.unwrap_or_else(|| unreachable!());
             // The list the entry was picked from holds it where it was picked.
-            let listed = *picked_at == [x, y, z];
+            let listed = picked_at == [x, y, z];
             let valid = valid_position_for_type(
                 l,
                 random,
                 category,
                 entry,
-                *kind,
+                kind,
                 listed,
                 [x, y, z],
                 distance,
             );
-            let Some((species, width, height, type_category)) = (*kind).filter(|_| valid) else {
+            let Some((species, width, height, type_category)) = kind.filter(|_| valid) else {
                 continue;
             };
-            let passed = state.can_spawn(l, &entry.entity, [x, y, z]);
-            trace(Event::Test(entry.entity.clone(), [x, y, z], passed));
-            if !passed {
+            let charge = state.can_spawn(l, &entry.entity, [x, y, z]);
+            trace(Event::Test(
+                entry.entity.clone(),
+                [x, y, z],
+                charge.is_some(),
+            ));
+            let Some(charge) = charge else {
                 continue;
-            }
+            };
             // getMobForSpawn (a type the game cannot create, which would end
             // the pass, never passes isValidSpawnPostitionForType).
             let yaw = random.next_float() * 360.0;
@@ -1181,7 +1411,7 @@ pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
             group_index += 1;
             spawned.push(result.bounds);
             cluster += 1;
-            state.after_spawn(l, &entry.entity, type_category, [x, y, z]);
+            state.after_spawn(type_category, [x, y, z], charge);
             trace(Event::Spawn(
                 entry.entity.clone(),
                 [xx, f64::from(y), zz],
@@ -1202,8 +1432,9 @@ pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
 /// checks only compare it with [`Nearest::CHECKS`], so the few players that can
 /// be within 128 blocks of an attempt near the chunk are kept and measured:
 /// when none is, the nearest reads as infinitely far, which every check answers
-/// as it answers the real distance. An attempt that wanders farther, or a crowd
-/// too big to keep, asks the index for an answer good enough for the checks.
+/// as it answers the real distance. In a crowd too big to keep, those kept give
+/// the index's search a distance to beat; an attempt that wanders farther asks
+/// the index outright. Either way the answer is good enough for the checks.
 #[derive(Clone, Debug, Default)]
 struct Nearest {
     chunk: Option<(i32, i32)>,
@@ -1233,15 +1464,18 @@ impl Nearest {
             self.keep_players(players, chunk);
         }
         let (cx, cz) = self.centre;
-        if self.crowded || (at[0] - cx).abs() > Self::MARGIN || (at[2] - cz).abs() > Self::MARGIN {
+        if (at[0] - cx).abs() > Self::MARGIN || (at[2] - cz).abs() > Self::MARGIN {
             return Some(players.nearest_against(at, &Self::CHECKS));
         }
-        Some(
-            self.nearby[..self.kept]
-                .iter()
-                .map(|p| (p[0] - at[0]).powi(2) + (p[1] - at[1]).powi(2) + (p[2] - at[2]).powi(2))
-                .fold(f64::INFINITY, f64::min),
-        )
+        let kept = self.nearby[..self.kept]
+            .iter()
+            .map(|p| (p[0] - at[0]).powi(2) + (p[1] - at[1]).powi(2) + (p[2] - at[2]).powi(2))
+            .fold(f64::INFINITY, f64::min);
+        Some(if self.crowded {
+            players.nearest_against_from(kept, at, &Self::CHECKS)
+        } else {
+            kept
+        })
     }
     fn keep_players(&mut self, players: &PlayerIndex, chunk: (i32, i32)) {
         self.chunk = Some(chunk);
@@ -1363,7 +1597,7 @@ pub fn spawn_mobs_for_chunk_generation<L: NaturalLevel, R: RandomSource, Q: Rand
         let Some(entry) = weighted_pick(&mobs, random) else {
             continue;
         };
-        let count = sample_count(&entry, random);
+        let count = sample_count(entry, random);
         let mut group_index = 0u32;
         let mut spawned: Vec<Aabb> = Vec::new();
         let mut x = xo + random.next_int_bound(16).unwrap_or(0);
@@ -1468,6 +1702,24 @@ fn top_non_colliding<L: NaturalLevel>(l: &L, entity: &str, x: i32, z: i32) -> [i
 mod tests {
     use super::Event;
 
+    /// The lookahead draws what `LegacyRandom` draws, rejections included,
+    /// and ends in its state.
+    #[test]
+    fn lookahead_draws_as_the_random_does() {
+        use horizon_core::random::{LegacyRandom, RandomSource};
+        let mut real = LegacyRandom::new(0x5eed);
+        let mut copy = super::Lcg(real.state());
+        for bound in [16, 1, 2, 3, 100, 385, 1 << 30, (1 << 30) + 1, i32::MAX, 0] {
+            for _ in 0..64 {
+                assert_eq!(
+                    copy.next_int(bound),
+                    real.next_int_bound(bound).unwrap_or(0)
+                );
+                assert_eq!(copy.0, real.state(), "{bound}");
+            }
+        }
+    }
+
     /// `add_local` and `can_spawn_local` against vanilla's lists: every chunk's
     /// players found by a scan, their counts bumped one at a time, caps filling.
     #[test]
@@ -1488,7 +1740,8 @@ mod tests {
             players: PlayerIndex::new(players.iter().copied()),
             player_counts: vec![[0; 8]; players.len()],
             local: None,
-            last_checked: None,
+            prepared: Vec::new(),
+            foreseen: None,
             nearest: Nearest::default(),
         };
         state.label_open_categories();
@@ -1509,6 +1762,10 @@ mod tests {
             let expected = close(chunk)
                 .iter()
                 .any(|&p| counts[p][category.index()] < category.max());
+            if draw(5) == 0 {
+                // Asked for in advance, as a spawn pass does.
+                state.prepare_local(&[chunk, (draw(40), draw(40))], &Category::SPAWNING);
+            }
             assert_eq!(state.can_spawn_local(category, chunk.0, chunk.1), expected);
             filled += usize::from(!expected);
             if draw(2) == 0 {
@@ -1519,6 +1776,49 @@ mod tests {
             }
         }
         assert!(filled > 1000, "the caps must fill: {filled}");
+    }
+
+    #[test]
+    fn category_names_and_structure_bits_answer_as_the_lookups_do() {
+        use super::{Category, Override, StructureSpawns};
+        for c in Category::ALL {
+            assert_eq!(Category::from_name(c.name()), c);
+        }
+        assert_eq!(Category::from_name("other"), Category::Misc);
+        let mut spawns = StructureSpawns::default();
+        let piece = |category: Category| {
+            let o = Override {
+                piece: true,
+                spawns: Vec::new(),
+            };
+            (category.name().to_owned(), o)
+        };
+        spawns.overrides.insert(
+            "minecraft:monument".to_owned(),
+            [piece(Category::Monster), piece(Category::Axolotls)]
+                .into_iter()
+                .collect(),
+        );
+        spawns.overrides.insert(
+            "minecraft:fortress".to_owned(),
+            [piece(Category::Creature)].into_iter().collect(),
+        );
+        for id in [
+            "minecraft:monument",
+            "minecraft:fortress",
+            "minecraft:mineshaft",
+        ] {
+            for c in Category::ALL {
+                // The structures `mobs_at` wants.
+                let wanted = c == Category::Monster && id == "minecraft:fortress"
+                    || spawns.get(id, c.name()).is_some();
+                assert_eq!(
+                    spawns.category_bits(id) & c.bit() != 0,
+                    wanted,
+                    "{id} {c:?}"
+                );
+            }
+        }
     }
 
     #[test]

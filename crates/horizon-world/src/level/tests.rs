@@ -1459,7 +1459,7 @@ fn hot_flags_and_contact_sections_follow_state_changes() {
     }
     let w = World::new(f);
     let mut section = PalettedContainer::new(Strategy::blocks(16), b.air().0);
-    let mut cache = ContactSections::default();
+    let mut cache = ContactSections::<std::collections::hash_map::RandomState>::default();
     let key = (-1, -4, 0);
     for (revision, name, contact, random) in [
         (0, "stone", false, false),
@@ -1507,7 +1507,25 @@ fn random_tick_reader_matches_current_states_after_each_write() {
     for ticks in [&mut a, &mut c] {
         ticks.add_empty_chunk(ChunkPos::new(0, 0)).unwrap();
     }
-    let mut snapshot = None;
+    /// Answers from a snapshot taken at each revision, and only where a state ticks.
+    struct Snapshots<'a> {
+        b: &'a Behaviours,
+        snapshot: Option<(u64, HashMap<BlockPos, BlockStateId>)>,
+    }
+    impl RandomTickSource<TestLevel> for Snapshots<'_> {
+        fn next_section(&mut self, _: &mut TestLevel, from_y: i32) -> Option<i32> {
+            (from_y <= 0).then_some(0)
+        }
+        fn ticking_state(&mut self, level: &mut TestLevel, pos: BlockPos) -> Option<BlockStateId> {
+            if self.snapshot.as_ref().is_none_or(|s| s.0 != level.revision) {
+                self.snapshot = Some((level.revision, level.blocks.clone()));
+            }
+            let blocks = &self.snapshot.as_ref().unwrap().1;
+            let state = blocks.get(&pos).copied().unwrap_or(level.air);
+            self.b.acts_on_random_tick(state).then_some(state)
+        }
+    }
+    let mut source = Snapshots { b, snapshot: None };
     for step in 0..1024 {
         // Add/remove random ticking states between calls as well as in callbacks.
         if step % 4 == 0 {
@@ -1521,27 +1539,7 @@ fn random_tick_reader_matches_current_states_after_each_write() {
         b.tick_chunk_random(&mut original, &mut a, ChunkPos::new(0, 0), |_, from| {
             (from <= 0).then_some(0)
         });
-        b.tick_chunk_random_with_reader(
-            &mut cached,
-            &mut c,
-            ChunkPos::new(0, 0),
-            |_, from| (from <= 0).then_some(0),
-            |level, pos| {
-                if snapshot
-                    .as_ref()
-                    .is_none_or(|(revision, _)| *revision != level.revision)
-                {
-                    snapshot = Some((level.revision, level.blocks.clone()));
-                }
-                snapshot
-                    .as_ref()
-                    .unwrap()
-                    .1
-                    .get(&pos)
-                    .copied()
-                    .unwrap_or(level.air)
-            },
-        );
+        b.tick_chunk_random_from(&mut cached, &mut c, ChunkPos::new(0, 0), &mut source);
         assert_eq!(original.blocks, cached.blocks, "tick {step}");
         assert_eq!(original.events, cached.events, "tick {step}");
         assert_eq!(a.random_tick_value, c.random_tick_value);
@@ -1575,7 +1573,7 @@ fn hot_path_lookup_benchmark() {
             .entity_inside_state(BlockPos::new(0, 0, 0), state);
     }
     let before = start.elapsed();
-    let mut cache = ContactSections::default();
+    let mut cache = ContactSections::<std::collections::hash_map::RandomState>::default();
     let start = Instant::now();
     for i in 0..iterations {
         if cache.get(black_box((0, 0, 0)), black_box(0), || {
@@ -1600,19 +1598,5 @@ fn hot_path_lookup_benchmark() {
             ),
         ));
     }
-    let before = start.elapsed();
-    let mut current = RandomTickChunk::default();
-    let _ = current.get(0, || Some(section));
-    let start = Instant::now();
-    for i in 0..iterations {
-        let chunk = current
-            .get(black_box(0), || sections.get(&black_box((0, 0, 0))))
-            .unwrap();
-        let state = BlockStateId(chunk.get(black_box(i & 4095)));
-        black_box(b.hot_flags[state.0 as usize] & 6);
-    }
-    eprintln!(
-        "random lookup: before={before:?} after={:?} samples={iterations}",
-        start.elapsed()
-    );
+    eprintln!("random lookup: {:?} samples={iterations}", start.elapsed());
 }

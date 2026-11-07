@@ -130,6 +130,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                     large_collision_shape: v[1].as_bool().unwrap(),
                     moving_piston: v[2].as_bool().unwrap(),
                     empty_shape: false,
+                    block_shape: false,
                 },
                 shape: shape(v[0].as_u64().unwrap()),
                 suffocating: v[3].as_bool().unwrap(),
