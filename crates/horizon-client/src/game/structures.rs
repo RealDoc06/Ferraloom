@@ -39,9 +39,28 @@ impl Game<'_> {
             .collect()
     }
 }
+/// What the reaching test reads of a structure start.
+pub(super) trait StartBoxes {
+    fn name(&self) -> &str;
+    /// Whether `pos` is in the start's whole box.
+    fn bounds_contain(&self, pos: [i32; 3]) -> bool;
+    /// Whether `pos` is in one of its pieces' boxes.
+    fn piece_contains(&self, pos: [i32; 3]) -> bool;
+}
+impl StartBoxes for Arc<StructureStart> {
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn bounds_contain(&self, pos: [i32; 3]) -> bool {
+        self.bounding_box.is_inside(pos)
+    }
+    fn piece_contains(&self, pos: [i32; 3]) -> bool {
+        self.pieces.iter().any(|p| p.bounding_box().is_inside(pos))
+    }
+}
 /// [`Game::structures_reaching_where`] in `chunk`, the column holding `pos`,
 /// with `starts_at` giving the starts owned by a chunk (the generator's).
-pub(super) fn structures_reaching_in<S: AsRef<[Arc<StructureStart>]>>(
+pub(super) fn structures_reaching_in<T: StartBoxes, S: AsRef<[T]>>(
     chunk: &Chunk,
     pos: [i32; 3],
     wanted: &dyn Fn(&str) -> bool,
@@ -53,13 +72,13 @@ pub(super) fn structures_reaching_in<S: AsRef<[Arc<StructureStart>]>>(
             continue;
         }
         for start in starts_at(*sx, *sz).as_ref() {
-            if *start.name != **id || !start.bounding_box.is_inside(pos) {
+            if start.name() != &**id || !start.bounds_contain(pos) {
                 continue;
             }
-            let piece = start.pieces.iter().any(|p| p.bounding_box().is_inside(pos));
-            match out.iter_mut().find(|(n, _)| *n == start.name) {
+            let piece = start.piece_contains(pos);
+            match out.iter_mut().find(|(n, _)| n == start.name()) {
                 Some(e) => e.1 |= piece,
-                None => out.push((start.name.clone(), piece)),
+                None => out.push((start.name().to_owned(), piece)),
             }
         }
     }

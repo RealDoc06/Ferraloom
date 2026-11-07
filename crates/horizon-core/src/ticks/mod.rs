@@ -11,8 +11,12 @@ use heap::Heap;
 use index::DeadlineIndex;
 use std::{
     cmp::Ordering,
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, VecDeque},
 };
+
+/// The sets of scheduled `(type, position)` keys: only asked whether they
+/// hold a key, never iterated, so a fast hasher changes no behaviour.
+type KeySet = crate::fx::FxHashSet<(TickTypeId, BlockPos)>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TickTypeId(pub u32);
@@ -96,7 +100,7 @@ impl SavedTick {
 pub struct ChunkTicks {
     queue: Heap<ScheduledTick>,
     pending: Option<Vec<SavedTick>>,
-    positions: HashSet<(TickTypeId, BlockPos)>,
+    positions: KeySet,
 }
 impl ChunkTicks {
     pub fn from_saved(ticks: Vec<SavedTick>) -> Self {
@@ -360,7 +364,7 @@ pub struct LevelTicks {
     containers_to_tick: Heap<i64>,
     to_run: VecDeque<ScheduledTick>,
     already_run: Vec<ScheduledTick>,
-    to_run_set: HashSet<(TickTypeId, BlockPos)>,
+    to_run_set: KeySet,
     collecting: bool,
 }
 impl LevelTicks {

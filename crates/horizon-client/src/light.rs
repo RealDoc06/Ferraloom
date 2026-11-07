@@ -641,6 +641,17 @@ impl<'w> Region<'w> {
         let slot = self.slot(x, y, z)?;
         Some(self.slots[slot].section.get(index(x, y, z)))
     }
+    /// The state of every block of the section holding `y`, when its palette
+    /// says so at a glance (one entry).
+    fn single_state(&mut self, x: i32, y: i32, z: i32) -> Option<u32> {
+        let slot = self.slot(x, y, z)?;
+        let blocks = &self.slots[slot].section.blocks;
+        if blocks.palette_len() == 1 {
+            blocks.uniform()
+        } else {
+            None
+        }
+    }
     /// Packed light (sky << 4 | block), None outside loaded, lit chunks.
     fn light(&mut self, x: i32, y: i32, z: i32) -> Option<u8> {
         let slot = self.slot(x, y, z)?;
@@ -799,6 +810,16 @@ fn lowest_sky_source(world: &mut Region, tables: &LightTables, x: i32, z: i32) -
         return MIN_Y;
     };
     while y > MIN_Y {
+        // A section of one state whose edges with itself are open: the walk
+        // down to its bottom block finds nothing, and `top` stays that state.
+        let base = MIN_Y + ((y - MIN_Y) >> 4 << 4);
+        if y > base
+            && world.single_state(x, y, z) == Some(top)
+            && !tables.edge_occluded(top as usize, top as usize)
+        {
+            y = base;
+            continue;
+        }
         let Some(bottom) = world.state(x, y - 1, z) else {
             break;
         };
@@ -1022,6 +1043,52 @@ mod tests {
         world[&(x >> 4, z >> 4)].light(x & 15, y, z & 15) & 15
     }
 
+    /// Skipping uniform sections finds the same source as reading every
+    /// block down the column.
+    #[test]
+    fn sky_sources_match_a_block_by_block_walk() {
+        fn walk(world: &mut Region, tables: &LightTables, x: i32, z: i32) -> i32 {
+            let mut y = MIN_Y + HEIGHT - 1;
+            let Some(mut top) = world.state(x, y, z) else {
+                return MIN_Y;
+            };
+            while y > MIN_Y {
+                let Some(bottom) = world.state(x, y - 1, z) else {
+                    break;
+                };
+                if tables.edge_occluded(top as usize, bottom as usize) {
+                    return y;
+                }
+                top = bottom;
+                y -= 1;
+            }
+            MIN_Y
+        }
+        let mut w = world(|c| {
+            // A slab at a section's bottom, one mid-section, and a section
+            // of stone (uniform, but closed to itself) high up; the
+            // neighbouring chunks are open down to their stone.
+            c.set(1, 0, 1, SLAB);
+            c.set(2, 40, 2, SLAB);
+            for x in 0..16 {
+                for z in 0..16 {
+                    for y in 64..80 {
+                        c.set(x, y, z, STONE);
+                    }
+                }
+            }
+        });
+        let tables = tables();
+        let mut region = Region::new(&mut w);
+        for (x, z) in [(1, 1), (2, 2), (3, 3), (5, 5), (-4, 7)] {
+            let expected = walk(&mut region, &tables, x, z);
+            assert_eq!(
+                lowest_sky_source(&mut region, &tables, x, z),
+                expected,
+                "{x} {z}"
+            );
+        }
+    }
     #[test]
     fn torch_light_falls_off_by_one_per_block() {
         let w = world(|c| {

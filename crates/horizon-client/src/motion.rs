@@ -2019,6 +2019,18 @@ impl EntityMoveWorld for MotionWorld<'_, '_, '_> {
     }
     fn collide(&mut self, movement: Vec3) -> Result<Vec3> {
         let max_step = self.player.attribute("minecraft:step_height")? as f32;
+        // Nothing to collide with in the open: no entities, no border near
+        // and only air around the box the first query asks for. With no
+        // colliders the move is the movement, and no step is tried.
+        let query = self.player.bounds().expand_towards(movement);
+        let at = self.player.position;
+        if self.entities.is_empty()
+            && (self.player.border.as_ref())
+                .is_none_or(|b| !b.is_inside_close_to_border(at.x, at.z, query))
+            && self.scene.only_air_near(query)
+        {
+            return Ok(movement);
+        }
         Ok(world_movement::resolve_world_movement(
             &mut self.movement_collisions(),
             MovementRequest {

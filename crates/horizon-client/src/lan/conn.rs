@@ -219,6 +219,15 @@ impl Holding {
     pub fn start() -> Self {
         Self(HOLDING.replace(true))
     }
+    /// Hold, or not, as `held` says: a pass on the pool's threads sends as
+    /// the thread that started it does (`holding`).
+    pub fn like(held: bool) -> Self {
+        Self(HOLDING.replace(held))
+    }
+}
+/// Whether this thread's packets are held (`Holding`).
+pub fn holding() -> bool {
+    HOLDING.get()
 }
 impl Drop for Holding {
     fn drop(&mut self) {
@@ -377,6 +386,10 @@ impl PlayerSender {
     }
     pub fn send(&self, body: Vec<u8>) {
         self.send_body(PacketBody::Owned(body));
+    }
+    /// `Guest::send` with only the sender at hand.
+    pub fn send_packet(&self, packet: &horizon_protocol::packets::play::Clientbound) {
+        self.send(packet.encode());
     }
     /// Send bytes other players get too, without a copy for each.
     pub fn send_shared(&self, body: &Arc<[u8]>) {
@@ -1116,8 +1129,9 @@ fn play(c: Connection, shared: &Arc<Shared>, parts: Parts, address: std::net::So
         std::thread::Builder::new()
             .name(format!("horizon-lan-out-{conn_id}"))
             .spawn(move || {
-                // Ticks and frames come first (horizon_threads).
-                horizon_threads::behind_server();
+                // Ticks and frames come first (horizon_threads), but a
+                // player's packets are not left to idle time.
+                horizon_threads::behind_server_io();
                 write_loop(writer, rx, alive, latency, pending)
             })
             .ok()

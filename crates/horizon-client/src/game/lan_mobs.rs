@@ -80,11 +80,16 @@ fn in_play(v: &PlayerView) -> bool {
 /// valid target; otherwise it sees the nearest player
 /// (`TargetingConditions`: alive, neither creative nor spectator), or the
 /// nearest one that is not a spectator if none qualifies.
+///
+/// `ahead` is the nearest player to where the mob stood read ahead of its
+/// tick ([`nearest_choice`] and that position), taken while it still
+/// stands there.
 pub(super) fn player_for(
     m: &Mob,
     host: Option<&PlayerView>,
     guests: &GuestLookup<'_>,
     bound: Option<u32>,
+    ahead: Option<(Vec3, Option<u32>)>,
 ) -> Option<u32> {
     // A tame cat reads its owner wherever they are while they sleep, or just
     // woke up (`CatRelaxOnOwnerGoal` uses `getOwner`, not the nearest player).
@@ -122,9 +127,10 @@ pub(super) fn player_for(
             return Some(*conn);
         }
     }
-    choose(m.position, targeting, host, guests, bound)
+    choose_ahead(m.position, targeting, host, guests, bound, ahead)
 }
 
+#[cfg(test)]
 fn choose(
     at: Vec3,
     targeting: bool,
@@ -132,12 +138,36 @@ fn choose(
     guests: &GuestLookup<'_>,
     bound: Option<u32>,
 ) -> Option<u32> {
+    choose_ahead(at, targeting, host, guests, bound, None)
+}
+fn choose_ahead(
+    at: Vec3,
+    targeting: bool,
+    host: Option<&PlayerView>,
+    guests: &GuestLookup<'_>,
+    bound: Option<u32>,
+    ahead: Option<(Vec3, Option<u32>)>,
+) -> Option<u32> {
     if targeting
         && let Some(conn) = bound
         && guests.view(conn).is_some_and(targetable)
     {
         return Some(conn);
     }
+    let bits = |v: Vec3| [v.x, v.y, v.z].map(f64::to_bits);
+    match ahead {
+        Some((stood, choice)) if bits(stood) == bits(at) => choice,
+        _ => nearest_choice(at, host, guests),
+    }
+}
+/// The player a mob at `at` sees when it is bound to none: the nearest one
+/// targetable, else the nearest in play (None: the host). It reads only
+/// `at`, the host and the guests, so the mob ticks read it ahead.
+pub(super) fn nearest_choice(
+    at: Vec3,
+    host: Option<&PlayerView>,
+    guests: &GuestLookup<'_>,
+) -> Option<u32> {
     let query = [at.x, at.y, at.z];
     // The nearest of a subset, the first on a tie, the host before any guest.
     let nearest = |ok: fn(&PlayerView) -> bool, subset: &GuestSubset| {
@@ -334,7 +364,14 @@ impl Game<'_> {
     /// `Level.getEntities` see every player in the level, but not spectators
     /// (`Entity.isIgnoringBlockTriggers`).
     pub(super) fn lan_block_trigger_boxes(&self) -> Vec<([f64; 3], [f64; 3])> {
-        let Some(host) = self.lan.as_ref() else {
+        Self::guest_trigger_boxes(self.lan.as_ref())
+    }
+    /// [`Self::lan_block_trigger_boxes`] of a host, for a level adapter that
+    /// holds the host but not the game.
+    pub(super) fn guest_trigger_boxes(
+        host: Option<&super::lan::LanHost>,
+    ) -> Vec<([f64; 3], [f64; 3])> {
+        let Some(host) = host else {
             return Vec::new();
         };
         host.hub

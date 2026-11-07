@@ -606,8 +606,11 @@ struct GameLevel<'w> {
     raining: bool,
     thundering: bool,
     player_box: Option<([f64; 3], [f64; 3])>,
+    /// The LAN host, from which the guests' boxes and feet below are built
+    /// when first asked: nothing a level adapter does moves a guest.
+    lan: Option<&'w lan::LanHost>,
     /// The LAN guests in this level who trigger blocks (not spectators).
-    guest_boxes: Vec<([f64; 3], [f64; 3])>,
+    guest_boxes: std::cell::OnceCell<Vec<([f64; 3], [f64; 3])>>,
     player_collision: Option<PlayerCollision>,
     /// Minecart boxes (detector rails).
     cart_boxes: Vec<([f64; 3], [f64; 3])>,
@@ -638,7 +641,9 @@ struct GameLevel<'w> {
     difficulty: i32,
     /// The feet of the players who keep fire spreading around them: the local
     /// player and the LAN guests in this level, spectators aside.
-    fire_players: Vec<[f64; 3]>,
+    fire_players: std::cell::OnceCell<Vec<[f64; 3]>>,
+    /// The local player's feet among them.
+    fire_host: Option<[f64; 3]>,
     /// Block loot random sequences (`ServerLevel.getRandomSequence`).
     rand_sequences: &'w mut horizon_client::random_sequences::RandomSequences,
     pending: &'w mut spill::Pending,
@@ -701,6 +706,24 @@ impl GameLevel<'_> {
     /// The living entities that trigger plates and tripwires and don't ignore
     /// block triggers (`Entity.isIgnoringBlockTriggers`: bats and marker armor
     /// stands). Armor stands live apart from `mobs`.
+    fn guest_boxes(&self) -> &[([f64; 3], [f64; 3])] {
+        self.guest_boxes
+            .get_or_init(|| Game::guest_trigger_boxes(self.lan))
+    }
+    fn fire_players(&self) -> &[[f64; 3]] {
+        self.fire_players.get_or_init(|| {
+            self.fire_host
+                .into_iter()
+                .chain(self.lan.iter().flat_map(|h| {
+                    h.hub
+                        .guests
+                        .iter()
+                        .filter(|g| h.hub.here(g) && !g.spectator())
+                        .map(|g| g.position)
+                }))
+                .collect()
+        })
+    }
     fn mob_trigger_boxes(&self) -> impl Iterator<Item = Aabb> + '_ {
         self.blockers
             .mobs
@@ -808,7 +831,7 @@ impl GameLevel<'_> {
         let b = self.blockers;
         self.player_box
             .iter()
-            .chain(&self.guest_boxes)
+            .chain(self.guest_boxes())
             .chain(&self.cart_boxes)
             .map(boxed)
             .chain(b.mobs.iter().filter(|m| !m.removed).map(Mob::bounds))
@@ -852,7 +875,7 @@ impl LevelAccess for GameLevel<'_> {
         self.world.world_surface(x, z, |s| self.facts.is_air(s))
     }
     fn precipitation(&self, pos: BlockPos) -> Option<horizon_world::level::Precipitation> {
-        self.behaviours.precipitation_info(self, pos)
+        self.behaviours.precipitation_tick_info(self, pos)
     }
     fn is_raining_at(&self, pos: BlockPos) -> bool {
         self.behaviours.is_raining_at(self, pos)
@@ -949,7 +972,7 @@ impl LevelAccess for GameLevel<'_> {
     fn can_spread_fire_around(&self, pos: BlockPos) -> bool {
         let radius = self.rules.fire_spread_radius_around_player;
         radius == -1
-            || self.fire_players.iter().any(|p| {
+            || self.fire_players().iter().any(|p| {
                 let d = [
                     p[0] - f64::from(pos.x),
                     p[1] - f64::from(pos.y),
@@ -1111,7 +1134,7 @@ impl LevelAccess for GameLevel<'_> {
         let players = || {
             self.player_box
                 .iter()
-                .chain(&self.guest_boxes)
+                .chain(self.guest_boxes())
                 .filter(|b| hit(b))
                 .count()
         };
@@ -2695,7 +2718,25 @@ impl Game<'_> {
         }
     }
     fn tick_items(&mut self) {
+        /// What the item ticks read of each item ahead of the serial pass,
+        /// from its position, velocity, ground, age and id and the blocks
+        /// (which this pass never writes): its noPhysics test, its first
+        /// fluid update and move, and the block kinds around it.
+        struct ItemAhead {
+            at: Vec3,
+            velocity: Vec3,
+            on_ground: bool,
+            age: u32,
+            id: u32,
+            inside: bool,
+            wet: Option<horizon_client::entities::ItemFluids>,
+            kinds: u16,
+        }
         let mut items = std::mem::take(&mut self.dropped);
+        // For reading per-item costs off a benchmark's log.
+        if self.world.game_time.rem_euclid(600) == 0 {
+            log::info!("dropped items: {}", items.len());
+        }
         // ServerLevel.tick: only entities in entity-ticking chunks tick.
         let ticking = self.entity_ticking_area();
         let mut removed = vec![false; items.len()];
@@ -2710,27 +2751,41 @@ impl Game<'_> {
         // item before its own tick: every item's answer is read ahead on the
         // pool. An item that moved anyway asks again.
         // Its first fluid update reads only its position, its velocity and
-        // the blocks too, and is read ahead the same way.
-        type Ahead = (
-            Vec3,
-            Vec3,
-            bool,
-            Option<horizon_client::entities::ItemFluids>,
-        );
-        let mut ahead: Vec<Ahead> = items
+        // the blocks too, and is read ahead the same way, as are the block
+        // kinds around it (for an item that does not move, its contact
+        // checks after the move).
+        let mut ahead: Vec<ItemAhead> = items
             .iter()
-            .map(|i| (i.position, i.velocity, false, None))
+            .map(|i| ItemAhead {
+                at: i.position,
+                velocity: i.velocity,
+                on_ground: i.on_ground,
+                age: i.age,
+                id: i.id,
+                inside: false,
+                wet: None,
+                kinds: u16::MAX,
+            })
             .collect();
         {
             let (world, collision) = (&self.world, self.collision);
             let fluids = &self.res.motion().fluids;
-            horizon_threads::pool::for_each_mut(&mut ahead, 64, |(at, velocity, inside, wet)| {
+            let registry = self.pack.assets.registry;
+            horizon_threads::pool::for_each_mut(&mut ahead, 64, |read| {
                 if merging {
-                    *inside = ItemEntity::inside_block_at(*at, world, collision);
+                    read.inside = ItemEntity::inside_block_at(read.at, world, collision);
                 }
-                *wet = Some(horizon_client::entities::ItemFluids::at(
-                    *at, *velocity, world, fluids,
+                read.wet = Some(horizon_client::entities::ItemFluids::at(
+                    read.at,
+                    read.velocity,
+                    read.on_ground,
+                    read.age,
+                    read.id,
+                    world,
+                    fluids,
+                    collision,
                 ));
+                read.kinds = ItemEntity::kinds_around(read.at, world, registry);
             });
         }
         for i in 0..items.len() {
@@ -2747,7 +2802,7 @@ impl Game<'_> {
             // ItemEntity.tick's noPhysics (servers only): out of a block
             // placed on it, towards the closest open side (#1252).
             let no_physics = merging && {
-                let (at, _, inside, _) = ahead[i];
+                let (at, inside) = (ahead[i].at, ahead[i].inside);
                 let same = [at.x, at.y, at.z].map(f64::to_bits)
                     == [item.position.x, item.position.y, item.position.z].map(f64::to_bits);
                 if same {
@@ -2766,17 +2821,28 @@ impl Game<'_> {
                 self.collision,
                 no_physics,
                 &self.res.motion().fluids,
-                ahead[i].3,
+                ahead[i].wet,
             );
+            // The kinds read ahead hold for an item still where it stood.
+            let around = {
+                let bits = |v: Vec3| [v.x, v.y, v.z].map(f64::to_bits);
+                if bits(ahead[i].at) == bits(item.position) {
+                    ahead[i].kinds
+                } else {
+                    u16::MAX
+                }
+            };
             // Entity.applyEffectsFromBlocks: bubble columns lift or drag the item.
-            horizon_client::motion::bubble_column_push(
-                &self.world,
-                self.pack.assets.registry,
-                self.res.facts(),
-                self.collision,
-                item.bounds(),
-                &mut item.velocity,
-            );
+            if around & horizon_client::block_kinds::BUBBLE_COLUMN != 0 {
+                horizon_client::motion::bubble_column_push(
+                    &self.world,
+                    self.pack.assets.registry,
+                    self.res.facts(),
+                    self.collision,
+                    item.bounds(),
+                    &mut item.velocity,
+                );
+            }
             cells.moved(i, item.previous, item.position);
             // ItemEntity.tick: merge every 2 ticks while moving between
             // blocks, every 40 otherwise, before the lifetime check.
@@ -2804,11 +2870,12 @@ impl Game<'_> {
                 cells.remove(i, item.position);
                 continue;
             }
-            let environment = item.environment_tick(
+            let environment = item.environment_tick_with(
                 &self.world,
                 self.res.facts(),
                 self.pack.assets.registry,
                 self.res.items(),
+                around,
             );
             // shortcut: age is the fresh-drop clock; use entity ticks for saved/frozen-age phase parity.
             if environment.should_play_lava_hurt_sound(item.age) {
@@ -2963,26 +3030,17 @@ impl Game<'_> {
                 (b.min_position().components(), b.max_position().components())
             })
             .collect();
-        let guest_boxes = self.lan_block_trigger_boxes();
         let dimension = match self.dim {
             Dim::Overworld => LevelDimension::Overworld,
             Dim::Nether => LevelDimension::Nether,
             Dim::End => LevelDimension::End,
         };
         let rules = self.level_rules();
-        let fire_players: Vec<[f64; 3]> = self
+        let fire_host = self
             .player
-            .iter()
+            .as_ref()
             .filter(|_| !spectator)
-            .map(|p| [p.position.x, p.position.y, p.position.z])
-            .chain(self.lan.iter().flat_map(|h| {
-                h.hub
-                    .guests
-                    .iter()
-                    .filter(|g| h.hub.here(g) && !g.spectator())
-                    .map(|g| g.position)
-            }))
-            .collect();
+            .map(|p| [p.position.x, p.position.y, p.position.z]);
         let blockers = Blockers {
             mobs: &self.mobs,
             armor_stands: &self.armor_stands,
@@ -3014,7 +3072,8 @@ impl Game<'_> {
             raining: rain > 0.2,
             thundering: thunder > 0.9,
             player_box,
-            guest_boxes,
+            lan: self.lan.as_ref(),
+            guest_boxes: std::cell::OnceCell::new(),
             player_collision,
             biomes: self.res.biomes(),
             seed: self.level.seed,
@@ -3031,7 +3090,8 @@ impl Game<'_> {
             registry: self.pack.assets.registry,
             rules,
             difficulty: i32::from(self.ui.difficulty),
-            fire_players,
+            fire_players: std::cell::OnceCell::new(),
+            fire_host,
             rand_sequences: &mut self.rand_sequences,
             pending: &mut self.pending,
             spill: &mut self.spill,
@@ -3246,13 +3306,11 @@ impl Game<'_> {
                     || b.has_entity_inside(level.world.air),
                     |chunk| {
                         let index = key.1 - (MIN_Y >> 4);
-                        chunk.sections.get(index as usize).map_or_else(
-                            || b.has_entity_inside(BlockStateId(0)),
-                            |section| {
-                                contact
-                                    .get(key, section, |id| b.has_entity_inside(BlockStateId(id)))
-                            },
-                        )
+                        contact
+                            .get_in(key, chunk, index as usize, |id| {
+                                b.has_entity_inside(BlockStateId(id))
+                            })
+                            .unwrap_or_else(|| b.has_entity_inside(BlockStateId(0)))
                     },
                 )
             };
@@ -15501,8 +15559,16 @@ pub fn run() -> Result<()> {
         horizon_threads::configure_server_affinity();
     }
     // Before any worker starts: on Linux they go behind the server thread
-    // and the render thread.
-    horizon_threads::put_helpers_behind();
+    // and the render thread; a dedicated server's generation and loading
+    // into the idle class, so the tick's pool gets a worker core the moment
+    // it asks, while its connection writers stay ten nice levels down.
+    // `FERRALOOM_HELPERS=all-idle` idles the writers too, `nice` none.
+    let helpers = std::env::var("FERRALOOM_HELPERS");
+    match (options.dedicated.is_some(), helpers.as_deref()) {
+        (true, Ok("nice")) | (false, _) => horizon_threads::put_helpers_behind(),
+        (true, Ok("all-idle")) => horizon_threads::put_helpers_idle(true),
+        (true, _) => horizon_threads::put_helpers_idle(false),
+    }
     if options.execution_role.is_client() {
         // The render thread, like the server thread, ahead of the workers on
         // macOS and Windows. While terrain loads, the worker pools (two with
@@ -15669,7 +15735,7 @@ mod runtime_reset_tests {
         reset_world_progress(&mut adv, &mut stats);
         assert!(!adv.loaded && !stats.loaded);
         assert!(adv.progress.criteria.is_empty());
-        assert!(stats.values.is_empty());
+        assert!(stats.of_type("minecraft:mined").next().is_none());
     }
 }
 

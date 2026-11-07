@@ -669,15 +669,24 @@ impl Mob {
             }
         };
         self.movement_emission(w, moved, events);
-        // Entity.applyEffectsFromBlocks: bubble columns push the mob.
-        if crate::motion::bubble_column_push(
-            w.world,
-            w.registry,
-            w.facts,
-            w.collision,
-            self.bounds(),
-            &mut self.velocity,
-        ) {
+        // Entity.applyEffectsFromBlocks: bubble columns push the mob. A mob
+        // still where it started, with none in the palettes read around it
+        // ahead of the tick, meets none.
+        let none_around = matches!(
+            w.kinds_ahead,
+            Some((at, kinds)) if at == super::ai::start_key(self)
+                && kinds & crate::block_kinds::BUBBLE_COLUMN == 0
+        );
+        if !none_around
+            && crate::motion::bubble_column_push(
+                w.world,
+                w.registry,
+                w.facts,
+                w.collision,
+                self.bounds(),
+                &mut self.velocity,
+            )
+        {
             self.fall_distance = 0.0;
         }
     }
@@ -771,6 +780,12 @@ impl Mob {
     /// and swimming sounds.
     fn movement_emission(&mut self, w: &MobWorld, moved: Vec3, events: &mut Vec<MobEvent>) {
         if !super::ai::emits_movement(self) || self.extra.mount.is_some() {
+            return;
+        }
+        // A mob that did not move walks no further, so with no step pending
+        // nothing below happens: it reads only blocks to add nothing.
+        let still = moved.x == 0.0 && moved.y == 0.0 && moved.z == 0.0;
+        if still && self.ai.steps.move_dist <= self.ai.steps.next_step {
             return;
         }
         let full = (moved.length() * f64::from(0.6_f32)) as f32;
@@ -1429,7 +1444,13 @@ impl horizon_world::water_splash::WaterSplashWorld for Splash<'_> {
 #[derive(Clone, Debug, Default)]
 pub struct MoveMemo {
     key: Option<[u64; 14]>,
+    /// Counts the moves remembered, so an answer read ahead about these
+    /// sections is known to be about this memo.
+    generation: u64,
     sections: SectionsSeen,
+    /// The fluids and block kinds read ahead of the last tick, with the
+    /// generation they were kept under (see `keep_reads`).
+    reads: Option<(u64, [u64; 7], Fluids, [u64; 4], u16)>,
     moved: Vec3,
     /// Where the mob stood when it looked for its support, and the support.
     support: Option<([u64; 3], Option<[i32; 3]>)>,
@@ -1471,13 +1492,68 @@ impl MoveMemo {
     /// The remembered move, if `key` is the remembered one and every
     /// section is unchanged.
     fn recall(&self, key: &[u64; 14], w: &MobWorld, bounds: Aabb, dy: f64) -> Option<Vec3> {
-        (self.key.as_ref() == Some(key)
-            && self.sections.unchanged(w.world, Self::cells(bounds, dy)))
-        .then_some(self.moved)
+        if self.key.as_ref() != Some(key) {
+            return None;
+        }
+        let unchanged = match w.memo_ahead {
+            Some((generation, unchanged)) if generation == self.generation => unchanged,
+            _ => self.sections.unchanged(w.world, Self::cells(bounds, dy)),
+        };
+        unchanged.then_some(self.moved)
+    }
+    /// Whether the remembered move's sections are unchanged, asked ahead
+    /// of the tick (the blocks hold still until the ticks are over), with
+    /// the memo's generation: None without a remembered move.
+    pub fn sections_ahead(&self, world: &crate::world::World) -> Option<(u64, bool)> {
+        let key = self.key.as_ref()?;
+        let at = |i: usize| {
+            Vec3::new(
+                f64::from_bits(key[i]),
+                f64::from_bits(key[i + 1]),
+                f64::from_bits(key[i + 2]),
+            )
+        };
+        let bounds = Aabb::new(at(3), at(6));
+        let dy = f64::from_bits(key[10]);
+        let unchanged = self.sections.unchanged(world, Self::cells(bounds, dy));
+        Some((self.generation, unchanged))
+    }
+    /// Keep the fluids and block kinds read ahead of this tick for the next
+    /// one. They were read from this tick's blocks; while the held sections
+    /// are unchanged next tick (a section, once replaced, never comes back),
+    /// those blocks are the same, and the reads, of cells inside the held
+    /// ones for the remembered box, answer again.
+    pub fn keep_reads(
+        &mut self,
+        fluids: Option<([u64; 7], Fluids)>,
+        kinds: Option<([u64; 4], u16)>,
+    ) {
+        self.reads = match (self.key, fluids, kinds) {
+            (Some(_), Some((at, fluids)), Some((start, kinds))) => {
+                Some((self.generation, at, fluids, start, kinds))
+            }
+            _ => None,
+        };
+    }
+    /// The reads kept last tick, if `sections` (this memo's
+    /// `sections_ahead`) says its sections are unchanged and the mob asks
+    /// at the remembered box (`fluids_key`) and position (`kinds_key`).
+    pub fn kept_reads(
+        &self,
+        sections: Option<(u64, bool)>,
+        fluids_key: [u64; 7],
+        kinds_key: [u64; 4],
+    ) -> Option<(Fluids, u16)> {
+        let (generation, at, fluids, start, kinds) = self.reads?;
+        let key = self.key.as_ref()?;
+        let same_box = key[3..9] == fluids_key[..6];
+        (sections == Some((generation, true)) && same_box && at == fluids_key && start == kinds_key)
+            .then_some((fluids, kinds))
     }
     /// Keep a resolved move, if its sections can be kept.
     fn remember(&mut self, key: [u64; 14], w: &MobWorld, bounds: Aabb, dy: f64, moved: Vec3) {
         self.support = None;
+        self.generation = self.generation.wrapping_add(1);
         let kept = self
             .sections
             .capture(w.world, w.collision, Self::cells(bounds, dy));

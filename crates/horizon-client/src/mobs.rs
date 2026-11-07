@@ -90,7 +90,7 @@ pub mod warden_brain;
 pub mod witch;
 pub mod wither;
 mod world;
-pub use world::visual_clip;
+pub use world::{KeptTags, keep_tag_answers, visual_clip};
 pub mod zombie_villager;
 
 use crate::{blocks::BlockFacts, mesher::Vertex, world::World};
@@ -1687,17 +1687,36 @@ pub fn apply_mob_pushes(m: &mut Mob, pending: &mut PendingPushes) {
 /// index `from` on), at once: vanilla sets them on the other entity during
 /// the tick, before the mobs after it tick.
 pub fn apply_brain_events(mobs: &mut [Mob], events: &mut Vec<MobEvent>, from: usize) {
+    apply_brain_events_indexed(mobs, events, from, None);
+}
+/// [`apply_brain_events`] finding each mob through `index` (the first slot
+/// of each id, as a scan from the front finds it) instead of a scan of
+/// every mob per event.
+pub fn apply_brain_events_indexed(
+    mobs: &mut [Mob],
+    events: &mut Vec<MobEvent>,
+    from: usize,
+    index: Option<&crate::fast_hash::FxHashMap<u32, u32>>,
+) {
+    let slot = |mobs: &[Mob], id: u32| {
+        index
+            .and_then(|index| index.get(&id))
+            .map(|&i| i as usize)
+            .filter(|&i| mobs.get(i).is_some_and(|m| m.id == id))
+            .or_else(|| mobs.iter().position(|m| m.id == id))
+    };
     let mut i = from;
     while i < events.len() {
         match events[i] {
             MobEvent::BreedTarget { mob, partner } => {
-                if let Some(m) = mobs.iter_mut().find(|m| m.id == mob) {
-                    animal_brain::set_breed_partner(m, partner);
+                if let Some(k) = slot(mobs, mob) {
+                    animal_brain::set_breed_partner(&mut mobs[k], partner);
                 }
                 events.remove(i);
             }
             MobEvent::LockGaze { mob, partner } => {
-                if let Some(m) = mobs.iter_mut().find(|m| m.id == mob) {
+                if let Some(k) = slot(mobs, mob) {
+                    let m = &mut mobs[k];
                     animal_brain::lock_gaze(m, partner);
                     villager_brain::lock_gaze_half(m, Who::Mob(partner));
                 }
@@ -1708,7 +1727,8 @@ pub fn apply_brain_events(mobs: &mut [Mob], events: &mut Vec<MobEvent>, from: us
             MobEvent::Breed {
                 parent, partner, ..
             } => {
-                if let Some(m) = mobs.iter_mut().find(|m| m.id == partner) {
+                if let Some(k) = slot(mobs, partner) {
+                    let m = &mut mobs[k];
                     m.extra.age = 6000;
                     m.extra.in_love = 0;
                     animal_brain::forget_breed_target(m, parent);
@@ -1839,6 +1859,8 @@ pub struct MobWorld<'a> {
     /// The ticking mob's `block_kinds` around its box where it stood
     /// before its tick ([`ai::start_key`] and the kinds), read ahead.
     pub kinds_ahead: Option<([u64; 4], u16)>,
+    /// The ticking mob's `MoveMemo::sections_ahead`, read ahead.
+    pub memo_ahead: Option<(u64, bool)>,
 }
 /// `Entity.getTeam` of the player and of the mobs on a team.
 #[derive(Clone, Debug, Default)]
@@ -1970,14 +1992,12 @@ impl Mob {
     }
     /// `Entity.makeBoundingBox(position)`.
     pub fn bounds_at(&self, position: Vec3) -> Aabb {
-        let w = f64::from(self.width()) / 2.0;
+        // `dims` widens floats, so these are `width()` and `height()`.
+        let (width, height, _) = self.dims();
+        let w = width / 2.0;
         Aabb::new(
             Vec3::new(position.x - w, position.y, position.z - w),
-            Vec3::new(
-                position.x + w,
-                position.y + f64::from(self.height()),
-                position.z + w,
-            ),
+            Vec3::new(position.x + w, position.y + height, position.z + w),
         )
     }
     pub fn alive(&self) -> bool {

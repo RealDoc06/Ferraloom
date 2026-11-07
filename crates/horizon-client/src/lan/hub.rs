@@ -10,7 +10,7 @@ use super::{
     chunks::ChunkEncoder,
     data::SyncData,
     entity::{Entities, EntityState, Riding, States, Tracker, Viewer},
-    guest::{Guest, SentEffect, stack_to_network},
+    guest::{Guest, SentEffect, stack_ref_to_network},
 };
 use crate::{
     chunk::Chunk,
@@ -257,7 +257,7 @@ pub struct Hub {
     chat_type: i32,
     dimension_type: i32,
     clock_ids: Vec<i32>,
-    item_ids: std::collections::HashMap<Arc<str>, i32>,
+    item_ids: crate::fast_hash::FxHashMap<Arc<str>, i32>,
     entity_types: std::collections::HashMap<String, i32>,
     /// Each level's tracked entities, by dimension (a level's is with the
     /// tracking pass while it runs).
@@ -404,9 +404,8 @@ impl TrackPass {
                 slot.fill(out);
             }
         }
-        // Freed here rather than on the tick, which only wants the rest back.
+        // The players' states go back to the tick to be written over.
         drop(entities);
-        self.players.clear();
         crate::spans::summary_add_span(
             "beside_track",
             started.0.elapsed().as_secs_f32() * 1000.0,
@@ -436,6 +435,107 @@ fn tracked(cx: i32, cz: i32, r: i32, x: i32, z: i32) -> bool {
     let dx = i64::from(((x - cx).abs() - 2).max(0));
     let dz = i64::from(((z - cz).abs() - 2).max(0));
     dx * dx + dz * dz < i64::from(r) * i64::from(r)
+}
+
+/// Guests per piece of `update_chunks`' pass on the pool.
+const VIEW_GRAIN: usize = 16;
+
+/// What a guest's chunk view reads and changes (`update_view`,
+/// `next_batch`): the guest's body stays on the tick's thread, these go to
+/// the pool's.
+struct ChunkView<'a> {
+    chunk: (i32, i32),
+    view_distance: i32,
+    placed_at: u64,
+    unacknowledged: u32,
+    max_unacknowledged: u32,
+    chunks_per_tick: f32,
+    center: &'a mut Option<(i32, i32)>,
+    center_sent: &'a mut Option<(i32, i32)>,
+    sent_chunks: &'a mut Arc<crate::fast_hash::FxHashSet<(i32, i32)>>,
+    sent_bounds: &'a mut super::guest::SentBounds,
+    chunk_queue: &'a mut Vec<(i32, i32)>,
+    batch_quota: &'a mut f32,
+    sender: &'a super::conn::PlayerSender,
+}
+impl<'a> ChunkView<'a> {
+    fn of(g: &'a mut Guest) -> Self {
+        Self {
+            chunk: g.chunk(),
+            view_distance: g.view_distance,
+            placed_at: g.placed_at,
+            unacknowledged: g.unacknowledged,
+            max_unacknowledged: g.max_unacknowledged,
+            chunks_per_tick: g.chunks_per_tick,
+            center: &mut g.center,
+            center_sent: &mut g.center_sent,
+            sent_chunks: &mut g.sent_chunks,
+            sent_bounds: &mut g.sent_bounds,
+            chunk_queue: &mut g.chunk_queue,
+            batch_quota: &mut g.batch_quota,
+            sender: &g.sender,
+        }
+    }
+}
+
+/// ChunkMap.move's view change: the new centre, the chunks that left
+/// the view forgotten and the ones that entered it queued, closest first.
+fn update_view(g: &mut ChunkView) {
+    let (cx, cz) = g.chunk;
+    let r = g.view_distance;
+    if *g.center == Some((cx, cz)) {
+        return;
+    }
+    *g.center = Some((cx, cz));
+    if g.center_sent.take() != Some((cx, cz)) {
+        g.sender
+            .send_packet(&C::SetChunkCacheCenter(play::SetChunkCacheCenter {
+                x: cx,
+                z: cz,
+            }));
+    }
+    // Chunks that left the view.
+    let forget: Vec<_> = g
+        .sent_chunks
+        .iter()
+        .copied()
+        .filter(|&(x, z)| !tracked(cx, cz, r, x, z))
+        .collect();
+    for (x, z) in forget {
+        Arc::make_mut(g.sent_chunks).remove(&(x, z));
+        g.sender
+            .send_packet(&C::ForgetLevelChunk(play::ForgetLevelChunk { pos: [x, z] }));
+    }
+    // `tracked` keeps only chunks under r + 2 away on each axis.
+    g.sent_bounds
+        .within([cx - r - 1, cz - r - 1], [cx + r + 1, cz + r + 1]);
+    requeue(g.chunk_queue, g.sent_chunks, (cx, cz), r);
+}
+
+/// PlayerChunkSender.sendNextChunks' choice: ready chunks, closest first,
+/// as many as the batch quota the client's acknowledgements pace allows,
+/// with their places in the queue.
+fn next_batch<'w>(
+    g: &mut ChunkView,
+    ticks: u64,
+    world: &'w World,
+) -> Option<Vec<(usize, &'w Chunk)>> {
+    if ticks <= g.placed_at + 1 || g.unacknowledged >= g.max_unacknowledged {
+        return None;
+    }
+    *g.batch_quota = (*g.batch_quota + g.chunks_per_tick).min(g.chunks_per_tick.max(1.0));
+    if *g.batch_quota < 1.0 || g.chunk_queue.is_empty() {
+        return None;
+    }
+    let budget = g.batch_quota.floor() as usize;
+    let batch: Vec<_> = g
+        .chunk_queue
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, key)| Some((idx, &**world.chunks.get(key).filter(|c| c.lit)?)))
+        .take(budget)
+        .collect();
+    (!batch.is_empty()).then_some(batch)
 }
 
 /// The view's queue around a new centre: the queued chunks still tracked, then
@@ -568,7 +668,11 @@ impl Hub {
         id
     }
     pub fn stack(&mut self, s: &Option<ItemStack>) -> Option<horizon_protocol::item::Stack> {
-        let item = s.as_ref()?.item.clone();
+        self.stack_of(s.as_ref()?)
+    }
+    /// `stack` of a stack in place.
+    pub fn stack_of(&mut self, s: &ItemStack) -> Option<horizon_protocol::item::Stack> {
+        let item = s.item.clone();
         let id = self.item_id(&item);
         let sync = self.sync.clone();
         // The stacks inside it (a bundle's contents, a crossbow's projectiles)
@@ -582,7 +686,7 @@ impl Hub {
                 .and_then(|i| i.id(name))
                 .unwrap_or(0)
         };
-        stack_to_network(item_id, |registry, name| sync.id(registry, name), s)
+        stack_ref_to_network(item_id, |registry, name| sync.id(registry, name), s)
     }
 
     pub fn broadcast(&self, packet: &C) {
@@ -1522,15 +1626,26 @@ impl Hub {
     /// packets keep their order.
     fn update_chunks(&mut self, ctx: &TickCtx) {
         let world = &*ctx.world;
-        let mut batches = Vec::new();
-        for i in 0..self.guests.len() {
-            if self.here(&self.guests[i]) {
-                self.update_view(i);
-                if let Some(batch) = self.next_batch(i, world) {
-                    batches.push((i, batch));
-                }
-            }
-        }
+        // Each guest's view and batch are its own, on the pool's threads:
+        // what each sends stays in its order.
+        let (ticks, dimension) = (self.ticks, &self.config.dimension);
+        let mut views: Vec<(usize, ChunkView, Option<Vec<(usize, &Chunk)>>)> = (self.guests)
+            .iter_mut()
+            .enumerate()
+            .filter(|(_, g)| g.placed && g.dimension == *dimension)
+            .map(|(i, g)| (i, ChunkView::of(g), None))
+            .collect();
+        let held = super::conn::holding();
+        horizon_threads::pool::for_each_mut(&mut views, VIEW_GRAIN, |(_, g, batch)| {
+            // Held for the tick's flush, as the tick's thread holds them.
+            let _held = super::conn::Holding::like(held);
+            update_view(g);
+            *batch = next_batch(g, ticks, world);
+        });
+        let batches: Vec<(usize, Vec<(usize, &Chunk)>)> = views
+            .into_iter()
+            .filter_map(|(i, _, batch)| Some((i, batch?)))
+            .collect();
         if batches.is_empty() {
             return;
         }
@@ -1573,61 +1688,9 @@ impl Hub {
             for idx in taken.into_iter().rev() {
                 let key = g.chunk_queue.remove(idx);
                 Arc::make_mut(&mut g.sent_chunks).insert(key);
+                g.sent_bounds.add(key);
             }
         }
-    }
-
-    /// ChunkMap.move's view change: the new centre, the chunks that left
-    /// the view forgotten and the ones that entered it queued, closest first.
-    fn update_view(&mut self, i: usize) {
-        let (cx, cz) = self.guests[i].chunk();
-        let r = self.guests[i].view_distance;
-        let g = &mut self.guests[i];
-        if g.center == Some((cx, cz)) {
-            return;
-        }
-        g.center = Some((cx, cz));
-        if g.center_sent.take() != Some((cx, cz)) {
-            g.send(&C::SetChunkCacheCenter(play::SetChunkCacheCenter {
-                x: cx,
-                z: cz,
-            }));
-        }
-        // Chunks that left the view.
-        let forget: Vec<_> = g
-            .sent_chunks
-            .iter()
-            .copied()
-            .filter(|&(x, z)| !tracked(cx, cz, r, x, z))
-            .collect();
-        for (x, z) in forget {
-            Arc::make_mut(&mut g.sent_chunks).remove(&(x, z));
-            g.send(&C::ForgetLevelChunk(play::ForgetLevelChunk { pos: [x, z] }));
-        }
-        requeue(&mut g.chunk_queue, &g.sent_chunks, (cx, cz), r);
-    }
-
-    /// PlayerChunkSender.sendNextChunks' choice: ready chunks, closest first,
-    /// as many as the batch quota the client's acknowledgements pace allows,
-    /// with their places in the queue.
-    fn next_batch<'w>(&mut self, i: usize, world: &'w World) -> Option<Vec<(usize, &'w Chunk)>> {
-        let g = &mut self.guests[i];
-        if self.ticks <= g.placed_at + 1 || g.unacknowledged >= g.max_unacknowledged {
-            return None;
-        }
-        g.batch_quota = (g.batch_quota + g.chunks_per_tick).min(g.chunks_per_tick.max(1.0));
-        if g.batch_quota < 1.0 || g.chunk_queue.is_empty() {
-            return None;
-        }
-        let budget = g.batch_quota.floor() as usize;
-        let batch: Vec<_> = g
-            .chunk_queue
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, key)| Some((idx, &**world.chunks.get(key).filter(|c| c.lit)?)))
-            .take(budget)
-            .collect();
-        (!batch.is_empty()).then_some(batch)
     }
 
     /// `ChunkHolder.broadcastChanges`' light part: the light sections that
@@ -1644,7 +1707,9 @@ impl Hub {
         let mut changes: Vec<((i32, i32), u32)> = log.drain().collect();
         changes.sort_unstable();
         for ((x, z), sections) in changes {
-            let tracked = |g: &Guest, x: i32, z: i32| g.sent_chunks.contains(&(x, z));
+            let tracked = |g: &Guest, x: i32, z: i32| {
+                g.sent_bounds.may_hold((x, z)) && g.sent_chunks.contains(&(x, z))
+            };
             let viewers: Vec<usize> = (0..self.guests.len())
                 .filter(|&i| {
                     let g = &self.guests[i];
@@ -1688,7 +1753,10 @@ impl Hub {
         for ((sx, sy, sz), positions) in sections {
             let viewers: Vec<usize> = (0..self.guests.len())
                 .filter(|&i| {
-                    self.here(&self.guests[i]) && self.guests[i].sent_chunks.contains(&(sx, sz))
+                    let g = &self.guests[i];
+                    g.sent_bounds.may_hold((sx, sz))
+                        && self.here(g)
+                        && g.sent_chunks.contains(&(sx, sz))
                 })
                 .collect();
             if viewers.is_empty() {
@@ -1761,8 +1829,12 @@ impl Hub {
         &self.sync
     }
 
+    /// A player's state, written over `state` (last tick's, whose vectors
+    /// and strings are reused); its equipment and attributes are the
+    /// caller's to fill.
     fn player_state(
         &self,
+        state: &mut EntityState,
         id: i32,
         uuid: u128,
         position: [f64; 3],
@@ -1774,10 +1846,8 @@ impl Hub {
         bed: Option<[i32; 3]>,
         skin: u8,
         health: f32,
-        equipment: Vec<(u8, Option<horizon_protocol::item::Stack>)>,
-        attributes: Vec<play::AttributeSnapshot>,
         effects: &[EffectInstance],
-    ) -> EntityState {
+    ) {
         let (sneaking, sprinting, sleeping) = flags;
         let shared = shared_flags(sneaking, sprinting, &body);
         // Player.getDesiredPose (and updatePlayerPose's crawl): sleeping,
@@ -1795,7 +1865,8 @@ impl Hub {
         } else {
             0
         };
-        let mut meta = Vec::new();
+        let meta = &mut state.meta;
+        meta.clear();
         if shared != 0 {
             meta.push((0, serializer::BYTE, Value::Byte(shared)));
         }
@@ -1824,39 +1895,37 @@ impl Hub {
                     .map(|e| (e.id, e.ambient)),
             ),
         );
-        EntityState {
-            id,
-            uuid,
-            kind: "minecraft:player".into(),
-            position,
-            yaw: rot.0,
-            pitch: rot.1,
-            head_yaw: rot.2,
-            on_ground,
-            velocity: [0.0; 3],
-            data: 0,
-            meta,
-            // The effect swirls go back to none.
-            defaults: vec![
-                (10, serializer::PARTICLES, Value::Particles(Vec::new())),
-                (11, serializer::BOOLEAN, Value::Bool(false)),
-            ],
-            equipment,
-            attributes,
-            precise: false,
-            needs_sync: false,
-            leash: None,
+        (state.id, state.uuid) = (id, uuid);
+        if state.kind != "minecraft:player" {
+            state.kind.clear();
+            state.kind.push_str("minecraft:player");
         }
+        state.position = position;
+        (state.yaw, state.pitch, state.head_yaw) = rot;
+        state.on_ground = on_ground;
+        state.velocity = [0.0; 3];
+        state.data = 0;
+        // The effect swirls go back to none.
+        state.defaults.clear();
+        state.defaults.extend([
+            (10, serializer::PARTICLES, Value::Particles(Vec::new())),
+            (11, serializer::BOOLEAN, Value::Bool(false)),
+        ]);
+        state.precise = false;
+        state.needs_sync = false;
+        state.leash = None;
     }
 
+    /// The stacks a player wears and holds, by wire slot, into `out`.
     fn equipment_of(
         &mut self,
+        out: &mut Vec<(u8, Option<horizon_protocol::item::Stack>)>,
         main: &Option<ItemStack>,
         off: &Option<ItemStack>,
         armor: [&Option<ItemStack>; 4],
-    ) -> Vec<(u8, Option<horizon_protocol::item::Stack>)> {
+    ) {
         // Armor is stored head..feet; the wire slots are feet(2) legs(3) chest(4) head(5).
-        let mut out = Vec::new();
+        out.clear();
         let slots = [
             (0u8, main),
             (1, off),
@@ -1870,19 +1939,34 @@ impl Hub {
                 out.push((slot, self.stack(item)));
             }
         }
-        out
+    }
+
+    /// The next of last tick's player states to write over, or a new one.
+    fn next_state<'a>(all: &'a mut Vec<EntityState>, n: &mut usize) -> &'a mut EntityState {
+        if *n == all.len() {
+            all.push(EntityState::default());
+        }
+        *n += 1;
+        &mut all[*n - 1]
     }
 
     /// All entities as one client sees them: the world's, the host, the other guests.
     fn track_entities(&mut self, ctx: &mut TickCtx) {
+        // Last tick's player states, written over in place.
         let mut all = std::mem::take(&mut self.entity_players);
-        all.clear();
+        let mut n = 0;
         if let Some(h) = ctx.host {
-            let equipment = {
-                let e = &h.equipment;
-                self.equipment_of(&e[0], &e[1], [&e[5], &e[4], &e[3], &e[2]])
-            };
-            all.push(self.player_state(
+            let state = Self::next_state(&mut all, &mut n);
+            let e = &h.equipment;
+            self.equipment_of(
+                &mut state.equipment,
+                &e[0],
+                &e[1],
+                [&e[5], &e[4], &e[3], &e[2]],
+            );
+            state.attributes.clone_from(&h.attributes);
+            self.player_state(
+                state,
                 h.entity_id,
                 h.uuid,
                 h.position,
@@ -1894,48 +1978,48 @@ impl Hub {
                 h.bed,
                 0x7F,
                 h.health,
-                equipment,
-                h.attributes.clone(),
                 &[],
-            ));
-        }
-        for i in 0..self.guests.len() {
-            if !self.here(&self.guests[i]) {
-                continue;
-            }
-            let (main, off, armor) = {
-                let g = &self.guests[i];
-                (
-                    g.inventory.get(g.selected).cloned().flatten(),
-                    g.offhand.clone(),
-                    g.armor.clone(),
-                )
-            };
-            let equipment =
-                self.equipment_of(&main, &off, [&armor[0], &armor[1], &armor[2], &armor[3]]);
-            let g = &self.guests[i];
-            all.push(
-                self.player_state(
-                    g.entity_id,
-                    g.uuid,
-                    g.position,
-                    (g.yaw, g.pitch, g.head_yaw),
-                    g.on_ground,
-                    (g.sneaking, g.sprinting, g.sleeping),
-                    guest_body(g),
-                    g.living_flags,
-                    g.bed,
-                    g.info.model_customisation,
-                    g.health,
-                    equipment,
-                    g.motion
-                        .as_ref()
-                        .map(|m| super::attributes::syncable(&m.attributes))
-                        .unwrap_or_default(),
-                    &g.effects.list,
-                ),
             );
         }
+        // Out of the hub while their states are made: what a state reads of
+        // the hub (the registries, the item ids) is not theirs, and their
+        // stacks are read in place.
+        let guests = std::mem::take(&mut self.guests);
+        for g in &guests {
+            if !self.here(g) {
+                continue;
+            }
+            let state = Self::next_state(&mut all, &mut n);
+            let main = g.inventory.get(g.selected).unwrap_or(&None);
+            let armor = &g.armor;
+            self.equipment_of(
+                &mut state.equipment,
+                main,
+                &g.offhand,
+                [&armor[0], &armor[1], &armor[2], &armor[3]],
+            );
+            match g.motion.as_ref() {
+                Some(m) => super::attributes::syncable_into(&m.attributes, &mut state.attributes),
+                None => state.attributes.clear(),
+            }
+            self.player_state(
+                state,
+                g.entity_id,
+                g.uuid,
+                g.position,
+                (g.yaw, g.pitch, g.head_yaw),
+                g.on_ground,
+                (g.sneaking, g.sprinting, g.sleeping),
+                guest_body(g),
+                g.living_flags,
+                g.bed,
+                g.info.model_customisation,
+                g.health,
+                &g.effects.list,
+            );
+        }
+        all.truncate(n);
+        self.guests = guests;
         if let Some(states) = self.entity_states.take() {
             return self.track_beside(all, states);
         }
@@ -1976,7 +2060,6 @@ impl Hub {
             g.sender.send_bodies(out.drain(..));
         }
         self.entity_out = outs;
-        all.clear();
         self.entity_players = all;
         self.entities.insert(self.config.dimension.clone(), level);
     }
@@ -2198,10 +2281,11 @@ impl Hub {
         }
         // AbstractContainerMenu.broadcastChanges for the inventory menu.
         let mut changes = Vec::new();
+        let g = &self.guests[i];
         for slot in 0..46 {
-            let now = self.guests[i].menu_slot(slot);
-            if now != self.guests[i].menu_sent[slot] {
-                changes.push((slot, now));
+            let now = g.menu_slot_ref(slot);
+            if now != g.menu_sent[slot].as_ref() {
+                changes.push((slot, now.cloned()));
             }
         }
         for (slot, now) in changes {
@@ -2786,6 +2870,7 @@ impl Hub {
         }
         g.tracker.clear();
         Arc::make_mut(&mut g.sent_chunks).clear();
+        g.sent_bounds.clear();
         g.chunk_queue.clear();
         let id = g.entity_id;
         self.respawned(id);
@@ -2811,6 +2896,7 @@ impl Hub {
         g.sent_effects.clear();
         g.center = None;
         Arc::make_mut(&mut g.sent_chunks).clear();
+        g.sent_bounds.clear();
         g.chunk_queue.clear();
         g.tracker.clear();
         self.teleport(i, None);
@@ -2892,6 +2978,7 @@ impl Hub {
         g.dimension = self.config.dimension.clone();
         g.tracker.clear();
         Arc::make_mut(&mut g.sent_chunks).clear();
+        g.sent_bounds.clear();
         g.chunk_queue.clear();
         g.center = None;
         g.yaw = yaw;
@@ -3028,6 +3115,31 @@ fn shared_flags(sneaking: bool, sprinting: bool, body: &BodyFlags) -> i8 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `update_view` cuts a guest's sent bounds to the square around the
+    /// centre: every chunk `tracked` keeps is in it.
+    #[test]
+    fn tracked_chunks_lie_in_the_square_the_sent_bounds_keep() {
+        for (cx, cz, r) in [(0, 0, 2), (-7, 13, 5), (100, -40, 12), (3, 3, 32)] {
+            let mut bounds = crate::lan::guest::SentBounds::default();
+            for x in cx - r - 4..=cx + r + 4 {
+                for z in cz - r - 4..=cz + r + 4 {
+                    bounds.add((x, z));
+                }
+            }
+            bounds.within([cx - r - 1, cz - r - 1], [cx + r + 1, cz + r + 1]);
+            for x in cx - r - 4..=cx + r + 4 {
+                for z in cz - r - 4..=cz + r + 4 {
+                    if tracked(cx, cz, r, x, z) {
+                        assert!(bounds.may_hold((x, z)), "{x} {z} around {cx} {cz} r {r}");
+                    }
+                }
+            }
+            assert!(!bounds.may_hold((cx + r + 2, cz)));
+            bounds.clear();
+            assert!(!bounds.may_hold((cx, cz)));
+        }
+    }
 
     use crate::fast_hash::FxHashSet;
 

@@ -428,6 +428,7 @@ tags! {
     washed_away_by_fluids = "washed_away_by_fluids",
     blocks_fluid_flow = "blocks_fluid_flow",
     blocks_motion = "blocks_motion",
+    blocks_motion_in_heightmap = "blocks_motion_in_heightmap",
     unstable_bottom_center = "unstable_bottom_center",
     cannot_support_snow_layer = "cannot_support_snow_layer",
     support_override_snow_layer = "support_override_snow_layer",

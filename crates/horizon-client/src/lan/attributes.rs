@@ -30,28 +30,61 @@ pub fn operation_named(name: &str) -> i32 {
 
 /// `AttributeSnapshot`: the base and every modifier, in the order they were added.
 pub fn snapshot(attribute: AttributeId, instance: &Instance) -> AttributeSnapshot {
-    AttributeSnapshot {
-        attribute: attribute.registry_id(),
-        base: instance.base_value(),
-        modifiers: instance
-            .modifiers()
-            .iter()
-            .map(|m| AttributeModifier {
+    let mut out = AttributeSnapshot {
+        attribute: 0,
+        base: 0.0,
+        modifiers: Vec::new(),
+    };
+    snapshot_into(attribute, instance, &mut out);
+    out
+}
+
+/// `snapshot` written over `out`, its modifiers' strings reused.
+fn snapshot_into(attribute: AttributeId, instance: &Instance, out: &mut AttributeSnapshot) {
+    out.attribute = attribute.registry_id();
+    out.base = instance.base_value();
+    let modifiers = instance.modifiers();
+    out.modifiers.truncate(modifiers.len());
+    for (i, m) in modifiers.iter().enumerate() {
+        let (amount, operation) = (m.amount(), operation_id(m.operation()));
+        match out.modifiers.get_mut(i) {
+            Some(o) => {
+                o.id.clear();
+                o.id.push_str(m.id());
+                (o.amount, o.operation) = (amount, operation);
+            }
+            None => out.modifiers.push(AttributeModifier {
                 id: m.id().to_owned(),
-                amount: m.amount(),
-                operation: operation_id(m.operation()),
-            })
-            .collect(),
+                amount,
+                operation,
+            }),
+        }
     }
 }
 
 /// `AttributeMap.getSyncableAttributes` of a live map (a player's).
 pub fn syncable<G: FnMut() -> i32>(map: &LiveAttributes<G>) -> Vec<AttributeSnapshot> {
+    let mut out = Vec::new();
+    syncable_into(map, &mut out);
+    out
+}
+
+/// `syncable` written over `out`, reusing its vectors and strings: a
+/// player's state is made again every tick.
+pub fn syncable_into<G: FnMut() -> i32>(map: &LiveAttributes<G>, out: &mut Vec<AttributeSnapshot>) {
     let catalog = map.catalog();
-    map.instances()
+    let mut n = 0;
+    for (_, key, instance) in map
+        .instances()
         .filter(|(_, key, _)| catalog.attribute(key.attribute()).syncable)
-        .map(|(_, key, instance)| snapshot(key.attribute(), instance))
-        .collect()
+    {
+        match out.get_mut(n) {
+            Some(o) => snapshot_into(key.attribute(), instance, o),
+            None => out.push(snapshot(key.attribute(), instance)),
+        }
+        n += 1;
+    }
+    out.truncate(n);
 }
 
 /// `getAttributesToSync`, cleared once read (`ServerEntity.sendDirtyEntityData`).

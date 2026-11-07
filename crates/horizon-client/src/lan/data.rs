@@ -124,6 +124,16 @@ pub fn component_nbt(v: &Value) -> Tag {
 }
 
 impl SyncData {
+    /// `Hub::stack_of` with no item id cache: the registry's id, 0 for an
+    /// item it lacks, as the cache holds.
+    pub fn stack(&self, s: &crate::items::ItemStack) -> Option<horizon_protocol::item::Stack> {
+        let items = self.builtin.get("minecraft:item");
+        super::guest::stack_ref_to_network(
+            |name| items.and_then(|i| i.id(name)).unwrap_or(0),
+            |registry, name| self.id(registry, name),
+            s,
+        )
+    }
     /// `LivingEntity.updateSynchronizedMobEffectParticles`: DATA_EFFECT_PARTICLES
     /// (10) and DATA_EFFECT_AMBIENCE_ID (11) for the visible `effects`, as
     /// (effect, ambient). The entries are left out when there is nothing to
