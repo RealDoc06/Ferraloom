@@ -188,25 +188,26 @@ pub(super) fn seen(m: &Mob, player: Option<[i32; 4]>) -> Seen {
     m.seen(player)
 }
 /// How many of the mobs read ahead tick (those whose fluids were read).
-fn reads_ticking(ahead: &[(&Mob, MobAhead)]) -> usize {
-    ahead
-        .iter()
-        .filter(|(_, read)| read.fluids.is_some())
-        .count()
+fn reads_ticking(reads: &[MobAhead]) -> usize {
+    reads.iter().filter(|read| read.fluids.is_some()).count()
 }
 /// What the mob ticks read of each mob ahead of the serial pass, on the
-/// tick's workers, from the mob as it stands and the blocks: its snapshot
-/// entry, the nearest player to it (the despawn distance), the fluids at
-/// its box, the block kinds around it and the player it would see when
-/// bound to none. Each is taken only while its inputs are unchanged.
+/// tick's workers, from the mob as it stands and the blocks: where it
+/// stood, the nearest player to it (the despawn distance), the fluids at
+/// its box, the block kinds around it, the blocks its tick reads where it
+/// stands and the player it would see when bound to none. Each is taken
+/// only while its inputs are unchanged. (Its snapshot entry is written
+/// straight into the snapshot.) Kept small: the serial pass reads one
+/// per mob, after other threads wrote them.
 #[derive(Default)]
 struct MobAhead {
-    seen: Option<Seen>,
+    stood: Vec3,
     nearest: Option<Vec3>,
     fluids: Option<([u64; 7], horizon_client::mobs::living::Fluids)>,
     kinds: Option<([u64; 4], u16)>,
     guest: Option<u32>,
     memo: Option<(u64, bool)>,
+    blocks: Option<horizon_client::mobs::BlocksAhead>,
 }
 impl Game<'_> {
     pub(super) fn player_view(&self) -> Option<PlayerView> {
@@ -487,6 +488,7 @@ impl Game<'_> {
             fluids_ahead: None,
             kinds_ahead: None,
             memo_ahead: None,
+            blocks_ahead: None,
             // The first player in the level: a server has no player of its own.
             difficulty: self.local_difficulty(
                 self.first_level_player()
@@ -578,16 +580,30 @@ impl Game<'_> {
         // Read ahead on the pool, from the mobs as they stand before any
         // ticks and the blocks, which hold still until the ticks are over
         // (see `MobAhead`). A mob moved before its own tick asks again then.
-        let mut ahead: Vec<(&Mob, MobAhead)> =
-            self.mobs.iter().map(|m| (m, MobAhead::default())).collect();
+        // The snapshot is filled in place: a placeholder per mob first, as
+        // moving whole entries from elsewhere costs more than writing these.
+        let mut snapshot: Vec<Seen> = match self.mobs.first() {
+            Some(first) => vec![seen(first, uuid); self.mobs.len()],
+            None => Vec::new(),
+        };
+        let mut reads: Vec<MobAhead> = Vec::new();
+        reads.resize_with(self.mobs.len(), MobAhead::default);
         {
+            let mut ahead: Vec<(&Mob, &mut Seen, &mut MobAhead)> = self
+                .mobs
+                .iter()
+                .zip(snapshot.iter_mut())
+                .zip(reads.iter_mut())
+                .map(|((m, entry), read)| (m, entry, read))
+                .collect();
             let reader = self.mob_world_base(&[]);
             let host = reader.player.as_ref();
             let with_guests = !guest_views.is_empty();
             let levels = self.tickets.levels();
             let world = &self.world;
-            horizon_threads::pool::for_each_mut(&mut ahead, 64, |(m, read)| {
-                read.seen = Some(seen(m, uuid));
+            horizon_threads::pool::for_each_mut(&mut ahead, 64, |(m, entry, read)| {
+                **entry = seen(m, uuid);
+                read.stood = m.position;
                 read.nearest = nearest_to(m.position);
                 if with_guests {
                     read.guest = super::lan_mobs::nearest_choice(m.position, host, &guests);
@@ -615,23 +631,15 @@ impl Game<'_> {
                     };
                 read.fluids = Some((fluids_key, fluids));
                 read.kinds = Some((kinds_key, kinds));
+                read.blocks = Some(horizon_client::mobs::BlocksAhead::read(m, world));
             });
         }
         // How many mobs there are and how many tick, now and then, for
         // reading per-mob costs off a benchmark's log.
         if self.world.game_time.rem_euclid(600) == 0 {
-            let ticking = reads_ticking(&ahead);
-            log::info!("mobs: {} loaded, {ticking} ticking", ahead.len());
+            let ticking = reads_ticking(&reads);
+            log::info!("mobs: {} loaded, {ticking} ticking", reads.len());
         }
-        let mut reads = Vec::with_capacity(ahead.len());
-        let mut snapshot: Vec<Seen> = ahead
-            .into_iter()
-            .map(|(m, mut read)| {
-                let entry = read.seen.take().unwrap_or_else(|| seen(m, uuid));
-                reads.push((m.position, read));
-                entry
-            })
-            .collect();
         let mut events = Vec::new();
         let mut mobs = std::mem::take(&mut self.mobs);
         let mut dead = Vec::new();
@@ -688,6 +696,16 @@ impl Game<'_> {
             // No command runs while the mobs tick: the block tags hold still.
             let tags = horizon_client::mobs::keep_tag_answers();
             for i in 0..mobs.len() {
+                // Each tick stalls on its mob's memory: start loading the
+                // next mobs', stage by stage (`Mob::prefetch`).
+                for stage in 0..4u8 {
+                    if let Some(next) = mobs.get(i + 4 - usize::from(stage)) {
+                        next.prefetch(stage);
+                    }
+                }
+                if let Some(read) = reads.get(i + 1) {
+                    horizon_threads::prefetch_all(read);
+                }
                 present.insert(mobs[i].species());
                 let mut w = MobWorld {
                     others: &snapshot,
@@ -703,10 +721,12 @@ impl Game<'_> {
                 w.difficulty = *difficulty
                     .entry(chunk)
                     .or_insert_with(|| self.local_difficulty(at));
-                let (stood, read) = &reads[i];
+                let read = &reads[i];
+                let stood = &read.stood;
                 w.fluids_ahead = read.fluids;
                 w.kinds_ahead = read.kinds;
                 w.memo_ahead = read.memo;
+                w.blocks_ahead = read.blocks;
                 let same = |a: Vec3, b: Vec3| {
                     [a.x, a.y, a.z].map(f64::to_bits) == [b.x, b.y, b.z].map(f64::to_bits)
                 };

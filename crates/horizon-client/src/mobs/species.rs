@@ -1321,8 +1321,20 @@ pub const ALL: &[Def] = &[
         Baby::None
     ),
 ];
+/// Where each species' def is in [`ALL`], by `Species as usize` (`ALL[0]`
+/// for one without a def). `Mob::dims` asks for a baby's every time.
+const SLOTS: [u8; Species::Mannequin as usize + 1] = {
+    let mut slots = [0; Species::Mannequin as usize + 1];
+    let mut i = ALL.len();
+    // From the back, so the first def of a species wins, as a scan finds it.
+    while i > 0 {
+        i -= 1;
+        slots[ALL[i].species as usize] = i as u8;
+    }
+    slots
+};
 pub fn def(s: Species) -> &'static Def {
-    ALL.iter().find(|d| d.species == s).unwrap_or(&ALL[0])
+    &ALL[SLOTS[s as usize] as usize]
 }
 impl Def {
     /// Model layer families to load for this entity (adult, baby, variants).
@@ -1711,4 +1723,17 @@ pub fn body_slot(s: Species) -> bool {
             | Species::SulfurCube
             | Species::Wolf
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn def_finds_each_species_own_def() {
+        for d in ALL {
+            assert_eq!(def(d.species).species, d.species);
+            assert_eq!(def(d.species).name, d.name);
+        }
+    }
 }

@@ -1041,11 +1041,16 @@ impl Mob {
         );
     }
     fn block_friction(&self, w: &MobWorld) -> f32 {
-        // Entity.getBlockPosBelowThatAffectsMyMovement: 0.500001 below.
-        let x = self.position.x.floor() as i32;
-        let z = self.position.z.floor() as i32;
-        let y = (self.position.y - 0.500_001).floor() as i32;
-        w.facts.get(w.world.block(x, y, z)).friction
+        let [x, y, z] = self.block_below_affecting_movement();
+        w.facts.get(w.block_ahead(x, y, z)).friction
+    }
+    /// `Entity.getBlockPosBelowThatAffectsMyMovement`: 0.500001 below.
+    pub(super) fn block_below_affecting_movement(&self) -> [i32; 3] {
+        [
+            self.position.x.floor() as i32,
+            (self.position.y - 0.500_001).floor() as i32,
+            self.position.z.floor() as i32,
+        ]
     }
     /// `getAttributeValue(BOUNCINESS)`.
     fn entity_bounciness(&self) -> f64 {
