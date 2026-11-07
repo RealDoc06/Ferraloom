@@ -724,9 +724,13 @@ impl Game<'_> {
         };
         if self.world.game_time.rem_euclid(600) == 0 && stats.speculated > 0 {
             log::info!(
-                "mobs: {} of {} speculative ticks ran again in turn",
+                "mobs: {} of {} speculative ticks ran again in turn ({} pushed, {} changed, {} read a change, {} drew)",
                 stats.reran,
-                stats.speculated
+                stats.speculated,
+                stats.pushed,
+                stats.touched,
+                stats.read,
+                stats.drew
             );
         }
         drop(base);

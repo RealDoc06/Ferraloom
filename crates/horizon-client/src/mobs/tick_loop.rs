@@ -154,8 +154,14 @@ pub struct MobLoop {
 pub struct Stats {
     /// Mobs that ticked speculatively.
     pub speculated: usize,
-    /// Of those, the ones that ticked again in turn.
+    /// Of those, the ones that ticked again in turn: in all, and because
+    /// another mob pushed them or changed them, they read what changed, or
+    /// they drew from the level random after another did.
     pub reran: usize,
+    pub pushed: usize,
+    pub touched: usize,
+    pub read: usize,
+    pub drew: usize,
 }
 
 /// What a mob's speculative tick, which ticked the mob in place, left.
@@ -197,17 +203,19 @@ struct Tracking {
     dirty: Dirty,
     /// Mobs whose state another mob's tick changed (brain memories).
     touched: Vec<bool>,
-    /// Each speculatively ticked mob as it was before, until its turn.
-    backups: Vec<Option<Mob>>,
-    /// Mobs no longer needed (backups, discarded speculative ticks), dropped
-    /// on the pool after the loop.
-    replaced: Vec<Mob>,
+    /// Each speculatively ticked mob as it was before (boxed: a mob is
+    /// large to move), used until its turn.
+    backups: Vec<Option<Box<Mob>>>,
+    /// Discarded speculative ticks, in the boxes their backups came in.
+    #[allow(clippy::vec_box)]
+    replaced: Vec<Box<Mob>>,
 }
 impl Tracking {
     /// Puts mob `i` back as it was before its speculative tick, if it is not.
     fn restore(&mut self, m: &mut Mob, i: usize) {
-        if let Some(before) = self.backups[i].take() {
-            self.replaced.push(std::mem::replace(m, before));
+        if let Some(mut before) = self.backups[i].take() {
+            std::mem::swap(m, &mut *before);
+            self.replaced.push(before);
         }
     }
 }
@@ -406,7 +414,9 @@ impl MobLoop {
                     from,
                     Some(&self.index),
                     |m, k| {
-                        track.restore(m, k);
+                        if k > i {
+                            track.restore(m, k);
+                        }
                         track.touched[k] = true;
                     },
                 );
@@ -436,12 +446,12 @@ impl MobLoop {
                 .collect()
         };
         let mut specs: Vec<Option<Spec>> = (0..n).map(|_| None).collect();
-        let mut backups: Vec<Option<Mob>> = (0..n).map(|_| None).collect();
+        let mut backups: Vec<Option<Box<Mob>>> = (0..n).map(|_| None).collect();
         {
             let _span = crate::spans::scope("creature_spec");
             let (snapshot, grid, index, bindings) =
                 (&self.snapshot, &self.grid, &self.index, &self.bindings);
-            let mut items: Vec<(usize, &mut Mob, &mut Option<Mob>, &mut Option<Spec>)> = self
+            let mut items: Vec<(usize, &mut Mob, &mut Option<Box<Mob>>, &mut Option<Spec>)> = self
                 .mobs
                 .iter_mut()
                 .zip(backups.iter_mut())
@@ -491,20 +501,26 @@ impl MobLoop {
                 continue;
             };
             stats.speculated += 1;
-            let holds = !track.touched[i]
-                && !self.pushes.has(self.mobs[i].id)
-                && spec.reads.hold(&self.grid, &track.dirty, grid_before)
-                && (spec.random.is_none() || same_random(&self.random, &start));
-            if !holds {
+            let why = if track.touched[i] {
+                Some(&mut stats.touched)
+            } else if self.pushes.has(self.mobs[i].id) {
+                Some(&mut stats.pushed)
+            } else if !spec.reads.hold(&self.grid, &track.dirty, grid_before) {
+                Some(&mut stats.read)
+            } else if spec.random.is_some() && !same_random(&self.random, &start) {
+                Some(&mut stats.drew)
+            } else {
+                None
+            };
+            if let Some(count) = why {
+                *count += 1;
                 stats.reran += 1;
                 track.restore(&mut self.mobs[i], i);
                 self.step(cx, i, Some(&mut track));
                 continue;
             }
-            // The serial turn, from the speculative tick's results.
-            if let Some(before) = track.backups[i].take() {
-                track.replaced.push(before);
-            }
+            // The serial turn, from the speculative tick's results (its
+            // backup stays, unused, until the end).
             self.present.insert(self.mobs[i].species());
             if cx.guests.is_some() {
                 let id = self.mobs[i].id;
@@ -522,8 +538,7 @@ impl MobLoop {
             self.finish(cx, i, from, spec.kept, spec.guest, seen, Some(&mut track));
         }
         drop(specs);
-        let mut replaced: Vec<Option<Mob>> = track.replaced.into_iter().map(Some).collect();
-        horizon_threads::pool::for_each_mut(&mut replaced, 64, |m| *m = None);
+        horizon_threads::pool::for_each_mut(&mut track.backups, 64, |m| *m = None);
         stats
     }
 
@@ -595,7 +610,7 @@ fn speculate(
     cx: &LoopCx,
     w: &mut MobWorld,
     m: &mut Mob,
-    backup: &mut Option<Mob>,
+    backup: &mut Option<Box<Mob>>,
     before: &Seen,
     read: &MobAhead,
     bindings: &FxHashMap<u32, u32>,
@@ -616,14 +631,14 @@ fn speculate(
         };
         conn
     });
-    *backup = Some(m.clone());
+    *backup = Some(Box::new(m.clone()));
     let mut random = start.clone();
     let mut events = Vec::new();
     let ticked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         record(|| m.tick(w, &mut random, &mut events))
     }));
     let Ok((kept, reads)) = ticked else {
-        *m = backup.take()?;
+        *m = *backup.take()?;
         return None;
     };
     m.ai.move_memo.keep_reads(read.fluids, read.kinds);
