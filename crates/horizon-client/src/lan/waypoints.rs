@@ -136,6 +136,33 @@ struct Memo {
     team: Option<(String, Option<i32>)>,
 }
 
+/// Ordered connections retain disconnect packet order; the index serves updates.
+#[derive(Default)]
+struct Connections {
+    ordered: Vec<(u128, Connection)>,
+    index: HashMap<u128, usize>,
+}
+
+impl Connections {
+    fn put(&mut self, source: u128, connection: Connection) {
+        if let Some(&i) = self.index.get(&source) {
+            self.ordered[i].1 = connection;
+        } else {
+            self.index.insert(source, self.ordered.len());
+            self.ordered.push((source, connection));
+        }
+    }
+
+    fn remove(&mut self, source: u128) -> Option<Connection> {
+        let i = self.index.remove(&source)?;
+        let (_, connection) = self.ordered.remove(i);
+        for (offset, (id, _)) in self.ordered[i..].iter().enumerate() {
+            *self.index.get_mut(id).unwrap() = i + offset;
+        }
+        Some(connection)
+    }
+}
+
 /// ServerWaypointManager for one level.
 #[derive(Default)]
 pub struct Waypoints {
@@ -144,7 +171,7 @@ pub struct Waypoints {
     /// The receivers, in the order they joined.
     players: Vec<u128>,
     /// Connections by receiver, then source.
-    connections: HashMap<u128, Vec<(u128, Connection)>>,
+    connections: HashMap<u128, Connections>,
     memo: HashMap<u128, Memo>,
     /// The `locator_bar` game rule as last seen.
     enabled: Option<bool>,
@@ -327,16 +354,10 @@ fn waypoint(source: u128, operation: i32, icon: &Icon, target: WaypointTarget) -
 
 impl Waypoints {
     fn put(&mut self, receiver: u128, source: u128, c: Connection) {
-        let row = self.connections.entry(receiver).or_default();
-        match row.iter_mut().find(|(s, _)| *s == source) {
-            Some(slot) => slot.1 = c,
-            None => row.push((source, c)),
-        }
+        self.connections.entry(receiver).or_default().put(source, c);
     }
     fn take(&mut self, receiver: u128, source: u128) -> Option<Connection> {
-        let row = self.connections.get_mut(&receiver)?;
-        let i = row.iter().position(|(s, _)| *s == source)?;
-        Some(row.remove(i).1)
+        self.connections.get_mut(&receiver)?.remove(source)
     }
 
     /// `createConnection`.
@@ -365,10 +386,10 @@ impl Waypoints {
         let Some(row) = self.connections.get_mut(&receiver) else {
             return self.create_connection(t, receiver, source);
         };
-        let Some(i) = row.iter().position(|(s, _)| *s == source) else {
+        let Some(i) = row.index.get(&source).copied() else {
             return self.create_connection(t, receiver, source);
         };
-        let c = &mut row[i].1;
+        let c = &mut row.ordered[i].1;
         // A connection to a player who isn't in the level is broken.
         let pair = t.pair(source, receiver);
         if let Some(pair) = pair
@@ -384,7 +405,7 @@ impl Waypoints {
             }
             None => {
                 t.disconnect(receiver, source);
-                row.remove(i);
+                row.remove(source);
             }
         }
     }
@@ -437,7 +458,7 @@ impl Waypoints {
     }
     /// `removePlayer`.
     fn remove_player(&mut self, t: &mut Tick, player: u128) {
-        for (source, _) in self.connections.remove(&player).unwrap_or_default() {
+        for (source, _) in self.connections.remove(&player).unwrap_or_default().ordered {
             t.disconnect(player, source);
         }
         self.untrack(t, player);
@@ -446,7 +467,12 @@ impl Waypoints {
     /// `breakAllConnections`.
     fn break_all(&mut self, t: &mut Tick) {
         for receiver in self.players.clone() {
-            for (source, _) in self.connections.remove(&receiver).unwrap_or_default() {
+            for (source, _) in self
+                .connections
+                .remove(&receiver)
+                .unwrap_or_default()
+                .ordered
+            {
                 t.disconnect(receiver, source);
             }
         }
@@ -581,6 +607,34 @@ impl Waypoints {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn connection_index_preserves_order_after_remove_and_replace() {
+        let mut row = Connections::default();
+        let connection = |x| Connection {
+            kind: Kind::Block([x, 0, 0]),
+            icon: Icon::default(),
+        };
+        for id in 0..4 {
+            row.put(id, connection(id as i32));
+        }
+        row.remove(1).unwrap();
+        row.put(2, connection(20));
+        row.put(1, connection(10));
+        assert_eq!(
+            row.ordered.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
+            [0, 2, 3, 1]
+        );
+        for (i, (id, _)) in row.ordered.iter().enumerate() {
+            assert_eq!(row.index[id], i);
+        }
+        assert_eq!(row.remove(2).unwrap().kind, Kind::Block([20, 0, 0]));
+        for id in [0, 3, 1] {
+            assert!(row.remove(id).is_some());
+        }
+        assert!(row.index.is_empty());
+        assert!(row.remove(2).is_none());
+    }
 
     fn player(uuid: u128, conn: u32, position: [f64; 3]) -> Player {
         Player {

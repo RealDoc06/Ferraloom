@@ -8,6 +8,7 @@ rust-version = "1.90"
 description = "Horizon native development client"
 
 [dependencies]
+pprof = { version = "0.15", optional = true, features = ["flamegraph"] }
 ferraloom-core = { path = "../ferraloom-core" }
 horizon-assets = { path = "../horizon-assets" }
 horizon-client-core = { path = "../horizon-client-core" }
@@ -68,7 +69,7 @@ unicode-bidi = "0.3.18"
 
 [target.'cfg(unix)'.dependencies]
 # The server thread's CPU time per tick (`HORIZON_SPIKES`, spans.rs).
-rustix = { version = "1", default-features = false, features = ["std", "time"] }
+rustix = { version = "1", default-features = false, features = ["std", "time", "thread"] }
 
 [target.'cfg(windows)'.dependencies]
 # DirectX 12, where Vulkan has no adapter or device, or by choice (`graphicsApi`, graphics.rs).
@@ -86,6 +87,7 @@ wgpu = { version = "30.0.1", default-features = false, features = ["gles"] }
 winresource = "0.1"
 
 [features]
+profiler = ["dep:pprof"]
 default = ["audio", "controllers"]
 # Sound output. Without it (and `controllers`) the program links neither libasound nor libudev on
 # Linux: the server build (`--no-default-features`, released as horizon-engine; docs/server.md).

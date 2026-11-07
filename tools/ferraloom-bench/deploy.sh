@@ -6,12 +6,14 @@ set -e
 host=${FERRALOOM_BENCH_HOST:-doc@10.10.10.101}
 bench=${FERRALOOM_BENCH_ROOT:-horizon-bench}
 sha=$1
+profile=${FERRALOOM_BUILD_PROFILE:-release}
+case "$profile" in ''|*[!a-zA-Z0-9_-]*) echo "invalid build profile" >&2; exit 2;; esac
 case "$sha" in ''|*[!0-9a-f]*) echo "expected a commit SHA" >&2; exit 2;; esac
 case "$bench" in ''|*[!a-zA-Z0-9_./-]*) echo "invalid bench directory" >&2; exit 2;; esac
 tmp=/tmp/horizon-eval/builds/$sha
 rm -rf "$tmp" && mkdir -p "$tmp/lib"
-scp -q ferraloom-builder:/home/doc/code/Ferraloom/target/release/horizon-client "$tmp/horizon-client.bin"
-scp -q ferraloom-builder:/home/doc/code/Ferraloom/target/release/horizon-server "$tmp/horizon-server.bin"
+scp -q ferraloom-builder:/home/doc/code/Ferraloom/target/$profile/horizon-client "$tmp/horizon-client.bin"
+scp -q ferraloom-builder:/home/doc/code/Ferraloom/target/$profile/horizon-server "$tmp/horizon-server.bin"
 scp -q ferraloom-builder:/lib/x86_64-linux-gnu/libc.so.6 ferraloom-builder:/lib/x86_64-linux-gnu/libm.so.6 \
   ferraloom-builder:/lib/x86_64-linux-gnu/libgcc_s.so.1 "$tmp/lib/"
 scp -q ferraloom-builder:/lib64/ld-linux-x86-64.so.2 "$tmp/"

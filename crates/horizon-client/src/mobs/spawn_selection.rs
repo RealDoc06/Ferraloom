@@ -734,10 +734,10 @@ pub fn mobs_at<L: NaturalLevel>(
         (monster && id == "minecraft:fortress") || overrides.get(id, category.name()).is_some()
     });
     if category == Category::Monster
-        && name_at(l, x, y - 1, z) == "minecraft:nether_bricks"
         && structures
             .iter()
             .any(|s| s.id == "minecraft:fortress" && s.in_bounds)
+        && name_at(l, x, y - 1, z) == "minecraft:nether_bricks"
     {
         return fortress_enemies();
     }
@@ -1023,7 +1023,7 @@ pub fn spawn_for_chunk<L: NaturalLevel, R: RandomSource>(
     categories: &[Category],
     chunk: (i32, i32),
     spawn: &mut dyn FnMut(&L, &SpawnRequest) -> Option<Spawned>,
-    trace: &mut dyn FnMut(Event),
+    trace: &mut (impl FnMut(Event) + ?Sized),
 ) {
     for &category in categories {
         let local = state.can_spawn_local(category, chunk.0, chunk.1);
@@ -1042,7 +1042,7 @@ pub fn spawn_category_for_chunk<L: NaturalLevel, R: RandomSource>(
     category: Category,
     chunk: (i32, i32),
     spawn: &mut dyn FnMut(&L, &SpawnRequest) -> Option<Spawned>,
-    trace: &mut dyn FnMut(Event),
+    trace: &mut (impl FnMut(Event) + ?Sized),
 ) {
     let x = chunk.0 * 16 + random.next_int_bound(16).unwrap_or(0);
     let z = chunk.1 * 16 + random.next_int_bound(16).unwrap_or(0);
@@ -1065,7 +1065,7 @@ pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
     chunk: (i32, i32),
     start: [i32; 3],
     spawn: &mut dyn FnMut(&L, &SpawnRequest) -> Option<Spawned>,
-    trace: &mut dyn FnMut(Event),
+    trace: &mut (impl FnMut(Event) + ?Sized),
 ) {
     let [x0, y, z0] = start;
     if l.mob_data().state(l.state(x0, y, z0)).flags & super::data::REDSTONE_CONDUCTOR != 0 {
@@ -1420,4 +1420,39 @@ fn top_non_colliding<L: NaturalLevel>(l: &L, entity: &str, x: i32, z: i32) -> [i
         y -= 1;
     }
     [x, y, z]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Event;
+
+    #[test]
+    #[ignore = "focused release trace micro-benchmark; run with --release --ignored --nocapture"]
+    fn bench_spawn_trace() {
+        use std::{hint::black_box, time::Instant};
+        // Model the event construction at a successful type check. The old
+        // callback's vtable hides the game's no-op sink from this function.
+        #[inline(never)]
+        fn dynamic(trace: &mut dyn FnMut(Event), entity: &str) {
+            trace(Event::Test(entity.to_owned(), [0, 64, 0], true));
+        }
+        fn specialized(trace: &mut impl FnMut(Event), entity: &str) {
+            trace(Event::Test(entity.to_owned(), [0, 64, 0], true));
+        }
+        for _ in 0..3 {
+            for optimized in [false, true] {
+                let started = Instant::now();
+                let mut trace = |_| {};
+                for _ in 0..2_000_000 {
+                    let entity = black_box("minecraft:zombie");
+                    if optimized {
+                        specialized(&mut trace, entity);
+                    } else {
+                        dynamic(black_box(&mut trace as &mut dyn FnMut(Event)), entity);
+                    }
+                }
+                eprintln!("optimized={optimized}: {:?}", started.elapsed());
+            }
+        }
+    }
 }

@@ -211,6 +211,8 @@ pub struct Hub {
     entities: std::collections::HashMap<String, Entities>,
     /// What one tick of entity tracking sends each guest, kept between ticks.
     entity_out: Vec<Vec<Vec<u8>>>,
+    /// Player snapshots reused after each tracking tick.
+    entity_players: Vec<EntityState>,
     /// Server mods' commands, a root in the commands report's format, sent
     /// after vanilla's; the key the game last set them for.
     mod_commands: (serde_json::Value, Option<u64>),
@@ -382,6 +384,7 @@ impl Hub {
             entity_types: Default::default(),
             entities: Default::default(),
             entity_out: Vec::new(),
+            entity_players: Vec::new(),
             mod_commands: (serde_json::Value::Null, None),
             teams: Vec::new(),
         }
@@ -1748,8 +1751,8 @@ impl Hub {
 
     /// All entities as one client sees them: the world's, the host, the other guests.
     fn track_entities(&mut self, ctx: &mut TickCtx) {
-        let mut all: Vec<EntityState> =
-            Vec::with_capacity(ctx.entities.len() + self.guests.len() + 1);
+        let mut all = std::mem::take(&mut self.entity_players);
+        all.clear();
         if let Some(h) = ctx.host {
             let equipment = {
                 let e = &h.equipment;
@@ -1772,23 +1775,22 @@ impl Hub {
                 &[],
             ));
         }
-        let placed: Vec<usize> = (0..self.guests.len())
-            .filter(|&i| self.here(&self.guests[i]))
-            .collect();
-        let guest_states: Vec<_> = placed
-            .into_iter()
-            .map(|i| {
-                let (main, off, armor) = {
-                    let g = &self.guests[i];
-                    (
-                        g.inventory.get(g.selected).cloned().flatten(),
-                        g.offhand.clone(),
-                        g.armor.clone(),
-                    )
-                };
-                let equipment =
-                    self.equipment_of(&main, &off, [&armor[0], &armor[1], &armor[2], &armor[3]]);
+        for i in 0..self.guests.len() {
+            if !self.here(&self.guests[i]) {
+                continue;
+            }
+            let (main, off, armor) = {
                 let g = &self.guests[i];
+                (
+                    g.inventory.get(g.selected).cloned().flatten(),
+                    g.offhand.clone(),
+                    g.armor.clone(),
+                )
+            };
+            let equipment =
+                self.equipment_of(&main, &off, [&armor[0], &armor[1], &armor[2], &armor[3]]);
+            let g = &self.guests[i];
+            all.push(
                 self.player_state(
                     g.entity_id,
                     g.uuid,
@@ -1807,10 +1809,9 @@ impl Hub {
                         .map(|m| super::attributes::syncable(&m.attributes))
                         .unwrap_or_default(),
                     &g.effects.list,
-                )
-            })
-            .collect();
-        all.extend(guest_states);
+                ),
+            );
+        }
         let entities: Vec<&EntityState> = all.iter().chain(ctx.entities).collect();
         // ChunkMap.tick: the level's entities, once for all its players.
         let mut level = self
@@ -1846,6 +1847,8 @@ impl Hub {
             g.sender.send_many(out.drain(..));
         }
         self.entity_out = outs;
+        all.clear();
+        self.entity_players = all;
         self.entities.insert(self.config.dimension.clone(), level);
     }
 

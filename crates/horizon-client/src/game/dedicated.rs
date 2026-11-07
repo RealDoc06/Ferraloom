@@ -443,6 +443,9 @@ impl Game<'_> {
     pub(super) fn run_dedicated(&mut self) -> Result<()> {
         // This thread ticks the server (MinecraftServer.spin's priority).
         horizon_threads::favour_current();
+        // Optional in-process CPU sampling of the dedicated server.
+        #[cfg(all(feature = "profiler", target_os = "linux"))]
+        horizon_client::profiler::start();
         self.join_world_rest()?;
         let Setup {
             props,

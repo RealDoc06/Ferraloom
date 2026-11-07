@@ -675,6 +675,7 @@ impl Snapshot {
             }
         }
         Ok(Behaviours {
+            hot_flags: Vec::new(),
             table,
             props,
             named,
@@ -690,7 +691,8 @@ impl Snapshot {
             dynamic,
             occlusion_cache: Default::default(),
             growth: Default::default(),
-        })
+        }
+        .with_hot_flags())
     }
 }
 
