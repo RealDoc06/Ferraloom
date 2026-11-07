@@ -150,6 +150,19 @@ impl<'a> From<&'a Chunk> for Column<'a> {
     }
 }
 
+/// A column `later_bodies` makes a body of: its neighbours' places in the
+/// shared list, in `AROUND`'s order, and the body once made.
+struct Piece<'a> {
+    column: &'a Chunk,
+    around: [usize; 9],
+    body: Option<Arc<super::conn::LaterBody>>,
+}
+/// `AROUND`'s index of the column itself.
+const OWN: usize = 4;
+/// Neighbours and bodies per piece of `later_bodies`' passes on the pool.
+const NEAR_GRAIN: usize = 32;
+const BODY_GRAIN: usize = 8;
+
 /// A neighbouring column's sections when a later body was asked for, and
 /// their non-air bits once one of the bodies has looked.
 struct NearColumn {
@@ -612,58 +625,80 @@ impl ChunkEncoder {
         world: &crate::world::World,
     ) -> Vec<Arc<super::conn::LaterBody>> {
         let encoder = Arc::new(self.clone());
-        // Neighbours are often shared: each column's sections are looked at once.
-        let mut near: FxHashMap<(i32, i32), Option<Arc<NearColumn>>> = FxHashMap::default();
-        columns
+        // Neighbours are often shared: each column's sections are looked at
+        // once. The columns' neighbourhoods are numbered here, then each
+        // neighbour and each body is put together on the pool's threads.
+        let mut index: FxHashMap<(i32, i32), usize> = FxHashMap::default();
+        let mut near: Vec<((i32, i32), Option<Arc<NearColumn>>)> = Vec::new();
+        let mut pieces: Vec<Piece> = columns
             .iter()
             .map(|&c| {
-                let mut at = |key: (i32, i32)| {
-                    near.entry(key)
-                        .or_insert_with(|| {
-                            Some(Arc::new(NearColumn {
-                                sections: world.chunks.get(&key)?.sections.clone(),
-                                occupied: Default::default(),
-                            }))
-                        })
-                        .clone()
-                };
-                let around: Vec<_> = AROUND
-                    .iter()
-                    .filter_map(|(dx, dz)| at((c.x + dx, c.z + dz)))
-                    .collect();
-                let (x, z) = (c.x, c.z);
-                // The column is its own (0, 0) neighbour, from the level as
-                // the columns are: its sections are held there once.
-                let own = at((x, z))
-                    .filter(|n| {
-                        n.sections
-                            .iter()
-                            .zip(&c.sections)
-                            .all(|(a, b)| Arc::ptr_eq(a, b))
+                let around = AROUND.map(|(dx, dz)| {
+                    let key = (c.x + dx, c.z + dz);
+                    *index.entry(key).or_insert_with(|| {
+                        near.push((key, None));
+                        near.len() - 1
                     })
-                    .unwrap_or_else(|| {
-                        Arc::new(NearColumn {
-                            sections: c.sections.clone(),
-                            occupied: Default::default(),
-                        })
-                    });
-                let order = Column::from(c).order.to_vec();
-                let tags = self.column_tags(c, &world.block_entities);
-                let encoder = encoder.clone();
-                Arc::new(super::conn::LaterBody::new(Box::new(move || {
-                    let around = around.iter().fold(0, |bits, n| {
-                        bits | *n.occupied.get_or_init(|| encoder.occupied(&n.sections))
-                    });
-                    let column = Column {
-                        x,
-                        z,
-                        sections: &own.sections,
-                        order: &order,
-                    };
-                    let tag = |pos: &_| tags.iter().find(|t| t.0 == *pos).map(|t| t.1.clone());
-                    encoder.body(column, tag, around)
-                })))
+                });
+                Piece {
+                    column: c,
+                    around,
+                    body: None,
+                }
             })
+            .collect();
+        horizon_threads::pool::for_each_mut(&mut near, NEAR_GRAIN, |(key, column)| {
+            *column = world.chunks.get(key).map(|c| {
+                Arc::new(NearColumn {
+                    sections: c.sections.clone(),
+                    occupied: Default::default(),
+                })
+            });
+        });
+        let near = &near;
+        horizon_threads::pool::for_each_mut(&mut pieces, BODY_GRAIN, |piece| {
+            let c = piece.column;
+            let around: Vec<Arc<NearColumn>> = (piece.around.iter())
+                .filter_map(|&i| near[i].1.clone())
+                .collect();
+            let (x, z) = (c.x, c.z);
+            // The column is its own (0, 0) neighbour, from the level as
+            // the columns are: its sections are held there once.
+            let own = near[piece.around[OWN]]
+                .1
+                .clone()
+                .filter(|n| {
+                    n.sections
+                        .iter()
+                        .zip(&c.sections)
+                        .all(|(a, b)| Arc::ptr_eq(a, b))
+                })
+                .unwrap_or_else(|| {
+                    Arc::new(NearColumn {
+                        sections: c.sections.clone(),
+                        occupied: Default::default(),
+                    })
+                });
+            let order = Column::from(c).order.to_vec();
+            let tags = encoder.column_tags(c, &world.block_entities);
+            let encoder = encoder.clone();
+            piece.body = Some(Arc::new(super::conn::LaterBody::new(Box::new(move || {
+                let around = around.iter().fold(0, |bits, n| {
+                    bits | *n.occupied.get_or_init(|| encoder.occupied(&n.sections))
+                });
+                let column = Column {
+                    x,
+                    z,
+                    sections: &own.sections,
+                    order: &order,
+                };
+                let tag = |pos: &_| tags.iter().find(|t| t.0 == *pos).map(|t| t.1.clone());
+                encoder.body(column, tag, around)
+            }))));
+        });
+        pieces
+            .into_iter()
+            .map(|p| p.body.expect("every piece is made"))
             .collect()
     }
 
