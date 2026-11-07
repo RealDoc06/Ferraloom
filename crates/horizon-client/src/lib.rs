@@ -21,6 +21,7 @@ pub mod block_entities;
 pub mod block_entity_anim;
 pub mod block_entity_item;
 pub mod block_entity_render;
+pub mod block_kinds;
 pub mod block_transform;
 pub mod border_render;
 pub mod boss_overlay;
@@ -37,6 +38,7 @@ pub mod collisions;
 pub mod command_block;
 pub mod command_storage;
 pub mod confirm_screen;
+pub mod contact_sections;
 pub mod container_screen;
 pub mod containers;
 pub mod control;
@@ -212,3 +214,6 @@ pub use horizon_items::enchant;
 pub use horizon_items::item_data;
 pub use horizon_items::items;
 pub use horizon_items::random_sequences;
+
+#[cfg(all(feature = "profiler", target_os = "linux"))]
+pub mod profiler;

@@ -91,10 +91,28 @@ impl PackedStorage {
     /// Reads `index` without a bounds check. Callers use this once they hold a
     /// slice length or a section index they have already validated.
     /// `index` must be less than `len`.
+    #[inline]
     pub fn read(&self, index: usize) -> u32 {
         debug_assert!(index < self.len);
-        let word = index / self.per_word;
-        let shift = (index % self.per_word) * usize::from(self.bits);
+        // Each possible divisor is constant in its arm, avoiding hardware div.
+        let word = match self.per_word {
+            2 => index / 2,
+            3 => index / 3,
+            4 => index / 4,
+            5 => index / 5,
+            6 => index / 6,
+            7 => index / 7,
+            8 => index / 8,
+            9 => index / 9,
+            10 => index / 10,
+            12 => index / 12,
+            16 => index / 16,
+            21 => index / 21,
+            32 => index / 32,
+            64 => index / 64,
+            _ => unreachable!("validated bits"),
+        };
+        let shift = (index - word * self.per_word) * usize::from(self.bits);
         ((self.words[word] >> shift) & self.mask) as u32
     }
 
@@ -152,6 +170,64 @@ impl PackedStorage {
 mod tests {
     use super::*;
 
+    #[test]
+    #[ignore = "release read microbenchmark"]
+    fn benchmark_storage_reads() {
+        use std::{hint::black_box, time::Instant};
+        for bits in [4, 5, 6, 7, 8, 16] {
+            let s = PackedStorage::from_words(
+                bits,
+                4096,
+                vec![0x123456789abcdef0; 4096usize.div_ceil(64 / usize::from(bits))],
+            )
+            .unwrap();
+            let mut times = [Vec::new(), Vec::new()];
+            for round in 0..11 {
+                for new in [round % 2 == 0, round % 2 != 0] {
+                    let start = Instant::now();
+                    for j in 0..500_000usize {
+                        let s = black_box(&s);
+                        let i = black_box(j.wrapping_mul(31337) & 4095);
+                        black_box(if new {
+                            s.read(i)
+                        } else {
+                            ((s.words[i / s.per_word] >> ((i % s.per_word) * usize::from(s.bits)))
+                                & s.mask) as u32
+                        });
+                    }
+                    if round > 0 {
+                        times[usize::from(new)]
+                            .push(start.elapsed().as_secs_f64() * 1e9 / 500_000.0);
+                    }
+                }
+            }
+            for t in &mut times {
+                t.sort_by(f64::total_cmp);
+            }
+            println!(
+                "storage bits={bits}: old {:.3} new {:.3} ns/op",
+                times[0][5], times[1][5]
+            );
+        }
+    }
+    #[test]
+    fn reads_match_division_at_every_width() {
+        for bits in 1..=32 {
+            for len in [1usize, 63, 64, 65, 4096, 8193] {
+                let per = 64 / usize::from(bits);
+                let words = (0..len.div_ceil(per))
+                    .map(|i| (i as u64).wrapping_mul(0x9e3779b97f4a7c15))
+                    .collect();
+                let s = PackedStorage::from_words(bits, len, words).unwrap();
+                for i in 0..len {
+                    let old =
+                        ((s.words[i / per] >> ((i % per) * usize::from(bits))) & s.mask) as u32;
+                    assert_eq!(s.read(i), old);
+                    assert_eq!(s.get(i), Ok(old));
+                }
+            }
+        }
+    }
     #[test]
     fn padded_words_never_split_entries() {
         let mut storage = PackedStorage::new(5, 13).unwrap();

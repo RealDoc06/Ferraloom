@@ -8,6 +8,7 @@ rust-version = "1.90"
 description = "Horizon native development client"
 
 [dependencies]
+pprof = { version = "0.15", optional = true, features = ["flamegraph"] }
 ferraloom-core = { path = "../ferraloom-core" }
 horizon-assets = { path = "../horizon-assets" }
 horizon-client-core = { path = "../horizon-client-core" }
@@ -67,8 +68,9 @@ ureq = { version = "2", default-features = false, features = ["tls"] }
 unicode-bidi = "0.3.18"
 
 [target.'cfg(unix)'.dependencies]
-# The server thread's CPU time per tick (`HORIZON_SPIKES`, spans.rs).
-rustix = { version = "1", default-features = false, features = ["std", "time"] }
+# The server thread's CPU time per tick (`HORIZON_SPIKES`, spans.rs) and
+# the profiler's open-file limit (profiler.rs).
+rustix = { version = "1", default-features = false, features = ["std", "time", "thread", "process"] }
 
 [target.'cfg(windows)'.dependencies]
 # DirectX 12, where Vulkan has no adapter or device, or by choice (`graphicsApi`, graphics.rs).
@@ -86,6 +88,7 @@ wgpu = { version = "30.0.1", default-features = false, features = ["gles"] }
 winresource = "0.1"
 
 [features]
+profiler = ["dep:pprof"]
 default = ["audio", "controllers"]
 # Sound output. Without it (and `controllers`) the program links neither libasound nor libudev on
 # Linux: the server build (`--no-default-features`, released as horizon-engine; docs/server.md).
@@ -105,6 +108,11 @@ path = "examples/probe/main.rs"
 
 [lints]
 workspace = true
+
+# The global allocator on Linux servers: glibc malloc took ~6% of the tick thread at 500 players, and
+# jemalloc cut the mean tick ~5 ms there for ~0.3 GB more RSS (bench 2026-11-06). Not built for MSVC.
+[target.'cfg(target_os = "linux")'.dependencies]
+tikv-jemallocator = "0.6"
 
 [dev-dependencies]
 horizon-items = { path = "../horizon-items", features = ["test-support"] }

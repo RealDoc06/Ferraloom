@@ -45,7 +45,7 @@ pub fn register(m: &mut Mob) {
             t.add(
                 5,
                 NearestTarget::new(
-                    super::goals::Prey::Filter(|s| s.species == Species::Turtle && s.baby),
+                    super::goals::Prey::SpeciesWhere(&[Species::Turtle], |s| s.baby),
                     true,
                 )
                 .interval(10),
@@ -107,7 +107,7 @@ pub fn register(m: &mut Mob) {
             t.add(
                 5,
                 NearestTarget::new(
-                    super::goals::Prey::Filter(|s| s.species == Species::Turtle && s.baby),
+                    super::goals::Prey::SpeciesWhere(&[Species::Turtle], |s| s.baby),
                     true,
                 )
                 .interval(10),
@@ -137,7 +137,7 @@ pub fn register(m: &mut Mob) {
             t.add(
                 3,
                 NearestTarget::new(
-                    super::goals::Prey::Filter(|s| s.species == Species::Turtle && s.baby),
+                    super::goals::Prey::SpeciesWhere(&[Species::Turtle], |s| s.baby),
                     true,
                 )
                 .interval(10),
@@ -972,7 +972,9 @@ impl Goal for AttackTurtleEgg {
             self.base.next_start -= 1;
             return false;
         }
-        if self.base.find_nearest(m, cx.w, turtle_egg_target) {
+        let kinds = crate::block_kinds::BlockKinds::of(cx.w.registry);
+        let egg = |s| kinds.is(s, crate::block_kinds::TURTLE_EGG);
+        if self.base.find_nearest_of(m, cx.w, egg, turtle_egg_target) {
             self.base.next_start = super::goals::reduced(20);
             return true;
         }

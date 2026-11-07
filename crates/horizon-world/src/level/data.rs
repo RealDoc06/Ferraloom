@@ -428,6 +428,7 @@ tags! {
     washed_away_by_fluids = "washed_away_by_fluids",
     blocks_fluid_flow = "blocks_fluid_flow",
     blocks_motion = "blocks_motion",
+    blocks_motion_in_heightmap = "blocks_motion_in_heightmap",
     unstable_bottom_center = "unstable_bottom_center",
     cannot_support_snow_layer = "cannot_support_snow_layer",
     support_override_snow_layer = "support_override_snow_layer",
@@ -1100,6 +1101,7 @@ fn build_with_gameplay<G: GameplayStateSource>(
         }
     }
     Ok(Behaviours {
+        hot_flags: Vec::new(),
         table,
         props,
         named,
@@ -1115,7 +1117,8 @@ fn build_with_gameplay<G: GameplayStateSource>(
         dynamic,
         occlusion_cache: Default::default(),
         growth: Default::default(),
-    })
+    }
+    .with_hot_flags())
 }
 
 /// `NoteBlockInstrument` serialized names in declaration order.

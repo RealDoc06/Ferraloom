@@ -1268,7 +1268,10 @@ impl MotionWorld<'_, '_, '_> {
                 }
             }
         }
-        let mut visited = std::collections::HashSet::new();
+        if self.only_air_along(&movements) {
+            return Ok(());
+        }
+        let mut visited = crate::fast_hash::FxHashSet::default();
         let mut entered = Vec::new();
         for movement in &movements {
             let mut from = movement.from;
@@ -1349,13 +1352,49 @@ impl MotionWorld<'_, '_, '_> {
         }
         Ok(())
     }
+    /// Whether every block the moves' sweeps can reach is air, which
+    /// `check_inside_blocks` passes over: then they do nothing, and a body
+    /// in the open (a flyer above the ground) skips them. The blocks are
+    /// those of the boxes at each move's ends, one more all round, and a
+    /// region too big for that or not finite goes the long way, which also
+    /// reports its errors.
+    fn only_air_along(&self, movements: &[horizon_world::entity_move::MovementRecord]) -> bool {
+        let Some(bounds) = movements
+            .iter()
+            .flat_map(|m| [m.from, m.to])
+            .map(|p| self.player.dimensions.bounds(p))
+            .reduce(Aabb::union_bounds)
+        else {
+            return false;
+        };
+        let (lo, hi) = (bounds.min_position(), bounds.max_position());
+        let within = |v: Vec3| [v.x, v.y, v.z].iter().all(|c| c.abs() < 3.0e7);
+        if !within(lo) || !within(hi) {
+            return false;
+        }
+        let corner = |v: Vec3, by: i32| [v.x, v.y, v.z].map(|c| c.floor() as i32 + by);
+        let (lo, hi) = (corner(lo, -1), corner(hi, 1));
+        let blocks: i64 = (0..3).map(|k| i64::from(hi[k] - lo[k] + 1)).product();
+        if blocks > 512 {
+            return false;
+        }
+        let registry = &self.assets.registry;
+        !self.scene.may_hold(lo, hi, |state| {
+            registry.state(state).is_some_and(|d| {
+                !matches!(
+                    d.name.as_str(),
+                    "minecraft:air" | "minecraft:cave_air" | "minecraft:void_air"
+                )
+            })
+        })
+    }
     /// `Entity.checkInsideBlocks(from, to, ...)`: the blocks the box at `to`
     /// sweeps through from `from`; returns the iterations used plus one.
     fn check_inside_blocks(
         &mut self,
         from: Vec3,
         to: Vec3,
-        visited: &mut std::collections::HashSet<i64>,
+        visited: &mut crate::fast_hash::FxHashSet<i64>,
         entered: &mut Vec<(i32, BlockPos)>,
         max_iterations: i32,
         damage_only: bool,
@@ -1980,6 +2019,18 @@ impl EntityMoveWorld for MotionWorld<'_, '_, '_> {
     }
     fn collide(&mut self, movement: Vec3) -> Result<Vec3> {
         let max_step = self.player.attribute("minecraft:step_height")? as f32;
+        // Nothing to collide with in the open: no entities, no border near
+        // and only air around the box the first query asks for. With no
+        // colliders the move is the movement, and no step is tried.
+        let query = self.player.bounds().expand_towards(movement);
+        let at = self.player.position;
+        if self.entities.is_empty()
+            && (self.player.border.as_ref())
+                .is_none_or(|b| !b.is_inside_close_to_border(at.x, at.z, query))
+            && self.scene.only_air_near(query)
+        {
+            return Ok(movement);
+        }
         Ok(world_movement::resolve_world_movement(
             &mut self.movement_collisions(),
             MovementRequest {
@@ -2842,6 +2893,73 @@ mod tests {
         let mut dry = PlayerMotion::new(&resources, Vec3::new(20.5, 4.25, 20.5)).unwrap();
         tick(&mut dry);
         assert_eq!(asks(&dry), 0);
+    }
+
+    #[test]
+    fn only_air_along_sees_any_block_its_sweeps_can_reach() {
+        let root = std::env::var_os("HORIZON_TEST_RESOURCES")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| {
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../.local/horizon-client")
+                    .join(horizon_core::VANILLA_VERSION)
+            });
+        if !root.join("movement-properties.nbt").exists() {
+            return;
+        }
+        let assets = Assets::load(&root).unwrap();
+        let render = assets.reload(&root).unwrap();
+        let binding = crate::collisions::load(&root, assets.registry).unwrap();
+        let resources = MotionResources::load(&root, &assets).unwrap();
+        let mut scene = World::test_scene(&assets, &render, 1).unwrap();
+        let rose = assets
+            .registry
+            .default_state("minecraft:wither_rose")
+            .unwrap();
+        scene.set(20, 40, 20, rose).unwrap();
+        let mut player = PlayerMotion::new(&resources, Vec3::ZERO).unwrap();
+        let mut along = |from: Vec3, to: Vec3| {
+            MotionWorld {
+                entities: &[],
+                player: &mut player,
+                scene: &mut scene,
+                assets: &assets,
+                collision_binding: &binding,
+                resources: &resources,
+            }
+            .only_air_along(&[horizon_world::entity_move::MovementRecord {
+                from,
+                to,
+                original: None,
+            }])
+        };
+        // High above the floor and away from the rose.
+        assert!(along(
+            Vec3::new(20.5, 60.0, 20.5),
+            Vec3::new(21.5, 60.5, 20.5)
+        ));
+        // Moving past it, or anywhere in its section: the palettes say
+        // what may be there.
+        assert!(!along(
+            Vec3::new(18.5, 40.0, 20.5),
+            Vec3::new(22.5, 40.0, 20.5)
+        ));
+        assert!(!along(
+            Vec3::new(28.5, 33.0, 28.5),
+            Vec3::new(28.6, 33.0, 28.5)
+        ));
+        // A block above the section's top reaches into it.
+        assert!(!along(
+            Vec3::new(28.5, 48.0, 28.5),
+            Vec3::new(28.6, 48.0, 28.5)
+        ));
+        // On the floor.
+        assert!(!along(Vec3::new(5.5, 4.0, 5.5), Vec3::new(5.6, 4.0, 5.5)));
+        // A long move goes the long way.
+        assert!(!along(
+            Vec3::new(0.5, 80.0, 0.5),
+            Vec3::new(60.5, 80.0, 0.5)
+        ));
     }
 
     #[test]

@@ -19,14 +19,20 @@ struct Cached {
 #[derive(Default)]
 pub struct PortalSections {
     chunks: FxHashMap<(i32, i32), Cached>,
+    /// The last answer: entities stand together, so the next question is
+    /// often the same chunk. Its pointer is the one the map's entry holds a
+    /// `Weak` to, so it cannot be reused while the entry stays.
+    last: Option<((i32, i32), usize, u32)>,
 }
 
 impl PortalSections {
     pub fn clear(&mut self) {
         self.chunks.clear();
+        self.last = None;
     }
     pub fn remove(&mut self, key: &(i32, i32)) {
         self.chunks.remove(key);
+        self.last = None;
     }
     /// The sections of `chunk` whose palette may hold a portal, as a bitmask in
     /// ascending section order (`MIN_Y` at bit 0). `portal` is only called while
@@ -39,6 +45,12 @@ impl PortalSections {
     ) -> u32 {
         const {
             assert!(crate::chunk::SECTIONS <= u32::BITS as usize);
+        }
+        if let Some((last, ptr, mask)) = self.last
+            && last == key
+            && ptr == Arc::as_ptr(chunk) as usize
+        {
+            return mask;
         }
         let cached = self.chunks.entry(key).or_insert_with(|| Cached {
             chunk: Weak::new(),
@@ -55,6 +67,7 @@ impl PortalSections {
             cached.sections = mask;
             cached.chunk = Arc::downgrade(chunk);
         }
+        self.last = Some((key, Arc::as_ptr(chunk) as usize, cached.sections));
         cached.sections
     }
 }

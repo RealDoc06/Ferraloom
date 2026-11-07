@@ -76,7 +76,7 @@ pub enum Out {
     /// A packet body: VarInt id and payload.
     Packet(Vec<u8>),
     /// Packet bodies held during a tick, in order.
-    Packets(Vec<Vec<u8>>),
+    Packets(Vec<conn::PacketBody>),
     /// Send a play disconnect with this component, then close.
     Disconnect(horizon_world::nbt::Tag),
     Close,
@@ -552,6 +552,10 @@ fn accept_loop(listener: TcpListener, shared: Arc<Shared>, stop: &AtomicBool) {
     }
 }
 fn handle(stream: TcpStream, addr: SocketAddr, shared: Arc<Shared>) {
+    // A connection's reader wakes for every packet: on the worker cores, not
+    // the tick's core or its sibling (horizon_threads). It keeps its priority,
+    // as the tick waits for what it reads.
+    horizon_threads::worker_affinity();
     let _ = stream.set_nonblocking(false);
     if let Err(e) = conn::serve(stream, addr, shared)
         && std::env::var_os("HORIZON_NET_DEBUG").is_some()

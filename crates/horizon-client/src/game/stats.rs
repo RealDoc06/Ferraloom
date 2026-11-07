@@ -13,22 +13,35 @@ use std::{
 /// `stats[type][key]`, with `type` and `key` namespaced ids.
 #[derive(Default)]
 pub(super) struct Stats {
-    pub(super) values: BTreeMap<String, BTreeMap<String, i32>>,
+    values: BTreeMap<String, BTreeMap<String, Counter>>,
     pub(super) loaded: bool,
     /// Ticks until the phantom spawner runs again.
     phantom_tick: i32,
     /// Statistic changes (type, key, amount; `None` = reset) for the
     /// scoreboard criteria to follow.
     pub(super) events: Vec<(String, String, Option<i32>)>,
-    /// Changed since the client was last sent them (`StatsCounter`'s dirty
-    /// set), by type.
-    dirty: BTreeMap<String, BTreeSet<String>>,
+    /// No scoreboard objective was there to follow the changes when the
+    /// player's turn began (`enter_guest`): none are kept in `events`, as
+    /// `ServerStatsCounter.setValue` finds no objective for them.
+    pub(super) unheard: bool,
+    /// Statistics reset in a type with no counters yet: changed since the
+    /// client was last sent them, with no counter of their own to say so.
+    dirty_elsewhere: BTreeSet<(String, String)>,
+}
+
+/// One statistic's value, and whether it changed since the client was
+/// last sent it (`StatsCounter`'s dirty set): a counter that goes up every
+/// tick is found once for both.
+#[derive(Clone, Copy, Default)]
+struct Counter {
+    value: i32,
+    dirty: bool,
 }
 
 /// `minecraft:` and `name`, given to `f` from the stack when short: some
 /// counters go up every tick for every player, and they are found without
 /// a string made for each.
-fn namespaced<T>(name: &str, f: impl FnOnce(&str) -> T) -> T {
+pub(super) fn namespaced<T>(name: &str, f: impl FnOnce(&str) -> T) -> T {
     const NAMESPACE: &str = "minecraft:";
     let mut buf = [0u8; 96];
     let len = NAMESPACE.len() + name.len();
@@ -53,55 +66,115 @@ fn entry<'a, V: Default>(map: &'a mut BTreeMap<String, V>, key: &str) -> &'a mut
 impl Stats {
     pub(super) fn add(&mut self, ty: &str, key: &str, n: i32) {
         namespaced(ty, |ty| {
-            let v = entry(entry(&mut self.values, ty), key);
-            *v = v.saturating_add(n);
-            self.events.push((ty.to_owned(), key.to_owned(), Some(n)));
-            self.mark_dirty(ty, key);
+            let count = |c: &mut Counter| {
+                c.value = c.value.saturating_add(n);
+                c.dirty = true;
+            };
+            // A counter already there (most of those that go up every tick)
+            // is found in one look at each map.
+            if let Some(c) = self.values.get_mut(ty).and_then(|m| m.get_mut(key)) {
+                count(c);
+            } else {
+                count(entry(entry(&mut self.values, ty), key));
+            }
+            if !self.unheard {
+                self.events.push((ty.to_owned(), key.to_owned(), Some(n)));
+            }
         });
-    }
-    fn mark_dirty(&mut self, ty: &str, key: &str) {
-        let keys = entry(&mut self.dirty, ty);
-        if !keys.contains(key) {
-            keys.insert(key.to_owned());
-        }
     }
     pub(super) fn get(&self, ty: &str, key: &str) -> i32 {
         self.values
             .get(&format!("minecraft:{ty}"))
             .and_then(|m| m.get(key))
-            .copied()
-            .unwrap_or(0)
+            .map_or(0, |c| c.value)
+    }
+    /// The type's (namespaced) statistics and their values, by key.
+    pub(super) fn of_type(&self, ty: &str) -> impl Iterator<Item = (&String, i32)> {
+        self.values
+            .get(ty)
+            .into_iter()
+            .flatten()
+            .map(|(key, c)| (key, c.value))
+    }
+    /// A value as a server sent it (`ClientboundAwardStatsPacket`): nothing
+    /// to send back.
+    pub(super) fn set(&mut self, ty: String, key: String, value: i32) {
+        let c = self.values.entry(ty).or_default().entry(key).or_default();
+        c.value = value;
     }
     pub(super) fn reset(&mut self, ty: &str, key: &str) {
-        if let Some(m) = self.values.get_mut(&format!("minecraft:{ty}")) {
-            m.insert(key.to_owned(), 0);
+        let ty = format!("minecraft:{ty}");
+        match self.values.get_mut(&ty) {
+            Some(m) => {
+                m.insert(
+                    key.to_owned(),
+                    Counter {
+                        value: 0,
+                        dirty: true,
+                    },
+                );
+            }
+            None => {
+                self.dirty_elsewhere.insert((ty.clone(), key.to_owned()));
+            }
         }
-        self.mark_dirty(&format!("minecraft:{ty}"), key);
-        self.events
-            .push((format!("minecraft:{ty}"), key.to_owned(), None));
+        if !self.unheard {
+            self.events.push((ty, key.to_owned(), None));
+        }
     }
     pub(super) fn custom(&mut self, key: &str, n: i32) {
         namespaced(key, |key| self.add("custom", key, n));
     }
     /// `ServerStatsCounter.markAllDirty`: everything goes out on the next request.
     pub(super) fn mark_all_dirty(&mut self) {
-        self.dirty = self
-            .values
-            .iter()
-            .map(|(ty, m)| (ty.clone(), m.keys().cloned().collect()))
-            .collect();
+        self.dirty_elsewhere.clear();
+        for c in self.values.values_mut().flat_map(BTreeMap::values_mut) {
+            c.dirty = true;
+        }
     }
     /// `ServerStatsCounter.sendStats`' entries: the dirty statistics and
-    /// their values, the set cleared.
+    /// their values, by type and key, the set cleared.
     pub(super) fn take_dirty(&mut self) -> Vec<(String, String, i32)> {
-        std::mem::take(&mut self.dirty)
-            .into_iter()
-            .flat_map(|(ty, keys)| keys.into_iter().map(move |key| (ty.clone(), key)))
-            .map(|(ty, key)| {
-                let v = self.values.get(&ty).and_then(|m| m.get(&key)).copied();
-                (ty, key, v.unwrap_or(0))
+        let mut out: Vec<(String, String, i32)> = Vec::new();
+        for (ty, m) in &mut self.values {
+            for (key, c) in m.iter_mut().filter(|(_, c)| c.dirty) {
+                c.dirty = false;
+                out.push((ty.clone(), key.clone(), c.value));
+            }
+        }
+        for (ty, key) in std::mem::take(&mut self.dirty_elsewhere) {
+            // One that has a counter by now has its value there.
+            let value = self.values.get(&ty).and_then(|m| m.get(&key));
+            match value {
+                Some(c) if !out.iter().any(|(t, k, _)| (t, k) == (&ty, &key)) => {
+                    out.push((ty, key, c.value))
+                }
+                Some(_) => {}
+                None => out.push((ty, key, 0)),
+            }
+        }
+        out.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
+        out
+    }
+    /// The counters of `other` (a stats file read), what was changed here
+    /// still to be sent.
+    pub(super) fn take_values(&mut self, other: Stats) {
+        let changed: Vec<(String, String)> = (self.values.iter())
+            .flat_map(|(ty, m)| {
+                m.iter()
+                    .filter(|(_, c)| c.dirty)
+                    .map(move |(key, _)| (ty.clone(), key.clone()))
             })
-            .collect()
+            .collect();
+        self.values = other.values;
+        for (ty, key) in changed {
+            match self.values.get_mut(&ty).and_then(|m| m.get_mut(&key)) {
+                Some(c) => c.dirty = true,
+                None => {
+                    self.dirty_elsewhere.insert((ty, key));
+                }
+            }
+        }
     }
     /// `ServerStatsCounter.parseLocal`: the counters of a stats file.
     pub(super) fn read(path: &Path) -> Self {
@@ -123,7 +196,13 @@ impl Stats {
                 let map = stats.values.entry(ty.clone()).or_default();
                 for (key, v) in entries {
                     if let Some(n) = v.as_i64() {
-                        map.insert(key.clone(), n as i32);
+                        map.insert(
+                            key.clone(),
+                            Counter {
+                                value: n as i32,
+                                dirty: false,
+                            },
+                        );
                     }
                 }
             }
@@ -138,7 +217,7 @@ impl Stats {
             .filter(|(_, m)| !m.is_empty())
             .map(|(ty, m)| {
                 let entries: serde_json::Map<String, serde_json::Value> =
-                    m.iter().map(|(k, v)| (k.clone(), (*v).into())).collect();
+                    m.iter().map(|(k, c)| (k.clone(), c.value.into())).collect();
                 (ty.clone(), serde_json::Value::Object(entries))
             })
             .collect();
@@ -182,7 +261,7 @@ impl Game<'_> {
         }
         self.stats.loaded = true;
         if let Some(path) = self.stats_path() {
-            self.stats.values = Stats::read(&path).values;
+            self.stats.take_values(Stats::read(&path));
         }
     }
     /// `ServerStatsCounter.save`.
@@ -469,5 +548,29 @@ mod tests {
         );
         s.mark_all_dirty();
         assert_eq!(s.take_dirty().len(), 3);
+    }
+
+    /// A reset where the type has no counters, and a reload, keep what is
+    /// still to be sent, each once, in type and key order.
+    #[test]
+    fn dirty_statistics_survive_resets_without_counters_and_reloads() {
+        let mut s = Stats::default();
+        s.reset("used", "minecraft:bow");
+        s.add("used", "minecraft:bow", 4);
+        s.reset("broken", "minecraft:axe");
+        s.custom("jump", 1);
+        let mut read = Stats::default();
+        read.set("minecraft:custom".into(), "minecraft:jump".into(), 7);
+        s.take_values(read);
+        let sent: Vec<(String, String, i32)> = [
+            ("minecraft:broken", "minecraft:axe", 0),
+            ("minecraft:custom", "minecraft:jump", 7),
+            ("minecraft:used", "minecraft:bow", 0),
+        ]
+        .iter()
+        .map(|&(t, k, n)| (t.to_owned(), k.to_owned(), n))
+        .collect();
+        assert_eq!(s.take_dirty(), sent);
+        assert!(s.take_dirty().is_empty());
     }
 }

@@ -216,13 +216,17 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     /// `BlockState.randomTick` followed by the fluid's random tick.
     pub fn random_tick_at(&mut self, pos: BlockPos) {
         let state = self.state(pos);
-        if self.b.is_randomly_ticking(state) {
+        self.random_tick_state(pos, state);
+    }
+
+    fn random_tick_state(&mut self, pos: BlockPos, state: BlockStateId) {
+        let flags = self.b.hot_flags[state.0 as usize];
+        if flags & 2 != 0 {
             self.random_tick_block(state, pos);
         }
         // Only lava's fluid state ticks randomly. A lava block is ticked twice
         // (LiquidBlock.randomTick, then FluidState.randomTick), as in vanilla.
-        let fluid = self.b.fluid(state).kind();
-        if matches!(fluid, FluidKind::Lava | FluidKind::FlowingLava) {
+        if flags & 4 != 0 {
             self.lava_random_tick(pos);
         }
     }
@@ -1581,6 +1585,17 @@ pub struct Precipitation {
     pub kind: PrecipitationKind,
 }
 
+/// Where [`Behaviours::tick_chunk_random_from`] reads a chunk's sections and
+/// states. Both answers must describe the chunk as it is at the call: a random
+/// tick can write blocks between any two calls.
+pub trait RandomTickSource<L: ?Sized> {
+    /// The minimum Y of the lowest randomly ticking section from `from_y` up.
+    fn next_section(&mut self, level: &mut L, from_y: i32) -> Option<i32>;
+    /// The state at `pos`. `None` is only allowed where that state has no
+    /// random tick (`Sim::random_tick_state` would do nothing with it).
+    fn ticking_state(&mut self, level: &mut L, pos: BlockPos) -> Option<BlockStateId>;
+}
+
 impl Behaviours {
     /// Run due scheduled ticks for the level's current game time, in vanilla
     /// order: block ticks then fluid ticks (65536 each at most).
@@ -1709,7 +1724,29 @@ impl Behaviours {
         level: &mut L,
         ticks: &mut Ticks,
         chunk: ChunkPos,
-        mut next_ticking: impl FnMut(&mut L, i32) -> Option<i32>,
+        next_ticking: impl FnMut(&mut L, i32) -> Option<i32>,
+    ) {
+        struct Scan<F>(F);
+        impl<L: LevelAccess + ?Sized, F: FnMut(&mut L, i32) -> Option<i32>> RandomTickSource<L>
+            for Scan<F>
+        {
+            fn next_section(&mut self, level: &mut L, from_y: i32) -> Option<i32> {
+                self.0(level, from_y)
+            }
+            fn ticking_state(&mut self, level: &mut L, pos: BlockPos) -> Option<BlockStateId> {
+                Some(level.block_state(pos))
+            }
+        }
+        self.tick_chunk_random_from(level, ticks, chunk, &mut Scan(next_ticking));
+    }
+
+    /// [`Self::tick_chunk_random`], with the sections and states read from `source`.
+    pub fn tick_chunk_random_from<L: LevelAccess + ?Sized>(
+        &self,
+        level: &mut L,
+        ticks: &mut Ticks,
+        chunk: ChunkPos,
+        source: &mut impl RandomTickSource<L>,
     ) {
         let speed = level.game_rules().random_tick_speed;
         if speed <= 0 {
@@ -1725,10 +1762,15 @@ impl Behaviours {
             }
         }
         let mut from = level.min_y();
-        while let Some(min_y) = next_ticking(level, from).filter(|&y| y < level.max_y()) {
+        while let Some(min_y) = source
+            .next_section(level, from)
+            .filter(|&y| y < level.max_y())
+        {
             for _ in 0..speed {
                 let pos = ticks.block_random_pos(min_x, min_y, min_z, 15);
-                self.sim(level, ticks).random_tick_at(pos);
+                if let Some(state) = source.ticking_state(level, pos) {
+                    self.sim(level, ticks).random_tick_state(pos, state);
+                }
             }
             from = min_y + 16;
         }

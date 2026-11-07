@@ -47,16 +47,36 @@ impl Behaviours {
         level: &L,
         pos: BlockPos,
     ) -> BlockPos {
-        let blocks = self.tag("minecraft:blocks_motion_in_heightmap");
+        // A missing tag reads as an empty one.
+        let blocks = &self.tags.blocks_motion_in_heightmap;
         let top = level.world_surface(pos.x, pos.z).min(level.max_y());
         for y in (level.min_y()..top).rev() {
             let state = level.block_state(BlockPos::new(pos.x, y, pos.z));
             let fluid = self.fluid(state).kind() != FluidKind::Empty;
-            if fluid || blocks.is_some_and(|t| t.contains(self.block(state))) {
+            if fluid || blocks.contains(self.block(state)) {
                 return BlockPos::new(pos.x, y + 1, pos.z);
             }
         }
         BlockPos::new(pos.x, level.min_y(), pos.z)
+    }
+    /// [`Self::precipitation_info`] for `ServerLevel.tickPrecipitation`, also
+    /// None when that tick would do nothing: without rain it only freezes a
+    /// water source under the top, so elsewhere the biome is not looked up.
+    pub fn precipitation_tick_info<L: LevelAccess + ?Sized>(
+        &self,
+        level: &L,
+        pos: BlockPos,
+    ) -> Option<Precipitation> {
+        if !level.is_raining() {
+            let top = self.motion_blocking_top(level, pos);
+            let below = BlockPos::new(top.x, top.y - 1, top.z);
+            let state = level.block_state(below);
+            let inside = below.y >= level.min_y() && below.y < level.max_y();
+            if !(inside && self.block(state) == self.named.water && self.fluid(state).is_source()) {
+                return None;
+            }
+        }
+        self.precipitation_info(level, pos)
     }
     /// Answers for one `ServerLevel.tickPrecipitation` at the column of `pos`;
     /// None without live features or a biome.

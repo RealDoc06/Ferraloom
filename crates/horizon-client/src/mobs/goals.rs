@@ -18,7 +18,10 @@ pub struct Cx<'a, 'w> {
     pub w: &'a MobWorld<'w>,
     pub events: &'a mut Vec<MobEvent>,
 }
-pub trait Goal: std::fmt::Debug {
+/// Goals live in their mob, which pool threads read ahead of the serial
+/// passes (mob ticks, `lan_entities`): they hold plain data, so they are
+/// `Send + Sync`.
+pub trait Goal: std::fmt::Debug + Send + Sync {
     fn flags(&self) -> u8;
     fn can_use(&mut self, m: &mut Mob, cx: &mut Cx) -> bool;
     fn can_continue(&mut self, m: &mut Mob, cx: &mut Cx) -> bool {
@@ -1259,6 +1262,8 @@ pub enum Prey {
     Species(Vec<Species>),
     /// Any mob matching a predicate on its snapshot.
     Filter(fn(&Seen) -> bool),
+    /// A mob of one of the species matching a predicate.
+    SpeciesWhere(&'static [Species], fn(&Seen) -> bool),
 }
 /// NearestAttackableTargetGoal (+ TargetGoal's continue rules).
 #[derive(Clone, Debug)]
@@ -1425,36 +1430,43 @@ impl Goal for NearestTarget {
                     self.found = Some(Who::Player);
                 }
             }
+            // None of the species in the snapshot: the search finds nothing.
+            Prey::Species(list) if !cx.w.others_may_hold(list) => {}
+            Prey::SpeciesWhere(list, _) if !cx.w.others_may_hold(list) => {}
             prey => {
                 let pos = Vec3::new(m.position.x, m.eye_y(), m.position.z);
                 let id = m.id;
                 let attacker = m.species();
-                let candidates: Vec<(u32, Vec3)> =
-                    cx.w.nearby(pos, range, move |s| {
-                        s.id != id
-                            && !s.playing_dead
-                            && !illager_spares(attacker, s)
-                            && match prey {
-                                Prey::Species(list) => list.contains(&s.species),
-                                Prey::Filter(f) => f(s),
-                                Prey::Player => false,
-                            }
-                    })
-                    .map(|s| (s.id, s.position))
-                    .collect();
-                for (cid, cpos) in candidates {
+                // Nearest first, asked one at a time: the first that passes
+                // ends the search (most often the first).
+                let candidates = cx.w.nearby(pos, range, move |s| {
+                    s.id != id
+                        && !s.playing_dead
+                        && !illager_spares(attacker, s)
+                        && match prey {
+                            Prey::Species(list) => list.contains(&s.species),
+                            Prey::Filter(f) => f(s),
+                            Prey::SpeciesWhere(list, f) => list.contains(&s.species) && f(s),
+                            Prey::Player => false,
+                        }
+                });
+                let beyond = self.beyond_sqr;
+                let mut found = None;
+                for s in candidates {
+                    let (cid, cpos) = (s.id, s.position);
                     if m.distance_sqr(cpos) > range * range {
                         continue;
                     }
-                    if self.beyond_sqr.is_some_and(|d| m.distance_sqr(cpos) <= d) {
+                    if beyond.is_some_and(|d| m.distance_sqr(cpos) <= d) {
                         continue;
                     }
                     if !m.sees(cx.w, Who::Mob(cid)) {
                         continue;
                     }
-                    self.found = Some(Who::Mob(cid));
+                    found = Some(Who::Mob(cid));
                     break;
                 }
+                self.found = found;
             }
         }
         self.found.is_some()
@@ -1698,6 +1710,11 @@ impl Goal for AvoidEntity {
                             && (p.position.y - m.position.y).abs() <= max + 3.0
                     })
                     .map(|p| p.position)
+            }
+            // None of the species in the snapshot: the search finds nothing.
+            Avoid::Species(list) if !cx.w.others_may_hold(list) => {
+                self.found = None;
+                None
             }
             Avoid::Species(list) => {
                 let id = m.id;
@@ -2349,6 +2366,41 @@ impl MoveToBlock {
             return false;
         }
         self.next_start = next;
+        self.find_nearest(m, w, valid)
+    }
+    /// `find_nearest` for a target that must be a block `kind` accepts:
+    /// where no section the search reaches can hold one there is nothing to
+    /// find, and the search reads no cell.
+    pub fn find_nearest_of(
+        &mut self,
+        m: &Mob,
+        w: &MobWorld,
+        kind: impl FnMut(horizon_world::registry::BlockStateId) -> bool,
+        valid: impl Fn(&MobWorld, [i32; 3]) -> bool,
+    ) -> bool {
+        if self.range > 0 && self.vertical_start <= self.vertical_range {
+            let base = [
+                m.position.x.floor() as i32,
+                m.position.y.floor() as i32 - 1,
+                m.position.z.floor() as i32,
+            ];
+            // The rings reach `range - 1` out; the heights alternate up to
+            // `vertical_range` either way, from `vertical_start`.
+            let reach = self.range - 1;
+            let lo = [
+                base[0] - reach,
+                base[1] + self.vertical_start.min(-self.vertical_range),
+                base[2] - reach,
+            ];
+            let hi = [
+                base[0] + reach,
+                base[1] + self.vertical_range,
+                base[2] + reach,
+            ];
+            if !w.world.may_hold(lo, hi, kind) {
+                return false;
+            }
+        }
         self.find_nearest(m, w, valid)
     }
     /// `MoveToBlockGoal.findNearestBlock`: rings outward, alternating heights.

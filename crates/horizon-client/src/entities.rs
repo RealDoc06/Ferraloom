@@ -11,6 +11,7 @@ use horizon_core::geometry::{Aabb, Vec3};
 use horizon_world::block_collision::BlockCollisionRegistry;
 
 mod fluids;
+pub use fluids::ItemFluids;
 
 #[derive(Clone, Debug)]
 pub struct ItemEntity {
@@ -46,14 +47,14 @@ impl ItemEnvironmentTick {
 impl ItemEntity {
     pub const WIDTH: f64 = 0.25;
     pub fn bounds(&self) -> Aabb {
+        Self::bounds_at(self.position)
+    }
+    /// An item's box with its feet at `position`.
+    pub fn bounds_at(position: Vec3) -> Aabb {
         let h = Self::WIDTH / 2.0;
         Aabb::new(
-            Vec3::new(self.position.x - h, self.position.y, self.position.z - h),
-            Vec3::new(
-                self.position.x + h,
-                self.position.y + Self::WIDTH,
-                self.position.z + h,
-            ),
+            Vec3::new(position.x - h, position.y, position.z - h),
+            Vec3::new(position.x + h, position.y + Self::WIDTH, position.z + h),
         )
     }
     pub fn environment_tick(
@@ -63,14 +64,52 @@ impl ItemEntity {
         registry: &horizon_world::registry::BlockRegistry,
         items: &crate::items::Items,
     ) -> ItemEnvironmentTick {
+        self.environment_tick_with(world, facts, registry, items, u16::MAX)
+    }
+    /// The `block_kinds` the palettes over the cells of an item's box at
+    /// `position` may hold (a superset of what its contact checks read).
+    pub fn kinds_around(
+        position: Vec3,
+        world: &World,
+        registry: &horizon_world::registry::BlockRegistry,
+    ) -> u16 {
+        let h = Self::WIDTH / 2.0;
+        let cell = |v: f64| v.floor() as i32;
+        crate::block_kinds::BlockKinds::of(registry).near(
+            world,
+            [cell(position.x - h), cell(position.y), cell(position.z - h)],
+            [
+                cell(position.x + h),
+                cell(position.y + Self::WIDTH),
+                cell(position.z + h),
+            ],
+        )
+    }
+    /// [`Self::environment_tick`] knowing which `block_kinds` may be around
+    /// the item's box ([`Self::kinds_around`]; all of them when unknown):
+    /// the fire and cactus contacts with none of theirs around find none.
+    pub fn environment_tick_with(
+        &mut self,
+        world: &World,
+        facts: &BlockFacts,
+        registry: &horizon_world::registry::BlockRegistry,
+        items: &crate::items::Items,
+        kinds: u16,
+    ) -> ItemEnvironmentTick {
+        use crate::block_kinds::{CACTUS, FIRE, SOUL_FIRE};
         let at = world.block(
             self.position.x.floor() as i32,
             (self.position.y + 0.1).floor() as i32,
             self.position.z.floor() as i32,
         );
         let fluid = facts.get(at).fluid;
-        let fire_immune = items.resists_fire(&self.stack, "minecraft:in_fire");
-        if fluid == Fluid::Water || fire_immune {
+        // Read only where it decides something: most items touch no fire
+        // and the lookup hashes the item's name.
+        let fire_immune = std::cell::OnceCell::new();
+        let fire_immune =
+            || *fire_immune.get_or_init(|| items.resists_fire(&self.stack, "minecraft:in_fire"));
+        // Zeroing a zero changes nothing: most items never ask.
+        if self.fire_ticks != 0 && (fluid == Fluid::Water || fire_immune()) {
             self.fire_ticks = 0;
         }
         if self.fire_ticks > 0 {
@@ -83,15 +122,19 @@ impl ItemEntity {
             self.fire_ticks -= 1;
         }
         let mut lava_hurt = false;
-        if fluid == Fluid::Lava && !fire_immune {
+        if fluid == Fluid::Lava && !fire_immune() {
             self.fire_ticks = self.fire_ticks.max(300);
             if !items.resists_fire(&self.stack, "minecraft:lava") {
                 self.health -= 4;
                 lava_hurt = true;
             }
         }
-        let fire_damage = crate::motion::environment::fire_contact(world, registry, self.bounds());
-        if fire_damage > 0.0 && !fire_immune {
+        let fire_damage = if kinds & (FIRE | SOUL_FIRE) != 0 {
+            crate::motion::environment::fire_contact(world, registry, self.bounds())
+        } else {
+            0.0
+        };
+        if fire_damage > 0.0 && !fire_immune() {
             self.fire_ticks = self.fire_ticks.max(160);
             if !items.resists_fire(&self.stack, "minecraft:in_fire") {
                 self.health -= fire_damage as i32;
@@ -101,7 +144,8 @@ impl ItemEntity {
         // hurt cooldown, so it loses 1 health every tick it touches a cactus
         // (5 health: gone in 5 ticks). Fire resistance does not help;
         // `ItemStack.canBeHurtBy` only skips it for a damage_resistant stack.
-        if crate::motion::environment::cactus_contact(world, registry, self.bounds())
+        if kinds & CACTUS != 0
+            && crate::motion::environment::cactus_contact(world, registry, self.bounds())
             && !items.resists_cactus(&self.stack)
         {
             self.health -= 1;
@@ -115,12 +159,21 @@ impl ItemEntity {
     /// (one placed where it lay) has no physics this tick
     /// (`level.noCollision(box.deflate(1.0E-7))`).
     pub fn inside_block(&self, world: &World, collision: &BlockCollisionRegistry<'_>) -> bool {
+        Self::inside_block_at(self.position, world, collision)
+    }
+    /// [`Self::inside_block`] for an item at `position`: it reads only the
+    /// box and the blocks, so it can be asked ahead of the item's tick.
+    pub fn inside_block_at(
+        position: Vec3,
+        world: &World,
+        collision: &BlockCollisionRegistry<'_>,
+    ) -> bool {
         let mut scene = SceneCollisions {
             world,
             binding: collision,
             subject: None,
         };
-        let inner = self.bounds().deflate(Vec3::new(1.0e-7, 1.0e-7, 1.0e-7));
+        let inner = Self::bounds_at(position).deflate(Vec3::new(1.0e-7, 1.0e-7, 1.0e-7));
         !crate::collisions::no_collision_empty(&mut scene, inner)
     }
     /// `Entity.moveTowardsClosestSpace` from the middle of the item's box:
@@ -170,6 +223,32 @@ impl ItemEntity {
             _ => Vec3::new(v.x, v.y, push),
         };
     }
+    /// The velocity after `ItemEntity.setUnderwaterMovement` (or its lava
+    /// twin) or gravity, at these fluid heights.
+    pub fn swim_or_fall(v: Vec3, water_height: f64, lava_height: f64) -> Vec3 {
+        if water_height > f64::from(0.1f32) {
+            // ItemEntity.setUnderwaterMovement
+            Vec3::new(
+                v.x * 0.99,
+                v.y + if v.y < 0.06 { 5.0e-4 } else { 0.0 },
+                v.z * 0.99,
+            )
+        } else if lava_height > f64::from(0.1f32) {
+            Vec3::new(
+                v.x * 0.95,
+                v.y + if v.y < 0.06 { 5.0e-4 } else { 0.0 },
+                v.z * 0.95,
+            )
+        } else {
+            Vec3::new(v.x, v.y - 0.04, v.z)
+        }
+    }
+    /// Whether `ItemEntity.tick` moves the item this tick: off the ground,
+    /// sliding, or every fourth tick of its age at rest.
+    pub fn moves(v: Vec3, on_ground: bool, age: u32, id: u32) -> bool {
+        let horizontal = v.x * v.x + v.z * v.z;
+        !on_ground || horizontal > 1.0e-5 || (age + id).is_multiple_of(4)
+    }
     /// Returns false when the item should be removed. `no_physics`: the item
     /// moves through blocks this tick ([`ItemEntity::inside_block`]).
     pub fn tick(
@@ -180,32 +259,34 @@ impl ItemEntity {
         no_physics: bool,
         fluids: &crate::motion::FluidResources,
     ) -> bool {
+        self.tick_with(world, facts, collision, no_physics, fluids, None)
+    }
+    /// [`Self::tick`] with its first fluid update read ahead: `ahead` is
+    /// taken while it is the update of the item as it stands and moves.
+    pub fn tick_with(
+        &mut self,
+        world: &World,
+        facts: &BlockFacts,
+        collision: &BlockCollisionRegistry<'_>,
+        no_physics: bool,
+        fluids: &crate::motion::FluidResources,
+        ahead: Option<ItemFluids>,
+    ) -> bool {
         self.ticks += 1;
         self.previous = self.position;
         if self.pickup_delay > 0 && self.pickup_delay != u32::MAX {
             self.pickup_delay -= 1;
         }
         // Entity.baseTick pushes before ItemEntity applies buoyancy and moves.
-        let (water_height, lava_height) = self.update_fluids(world, fluids);
-        let in_water = water_height > f64::from(0.1f32);
-        if in_water {
-            // ItemEntity.setUnderwaterMovement
-            self.velocity = Vec3::new(
-                self.velocity.x * 0.99,
-                self.velocity.y + if self.velocity.y < 0.06 { 5.0e-4 } else { 0.0 },
-                self.velocity.z * 0.99,
-            );
-        } else if lava_height > f64::from(0.1f32) {
-            self.velocity = Vec3::new(
-                self.velocity.x * 0.95,
-                self.velocity.y + if self.velocity.y < 0.06 { 5.0e-4 } else { 0.0 },
-                self.velocity.z * 0.95,
-            );
-        } else {
-            self.velocity.y -= 0.04;
-        }
-        let horizontal = self.velocity.x * self.velocity.x + self.velocity.z * self.velocity.z;
-        if !self.on_ground || horizontal > 1.0e-5 || (self.age + self.id).is_multiple_of(4) {
+        let (water_height, lava_height) = match ahead.filter(|a| a.of(self)) {
+            Some(read) => {
+                self.velocity = read.pushed;
+                read.heights
+            }
+            None => self.update_fluids(world, fluids),
+        };
+        self.velocity = Self::swim_or_fall(self.velocity, water_height, lava_height);
+        if Self::moves(self.velocity, self.on_ground, self.age, self.id) {
             let mut scene = SceneCollisions {
                 world,
                 binding: collision,
@@ -215,6 +296,10 @@ impl ItemEntity {
             // Entity.move with noPhysics: straight through, the ground as it was.
             let moved = if no_physics {
                 wanted
+            } else if let Some(moved) =
+                ahead.and_then(|a| a.moved_for(self.position, wanted, self.on_ground))
+            {
+                moved
             } else {
                 scene
                     .resolve(self.bounds(), wanted, 0.0, self.on_ground)
@@ -267,14 +352,25 @@ impl ItemEntity {
     }
 }
 /// Dropped items by block cell, for `ItemEntity.mergeWithNeighbours`'s
-/// search around an item. Holds indexes into the tick's item list.
+/// search around an item. Holds indexes into the tick's item list, each
+/// cell's as a list linked through `next` (no allocation per cell).
 #[derive(Default)]
 pub struct ItemCells {
-    cells: crate::fast_hash::FxHashMap<(i32, i32, i32), Vec<u32>>,
+    /// The last item added to each cell.
+    heads: crate::fast_hash::FxHashMap<(i32, i32, i32), u32>,
+    /// The item added before each one to its cell, or [`ItemCells::END`].
+    next: Vec<u32>,
 }
 impl ItemCells {
+    const END: u32 = u32::MAX;
     pub fn new(items: &[ItemEntity]) -> Self {
-        let mut cells = Self::default();
+        let mut cells = Self {
+            heads: crate::fast_hash::FxHashMap::with_capacity_and_hasher(
+                items.len(),
+                Default::default(),
+            ),
+            next: vec![Self::END; items.len()],
+        };
         for (i, item) in items.iter().enumerate() {
             cells.add(i, item.position);
         }
@@ -284,11 +380,31 @@ impl ItemCells {
         (p.x.floor() as i32, p.y.floor() as i32, p.z.floor() as i32)
     }
     fn add(&mut self, i: usize, at: Vec3) {
-        self.cells.entry(Self::cell(at)).or_default().push(i as u32);
+        let previous = self.heads.insert(Self::cell(at), i as u32);
+        self.next[i] = previous.unwrap_or(Self::END);
     }
+    /// Takes item `i` out of the cell at `at`, if it is there.
     pub fn remove(&mut self, i: usize, at: Vec3) {
-        if let Some(list) = self.cells.get_mut(&Self::cell(at)) {
-            list.retain(|&j| j as usize != i);
+        let cell = Self::cell(at);
+        let Some(&head) = self.heads.get(&cell) else {
+            return;
+        };
+        if head as usize == i {
+            match self.next[i] {
+                Self::END => self.heads.remove(&cell),
+                rest => self.heads.insert(cell, rest),
+            };
+            self.next[i] = Self::END;
+            return;
+        }
+        let mut at = head as usize;
+        while self.next[at] != Self::END {
+            if self.next[at] as usize == i {
+                self.next[at] = self.next[i];
+                self.next[i] = Self::END;
+                return;
+            }
+            at = self.next[at] as usize;
         }
     }
     pub fn moved(&mut self, i: usize, from: Vec3, to: Vec3) {
@@ -311,8 +427,10 @@ impl ItemCells {
         for x in lo.0..=hi.0 {
             for y in lo.1..=hi.1 {
                 for z in lo.2..=hi.2 {
-                    if let Some(list) = self.cells.get(&(x, y, z)) {
-                        out.extend_from_slice(list);
+                    let mut at = self.heads.get(&(x, y, z)).copied().unwrap_or(Self::END);
+                    while at != Self::END {
+                        out.push(at);
+                        at = self.next[at as usize];
                     }
                 }
             }

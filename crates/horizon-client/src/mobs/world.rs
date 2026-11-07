@@ -64,8 +64,26 @@ impl MobWorld<'_> {
             .and_then(|s| s.properties.get(key))
             .map(String::as_str)
     }
+    /// Whether `block` is in the block tag `tag`. While [`keep_tag_answers`] holds,
+    /// the answers are kept by the strings' contents: the tag table hashes
+    /// both with SipHash, and the mob ticks ask the same few many times.
     pub fn has_tag(&self, tag: &str, block: &str) -> bool {
-        self.block_tags.get(tag).is_some_and(|s| s.contains(block))
+        let ask = || self.block_tags.get(tag).is_some_and(|s| s.contains(block));
+        TAGS.with(|cache| {
+            let mut cache = cache.borrow_mut();
+            let Some(answers) = cache.as_mut() else {
+                return ask();
+            };
+            if let Some(&known) = answers.get(tag).and_then(|blocks| blocks.get(block)) {
+                return known;
+            }
+            let known = ask();
+            answers
+                .entry(tag.into())
+                .or_default()
+                .insert(block.into(), known);
+            known
+        })
     }
     /// `findBlocksInBoxByManhattanDistance(at, range_xz, range_y).filterState(..).findFirst()`:
     /// the first block `matches` accepts (given its position and name), going
@@ -268,14 +286,25 @@ impl MobWorld<'_> {
     /// The other mobs whose boxes may meet `area` (callers test the boxes),
     /// in snapshot order: through the grid when there is one, else all.
     pub fn others_near(&self, area: Aabb) -> impl Iterator<Item = &Seen> {
-        let mut near = Vec::new();
+        let mut near = NEAR.take();
         let indexed = self
             .others_grid
             .is_some_and(|grid| grid.candidates(area, &mut near));
-        let all = (!indexed).then(|| self.others.iter());
-        near.into_iter()
-            .map(|i| &self.others[i as usize])
-            .chain(all.into_iter().flatten())
+        if !indexed {
+            near.clear();
+        }
+        Near {
+            list: near,
+            at: 0,
+            others: self.others,
+            all: (!indexed).then(|| self.others.iter()),
+        }
+    }
+    /// Whether `others` may hold a mob of one of `species`: false only when
+    /// its grid keeps their species and none is among them, so a search
+    /// for them finds nothing.
+    pub fn others_may_hold(&self, species: &[super::Species]) -> bool {
+        self.others_grid.is_none_or(|grid| grid.may_hold(species))
     }
     pub fn seen(&self, id: u32) -> Option<&Seen> {
         match self.others_index {
@@ -300,7 +329,12 @@ impl MobWorld<'_> {
             Vec3::new(from.x - r, from.y - r, from.z - r),
             Vec3::new(from.x + r, from.y + r, from.z + r),
         );
-        let mut v: Vec<&Seen> = self
+        let distance = |s: &Seen| {
+            (s.position.x - from.x).powi(2)
+                + (s.position.y - from.y).powi(2)
+                + (s.position.z - from.z).powi(2)
+        };
+        let found: Vec<(f64, &Seen)> = self
             .others_near(area)
             .filter(|s| {
                 s.alive
@@ -309,20 +343,105 @@ impl MobWorld<'_> {
                     && (s.position.z - from.z).abs() <= range
             })
             .filter(move |s| pred(s))
+            .map(|s| (distance(s), s))
             .collect();
-        v.sort_by(|a, b| {
-            let da = (a.position.x - from.x).powi(2)
-                + (a.position.y - from.y).powi(2)
-                + (a.position.z - from.z).powi(2);
-            let db = (b.position.x - from.x).powi(2)
-                + (b.position.y - from.y).powi(2)
-                + (b.position.z - from.z).powi(2);
-            da.total_cmp(&db)
-        });
-        v.into_iter()
+        Nearest::new(found)
     }
 }
 
+/// `nearby`'s answer: its candidates nearest first, as a stable sort by
+/// distance (`total_cmp`) orders them. The first is found by one scan, and
+/// the rest are sorted only if asked for: most callers take one.
+struct Nearest<'a> {
+    found: Vec<(f64, &'a Seen)>,
+    /// The candidates left, in the order they are given out; None until
+    /// the second is asked for.
+    sorted: Option<std::vec::IntoIter<(f64, &'a Seen)>>,
+    first: bool,
+}
+impl<'a> Nearest<'a> {
+    fn new(found: Vec<(f64, &'a Seen)>) -> Self {
+        Self {
+            found,
+            sorted: None,
+            first: true,
+        }
+    }
+}
+impl<'a> Iterator for Nearest<'a> {
+    type Item = &'a Seen;
+    fn next(&mut self) -> Option<&'a Seen> {
+        if let Some(rest) = &mut self.sorted {
+            return rest.next().map(|(_, s)| s);
+        }
+        if std::mem::take(&mut self.first) {
+            // The first of the least distance, as the stable sort puts it.
+            let mut best: Option<usize> = None;
+            for (k, (d, _)) in self.found.iter().enumerate() {
+                if best.is_none_or(|b| d.total_cmp(&self.found[b].0).is_lt()) {
+                    best = Some(k);
+                }
+            }
+            return best.map(|k| self.found.remove(k).1);
+        }
+        // The rest keep their order among equals, as the stable sort does.
+        let mut rest = std::mem::take(&mut self.found);
+        rest.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let mut rest = rest.into_iter();
+        let next = rest.next().map(|(_, s)| s);
+        self.sorted = Some(rest);
+        next
+    }
+}
+/// `MobWorld::has_tag`'s answers by tag then block, while kept.
+type TagAnswers =
+    crate::fast_hash::FxHashMap<Box<str>, crate::fast_hash::FxHashMap<Box<str>, bool>>;
+thread_local! {
+    static TAGS: std::cell::RefCell<Option<TagAnswers>> = const { std::cell::RefCell::new(None) };
+}
+/// `MobWorld::has_tag`'s answers kept on this thread, fresh, until the
+/// guard drops: for a stretch in which the block tags cannot change (the
+/// mob ticks).
+pub fn keep_tag_answers() -> KeptTags {
+    TAGS.with(|cache| *cache.borrow_mut() = Some(Default::default()));
+    KeptTags(())
+}
+/// The guard [`keep_tag_answers`] returns.
+pub struct KeptTags(());
+impl Drop for KeptTags {
+    fn drop(&mut self) {
+        TAGS.with(|cache| *cache.borrow_mut() = None);
+    }
+}
+thread_local! {
+    /// The candidate list of the thread's last `others_near`, kept for its
+    /// capacity: queries run for most mobs every tick.
+    static NEAR: std::cell::Cell<Vec<u32>> = const { std::cell::Cell::new(Vec::new()) };
+}
+/// `others_near`'s answer: the grid's candidates, else every entry.
+struct Near<'a> {
+    list: Vec<u32>,
+    at: usize,
+    others: &'a [Seen],
+    all: Option<std::slice::Iter<'a, Seen>>,
+}
+impl<'a> Iterator for Near<'a> {
+    type Item = &'a Seen;
+    fn next(&mut self) -> Option<&'a Seen> {
+        if let Some(&i) = self.list.get(self.at) {
+            self.at += 1;
+            return Some(&self.others[i as usize]);
+        }
+        self.all.as_mut()?.next()
+    }
+}
+impl Drop for Near<'_> {
+    fn drop(&mut self) {
+        let mut list = std::mem::take(&mut self.list);
+        list.clear();
+        NEAR.set(list);
+    }
+}
 /// Level.clip with VISUAL shapes and no fluids: the block the segment first
 /// hits, None inside when it hits nothing and outside when the segment is
 /// too long to walk. Glass and copper grates (`TransparentBlock`) and bars and panes

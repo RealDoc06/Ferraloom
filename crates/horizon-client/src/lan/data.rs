@@ -3,6 +3,7 @@
 //! pack) and the tags of every registry, loaded from the prepared resources
 //! (`data/minecraft/...`) and the registries report.
 use horizon_protocol::{
+    entity_data,
     packets::configuration::{RegistryData, RegistryEntry, RegistryTags, TagEntry, UpdateTags},
     registry::{Builtin, Dynamic},
 };
@@ -123,6 +124,68 @@ pub fn component_nbt(v: &Value) -> Tag {
 }
 
 impl SyncData {
+    /// `Hub::stack_of` with no item id cache: the registry's id, 0 for an
+    /// item it lacks, as the cache holds.
+    pub fn stack(&self, s: &crate::items::ItemStack) -> Option<horizon_protocol::item::Stack> {
+        let items = self.builtin.get("minecraft:item");
+        super::guest::stack_ref_to_network(
+            |name| items.and_then(|i| i.id(name)).unwrap_or(0),
+            |registry, name| self.id(registry, name),
+            s,
+        )
+    }
+    /// `LivingEntity.updateSynchronizedMobEffectParticles`: DATA_EFFECT_PARTICLES
+    /// (10) and DATA_EFFECT_AMBIENCE_ID (11) for the visible `effects`, as
+    /// (effect, ambient). The entries are left out when there is nothing to
+    /// show, which is their default.
+    pub fn effect_meta<'a>(
+        &self,
+        effects: impl IntoIterator<Item = (&'a str, bool)>,
+    ) -> Vec<(u8, i32, entity_data::Value)> {
+        let mut particles = Vec::new();
+        let mut all_ambient = true;
+        for (effect, ambient) in effects {
+            let effect = effect.trim_start_matches("minecraft:");
+            // MobEffect.particleFactory: the omens have their own particles,
+            // the others an entity effect in their colour (faint if ambient).
+            let (name, data) = match effect {
+                "trial_omen" | "raid_omen" => (effect, None),
+                _ => {
+                    let Some(def) = crate::brewing::effect(effect) else {
+                        continue;
+                    };
+                    let alpha = if ambient { 38 } else { 255 };
+                    let argb = (alpha << 24) | def.color as i32;
+                    (
+                        "entity_effect",
+                        Some(entity_data::ParticleData::Color(argb)),
+                    )
+                }
+            };
+            let Some(id) = self.id("minecraft:particle_type", &format!("minecraft:{name}")) else {
+                continue;
+            };
+            particles.push(entity_data::Particle { id, data });
+            all_ambient &= ambient;
+        }
+        if particles.is_empty() {
+            return Vec::new();
+        }
+        let mut meta = vec![(
+            10,
+            entity_data::serializer::PARTICLES,
+            entity_data::Value::Particles(particles),
+        )];
+        if all_ambient {
+            meta.push((
+                11,
+                entity_data::serializer::BOOLEAN,
+                entity_data::Value::Bool(true),
+            ));
+        }
+        meta
+    }
+
     pub fn load(resources: &Path) -> Result<Self, String> {
         let builtin = Builtin::find(resources)
             .and_then(|p| Builtin::load(&p).ok())

@@ -142,12 +142,36 @@ impl MotionWorld<'_, '_, '_> {
         Ok(())
     }
 }
+/// The cells from the block holding a box's minimum corner to the one
+/// holding its maximum, as the contact scans visit them.
+fn cells_of(b: Aabb) -> ([i32; 3], [i32; 3]) {
+    let (lo, hi) = (b.min_position(), b.max_position());
+    (
+        [
+            lo.x.floor() as i32,
+            lo.y.floor() as i32,
+            lo.z.floor() as i32,
+        ],
+        [
+            hi.x.floor() as i32,
+            hi.y.floor() as i32,
+            hi.z.floor() as i32,
+        ],
+    )
+}
 pub(crate) fn fire_contact(
     world: &World,
     registry: &horizon_world::registry::BlockRegistry,
     bounds: Aabb,
 ) -> f32 {
     let b = bounds.deflate(Vec3::new(1e-5, 1e-5, 1e-5));
+    use crate::block_kinds::{BlockKinds, FIRE, SOUL_FIRE};
+    let kinds = BlockKinds::of(registry);
+    let fire = |s| kinds.is(s, FIRE | SOUL_FIRE);
+    // Most boxes are in sections without fire: no cell to read.
+    if !world.may_hold(cells_of(b).0, cells_of(b).1, fire) {
+        return 0.0;
+    }
     let mut damage = 0.0f32;
     for x in b.min_position().x.floor() as i32..=b.max_position().x.floor() as i32 {
         for y in b.min_position().y.floor() as i32..=b.max_position().y.floor() as i32 {
@@ -176,6 +200,11 @@ pub(crate) fn cactus_contact(
     bounds: Aabb,
 ) -> bool {
     let b = bounds.deflate(Vec3::new(1e-5, 1e-5, 1e-5));
+    let kinds = crate::block_kinds::BlockKinds::of(registry);
+    let cactus = |s| kinds.is(s, crate::block_kinds::CACTUS);
+    if !world.may_hold(cells_of(b).0, cells_of(b).1, cactus) {
+        return false;
+    }
     for x in b.min_position().x.floor() as i32..=b.max_position().x.floor() as i32 {
         for y in b.min_position().y.floor() as i32..=b.max_position().y.floor() as i32 {
             for z in b.min_position().z.floor() as i32..=b.max_position().z.floor() as i32 {

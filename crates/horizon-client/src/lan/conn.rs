@@ -219,10 +219,147 @@ impl Holding {
     pub fn start() -> Self {
         Self(HOLDING.replace(true))
     }
+    /// Hold, or not, as `held` says: a pass on the pool's threads sends as
+    /// the thread that started it does (`holding`).
+    pub fn like(held: bool) -> Self {
+        Self(HOLDING.replace(held))
+    }
+}
+/// Whether this thread's packets are held (`Holding`).
+pub fn holding() -> bool {
+    HOLDING.get()
 }
 impl Drop for Holding {
     fn drop(&mut self) {
         HOLDING.set(self.0);
+    }
+}
+
+/// A packet's bytes, made by the first writer thread that gets to them. Every
+/// recipient sends the same bytes; the others wait for the first to finish.
+pub struct LaterBody(std::sync::LazyLock<Vec<u8>, Box<dyn FnOnce() -> Vec<u8> + Send>>);
+impl LaterBody {
+    pub fn new(make: Box<dyn FnOnce() -> Vec<u8> + Send>) -> Self {
+        Self(std::sync::LazyLock::new(make))
+    }
+}
+impl std::fmt::Debug for LaterBody {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("LaterBody")
+    }
+}
+
+/// A place in a connection's queue for packets a pass beside the tick is still
+/// making: what the tick queues after it goes out after them, and the writer
+/// thread waits here for them. The owner fills it ([`SlotFiller`]).
+pub struct Slot {
+    bodies: std::sync::OnceLock<Vec<PacketBody>>,
+    pending: Arc<AtomicUsize>,
+}
+impl std::fmt::Debug for Slot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Slot")
+    }
+}
+
+/// The pass's end of a [`Slot`]. Dropped unfilled (a pass that panicked), it
+/// leaves the slot empty rather than the writer thread stuck.
+pub struct SlotFiller(Arc<Slot>);
+impl SlotFiller {
+    /// The packets for this place, which count in the queue from now.
+    pub fn fill(&self, bodies: Vec<PacketBody>) {
+        let bytes: usize = bodies.iter().map(PacketBody::queued_bytes).sum();
+        self.0.pending.fetch_add(bytes, Ordering::Relaxed);
+        let _ = self.0.bodies.set(bodies);
+    }
+}
+impl Drop for SlotFiller {
+    fn drop(&mut self) {
+        let _ = self.0.bodies.set(Vec::new());
+    }
+}
+
+/// A private packet buffer or immutable bytes shared by several recipients.
+#[derive(Clone, Debug)]
+pub enum PacketBody {
+    Owned(Vec<u8>),
+    Shared(Arc<[u8]>),
+    /// Several packets end to end, each ending at one of `ends`: a player's
+    /// many small ones of a tick for one allocation. Sent one by one.
+    Run {
+        bytes: Vec<u8>,
+        ends: Vec<u32>,
+    },
+    /// One packet the writer thread makes when it comes to it.
+    Later(Arc<LaterBody>),
+    /// Packets that come from a pass beside the tick, in their place. Has no
+    /// bytes of its own to look at: see [`Self::wait`].
+    Slot(Arc<Slot>),
+}
+
+impl PacketBody {
+    /// What it counts for in the connection's queue until it is written.
+    fn queued_bytes(&self) -> usize {
+        match self {
+            Self::Later(_) => super::chunks::LATER_BODY_BYTES,
+            // Counted when it is filled.
+            Self::Slot(_) => 0,
+            known => known.len(),
+        }
+    }
+    /// A slot not filled yet: [`Self::wait`] would block.
+    fn is_waiting(&self) -> bool {
+        matches!(self, Self::Slot(slot) if slot.bodies.get().is_none())
+    }
+    /// The bodies this stands for, in order: itself, or what its slot is
+    /// filled with, once it is.
+    pub fn wait(&self) -> &[PacketBody] {
+        match self {
+            Self::Slot(slot) => slot.bodies.wait(),
+            one => std::slice::from_ref(one),
+        }
+    }
+    /// The packets of the body, in order.
+    pub fn packets(&self) -> impl Iterator<Item = &[u8]> {
+        let (bytes, ends): (&[u8], &[u32]) = match self {
+            Self::Run { bytes, ends } => (bytes, ends),
+            one => (one, &[]),
+        };
+        let single = (!matches!(self, Self::Run { .. })).then_some(bytes);
+        let mut start = 0;
+        single.into_iter().chain(ends.iter().map(move |&end| {
+            let packet = &bytes[start..end as usize];
+            start = end as usize;
+            packet
+        }))
+    }
+}
+
+/// Same kind and same bytes (a slot: the same slot).
+#[cfg(test)]
+impl PartialEq for PacketBody {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Slot(a), Self::Slot(b)) => Arc::ptr_eq(a, b),
+            (Self::Slot(_), _) | (_, Self::Slot(_)) => false,
+            _ => {
+                std::mem::discriminant(self) == std::mem::discriminant(other)
+                    && self.packets().eq(other.packets())
+            }
+        }
+    }
+}
+
+impl std::ops::Deref for PacketBody {
+    type Target = [u8];
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Owned(body) => body,
+            Self::Shared(body) => body,
+            Self::Run { bytes, .. } => bytes,
+            Self::Later(body) => &body.0,
+            Self::Slot(_) => unreachable!("a slot's bodies are read with wait"),
+        }
     }
 }
 
@@ -231,7 +368,7 @@ impl Drop for Holding {
 pub struct PlayerSender {
     pub tx: Sender<Out>,
     pub pending: Arc<AtomicUsize>,
-    held: Arc<Mutex<Vec<Vec<u8>>>>,
+    held: Arc<Mutex<Vec<PacketBody>>>,
     /// What [`flush_all`] gave the post thread and it hasn't passed on yet.
     posted: Arc<AtomicUsize>,
 }
@@ -244,28 +381,57 @@ impl PlayerSender {
             posted: Arc::default(),
         }
     }
-    fn held(&self) -> std::sync::MutexGuard<'_, Vec<Vec<u8>>> {
+    fn held(&self) -> std::sync::MutexGuard<'_, Vec<PacketBody>> {
         self.held.lock().unwrap_or_else(PoisonError::into_inner)
     }
     pub fn send(&self, body: Vec<u8>) {
-        self.pending.fetch_add(body.len(), Ordering::Relaxed);
+        self.send_body(PacketBody::Owned(body));
+    }
+    /// `Guest::send` with only the sender at hand.
+    pub fn send_packet(&self, packet: &horizon_protocol::packets::play::Clientbound) {
+        self.send(packet.encode());
+    }
+    /// Send bytes other players get too, without a copy for each.
+    pub fn send_shared(&self, body: &Arc<[u8]>) {
+        self.send_body(PacketBody::Shared(body.clone()));
+    }
+    fn send_body(&self, body: PacketBody) {
+        self.pending
+            .fetch_add(body.queued_bytes(), Ordering::Relaxed);
         if HOLDING.get() {
             self.held().push(body);
         } else {
             self.flush();
-            self.deliver(Out::Packet(body));
+            self.deliver(match body {
+                PacketBody::Owned(body) => Out::Packet(body),
+                shared => Out::Packets(vec![shared]),
+            });
         }
+    }
+    /// Keep a place in the queue for packets that come later.
+    pub fn reserve(&self) -> SlotFiller {
+        let slot = Arc::new(Slot {
+            bodies: Default::default(),
+            pending: self.pending.clone(),
+        });
+        self.send_body(PacketBody::Slot(slot.clone()));
+        SlotFiller(slot)
     }
     /// Several packets in order, as [`Self::send`] each: under one lock
     /// while the tick holds them.
     pub fn send_many(&self, bodies: impl IntoIterator<Item = Vec<u8>>) {
+        self.send_bodies(bodies.into_iter().map(PacketBody::Owned));
+    }
+    /// Queue shared and private packet bodies together, retaining their order.
+    pub fn send_bodies(&self, bodies: impl IntoIterator<Item = PacketBody>) {
         if !HOLDING.get() {
-            bodies.into_iter().for_each(|body| self.send(body));
+            bodies.into_iter().for_each(|body| self.send_body(body));
             return;
         }
         let mut held = self.held();
         for body in bodies {
-            self.pending.fetch_add(body.len(), Ordering::Relaxed);
+            self.pending
+                .fetch_add(body.queued_bytes(), Ordering::Relaxed);
             held.push(body);
         }
     }
@@ -963,8 +1129,9 @@ fn play(c: Connection, shared: &Arc<Shared>, parts: Parts, address: std::net::So
         std::thread::Builder::new()
             .name(format!("horizon-lan-out-{conn_id}"))
             .spawn(move || {
-                // Ticks and frames come first (horizon_threads).
-                horizon_threads::behind_server();
+                // Ticks and frames come first (horizon_threads), but a
+                // player's packets are not left to idle time.
+                horizon_threads::behind_server_io();
                 write_loop(writer, rx, alive, latency, pending)
             })
             .ok()
@@ -1124,6 +1291,37 @@ fn send_body(writer: &mut ConnWriter, body: &[u8]) -> horizon_protocol::Result<(
     }
 }
 
+/// Write what the game queued together, for one system call rather than one
+/// per packet: the stream's bytes are the same. False when the connection is
+/// to close: it failed, or the client is too far behind.
+fn write_bodies(
+    writer: &mut ConnWriter,
+    pending: &AtomicUsize,
+    bodies: impl IntoIterator<Item = PacketBody>,
+) -> bool {
+    writer.start_batch();
+    let written = bodies.into_iter().all(|body| {
+        // What comes before a slot still being filled goes out meanwhile:
+        // the client acknowledges a chunk batch as soon as it has it.
+        if body.is_waiting() && writer.finish_batch().is_err() {
+            return false;
+        }
+        writer.start_batch();
+        body.wait().iter().all(|body| {
+            // A later body counted for a guess until now: its bytes from here.
+            if matches!(body, PacketBody::Later(_)) {
+                pending.fetch_add(body.len(), Ordering::Relaxed);
+                pending.fetch_sub(body.queued_bytes(), Ordering::Relaxed);
+            }
+            body.packets().all(|packet| {
+                pending.fetch_sub(packet.len(), Ordering::Relaxed);
+                send_body(writer, packet).is_ok() && pending.load(Ordering::Relaxed) <= MAX_PENDING
+            })
+        })
+    });
+    writer.finish_batch().is_ok() && written
+}
+
 fn write_loop(
     mut writer: ConnWriter,
     rx: Receiver<Out>,
@@ -1135,18 +1333,14 @@ fn write_loop(
     let mut sent_at: Option<(i64, Instant)> = None;
     let mut next = Instant::now() + KEEP_ALIVE_EVERY;
     loop {
-        let mut write = |body: Vec<u8>| {
-            pending.fetch_sub(body.len(), Ordering::Relaxed);
-            send_body(&mut writer, &body).is_ok() && pending.load(Ordering::Relaxed) <= MAX_PENDING
-        };
         match rx.recv_timeout(Duration::from_millis(200)) {
             Ok(Out::Packet(body)) => {
-                if !write(body) {
+                if !write_bodies(&mut writer, &pending, [PacketBody::Owned(body)]) {
                     break;
                 }
             }
             Ok(Out::Packets(bodies)) => {
-                if !bodies.into_iter().all(&mut write) {
+                if !write_bodies(&mut writer, &pending, bodies) {
                     break;
                 }
             }
@@ -1195,6 +1389,139 @@ fn write_loop(
 mod tests {
     use super::*;
 
+    /// The 500-player waypoint send path: individual sends versus one lock per recipient.
+    #[test]
+    #[ignore]
+    fn waypoint_send_benchmark() {
+        use std::hint::black_box;
+        let (tx, _rx) = channel();
+        let senders: Vec<_> = (0..500)
+            .map(|_| PlayerSender::new(tx.clone(), Arc::default()))
+            .collect();
+        let _holding = Holding::start();
+        for batched in [false, true] {
+            let mut samples = Vec::new();
+            for _ in 0..7 {
+                let mut elapsed = Duration::ZERO;
+                for _ in 0..20 {
+                    let start = Instant::now();
+                    for sender in &senders {
+                        let bodies = (0..200).map(|i| black_box(vec![i; 40]));
+                        if batched {
+                            sender.send_many(bodies);
+                        } else {
+                            for body in bodies {
+                                sender.send(body);
+                            }
+                        }
+                    }
+                    elapsed += start.elapsed();
+                    for sender in &senders {
+                        sender.held().clear();
+                        sender.pending.store(0, Ordering::Relaxed);
+                    }
+                }
+                samples.push(elapsed.as_secs_f64() * 1e3 / 20.0);
+            }
+            samples.sort_by(f64::total_cmp);
+            println!(
+                "waypoint_send batched={batched} median_ms_per_tick={:.3}",
+                samples[3]
+            );
+        }
+    }
+
+    #[test]
+    fn shared_and_owned_bodies_keep_order_and_pending_bytes() {
+        let (tx, rx) = channel();
+        let sender = PlayerSender::new(tx, Arc::default());
+        let shared: Arc<[u8]> = vec![2, 3].into();
+        let holding = Holding::start();
+        sender.send(vec![1]);
+        sender.send_bodies([PacketBody::Shared(shared.clone())]);
+        sender.send(vec![4]);
+        drop(holding);
+        sender.flush();
+        let Out::Packets(bodies) = rx.recv().unwrap() else {
+            panic!("expected one held batch")
+        };
+        assert_eq!(
+            bodies.iter().map(|b| &b[..]).collect::<Vec<_>>(),
+            [vec![1], vec![2, 3], vec![4]]
+        );
+        let PacketBody::Shared(body) = &bodies[1] else {
+            panic!("shared buffer was copied")
+        };
+        assert!(Arc::ptr_eq(body, &shared));
+        assert_eq!(sender.pending.load(Ordering::Relaxed), 4);
+    }
+
+    #[test]
+    fn a_slot_keeps_its_place_whenever_it_is_filled() {
+        let (tx, rx) = channel();
+        let sender = PlayerSender::new(tx, Arc::default());
+        let holding = Holding::start();
+        sender.send(vec![1]);
+        let filler = sender.reserve();
+        let dropped = sender.reserve();
+        sender.send(vec![4]);
+        drop(holding);
+        sender.flush();
+        assert_eq!(sender.pending.load(Ordering::Relaxed), 2);
+        let Out::Packets(bodies) = rx.recv().unwrap() else {
+            panic!("expected one held batch")
+        };
+        std::thread::scope(|scope| {
+            let writer = scope.spawn(|| {
+                bodies
+                    .iter()
+                    .flat_map(|b| b.wait())
+                    .flat_map(|b| b.packets())
+                    .map(<[u8]>::to_vec)
+                    .collect::<Vec<_>>()
+            });
+            drop(dropped);
+            filler.fill(vec![PacketBody::Run {
+                bytes: vec![2, 3],
+                ends: vec![1, 2],
+            }]);
+            assert_eq!(writer.join().unwrap(), [vec![1], vec![2], vec![3], vec![4]]);
+        });
+        assert_eq!(sender.pending.load(Ordering::Relaxed), 4);
+    }
+
+    #[test]
+    fn a_later_body_is_made_once_keeps_its_place_and_counts_in_the_queue() {
+        let (tx, rx) = channel();
+        let sender = PlayerSender::new(tx, Arc::default());
+        let made = Arc::new(AtomicUsize::new(0));
+        let body = Arc::new(LaterBody::new(Box::new({
+            let made = made.clone();
+            move || {
+                made.fetch_add(1, Ordering::Relaxed);
+                vec![2, 3]
+            }
+        })));
+        let holding = Holding::start();
+        sender.send(vec![1]);
+        sender.send_bodies([PacketBody::Later(body.clone()), PacketBody::Later(body)]);
+        sender.send(vec![4]);
+        drop(holding);
+        sender.flush();
+        // Queueing it asks nothing of it.
+        assert_eq!(made.load(Ordering::Relaxed), 0);
+        assert_eq!(
+            sender.pending.load(Ordering::Relaxed),
+            2 + 2 * crate::lan::chunks::LATER_BODY_BYTES
+        );
+        let Out::Packets(bodies) = rx.recv().unwrap() else {
+            panic!("expected one held batch")
+        };
+        let packets: Vec<_> = bodies.iter().flat_map(|b| b.packets()).collect();
+        assert_eq!(packets, [&[1][..], &[2, 3], &[2, 3], &[4]]);
+        assert_eq!(made.load(Ordering::Relaxed), 1);
+    }
+
     #[test]
     fn prompts_become_the_components_vanilla_sends() {
         let tag = |json: &str| {
@@ -1216,7 +1543,7 @@ mod tests {
     fn unpack(out: Out) -> Vec<Vec<u8>> {
         match out {
             Out::Packet(body) => vec![body],
-            Out::Packets(bodies) => bodies,
+            Out::Packets(bodies) => bodies.into_iter().map(|body| body.to_vec()).collect(),
             Out::Disconnect(_) => vec![b"disconnect".to_vec()],
             Out::Close => vec![b"close".to_vec()],
         }

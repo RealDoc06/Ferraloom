@@ -66,19 +66,20 @@ pub(super) struct LanHost {
     /// The guests' models in the host's world.
     pub models: HashMap<u32, Mob>,
     host_mode: i32,
-    pub play: HashMap<u32, super::lan_actions::GuestPlay>,
+    pub play: horizon_client::fast_hash::FxHashMap<u32, Box<super::lan_actions::GuestPlay>>,
     /// Blocks broken this tick (their sound is a level event for the guests).
     pub broken: Vec<[f64; 3]>,
     /// Hurt time, death and swing time (while swinging) of the mobs guests see.
     mob_state: HashMap<super::Dim, HashMap<u32, (i32, bool, Option<i32>)>>,
     /// The guest each mob sees as its player, when not the host (game/lan_mobs.rs).
-    pub mob_players: HashMap<u32, u32>,
+    pub mob_players: horizon_client::fast_hash::FxHashMap<u32, u32>,
     /// An integrated server's owner (game/integrated.rs).
     pub owner: Option<Owner>,
     /// The players' locator bars, one waypoint manager per level by
     /// dimension id (game/lan_waypoints.rs), and the guests who are dead,
     /// whose respawn replaces their waypoint.
-    pub waypoints: std::collections::HashMap<String, lan::waypoints::Waypoints>,
+    pub waypoints: std::collections::HashMap<String, lan::waypoints::ParallelWaypoints>,
+    pub(super) waypoint_tick: super::lan_waypoints::WaypointTick,
     pub waypoint_dead: std::collections::HashSet<u128>,
     /// The world border as the guests were last told of it (lan/border.rs).
     pub border_sent: Option<lan::border::Sent>,
@@ -89,7 +90,7 @@ pub(super) struct LanHost {
     pub quiet: std::collections::VecDeque<super::lan_quiet::QuietBatch>,
     /// The entities the guests track, described again every tick
     /// (`lan_entities`) over last tick's states.
-    states: lan::entity::States,
+    states: std::sync::Arc<lan::entity::States>,
 }
 
 impl LanHost {
@@ -187,12 +188,13 @@ pub(super) fn baby_index(kind: &str) -> Option<u8> {
 /// own: `mob_meta`'s arms hold these mobs' other entries.
 fn mob_variant_meta(
     m: &Mob,
-    hub: &Hub,
+    sync: &SyncData,
     meta: &mut Vec<(u8, i32, Value)>,
     defaults: &mut Vec<(u8, i32, Value)>,
 ) {
     let (kind, e) = (m.kind.id.as_str(), &m.extra);
-    let id = |registry: &str, name: &str| hub.registry_id(registry, &format!("minecraft:{name}"));
+    let id =
+        |registry: &str, name: &str| super::stats::namespaced(name, |name| sync.id(registry, name));
     match kind {
         // Axolotl.DATA_VARIANT (after AgeableMob's two).
         "minecraft:axolotl" => {
@@ -312,13 +314,16 @@ fn mob_variant_meta(
     }
 }
 
+/// Mobs per piece of `lan_entities`' pass on the pool.
+const MOB_STATE_GRAIN: usize = 128;
+
 /// A mob's synched data as ServerEntity sends it (only the values that differ
 /// from the defaults the client constructs), with vanilla's entry indices:
 /// Entity 0..=7, LivingEntity 8..=14, Mob 15, then the subclasses.
 /// `defaults` gets the defaults of the entries that can go back to theirs.
 fn mob_meta(
     m: &Mob,
-    hub: &Hub,
+    sync: &SyncData,
     player_entity: Option<i32>,
     game_time: i64,
     meta: &mut Vec<(u8, i32, Value)>,
@@ -373,7 +378,7 @@ fn mob_meta(
     // LivingEntity.DATA_EFFECT_PARTICLES and DATA_EFFECT_AMBIENCE_ID: the
     // swirls of its effects (the ones a mob has are visible, not ambient).
     meta.extend(
-        hub.effect_meta(
+        sync.effect_meta(
             (m.extra.effects.iter())
                 .filter(|e| !m.extra.hidden_effects.contains(&e.0))
                 .map(|e| (e.0, false)),
@@ -398,8 +403,9 @@ fn mob_meta(
         defaults.push((index, serializer::BOOLEAN, Value::Bool(false)));
     }
     let e = &m.extra;
-    let id = |registry: &str, name: &str| hub.registry_id(registry, &format!("minecraft:{name}"));
-    mob_variant_meta(m, hub, meta, defaults);
+    let id =
+        |registry: &str, name: &str| super::stats::namespaced(name, |name| sync.id(registry, name));
+    mob_variant_meta(m, sync, meta, defaults);
     match kind {
         "minecraft:guardian" | "minecraft:elder_guardian" => {
             // Guardian.DATA_ID_MOVING and DATA_ID_ATTACK_TARGET.
@@ -901,7 +907,7 @@ fn mob_freeze_meta(
 /// off hand, feet, legs, chest, head, body, saddle).
 fn mob_equipment(
     m: &Mob,
-    hub: &mut Hub,
+    sync: &SyncData,
     out: &mut Vec<(u8, Option<horizon_protocol::item::Stack>)>,
 ) {
     let e = &m.extra;
@@ -933,7 +939,7 @@ fn mob_equipment(
                     None
                 },
             };
-            out.push((slot, hub.stack(&Some(stack))));
+            out.push((slot, sync.stack(&stack)));
         }
     }
     if e.saddled {
@@ -943,7 +949,7 @@ fn mob_equipment(
             damage: 0,
             extra: None,
         });
-        out.push((7, hub.stack(&Some(stack))));
+        out.push((7, sync.stack(&stack)));
     }
 }
 
@@ -1165,13 +1171,14 @@ impl Game<'_> {
             host_name: self.options.player_name(),
             models: HashMap::new(),
             host_mode: self.mode_id(),
-            play: HashMap::new(),
+            play: Default::default(),
             broken: Vec::new(),
             mob_state: HashMap::new(),
-            mob_players: HashMap::new(),
+            mob_players: Default::default(),
             owner: None,
             waypoints: Default::default(),
             waypoint_dead: Default::default(),
+            waypoint_tick: Default::default(),
             border_sent: None,
             commands: Vec::new(),
             quiet: std::collections::VecDeque::new(),
@@ -1406,25 +1413,29 @@ impl Game<'_> {
     fn lan_entities(
         &self,
         host_entity: Option<i32>,
-        mob_players: &HashMap<u32, u32>,
+        mob_players: &horizon_client::fast_hash::FxHashMap<u32, u32>,
         hub: &mut Hub,
         out: &mut States,
     ) {
         out.clear();
-        for m in self.mobs.iter().filter(|m| !m.removed) {
-            // The lead's holder: the player the mob sees (a guest, else the
-            // host), another mob or a fence knot (game/lan_entities.rs).
+        // The player each mob sees (a guest, else the host).
+        let mut mobs: Vec<(&Mob, Option<i32>, &mut EntityState)> = Vec::new();
+        let live = self.mobs.iter().filter(|m| !m.removed);
+        let slots = out.take(live.clone().count());
+        for (m, e) in live.zip(slots) {
             let player_entity = mob_players
                 .get(&m.id)
                 .and_then(|conn| hub.guest(*conn))
                 .map(|g| g.entity_id)
                 .or(host_entity);
-            let leash = m.extra.leash.and_then(|h| match h {
-                Holder::Player => player_entity,
-                Holder::Mob(id) => Some(id as i32),
-                Holder::Knot(p) => self.knot_ids.get(&p).map(|&id| id as i32),
-            });
-            let e = out.add(m.id as i32, entity_uuid(m.id), m.kind.id.as_str());
+            mobs.push((m, player_entity, e));
+        }
+        // Each state is made from its mob alone, on the pool's threads: every
+        // state is its own, so the list comes out as one thread makes it.
+        let (sync, game_time) = (hub.registries(), self.world.game_time);
+        let (sources, knots) = (self.attribute_sources(), &self.knot_ids);
+        horizon_threads::pool::for_each_mut(&mut mobs, MOB_STATE_GRAIN, |(m, player_entity, e)| {
+            e.reset(m.id as i32, entity_uuid(m.id), m.kind.id.as_str());
             e.position = [m.position.x, m.position.y, m.position.z];
             (e.yaw, e.pitch, e.head_yaw) = (m.yaw, m.head_pitch, m.head_yaw);
             e.on_ground = m.on_ground;
@@ -1432,9 +1443,9 @@ impl Game<'_> {
             e.needs_sync = m.needs_sync;
             mob_meta(
                 m,
-                hub,
-                player_entity,
-                self.world.game_time,
+                sync,
+                *player_entity,
+                game_time,
                 &mut e.meta,
                 &mut e.defaults,
             );
@@ -1442,12 +1453,18 @@ impl Game<'_> {
             e.precise = m.species() == horizon_client::mobs::Species::HappyGhast
                 && horizon_client::mobs::happy_ghast::on_still_timeout(m);
             mob_freeze_meta(m, &mut e.meta, &mut e.defaults);
-            mob_equipment(m, hub, &mut e.equipment);
-            self.mob_attributes(m, &mut e.attributes);
-            e.leash = leash;
-        }
+            mob_equipment(m, sync, &mut e.equipment);
+            sources.mob_attributes(m, &mut e.attributes);
+            // The lead's holder: the player the mob sees, another mob or a
+            // fence knot (game/lan_entities.rs).
+            e.leash = m.extra.leash.and_then(|h| match h {
+                Holder::Player => *player_entity,
+                Holder::Mob(id) => Some(id as i32),
+                Holder::Knot(p) => knots.get(&p).map(|&id| id as i32),
+            });
+        });
         for d in &self.dropped {
-            let stack = hub.stack(&Some(d.stack.clone()));
+            let stack = hub.stack_of(&d.stack);
             let e = out.add(d.id as i32, entity_uuid(d.id), "minecraft:item");
             e.position = [d.position.x, d.position.y, d.position.z];
             e.on_ground = d.on_ground;
@@ -1478,6 +1495,8 @@ impl Game<'_> {
         let Some(mut host) = self.lan.take() else {
             return;
         };
+        // The last tick's tracking pass gives back what it read.
+        host.hub.finish_tracking();
         // What the tick sends a guest goes to its connection at the end.
         let holding = lan::Holding::start();
         // The host's own commands' (and command blocks') players moving
@@ -1502,7 +1521,8 @@ impl Game<'_> {
         // A dedicated server runs the hub without a host player.
         if state.is_some() || host.hub.config.dedicated {
             let has_guests = !host.hub.guests.is_empty();
-            let mut states = std::mem::take(&mut host.states);
+            let mut states =
+                std::sync::Arc::into_inner(std::mem::take(&mut host.states)).unwrap_or_default();
             if has_guests {
                 let host_entity = state.as_ref().map(|s| s.entity_id);
                 self.lan_assign_ids();
@@ -1513,8 +1533,10 @@ impl Game<'_> {
                     .filter_map(|g| Some((g.vehicle?, g.entity_id)))
                     .collect();
                 self.lan_riding(host_entity, &guests, &mut host.hub.riding);
-                self.lan_entities(host_entity, &host.mob_players, &mut host.hub, &mut states);
-                self.lan_hook_states(host_entity, &host.play, &host.hub, &mut states);
+                horizon_client::spans::time("lan_entities", || {
+                    self.lan_entities(host_entity, &host.mob_players, &mut host.hub, &mut states);
+                    self.lan_hook_states(host_entity, &host.play, &host.hub, &mut states);
+                });
             } else {
                 states.clear();
             }
@@ -1532,6 +1554,7 @@ impl Game<'_> {
             for (pos, b0, b1, state) in std::mem::take(&mut self.lan_block_events) {
                 host.hub.block_event(pos, b0, b1, state);
             }
+            let states = std::sync::Arc::new(states);
             let entities = states.as_slice();
             // An entity that left the level since the last tick (a snowball
             // that hit) is dropped by the tracker below: its event goes out
@@ -1567,6 +1590,10 @@ impl Game<'_> {
                 );
                 host.hub
                     .set_immediate_respawn(self.ui.rules.bool("immediate_respawn"));
+                // A dedicated server tracks its entities beside the tick.
+                if host.hub.config.dedicated {
+                    host.hub.entity_states = Some(states.clone());
+                }
                 // A server with several levels runs a pass for each
                 // (`tick_server`): the network is read once, before the first.
                 let pass = self.level_pass;
@@ -1575,7 +1602,11 @@ impl Game<'_> {
                 } else {
                     Vec::new()
                 };
-                events.extend(host.hub.tick_level(&mut ctx));
+                events.extend(horizon_client::spans::time("lan_tick_level", || {
+                    host.hub.tick_level(&mut ctx)
+                }));
+                // Not left for the next tick's: nothing here to track.
+                host.hub.entity_states = None;
                 if pass.last {
                     host.hub.end_tick();
                 }
@@ -1694,18 +1725,22 @@ impl Game<'_> {
         }
         self.lan_flush_effects(&mut host);
         if !paused {
-            self.tick_guests(&mut host);
+            horizon_client::spans::time("lan_guests", || self.tick_guests(&mut host));
         }
         self.lan_living_flags(&mut host);
         self.tick_server_travel(&mut host);
         self.lan_swings(&mut host);
         self.lan_update_streaming(&host);
         self.lan_update_models(&mut host);
-        self.lan_update_waypoints(&mut host, state.as_ref());
+        horizon_client::spans::time("lan_waypoints", || {
+            self.lan_update_waypoints(&mut host, state.as_ref());
+        });
         self.lan_sync_scoreboard(&mut host);
         self.lan_sync_border(&mut host);
         drop(holding);
-        lan::flush_all(host.hub.guests.iter().map(|g| &g.sender));
+        horizon_client::spans::time("lan_flush", || {
+            lan::flush_all(host.hub.guests.iter().map(|g| &g.sender));
+        });
         self.lan = Some(host);
         // A blast from a guest's attack, and a mace's wind burst.
         self.flush_lan_explosions();

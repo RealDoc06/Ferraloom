@@ -149,7 +149,10 @@ pub struct Guest {
     pub loaded: bool,
     // Chunks.
     pub center: Option<(i32, i32)>,
-    pub sent_chunks: crate::fast_hash::FxHashSet<(i32, i32)>,
+    pub sent_chunks: Arc<crate::fast_hash::FxHashSet<(i32, i32)>>,
+    /// A box every chunk of `sent_chunks` lies in, which a broadcast to
+    /// the guests that have a chunk checks before the set.
+    pub sent_bounds: SentBounds,
     pub chunk_queue: Vec<(i32, i32)>,
     /// PlayerChunkSender: batches sent but not yet acknowledged, how many
     /// may be (1 until the client's first acknowledgement, then 10), the
@@ -159,6 +162,7 @@ pub struct Guest {
     pub chunks_per_tick: f32,
     pub batch_quota: f32,
     // Entities.
+    /// With the tracking pass while one runs: `Hub::finish_tracking` first.
     pub tracker: Tracker,
     // Player state the gameplay code reads and writes.
     pub motion: Option<Box<PlayerMotion>>,
@@ -316,6 +320,7 @@ impl Guest {
             loaded: false,
             center: None,
             sent_chunks: Default::default(),
+            sent_bounds: SentBounds::default(),
             chunk_queue: Vec::new(),
             unacknowledged: 0,
             max_unacknowledged: 1,
@@ -463,13 +468,17 @@ impl Guest {
     /// result, 1..=4 crafting grid, 5..=8 armor, 9..=35 main, 36..=44 hotbar,
     /// 45 off hand.
     pub fn menu_slot(&self, slot: usize) -> Option<ItemStack> {
+        self.menu_slot_ref(slot).cloned()
+    }
+    /// The stack in an inventory menu slot (`menu_slot`), borrowed.
+    pub fn menu_slot_ref(&self, slot: usize) -> Option<&ItemStack> {
         match slot {
-            0 => self.craft_result.clone(),
-            1..=4 => self.craft_grid[slot - 1].clone(),
-            5..=8 => self.armor[slot - 5].clone(),
-            9..=35 => self.inventory.get(slot).cloned().flatten(),
-            36..=44 => self.inventory.get(slot - 36).cloned().flatten(),
-            45 => self.offhand.clone(),
+            0 => self.craft_result.as_ref(),
+            1..=4 => self.craft_grid[slot - 1].as_ref(),
+            5..=8 => self.armor[slot - 5].as_ref(),
+            9..=35 => self.inventory.get(slot).and_then(Option::as_ref),
+            36..=44 => self.inventory.get(slot - 36).and_then(Option::as_ref),
+            45 => self.offhand.as_ref(),
             _ => None,
         }
     }
@@ -531,15 +540,22 @@ pub fn stack_to_network(
     synced_id: impl Fn(&str, &str) -> Option<i32>,
     s: &Option<ItemStack>,
 ) -> Option<Stack> {
+    network_stack(&item_id, &synced_id, s.as_ref()?)
+}
+/// `stack_to_network` of a stack in place.
+pub fn stack_ref_to_network(
+    item_id: impl Fn(&str) -> i32,
+    synced_id: impl Fn(&str, &str) -> Option<i32>,
+    s: &ItemStack,
+) -> Option<Stack> {
     network_stack(&item_id, &synced_id, s)
 }
 fn network_stack(
     item_id: &dyn Fn(&str) -> i32,
     synced_id: &dyn Fn(&str, &str) -> Option<i32>,
-    s: &Option<ItemStack>,
+    s: &ItemStack,
 ) -> Option<Stack> {
     let enchantment_id = |name: &str| synced_id("minecraft:enchantment", name);
-    let s = s.as_ref()?;
     let mut stack = Stack::new(item_id(&s.item), s.count as i32);
     if s.damage > 0 {
         stack.added.push((
@@ -650,7 +666,7 @@ fn network_stack(
             let charged = d
                 .charged
                 .iter()
-                .filter_map(|c| network_stack(item_id, synced_id, &Some(c.clone())))
+                .filter_map(|c| network_stack(item_id, synced_id, c))
                 .collect();
             stack.added.push((
                 horizon_protocol::item::component::CHARGED_PROJECTILES,
@@ -662,7 +678,7 @@ fn network_stack(
             let contents = d
                 .bundle_contents
                 .iter()
-                .filter_map(|c| network_stack(item_id, synced_id, &Some(c.clone())))
+                .filter_map(|c| network_stack(item_id, synced_id, c))
                 .collect();
             stack.added.push((
                 horizon_protocol::item::component::BUNDLE_CONTENTS,
@@ -770,5 +786,40 @@ mod tests {
         chestplate.data_mut().trim = Some(("minecraft:x".into(), "coast".into()));
         let stack = stack_to_network(|_| 7, synced_id, &Some(chestplate)).unwrap();
         assert_eq!(stack.component(component::TRIM), None);
+    }
+}
+
+/// Chunk coordinates `[min x, min z, max x, max z]` holding every chunk a
+/// guest was sent: grown by each chunk sent, cut to the view's square when
+/// the view moves, emptied with the set. A superset, so `may_hold` never
+/// turns a chunk away that the set has.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SentBounds([i32; 4]);
+impl Default for SentBounds {
+    fn default() -> Self {
+        Self([i32::MAX, i32::MAX, i32::MIN, i32::MIN])
+    }
+}
+impl SentBounds {
+    pub fn add(&mut self, (x, z): (i32, i32)) {
+        let b = &mut self.0;
+        *b = [b[0].min(x), b[1].min(z), b[2].max(x), b[3].max(z)];
+    }
+    /// Keep to `lo..=hi` (each `[x, z]`), where every chunk left lies.
+    pub fn within(&mut self, lo: [i32; 2], hi: [i32; 2]) {
+        let b = &mut self.0;
+        *b = [
+            b[0].max(lo[0]),
+            b[1].max(lo[1]),
+            b[2].min(hi[0]),
+            b[3].min(hi[1]),
+        ];
+    }
+    pub fn clear(&mut self) {
+        *self = Self::default();
+    }
+    pub fn may_hold(&self, (x, z): (i32, i32)) -> bool {
+        let b = &self.0;
+        (b[0]..=b[2]).contains(&x) && (b[1]..=b[3]).contains(&z)
     }
 }

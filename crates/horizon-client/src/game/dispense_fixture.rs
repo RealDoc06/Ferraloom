@@ -520,7 +520,7 @@ impl Game<'_> {
             });
         }
         player.health.food.food = op["food"].as_i64().unwrap_or(20) as i32;
-        self.player = Some(player);
+        self.player = Some(Box::new(player));
         self.yaw = op["yaw"].as_f64().unwrap_or(0.0) as f32;
         self.pitch = 90.0;
         self.keys.clear();
@@ -634,7 +634,7 @@ impl Game<'_> {
             player.impulse.impact_position = Some(v3(&op["impact"]));
         }
         let feet = [player.position.x, player.position.y, player.position.z];
-        self.player = Some(player);
+        self.player = Some(Box::new(player));
         self.inventory[self.selected] = stack.clone();
         let used_before = stack
             .as_ref()
@@ -840,14 +840,14 @@ impl Game<'_> {
         let stack = parse_stack(op["item"].as_str().unwrap_or("-"))?;
         self.mode = GameMode::Survival;
         self.creative = false;
-        self.player = Some(PlayerMotion::new(
+        self.player = Some(Box::new(PlayerMotion::new(
             self.motion,
             horizon_core::geometry::Vec3::new(
                 f64::from(pos.x) + 0.5,
                 f64::from(pos.y) + 1.0,
                 f64::from(pos.z) + 3.5,
             ),
-        )?);
+        )?));
         self.yaw = 0.0;
         self.pitch = 90.0;
         self.keys.clear();

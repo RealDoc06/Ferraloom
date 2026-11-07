@@ -2955,7 +2955,7 @@ impl Game<'_> {
                     }
                 }
                 for (ty, key, count) in known {
-                    self.stats.values.entry(ty).or_default().insert(key, count);
+                    self.stats.set(ty, key, count);
                 }
             }
             // ClientPacketListener.setActionBarText, setTitleText,
@@ -3503,7 +3503,7 @@ impl Game<'_> {
                 // Player.tick derives noPhysics from the current game mode.
                 player.spectator = self.spectator();
                 player.velocity = delta;
-                self.player = Some(player);
+                self.player = Some(Box::new(player));
                 self.pad.player_replaced();
                 self.sway = Default::default();
                 self.eye = 1.62;

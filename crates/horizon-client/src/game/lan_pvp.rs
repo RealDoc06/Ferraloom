@@ -332,7 +332,7 @@ impl Game<'_> {
         }
         if hurt && (s.crit || s.magic) {
             let target = match victim {
-                Victim::Host => self.player.as_ref().map(|p| (host.host_entity, p)),
+                Victim::Host => self.player.as_deref().map(|p| (host.host_entity, p)),
                 Victim::Guest(conn) => host
                     .hub
                     .guest(conn)
