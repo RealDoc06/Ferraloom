@@ -1,6 +1,8 @@
 //! Scheduling hints for the game's threads: the few OS calls that the other
 //! crates, which forbid unsafe code, can't make themselves.
 
+pub mod pool;
+
 #[cfg(target_os = "linux")]
 mod affinity;
 #[cfg(target_os = "linux")]

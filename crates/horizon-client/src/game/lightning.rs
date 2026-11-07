@@ -29,7 +29,9 @@ impl Game<'_> {
         if rain <= 0.2 || thunder <= 0.9 || self.dim != super::Dim::Overworld {
             return;
         }
-        let (_, mut chunks) = self.spawning_chunks(&self.level_players());
+        let players = self.level_players();
+        let close = super::natural_spawning::non_spectators(&players);
+        let (_, mut chunks) = self.spawning_chunks(&players, &close);
         let levels = self.tickets.levels();
         chunks.retain(|&(x, z)| levels.random_ticking(x, z));
         for (cx, cz) in chunks {

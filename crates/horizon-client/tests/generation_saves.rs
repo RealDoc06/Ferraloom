@@ -310,6 +310,58 @@ fn chunks_left_behind_keep_their_decoration() {
     }
 }
 
+/// A server's players moving: their areas cross chunks, teleport, leave and
+/// come back. Debug builds check each update's unloading, finishing and
+/// decoration against a full scan of every column (`Streaming::update`); here
+/// the columns come out whole, each finished once, and those wanted are there.
+#[test]
+fn moving_players_areas_finish_what_they_reach() {
+    let Some(context) = context() else { return };
+    for budgeted in [false, true] {
+        let generator = Arc::new(Recorder::default());
+        let mut session = Session::new(generator.clone(), context.clone(), budgeted);
+        session.streaming.radius = 1;
+        let mut extra: Vec<((i32, i32), i32)> =
+            (0..8).map(|i| ((i * 9 - 30, 40 - i * 5), 3)).collect();
+        let deadline = Instant::now() + Duration::from_secs(120);
+        for update in 0..600 {
+            assert!(Instant::now() < deadline, "moving areas never settled");
+            session.streaming.extra.clone_from(&extra);
+            session.update();
+            thread::sleep(Duration::from_millis(1));
+            match update % 40 {
+                // Everyone walks, one chunk at a time.
+                0 | 10 | 20 | 30 => extra.iter_mut().for_each(|a| a.0.0 += 1),
+                // One teleports, and one leaves and joins again elsewhere.
+                5 => extra[3].0 = (-extra[3].0.0, extra[3].0.1 + 20),
+                15 => drop(extra.remove(2)),
+                25 => extra.push(((update / 8, -30), 3)),
+                _ => {}
+            }
+        }
+        session.streaming.extra.clone_from(&extra);
+        session.settle_at((0, 0));
+        let finished = generator.finished.lock().unwrap();
+        assert!(finished.len() > 200, "only {} finished", finished.len());
+        for (&(x, z), finishes) in finished.iter() {
+            assert_eq!(finishes.len(), 1, "({x}, {z}) was finished again");
+            let mut writes = finishes[0].writes.clone();
+            writes.sort_unstable();
+            let neighbours: Vec<(i32, i32)> = (-1..=1)
+                .flat_map(|dx| (-1..=1).map(move |dz| (x + dx, z + dz)))
+                .collect();
+            assert_eq!(writes, neighbours, "({x}, {z})");
+        }
+        for &((cx, cz), r) in &extra {
+            for z in cz - r..=cz + r {
+                for x in cx - r..=cx + r {
+                    assert!(session.world.chunks.contains_key(&(x, z)), "({x}, {z})");
+                }
+            }
+        }
+    }
+}
+
 /// A saved proto chunk comes back exactly: the bastion region of #249, its
 /// centre decorated (writing into all nine chunks), saved and restored onto
 /// chunks generated again finishes into the same columns.

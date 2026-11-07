@@ -9,6 +9,7 @@ use horizon_client::{
     Result,
     block_entities::{Pos, Ticking},
     containers::{BlockEntity, FurnaceKind, HOPPER_SLOTS},
+    mobs::player_index::PlayerIndex,
 };
 use horizon_core::position::BlockPos;
 use horizon_world::registry::BlockStateId;
@@ -28,6 +29,12 @@ impl Game<'_> {
         let mut spawners = Vec::new();
         let mut trial_spawners = Vec::new();
         self.item_columns = Some(Default::default());
+        self.block_entity_players = Some(PlayerIndex::new(
+            self.level_players()
+                .iter()
+                .filter(|p| p.alive && !p.spectator)
+                .map(|p| [p.position.x, p.position.y, p.position.z]),
+        ));
         for slot in self.world.block_entity_tickers() {
             let pos = slot.0;
             // Ticks before this one can remove it (`TickingBlockEntity.isRemoved`).
@@ -64,6 +71,7 @@ impl Game<'_> {
         }
         // Items move between passes: the columns hold for this one only.
         self.item_columns = None;
+        self.block_entity_players = None;
         self.update_song_volumes();
         self.scan_for_hearts();
         // The client ticks (particles, sounds, the turning mob) are for a

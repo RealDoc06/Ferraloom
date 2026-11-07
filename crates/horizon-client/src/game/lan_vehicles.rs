@@ -94,7 +94,7 @@ impl Game<'_> {
     /// `Player.rideTick` for a server player, before its moves this tick:
     /// it stays in its seat, steers its minecart, or gets out.
     pub(super) fn guest_vehicle_tick(&mut self, host: &mut LanHost, conn: u32) {
-        let Some(gi) = host.hub.guests.iter().position(|g| g.conn == conn) else {
+        let Some(gi) = host.hub.guest_index(conn) else {
             return;
         };
         let g = &host.hub.guests[gi];
@@ -163,7 +163,7 @@ impl Game<'_> {
     /// After an interaction: a player that got into a vehicle sits in it,
     /// and its last good vehicle position is where the vehicle is.
     pub(super) fn guest_boarded(&mut self, host: &mut LanHost, conn: u32, before: Option<u32>) {
-        let Some(gi) = host.hub.guests.iter().position(|g| g.conn == conn) else {
+        let Some(gi) = host.hub.guest_index(conn) else {
             return;
         };
         let Some(vehicle) = host.hub.guests[gi].vehicle else {
@@ -226,7 +226,7 @@ impl Game<'_> {
         conn: u32,
         p: &play::MoveVehicleRequest,
     ) {
-        let Some(gi) = host.hub.guests.iter().position(|g| g.conn == conn) else {
+        let Some(gi) = host.hub.guest_index(conn) else {
             return;
         };
         let [x, y, z] = p.position;

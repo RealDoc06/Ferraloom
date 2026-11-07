@@ -1,7 +1,7 @@
 //! The creaking heart block entity in the game: `mobs::creaking_heart`
 //! ticks each heart (spawning, letting go of and bleeding for its creaking)
 //! and this applies what it reports to the world, the mobs and the speakers.
-use super::{Game, creatures::seen};
+use super::Game;
 use horizon_client::{
     Result,
     containers::{BlockEntity, CreakingHeart},
@@ -111,11 +111,11 @@ impl Game<'_> {
         let mut random = self.world.random.clone();
         let spawning = self.spawning_monsters();
         let creaking = self.res.mob_types().get("minecraft:creaking").cloned();
-        let player_uuid = self.level.player_uuid;
-        let snapshot: Vec<_> = mobs.iter().map(|m| seen(m, player_uuid)).collect();
         let mut events = Vec::new();
         let added = {
-            let w = self.mob_world_base(&snapshot);
+            // A heart reads blocks and the player from this, never other mobs:
+            // they come through the host.
+            let w = self.mob_world_base(&[]);
             let mut host = Host {
                 mobs: &mut mobs,
                 added: Vec::new(),

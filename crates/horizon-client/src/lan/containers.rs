@@ -21,7 +21,7 @@ impl Hub {
 
     /// Send to every placed guest within `range` blocks of `at`.
     pub fn broadcast_near(&self, at: [f64; 3], range: f64, packet: &C, except: Option<u32>) {
-        let body = packet.encode();
+        let body: std::sync::Arc<[u8]> = packet.encode().into();
         for g in self
             .guests
             .iter()
@@ -29,7 +29,7 @@ impl Hub {
         {
             let d: f64 = (0..3).map(|k| (g.position[k] - at[k]).powi(2)).sum();
             if d <= range * range {
-                g.sender.send(body.clone());
+                g.sender.send_shared(&body);
             }
         }
     }
@@ -219,7 +219,7 @@ impl Hub {
         else {
             return;
         };
-        let Some(i) = self.guests.iter().position(|g| g.conn == conn) else {
+        let Some(i) = self.guest_index(conn) else {
             return;
         };
         self.close_container_at(i);
@@ -259,7 +259,7 @@ impl Hub {
             .builtin
             .get("minecraft:menu")
             .and_then(|m| m.id(menu))?;
-        let i = self.guests.iter().position(|g| g.conn == conn)?;
+        let i = self.guest_index(conn)?;
         self.close_container_at(i);
         let g = &mut self.guests[i];
         g.next_window = g.next_window % 100 + 1;
@@ -276,7 +276,7 @@ impl Hub {
     /// window id opens mount `entity`'s inventory with its chest's columns
     /// (ClientboundMountScreenOpenPacket).
     pub fn open_mount_window(&mut self, conn: u32, columns: i32, entity: i32) -> Option<i32> {
-        let i = self.guests.iter().position(|g| g.conn == conn)?;
+        let i = self.guest_index(conn)?;
         self.close_container_at(i);
         let g = &mut self.guests[i];
         g.next_window = g.next_window % 100 + 1;
@@ -325,7 +325,7 @@ impl Hub {
     }
 
     pub fn close_container(&mut self, conn: u32) {
-        if let Some(i) = self.guests.iter().position(|g| g.conn == conn) {
+        if let Some(i) = self.guest_index(conn) {
             self.close_container_at(i);
         }
     }
@@ -369,7 +369,7 @@ impl Hub {
         world: &mut World,
         rules: &dyn Rules,
     ) -> Vec<ItemStack> {
-        let Some(i) = self.guests.iter().position(|g| g.conn == conn) else {
+        let Some(i) = self.guest_index(conn) else {
             return Vec::new();
         };
         let in_menu = p.container != 0;
@@ -437,7 +437,7 @@ impl Hub {
     /// menu: a container's own slots, or the inventory's. A bundle's selection
     /// lives on the server's stack until the click that takes from it.
     pub fn select_bundle_item(&mut self, conn: u32, slot: usize, index: i32, world: &mut World) {
-        let Some(g) = self.guests.iter_mut().find(|g| g.conn == conn) else {
+        let Some(g) = self.guest_mut(conn) else {
             return;
         };
         let open = g.menu.as_ref().map(|m| (m.size, m.slots));
@@ -478,7 +478,7 @@ impl Hub {
         world: &World,
         changed: &[usize],
     ) {
-        if let Some(i) = self.guests.iter().position(|g| g.conn == conn) {
+        if let Some(i) = self.guest_index(conn) {
             self.answer_click(i, p, world, changed);
         }
     }

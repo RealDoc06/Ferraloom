@@ -30,11 +30,11 @@ use horizon_client::{
     mobs::{
         MobTypes, Species,
         data::MobData,
+        player_index::PlayerIndex,
         spawn_rules::{Dimension, SpawnLevel},
         spawn_selection::{
             self, Category, Counted, Event, GenEvent, Heightmap, NaturalLevel, SpawnCost,
-            SpawnPlayer, SpawnRequest, SpawnState, Spawned, StructureAt, StructureSpawns,
-            spawn_box,
+            SpawnRequest, SpawnState, Spawned, StructureAt, StructureSpawns, spawn_box,
         },
         spawner::{Spawner, SpawnerAdded, SpawnerEvent, SpawnerLevel, SpawnerSpawn},
         species::{self, Baby},
@@ -303,9 +303,6 @@ impl NaturalLevel for World<'_> {
     }
     fn structure_spawns(&self) -> &StructureSpawns {
         self.s.structures
-    }
-    fn nearest_player_positions(&self) -> &[[f64; 3]] {
-        &self.nearest
     }
     fn respawn(&self) -> Option<[i32; 3]> {
         self.respawn
@@ -827,18 +824,10 @@ pub fn main() -> horizon_client::Result<()> {
                     })
                 })
                 .collect();
-            let players = world
-                .players
-                .iter()
-                .map(|(p, mode)| SpawnPlayer {
-                    position: *p,
-                    spectator: mode == "spectator",
-                })
-                .collect();
             let mut state = SpawnState::new(
                 &world,
                 get("chunkcount", "289").parse()?,
-                players,
+                PlayerIndex::new(world.nearest.iter().copied()),
                 &counted,
                 |cx, cz| !world.unloaded.contains(&(cx, cz)),
             );
