@@ -1,7 +1,7 @@
 //! What mobs read from the level: block solidity, ray clipping for line of
 //! sight (`ClipContext.Block.COLLIDER`), sky visibility, light-dependent
 //! values and the positions of other entities.
-use super::{MobWorld, Seen, Who, data};
+use super::{MobWorld, Seen, Who, data, tick_loop};
 use crate::{
     blocks::{BlockFacts, Fluid},
     collisions::SceneCollisions,
@@ -14,6 +14,35 @@ use horizon_world::{
     block_collision::{BlockCollisionRegistry, DynamicCollisionWorld},
     registry::BlockStateId,
 };
+
+/// The other mobs a mob's tick sees ([`MobWorld::others`]). Reading them
+/// all goes through here, so a speculative tick knows it did (`tick_loop`);
+/// [`MobWorld::others_near`] and [`MobWorld::seen`] read some.
+#[derive(Clone, Copy, Default)]
+pub struct Others<'a>(&'a [Seen]);
+impl<'a> Others<'a> {
+    pub fn new(seen: &'a [Seen]) -> Self {
+        Self(seen)
+    }
+    /// Every one of them, in snapshot order.
+    pub fn iter(self) -> std::slice::Iter<'a, Seen> {
+        tick_loop::note(tick_loop::Reads::all);
+        self.0.iter()
+    }
+    pub fn len(self) -> usize {
+        self.0.len()
+    }
+    pub fn is_empty(self) -> bool {
+        self.0.is_empty()
+    }
+}
+impl<'a> IntoIterator for Others<'a> {
+    type Item = &'a Seen;
+    type IntoIter = std::slice::Iter<'a, Seen>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
 
 /// Where a target entity is this tick.
 #[derive(Clone, Copy, Debug)]
@@ -311,25 +340,30 @@ impl MobWorld<'_> {
         if !indexed {
             near.clear();
         }
+        tick_loop::note(|r| r.query(area, indexed.then_some(near.as_slice())));
         Near {
             list: near,
             at: 0,
-            others: self.others,
-            all: (!indexed).then(|| self.others.iter()),
+            others: self.others.0,
+            all: (!indexed).then(|| self.others.0.iter()),
         }
     }
     /// Whether `others` may hold a mob of one of `species`: false only when
     /// its grid keeps their species and none is among them, so a search
     /// for them finds nothing.
     pub fn others_may_hold(&self, species: &[super::Species]) -> bool {
-        self.others_grid.is_none_or(|grid| grid.may_hold(species))
+        self.others_grid.is_none_or(|grid| {
+            tick_loop::note(tick_loop::Reads::species);
+            grid.may_hold(species)
+        })
     }
     pub fn seen(&self, id: u32) -> Option<&Seen> {
         match self.others_index {
-            Some(index) => index
-                .get(&id)
-                .and_then(|&i| self.others.get(i as usize))
-                .filter(|s| s.id == id),
+            Some(index) => {
+                let slot = *index.get(&id)?;
+                tick_loop::note(|r| r.slot(slot));
+                self.others.0.get(slot as usize).filter(|s| s.id == id)
+            }
             None => self.others.iter().find(|s| s.id == id),
         }
     }

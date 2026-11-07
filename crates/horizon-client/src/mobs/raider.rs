@@ -63,9 +63,21 @@ pub struct State {
 }
 
 static HURT_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-/// A counter ordering the hurts of raiders across the game.
+/// A counter ordering the hurts of raiders across the game. A speculative
+/// mob tick draws none: it is marked to tick again in turn (`tick_loop`).
 pub fn next_hurt_seq() -> u64 {
+    if super::tick_loop::note_impure() {
+        return 0;
+    }
     HURT_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1
+}
+/// The last hurt drawn, and putting it back (`tick_loop`'s check mode runs
+/// the mob ticks twice).
+pub fn hurt_seq() -> u64 {
+    HURT_SEQ.load(std::sync::atomic::Ordering::Relaxed)
+}
+pub fn set_hurt_seq(seq: u64) {
+    HURT_SEQ.store(seq, std::sync::atomic::Ordering::Relaxed);
 }
 /// `Raider.hurtServer`: a raider in an active raid asks its raid to update
 /// the bar with the health it has before this hit.

@@ -76,6 +76,7 @@ pub mod strider;
 pub mod sulfur_cube;
 pub mod sync;
 pub mod tame;
+pub mod tick_loop;
 pub mod trader;
 pub mod transport_items;
 pub mod trial_spawner;
@@ -90,7 +91,7 @@ pub mod warden_brain;
 pub mod witch;
 pub mod wither;
 mod world;
-pub use world::{KeptTags, keep_tag_answers, visual_clip};
+pub use world::{KeptTags, Others, keep_tag_answers, visual_clip};
 pub mod zombie_villager;
 
 use crate::{blocks::BlockFacts, mesher::Vertex, world::World};
@@ -1505,6 +1506,120 @@ impl Seen {
     pub fn has_effect(&self, effect: &str) -> bool {
         self.effects.contains(&effect)
     }
+    /// Whether a mob reading `other` instead would read the same, to the bit
+    /// (floats by their bits; a villager's state only when it is the same
+    /// `Arc`). Lists every field, so a new one must be added here.
+    pub fn same_as(&self, other: &Seen) -> bool {
+        let Seen {
+            in_water,
+            playing_dead,
+            last_damage,
+            id,
+            species,
+            position,
+            bounds,
+            eye_y,
+            alive,
+            baby,
+            in_love,
+            tame,
+            owner,
+            hostile,
+            target,
+            health,
+            variant,
+            size,
+            color,
+            job,
+            bed,
+            yaw,
+            velocity,
+            leash,
+            caravan,
+            delay,
+            hurt_by,
+            active_raid,
+            opened_chest,
+            passenger,
+            player_rep,
+            pushable,
+            cold_strider,
+            category,
+            potential_job,
+            meeting,
+            profession,
+            xp,
+            villager,
+            stats,
+            sitting,
+            silent,
+            lying,
+            ridden,
+            knockback_resistance,
+            effects,
+            hunted_recently,
+        } = self;
+        let o = other;
+        let v = |a: &Vec3| [a.x, a.y, a.z].map(f64::to_bits);
+        let b = |a: &Aabb| {
+            use horizon_core::geometry::Axis::{X, Y, Z};
+            [a.min(X), a.min(Y), a.min(Z), a.max(X), a.max(Y), a.max(Z)].map(f64::to_bits)
+        };
+        let damage = |d: &Option<Damage>| {
+            d.map(|d| (d.kind, d.attacker, d.from.map(|f| f.map(f64::to_bits))))
+        };
+        *in_water == o.in_water
+            && *playing_dead == o.playing_dead
+            && damage(last_damage) == damage(&o.last_damage)
+            && *id == o.id
+            && *species == o.species
+            && v(position) == v(&o.position)
+            && b(bounds) == b(&o.bounds)
+            && eye_y.to_bits() == o.eye_y.to_bits()
+            && *alive == o.alive
+            && *baby == o.baby
+            && *in_love == o.in_love
+            && *tame == o.tame
+            && *owner == o.owner
+            && *hostile == o.hostile
+            && *target == o.target
+            && health.to_bits() == o.health.to_bits()
+            && *variant == o.variant
+            && *size == o.size
+            && *color == o.color
+            && *job == o.job
+            && *bed == o.bed
+            && yaw.to_bits() == o.yaw.to_bits()
+            && v(velocity) == v(&o.velocity)
+            && *leash == o.leash
+            && *caravan == o.caravan
+            && *delay == o.delay
+            && *hurt_by == o.hurt_by
+            && *active_raid == o.active_raid
+            && *opened_chest == o.opened_chest
+            && *passenger == o.passenger
+            && *player_rep == o.player_rep
+            && *pushable == o.pushable
+            && *cold_strider == o.cold_strider
+            && *category == o.category
+            && *potential_job == o.potential_job
+            && *meeting == o.meeting
+            && *profession == o.profession
+            && *xp == o.xp
+            && match (villager, &o.villager) {
+                (None, None) => true,
+                (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+                _ => false,
+            }
+            && stats.map(f64::to_bits) == o.stats.map(f64::to_bits)
+            && *sitting == o.sitting
+            && *silent == o.silent
+            && *lying == o.lying
+            && *ridden == o.ridden
+            && knockback_resistance.to_bits() == o.knockback_resistance.to_bits()
+            && *effects == o.effects
+            && *hunted_recently == o.hunted_recently
+    }
 }
 impl Mob {
     pub fn burning_time(&self) -> f64 {
@@ -1638,7 +1753,7 @@ pub fn take_mob_pushes(events: &mut Vec<MobEvent>, from: usize, pending: &mut Pe
 /// Pushes waiting for their mob's tick, in push order. A list while short;
 /// past [`PendingPushes::LIST_MAX`] (a crowd pushing each other) one list
 /// per mob, as scanning the whole list for each mob grows with its square.
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub struct PendingPushes {
     list: Vec<(u32, Vec3)>,
     by_mob: crate::fast_hash::FxHashMap<u32, Vec<Vec3>>,
@@ -1648,6 +1763,10 @@ impl PendingPushes {
     /// No push is waiting for any mob.
     pub fn is_empty(&self) -> bool {
         self.list.is_empty() && self.by_mob.is_empty()
+    }
+    /// Some push is waiting for mob `id`.
+    pub fn has(&self, id: u32) -> bool {
+        self.list.iter().any(|&(to, _)| to == id) || self.by_mob.contains_key(&id)
     }
     pub fn push(&mut self, id: u32, v: Vec3) {
         if self.by_mob.is_empty() && self.list.len() < Self::LIST_MAX {
@@ -1698,6 +1817,17 @@ pub fn apply_brain_events_indexed(
     from: usize,
     index: Option<&crate::fast_hash::FxHashMap<u32, u32>>,
 ) {
+    apply_brain_events_noting(mobs, events, from, index, |_, _| {});
+}
+/// [`apply_brain_events_indexed`], calling `touched` with each mob and its
+/// slot before it changes it.
+pub fn apply_brain_events_noting(
+    mobs: &mut [Mob],
+    events: &mut Vec<MobEvent>,
+    from: usize,
+    index: Option<&crate::fast_hash::FxHashMap<u32, u32>>,
+    mut touched: impl FnMut(&mut Mob, usize),
+) {
     let slot = |mobs: &[Mob], id: u32| {
         index
             .and_then(|index| index.get(&id))
@@ -1710,12 +1840,14 @@ pub fn apply_brain_events_indexed(
         match events[i] {
             MobEvent::BreedTarget { mob, partner } => {
                 if let Some(k) = slot(mobs, mob) {
+                    touched(&mut mobs[k], k);
                     animal_brain::set_breed_partner(&mut mobs[k], partner);
                 }
                 events.remove(i);
             }
             MobEvent::LockGaze { mob, partner } => {
                 if let Some(k) = slot(mobs, mob) {
+                    touched(&mut mobs[k], k);
                     let m = &mut mobs[k];
                     animal_brain::lock_gaze(m, partner);
                     villager_brain::lock_gaze_half(m, Who::Mob(partner));
@@ -1728,6 +1860,7 @@ pub fn apply_brain_events_indexed(
                 parent, partner, ..
             } => {
                 if let Some(k) = slot(mobs, partner) {
+                    touched(&mut mobs[k], k);
                     let m = &mut mobs[k];
                     m.extra.age = 6000;
                     m.extra.in_love = 0;
@@ -1820,7 +1953,7 @@ pub struct MobWorld<'a> {
     /// `getNearestPlayer(mob, -1)`: where the nearest non-spectator of every
     /// player in the level stands, alive or not (the despawn distance).
     pub nearest_player: Option<Vec3>,
-    pub others: &'a [Seen],
+    pub others: Others<'a>,
     /// `others` by position, when the caller keeps one (the mob ticks).
     pub others_grid: Option<&'a seen_grid::SeenGrid>,
     /// Where each id stands in `others`, when the caller keeps one.

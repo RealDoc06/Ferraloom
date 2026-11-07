@@ -23,7 +23,7 @@ struct Block {
 
 /// Snapshot indices by the column holding each box's minimum corner, each
 /// column's as a list linked through `next` (no allocation per column).
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct SeenGrid {
     /// Where in `slabs` each block that has held an entry is.
     blocks: FxHashMap<(i32, i32), u32>,
@@ -38,6 +38,8 @@ pub struct SeenGrid {
     reach: f64,
     /// Every species an entry has had, when kept ([`SeenGrid::keep_species`]).
     species: Option<SpeciesSet>,
+    /// How many times [`SeenGrid::note_species`] added a species.
+    species_added: u32,
 }
 const END: u32 = u32::MAX;
 
@@ -71,6 +73,7 @@ impl SeenGrid {
             columns: 0,
             reach: 0.0,
             species: None,
+            species_added: 0,
         };
         for (i, b) in boxes.enumerate() {
             let at = corner(b);
@@ -85,13 +88,22 @@ impl SeenGrid {
     /// then [`SeenGrid::may_hold`] can answer no.
     pub fn keep_species(&mut self, species: impl Iterator<Item = Species>) {
         let set = self.species.get_or_insert_default();
-        species.for_each(|s| set.insert(s));
+        species.for_each(|s| {
+            set.insert(s);
+        });
     }
     /// An entry is now of species `s` (kept only while the grid keeps them).
     pub fn note_species(&mut self, s: Species) {
-        if let Some(set) = &mut self.species {
-            set.insert(s);
+        if let Some(set) = &mut self.species
+            && set.insert(s)
+        {
+            self.species_added += 1;
         }
+    }
+    /// Changes whenever a species is added: [`SeenGrid::may_hold`]'s
+    /// answers stand while it is the same.
+    pub fn species_added(&self) -> u32 {
+        self.species_added
     }
     /// False only when the grid keeps species and no entry has ever been
     /// of one of `list`.
@@ -204,14 +216,17 @@ impl SeenGrid {
 }
 
 /// The species among a list of mobs, as bits (all of them past the 128th).
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct SpeciesSet([u64; 2], bool);
 impl SpeciesSet {
-    pub fn insert(&mut self, s: Species) {
+    /// Adds `s`; true when it was not in yet.
+    pub fn insert(&mut self, s: Species) -> bool {
+        let before = (self.0, self.1);
         match s as usize {
             i if i < 128 => self.0[i / 64] |= 1 << (i % 64),
             _ => self.1 = true,
         }
+        before != (self.0, self.1)
     }
     pub fn has(&self, s: Species) -> bool {
         let i = s as usize;
