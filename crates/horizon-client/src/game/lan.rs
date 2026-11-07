@@ -5,6 +5,7 @@
 use super::{Game, shield::OFFHAND_SLOT};
 use horizon_client::{
     Result,
+    fast_hash::FxHashMap,
     items::ItemStack,
     lan::{
         self, Lan, MAX_PLAYERS, NetConfig,
@@ -70,7 +71,7 @@ pub(super) struct LanHost {
     /// Blocks broken this tick (their sound is a level event for the guests).
     pub broken: Vec<[f64; 3]>,
     /// Hurt time, death and swing time (while swinging) of the mobs guests see.
-    mob_state: HashMap<super::Dim, HashMap<u32, (i32, bool, Option<i32>)>>,
+    mob_state: HashMap<super::Dim, FxHashMap<u32, (i32, bool, Option<i32>)>>,
     /// The guest each mob sees as its player, when not the host (game/lan_mobs.rs).
     pub mob_players: horizon_client::fast_hash::FxHashMap<u32, u32>,
     /// An integrated server's owner (game/integrated.rs).
@@ -314,7 +315,7 @@ fn mob_variant_meta(
     }
 }
 
-/// Mobs per piece of `lan_entities`' pass on the pool.
+/// Mobs per piece of `lan_entities`' (and the riders') pass on the pool.
 const MOB_STATE_GRAIN: usize = 128;
 
 /// A mob's synched data as ServerEntity sends it (only the values that differ
@@ -1509,15 +1510,17 @@ impl Game<'_> {
         }
         let state = self.lan_host_state(&host);
         // An animal whose rider left the game (or the level) stops taking
-        // its input.
-        for m in &mut self.mobs {
-            if m.rider.is_some()
-                && self.riding != Some(m.id)
-                && !host.hub.guests.iter().any(|g| g.vehicle == Some(m.id))
-            {
-                m.rider = None;
-            }
-        }
+        // its input. Each mob is its own, so the pass runs on the pool: the
+        // first look at every mob this tick is mostly waiting on memory.
+        horizon_client::spans::time("lan_riders", || {
+            let riding = self.riding;
+            let vehicles: Vec<u32> = host.hub.guests.iter().filter_map(|g| g.vehicle).collect();
+            horizon_threads::pool::for_each_mut(&mut self.mobs, MOB_STATE_GRAIN, |m| {
+                if m.rider.is_some() && riding != Some(m.id) && !vehicles.contains(&m.id) {
+                    m.rider = None;
+                }
+            });
+        });
         // A dedicated server runs the hub without a host player.
         if state.is_some() || host.hub.config.dedicated {
             let has_guests = !host.hub.guests.is_empty();
@@ -1982,14 +1985,12 @@ impl Game<'_> {
             return;
         }
         // Hurt and death animations of mobs.
-        let mut seen = HashMap::new();
+        let last = host.mob_state.remove(&self.dim).unwrap_or_default();
+        let mut seen = FxHashMap::default();
+        seen.reserve(self.mobs.len());
         for m in &self.mobs {
             let dead = !m.alive();
-            let old = host
-                .mob_state
-                .get(&self.dim)
-                .and_then(|s| s.get(&m.id))
-                .copied();
+            let old = last.get(&m.id).copied();
             let at = [m.position.x, m.position.y, m.position.z];
             // LivingEntity.hurtServer: a hurt that restarted the hurt time.
             if m.hurt_time > old.map_or(0, |o| o.0)
