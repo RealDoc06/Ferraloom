@@ -1,7 +1,0 @@
-tag:minecraft:supports_vegetation	minecraft:dirt
-tag:minecraft:fire	minecraft:fire,minecraft:soul_fire
-tag:minecraft:washed_away_by_fluids	minecraft:air,minecraft:cave_air,minecraft:void_air,minecraft:water,minecraft:lava,minecraft:short_grass,minecraft:dandelion,minecraft:bush,minecraft:fire,minecraft:soul_fire
-tag:minecraft:blocks_motion_in_heightmap	minecraft:stone,minecraft:dirt,minecraft:sand,minecraft:gravel,minecraft:obsidian,minecraft:cobblestone,minecraft:basalt,minecraft:soul_soil,minecraft:blue_ice,minecraft:magma_block
-tag:minecraft:blocks_motion_in_heightmap_no_leaves	minecraft:stone,minecraft:dirt,minecraft:sand,minecraft:gravel,minecraft:obsidian,minecraft:cobblestone,minecraft:basalt,minecraft:soul_soil,minecraft:blue_ice,minecraft:magma_block
-tag:minecraft:enables_bubble_column_drag_down	minecraft:magma_block
-tag:minecraft:enables_bubble_column_push_up	

@@ -1,0 +1,283 @@
+# Ferraloom server core
+
+Ferraloom replaces Horizon's server loop and ownership model, retaining its
+vanilla logic and differential harnesses. The base is Horizon v0.2.93, not the
+old `ferraloom-*` implementation on `restart`. The old
+[game-core design](game-core.md) remains the detailed reference for synchronous
+callbacks, region dependencies and accepted parallel-mode differences; its crate
+names and foundation status describe the old port, not this checkout.
+
+## Boundaries in this checkout
+
+Today `horizon-server` supervises `horizon-client --dedicated`.
+`horizon-client/src/game.rs` owns both simulation and presentation.
+`game/levels.rs::Parked` moves dimension fields in and out of `Game`;
+`game/lan_actions.rs::as_guest` does the same for players. Neither mechanism is
+a suitable unit of parallel ownership. Sharing `Game` behind locks would retain
+these dependencies and serialize the work we need to parallelize.
+
+The target dependency graph is:
+
+| Crate | Responsibility |
+| --- | --- |
+| `ferraloom-core` | Server execution policies independent of the client loop; chunk integration budgets introduced by this milestone |
+| `ferraloom-game` (target) | Canonical server, level, region and player state; gameplay adapters and phase methods extracted from `Game` |
+| `ferraloom-runtime` (target) | Tick coordinator, region workers, background jobs, network and persistence boundaries |
+| `horizon-server` | Existing CLI/configuration/supervision; ultimately starts the server-only runtime |
+| `horizon-world` | Existing worldgen, NBT/region codecs, block behaviours, ticks and entity rules |
+| `horizon-core`, `horizon-items`, `horizon-command`, `horizon-protocol`, `horizon-server-files` | Existing maths/RNG/palettes, item rules, Brigadier parsing, wire codecs and server files |
+| `horizon-mods` | Existing sandboxed WebAssembly plugins; gameplay calls use the same ownership/exclusive access rules |
+
+These are target boundaries, not empty crates to create in advance. Runtime
+depends on game; game never depends on sockets or the worker scheduler. Neither
+new crate may depend on `horizon-client`. Move reusable server modules out of
+that crate and re-export their old paths for Horizon callers. Keep existing
+registry IDs and `horizon_core::paletted` storage, rather than rebuilding the old
+port's data/util/chunk crate graph.
+
+`horizon-world::level::Behaviours` already accepts `LevelAccess` rather than
+`Game`. Extract `GameLevel`/`with_level` into a server-owned adapter implementing
+that interface. Preserve its immediate mutation/event semantics, including
+heightmaps, lighting, block entities and neighbor callbacks. Library-only mob
+rules can move mechanically; `game/creatures.rs` orchestration, commands,
+containers and player actions still need extraction. Move their real state and
+methods in small units, not a parallel implementation of vanilla. Presentation
+hooks become consumers of owned effects, never dependencies of the server.
+
+Separate immutable gameplay resources from `Resources`/`PackResources`: block
+facts, registries, recipes and collision data remain shared `Arc` values;
+renderers, baked models, audio, input, HUD and shaders stay client-only. The
+current `--no-default-features` build disables audio/controllers but still links
+client libraries; that is an interim build requirement, not the final boundary.
+
+## Live ownership
+
+`Server` owns global clocks, functions, scoreboard, game rules and dimensions
+in vanilla order. Each `ServerLevel` owns weather/border, tickets and distance
+management, dimension-wide spawn/tick budgets, region routing and region values.
+A `Region` owns its chunks, canonical entities and spatial indexes, insertion
+ordered tick membership, block entities, scheduled block/fluid queues, neighbor
+stacks, block events and dirty/effect buffers. A lookup map is not a tick order.
+Loaded status, block-ticking eligibility and entity-ticking eligibility remain
+separate. Players are canonical game entities; connections only hold handles.
+
+Regions are connected dependency closures, not fixed squares. Start with the
+old design's eight-chunk margin, then enlarge/merge for actual navigation,
+movement, explosions, loaded neighbors and retained references. The margin is
+not a correctness proof. A cross-owner synchronous operation parks at its call
+site and enters the exclusive lane; a missing owner is never air. Merge keeps
+entity/tick ordinals and pending queues. Split only after a complete tick when
+no active callback, passenger tree or job pins both sides. Use short canonical
+state borrows and handles across reentrant callbacks, never take out an actor
+and later overwrite callback mutations with its stale state.
+
+The extracted driver will provide `--regions off`: one reference region with
+vanilla RNG draws, entity IDs,
+collection traversal and immediate callbacks unchanged. Parallel mode retains
+local vanilla order and the documented regional RNG/ID/spawn-quota differences
+in `game-core.md`. It cannot claim bit-exact total ordering across independent
+regions. Worker completion order must introduce no further differences.
+
+## Tick driver and barriers
+
+Retain vanilla's gates for frozen, debug, empty and paused worlds. Do not infer
+the target sequence from Horizon's presentation-oriented `tick_world` alone;
+check 26.3 `MinecraftServer`, `ServerLevel` and `ServerChunkCache` directly.
+
+1. Apply ordered ingress at vanilla's packet-processing point. Run server
+   functions/clocks and time synchronization in their original serial slots.
+2. For each dimension in vanilla order, update border/weather/sleep/time;
+   collect and execute scheduled block ticks, then scheduled fluid ticks.
+   Grant each queue's 65,536 dimension-wide budget in reference order.
+3. Tick raids; update chunk tickets/distances; build dimension-wide spawn state;
+   tick spawning chunks, weather/random blocks and custom spawners; run tracking
+   and chunk-management subphases at their original positions.
+4. Drain block events, then eligible entities/passengers and block entities;
+   integrate entity loads/unloads. Preserve captured membership and live removal
+   checks, including pending block-entity tickers.
+5. After all levels, run connection/player-list work and chunk sends, resume
+   flushing, then status/autosave/statistics in their vanilla slots.
+
+Each regional subphase joins before the next starts. Dimension/server work
+occupies serial slots between these barriers. No independent regional clocks.
+A worker requesting exclusive access returns ownership while retaining only
+handles/scalars in its continuation. Other workers finish or park in the same
+phase. The coordinator serves requests in stable phase/region/operation order,
+lends the required regions, and resumes the caller at its original visibility
+point. Teleports and multi-target commands cannot become next-tick messages.
+Implement and test this continuation protocol before enabling parallel regions;
+a mutex around the world is not its substitute.
+
+## Work outside the tick
+
+Capture chunk-send/save inputs at their original visibility points. Existing
+resident sections are copy-on-write `Arc` snapshots (`chunk.rs`); preserve that
+property on extraction. Worldgen, lighting, encoding and persistence jobs own
+inputs and return results tagged with request order, owner epoch and versions.
+Integrate at the declared phase in request order, validate versions, and discard
+or recompute stale results. A synchronous vanilla query still waits at its call
+site. Per-region integration budgets may postpone asynchronous readiness, never
+a required synchronous load or an already eligible simulation tick.
+
+Connection workers already frame/compress/encrypt in `lan/conn.rs`; `save.rs`
+already snapshots and writes chunk records on background workers. Reuse those
+mechanisms. Extend the pipeline only where work remains on the simulation
+thread. Assign packet sequence before parallel encoding and preserve each
+connection's FIFO, batch boundaries and acknowledgments. Encryption stays serial
+per connection. Bound queued snapshot bytes and account for slow clients without
+blocking simulation indefinitely. Save capture and durable flush are distinct
+completion contracts. Saving or disconnecting must drain the appropriate jobs.
+
+## First shipped step
+
+Introduce dependency-free `ferraloom-core::{IntegrationLimits, IntegrationBudget}`
+and adapt `Streaming` to publish a bounded prefix of completed worker results.
+Doc's pinned explorer measurements are the reason: increasing workers raised
+MSPT from 46 to 86 to 154 ms while opening more terrain. Worker throughput must
+not decide how much simulation work the tick takes on.
+
+The initial dedicated-server policy permits two completed columns and 2 ms of
+result integration per dimension per tick. `tick_server` replenishes it once;
+between-tick pregeneration pumps share the remaining allowance. Limits are both
+time and admission count: cheap insertion can still open expensive terrain.
+Completions are atomic, so one may overrun the time allowance. At least one
+completion can progress each tick. Results keep their original polling snapshot
+and FIFO; the unconsumed suffix stays owned for later ticks. No result is dropped
+or moved ahead of another, and decoration's existing dependency/order queue is
+unchanged. Already-loaded eligible chunks, scheduled ticks and entities still
+run normally; this limits asynchronous publication, not gameplay ticking.
+
+Initial world startup retains synchronous/unbounded loading. Explicit saving
+and closing drain retained generation/save completions outside the admission
+budget, then honor the existing durable write barrier. The generation/save test
+runs both modes, pumps twice per tick, moves/unloads/reloads areas and restarts,
+checking that each chunk finishes once with every neighbor decoration intact.
+Core tests cover carried allowance, atomic overruns, count limits and disabled
+reference behavior.
+
+Admission is explicit at each streaming pump: `Streaming::update` is unbounded
+for synchronous/client work, while `update_budgeted` consumes the allowance
+retained by `begin_server_tick`. `tick_server` and between-tick pregeneration
+select the latter and assert that selection in debug builds. Synchronous pumps
+neither spend nor replenish the allowance for later bounded pumps. The command
+harness freezes its clock while settling terrain; inheriting a spent allowance
+there previously prevented progress forever. Real single-player play was not
+affected: its loop renews the allowance every server tick, startup precedes the
+first budget, and saving already drains independently.
+
+On Linux, `horizon-threads` captures the launcher's allowed CPU mask before
+workers start. The tick chooses its lowest logical CPU; streaming, save, encode
+and network helper lanes exclude that CPU and its SMT siblings. All masks stay
+inside the original `taskset`/cgroup intersection. Pool sizes also respect the
+CPU quota, captured before the tick thread is pinned. Startup workers keep their
+existing mask until selecting a lane; the tick pins when its loop starts. An
+unknown topology, single physical core or single-CPU quota leaves affinity unchanged. OS calls
+stay in Horizon's existing unsafe OS boundary, not in simulation/core policy.
+
+`FERRALOOM_INTEGRATION_US=0` disables admission limits for the reference path;
+`FERRALOOM_CHUNKS_PER_TICK` changes the column allowance (default 2), and
+`FERRALOOM_TICK_AFFINITY=0` disables CPU separation. These controls support
+same-binary comparisons. Ordinary client streaming keeps its previous behavior.
+This budget cannot make already-overloaded simulation cheap: parallel regions
+remain necessary. Report TPS together with delivered/generated chunks and
+pull-backs, so throttling terrain is explicit rather than a disguised win.
+
+This milestone starts with the region coordinator's admission policy while
+retaining Horizon's world logic and serial execution order.
+
+## Migration with a gate at every step
+
+Each row is a sequence of small commits/PRs, not permission for a broad rewrite.
+Keep the dedicated server playable through the existing entry point until its
+replacement passes the same end-to-end tests.
+
+| Step | Deliverable | Required gate |
+| --- | --- | --- |
+| 1 | Bound chunk publication per tick and keep workers off the tick core | Budget/topology tests, both-mode generation/save invariants, affected parity and pinned explorer/normal-play bench |
+| 2 | Extract shared chunk/resource leaves and one server adapter at a time; re-export old paths | Existing affected block/chunk/save harnesses still pass; no new client dependency |
+| 3 | Move dimension state from `Parked` into `ServerLevel` and player state from guest swaps into explicit handles, one subsystem at a time | Dedicated server, server-level/portal, player-action and entity harnesses; same serial trace |
+| 4 | Move the serial tick driver to runtime and make server-only startup use it | All selected existing harnesses and playable login/exploration/save/reload; build without renderer/audio/input dependencies |
+| 5 | Introduce one-region phase driver and exclusive continuations, then closure ownership with parallelism disabled | Exact reference trace; reentrant mutation, removal/replacement, teleport and command tests |
+| 6 | Enable parallel regional phases individually | Both-mode parity, schedule/deadlock tests and measured useful parallelism; explicit assertions for approved cross-region differences |
+| 7 | Add parallel sensing/navigation and nonoverlapping decoration behind the same job contract | Apply in vanilla order, preserve synchronous answers and FEATURES visit dependencies; differential cases and explorer/farm bench |
+
+Research speculative execution for touching regions separately after these gates;
+it needs validated dependency tracking and rollback before it can execute live
+vanilla mutations.
+
+Before each change, obtain the actual affected set with
+`python3 tools/parity.py --changed-files <path-list> --list`; do not pin the
+historical count of harnesses. Run Rust builds/tests only through
+`ferraloom-build` from a clean committed checkout. Prepared resources and vanilla
+oracles remain outside the public tree. Performance acceptance uses
+`tools/ferraloom-bench` and the approved pinned CT 121 matrix on port 25570,
+with bots on devbox and the builder idle. The original VM/laptop-relay setup
+remains available. Report mean/P95/P99 MSPT, TPS, delivered/full chunks,
+pull-backs, CPU and busiest thread against `4a661f939`. Report the cost of
+reduced terrain admission alongside the simulation gain; farm correctness
+remains mandatory.
+
+
+## Initial measurements
+
+Pinned CT 121, Xeon E5-2660 v3; seed 12345, view/simulation distance 10,
+60-second warmup and 180-second measurement, bots on devbox. This branch
+submitted no builds during measurement. Separate profiling builds overlapped
+the initial later runs, on disjoint builder CPUs `2-3,10-12,14`; shared-host
+cache/clock noise remains possible for normal play and the four-column trial.
+The four-core explorer run finished before that overlap; SMT exploration was
+repeated with the builder reserved and idle for the entire run.
+Explorers fly at 11 blocks/s. Each cell is one run, not a confidence interval.
+Baseline is `4a661f939`; the budgeted build is `b84aad467` for four-core
+exploration and normal play, and `65fca9e64` for the final SMT explorer run.
+The latter includes quota-aware pool sizing and retains the same 3/6 helper
+counts for these CPU sets.
+
+| Workload | Baseline mean/P95/P99 ms | Budget mean/P95/P99 ms | TPS before → after |
+| --- | --- | --- | --- |
+| Explore 25, 4c | 86.17/104.48/119.65 | 57.83/66.57/75.14 | 11.60 → 17.29 |
+| Explore 25, 4c+SMT | 154.06/178.76/196.80 | 58.81/68.93/77.49 | 6.49 → 17.01 |
+| Normal 50, 4c | 26.61/37.41/48.01 | 29.10/41.17/51.33 | 20.00 → 20.00 |
+| Normal 50, 4c+SMT | 26.67/40.05/50.11 | 27.65/38.44/47.23 | 20.00 → 20.00 |
+
+Delivered counts are chunk packets, including initial joins; rates use the
+measurement window. Full chunks are counted in region files after shutdown.
+Pull-backs are correction events, not distinct players. CPU/busiest are mean
+percentages; 100% means one logical CPU.
+
+| Workload | Delivered/s (total), before → after | Full, before → after | Pull-backs, before → after | CPU/busiest %, before → after |
+| --- | --- | --- | --- | --- |
+| Explore 25, 4c | 117.13 (52,983) → 71.84 (37,587) | 8,886 → 9,590 | 24,763 → 31,336 | 342.19/98.88 → 228.82/98.77 |
+| Explore 25, 4c+SMT | 150.96 (62,840) → 71.36 (38,005) | 9,659 → 9,685 | 13,631 → 31,541 | 603.86/99.53 → 304.60/99.54 |
+| Normal 50, 4c | 316.22 (107,282) → 316.20 (107,049) | 2,188 → 2,188 | 0 → 0 | 93.78/53.26 → 100.99/58.68 |
+| Normal 50, 4c+SMT | 316.32 (107,277) → 316.19 (107,076) | 2,188 → 2,188 | 0 → 0 | 113.53/53.60 → 116.01/56.01 |
+
+Two columns reduce explorer mean MSPT by 33% at four cores and 62% with SMT,
+while delivered terrain falls and corrections rise. Normal play keeps 20 TPS
+and its delivery rate, with observed mean MSPT 2.49/0.98 ms higher. The tick
+thread remains saturated during exploration; the serial simulation and global
+decoration queue still need the later migration steps.
+
+A four-column trial at four cores produced 70.19/81.77/94.41 ms, 14.25 TPS,
+92.76 delivered chunks/s (46,605 total), 13,829 full chunks, 28,859 pull-backs,
+and 279.40% CPU / 99.89% busiest thread. Keep two as the conservative initial
+default for simulation time; four buys more terrain at higher tick cost.
+This trades terrain throughput for simulation time. Exploration remains below
+20 TPS.
+Raw runs remain on CT 121 under `/root/bench/results/core-b84aad467` and
+`/root/bench/results/core-b84-count4`; the final idle-window SMT repeat is in
+`/root/bench/results/core-65fca9e64-ht-idle`. The baseline is in
+`/root/bench/results`.
+
+Validation covers 19 focused Rust/save tests and 13 publication-guard tests,
+including carried budgets, CPU topology/quota limits and generation
+save/reload/restart in both modes. Scoped vanilla harnesses pass:
+`chunk_status`, `chunk_stage`, `generation_tick`, `feature_region` and
+`decoration_region`. Both `dedicated_server` and `server_dimension_players`
+match vanilla-codec transcripts with limits/isolation enabled and disabled.
+The dedicated check uses `--server-only --engine target/release/horizon-client`;
+the rendered-client check is omitted. Java-server correctness fixtures can use
+RAM-backed scratch to avoid builder storage watchdogs; the performance runs
+use CT 121's region files. The complete retained-history artifact audit passes.
+File-based selection widens conservatively through `Game` and the client
+manifest; this is scoped server validation, not a full client/rendering audit.

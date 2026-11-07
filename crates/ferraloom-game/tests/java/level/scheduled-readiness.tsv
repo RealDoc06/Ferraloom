@@ -1,6 +1,0 @@
-scheduled-readiness:fresh	true
-scheduled-readiness:pending	true
-scheduled-readiness:completed-not-integrated	true
-scheduled-readiness:outside-simulation	true
-scheduled-readiness:ticking-not-ready	true
-scheduled-readiness:ready	false

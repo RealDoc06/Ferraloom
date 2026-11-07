@@ -1,8 +1,0 @@
-clone-item:minecraft:stone:false	minecraft:stone:1
-clone-item:minecraft:stone:true	minecraft:stone:1
-clone-item:minecraft:air:false	minecraft:air:0
-clone-item:minecraft:air:true	minecraft:air:0
-clone-item:minecraft:wall_torch:false	minecraft:torch:1
-clone-item:minecraft:wall_torch:true	minecraft:torch:1
-clone-item:minecraft:chest:false	minecraft:chest:1
-clone-item:minecraft:chest:true	minecraft:chest:1

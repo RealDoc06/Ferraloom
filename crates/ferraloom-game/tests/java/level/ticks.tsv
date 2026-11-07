@@ -1,8 +1,0 @@
-container-order	C,A,B
-reentrant-collection	A:true,B:false,C
-saved-pack	A:5:0,B:2:-1
-saved-unpack	B:12:-1,A:15:-2
-registered-pending	7:0
-late-start-ticking	B@200,A@207
-equal-loaded-heads	0,-96,32,-32,64,-112,48,128,112,-48,-80,160,-160,16,-128,-144,96,144,-16,80,-64
-area-copy-clear	0,before:true,after:true,16,32,33,48,2,34

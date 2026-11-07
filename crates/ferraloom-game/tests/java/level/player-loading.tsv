@@ -1,8 +1,0 @@
-origin	0,0,31,true;-1,1,31,true;1,1,31,true;1,0,31,true
-release-0,0	-1,-1,31,true
-release--1,-1	0,1,31,true
-release-1,1	0,-1,31,true
-release--2,-2	
-move	-1,1,45,false;-1,-1,45,false;2,-1,31,true
-shrink	0,0,45,false;1,1,45,false;1,0,45,false;0,1,45,false;0,-1,45,false
-empty	2,-1,45,false

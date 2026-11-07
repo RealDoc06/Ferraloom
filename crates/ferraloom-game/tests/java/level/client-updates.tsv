@@ -1,4 +1,0 @@
-client-update:FULL:false	false:false
-client-update:FULL:true	false:false
-client-update:BLOCK_TICKING:false	true:false
-client-update:BLOCK_TICKING:true	true:true
