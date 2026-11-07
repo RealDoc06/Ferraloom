@@ -1,7 +1,9 @@
 //! A blocking connection with vanilla's pipeline: optional AES/CFB8
 //! encryption, VarInt21 framing and threshold compression. After login it
-//! splits into a reader (for a receive thread) and a shareable writer. It runs
-//! over TCP, or over an in-memory pipe between two threads of one process
+//! splits into a reader (for a receive thread) and a shareable writer, which
+//! over TCP can also go non-blocking for an event loop that serves many
+//! connections ([`ConnReader::read_some`], [`ConnWriter::set_nonblocking`]).
+//! It runs over TCP, or over an in-memory pipe between two threads of one process
 //! (vanilla's `LocalChannel`, which an integrated server's player uses).
 use crate::{Error, Result, buf::Reader, crypto::Cfb8, frame};
 use std::{
@@ -179,9 +181,13 @@ pub struct ConnWriter {
     encrypt: Option<Cfb8>,
     pub threshold: Option<usize>,
     counters: Arc<Counters>,
-    /// Frames not written yet: see [`Self::start_batch`].
+    /// Frames not written yet: see [`Self::start_batch`]. The first
+    /// `written` bytes went out already (a non-blocking partial write).
     unsent: Vec<u8>,
+    written: usize,
     batching: bool,
+    /// Writes take what the socket accepts now and keep the rest.
+    nonblocking: bool,
 }
 /// `InetAddress.getByName` under Java's default `java.net.preferIPv6Addresses=false`: IPv4
 /// addresses first, whatever order the system resolver gives (macOS lists IPv6 first). Vanilla
@@ -248,7 +254,9 @@ impl Connection {
                 threshold: None,
                 counters,
                 unsent: Vec::new(),
+                written: 0,
                 batching: false,
+                nonblocking: false,
             },
         })
     }
@@ -284,27 +292,58 @@ impl ConnReader {
     /// Block until a whole packet arrives: (id, payload).
     pub fn recv(&mut self) -> Result<(i32, Vec<u8>)> {
         loop {
-            if let Some(frame) = frame::split(&mut self.buffer)? {
-                let body = frame::decompress(frame, self.threshold)?;
-                let mut r = Reader::new(&body);
-                let id = r.varint()?;
-                let start = r.position();
-                self.counters.received.fetch_add(1, Ordering::Relaxed);
-                return Ok((id, body[start..].to_vec()));
+            if let Some(packet) = self.buffered()? {
+                return Ok(packet);
             }
-            let mut chunk = [0u8; 16384];
-            let n = self.stream.read(&mut chunk)?;
-            if n == 0 {
-                return Err(Error::new("Connection closed by the server"));
+            if self.read_chunk()? == 0 {
+                return Err(closed());
             }
-            self.counters
-                .bytes_in
-                .fetch_add(n as i64, Ordering::Relaxed);
-            let data = &mut chunk[..n];
-            if let Some(c) = &mut self.decrypt {
-                c.decrypt(data);
-            }
-            self.buffer.extend_from_slice(data);
+        }
+    }
+    /// The next packet already read, if a whole one has arrived.
+    pub fn buffered(&mut self) -> Result<Option<(i32, Vec<u8>)>> {
+        let Some(frame) = frame::split(&mut self.buffer)? else {
+            return Ok(None);
+        };
+        let body = frame::decompress(frame, self.threshold)?;
+        let mut r = Reader::new(&body);
+        let id = r.varint()?;
+        let start = r.position();
+        self.counters.received.fetch_add(1, Ordering::Relaxed);
+        Ok(Some((id, body[start..].to_vec())))
+    }
+    /// One read on a non-blocking stream, for [`Self::buffered`]: false when
+    /// the peer has sent nothing more for now.
+    pub fn read_some(&mut self) -> Result<bool> {
+        loop {
+            return match self.read_chunk() {
+                Ok(0) => Err(closed()),
+                Ok(_) => Ok(true),
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => Ok(false),
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(e) => Err(e.into()),
+            };
+        }
+    }
+    /// Read what the stream has into the buffer, decrypted: how many bytes.
+    fn read_chunk(&mut self) -> std::io::Result<usize> {
+        let mut chunk = [0u8; 16384];
+        let n = self.stream.read(&mut chunk)?;
+        self.counters
+            .bytes_in
+            .fetch_add(n as i64, Ordering::Relaxed);
+        let data = &mut chunk[..n];
+        if let Some(c) = &mut self.decrypt {
+            c.decrypt(data);
+        }
+        self.buffer.extend_from_slice(data);
+        Ok(n)
+    }
+    /// The socket under a TCP connection.
+    pub fn socket(&self) -> Option<&TcpStream> {
+        match &self.stream {
+            Stream::Tcp(s) => Some(s),
+            Stream::Memory(_) => None,
         }
     }
     pub fn set_read_timeout(&self, timeout: Option<Duration>) -> Result<()> {
@@ -328,10 +367,25 @@ impl ConnWriter {
         self.counters
             .bytes_out
             .fetch_add((self.unsent.len() - start) as i64, Ordering::Relaxed);
-        if self.batching && self.unsent.len() < BATCH_BYTES {
+        if self.batching && self.unsent() < BATCH_BYTES {
             return Ok(());
         }
         self.write_unsent()
+    }
+    /// Bytes framed and not taken by the socket yet.
+    pub fn unsent(&self) -> usize {
+        self.unsent.len() - self.written
+    }
+    /// From here on writes take what a non-blocking socket accepts and keep
+    /// the rest for the next ([`Self::unsent`]), so a full socket neither
+    /// blocks nor fails the connection. Errors on an in-memory pipe.
+    pub fn set_nonblocking(&mut self) -> Result<()> {
+        let Stream::Tcp(s) = &self.stream else {
+            return Err(Error::new("not a socket"));
+        };
+        s.set_nonblocking(true)?;
+        self.nonblocking = true;
+        Ok(())
     }
     /// The frames sent from here to [`Self::finish_batch`] go out together,
     /// with fewer system calls and packets on the network: the same bytes
@@ -345,14 +399,39 @@ impl ConnWriter {
         self.write_unsent()
     }
     fn write_unsent(&mut self) -> Result<()> {
-        if self.unsent.is_empty() {
+        if self.unsent() == 0 {
             return Ok(());
         }
-        let written = self.stream.write_all(&self.unsent);
-        self.unsent.clear();
-        // A chunk's frame doesn't stay for every connection's every tick.
-        self.unsent.shrink_to(BATCH_BYTES);
+        let written = if self.nonblocking {
+            self.write_available()
+        } else {
+            self.stream.write_all(&self.unsent)
+        };
+        if written.is_err() || !self.nonblocking || self.unsent() == 0 {
+            self.unsent.clear();
+            self.written = 0;
+            // A chunk's frame doesn't stay for every connection's every tick.
+            self.unsent.shrink_to(BATCH_BYTES);
+        } else if self.written >= BATCH_BYTES {
+            // A connection that never quite catches up doesn't keep what went out.
+            self.unsent.drain(..self.written);
+            self.written = 0;
+        }
         written?;
+        Ok(())
+    }
+    /// Write until the socket is full or nothing is left.
+    fn write_available(&mut self) -> std::io::Result<()> {
+        use std::io::ErrorKind;
+        while self.written < self.unsent.len() {
+            match self.stream.write(&self.unsent[self.written..]) {
+                Ok(0) => return Err(ErrorKind::WriteZero.into()),
+                Ok(n) => self.written += n,
+                Err(e) if e.kind() == ErrorKind::WouldBlock => break,
+                Err(e) if e.kind() == ErrorKind::Interrupted => {}
+                Err(e) => return Err(e),
+            }
+        }
         Ok(())
     }
     pub fn shutdown(&self) {
@@ -362,7 +441,11 @@ impl ConnWriter {
 
 /// What a batch holds before it writes what it has: a batch takes no more
 /// memory than this per connection.
-const BATCH_BYTES: usize = 64 << 10;
+pub const BATCH_BYTES: usize = 64 << 10;
+
+fn closed() -> Error {
+    Error::new("Connection closed by the server")
+}
 
 #[cfg(test)]
 mod tests {
@@ -469,6 +552,88 @@ mod tests {
             reader.join().unwrap()
         };
         assert_eq!(stream(true), stream(false));
+    }
+
+    /// A non-blocking writer keeps what a full socket doesn't take, and the
+    /// stream is the bytes a blocking one writes.
+    #[test]
+    fn a_full_socket_keeps_the_rest_without_blocking() {
+        let bodies: Vec<Vec<u8>> = (0..300u32)
+            .map(|i| {
+                (0..64 << 10)
+                    .map(|j: u32| (i ^ j.wrapping_mul(2_654_435_761)) as u8)
+                    .collect()
+            })
+            .collect();
+        let stream = |nonblocking: bool| {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let c = Connection::connect("127.0.0.1", port, Duration::from_secs(5)).unwrap();
+            let (mut peer, _) = listener.accept().unwrap();
+            let (_, mut writer) = c.split();
+            if !nonblocking {
+                let reader = std::thread::spawn(move || {
+                    let mut all = Vec::new();
+                    peer.read_to_end(&mut all).unwrap();
+                    all
+                });
+                bodies.iter().for_each(|b| writer.send(b).unwrap());
+                writer.shutdown();
+                return reader.join().unwrap();
+            }
+            writer.set_nonblocking().unwrap();
+            writer.start_batch();
+            bodies.iter().for_each(|b| writer.send(b).unwrap());
+            writer.finish_batch().unwrap();
+            assert!(writer.unsent() > 0, "the socket took ~19 MiB at once");
+            let reader = std::thread::spawn(move || {
+                let mut all = Vec::new();
+                peer.read_to_end(&mut all).unwrap();
+                all
+            });
+            while writer.unsent() > 0 {
+                std::thread::sleep(Duration::from_millis(1));
+                writer.finish_batch().unwrap();
+            }
+            writer.shutdown();
+            reader.join().unwrap()
+        };
+        assert!(stream(true) == stream(false));
+    }
+
+    /// Non-blocking reads give a packet only once all of it arrived.
+    #[test]
+    fn a_partial_frame_waits_for_the_rest() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let mut client = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        client.set_nodelay(true).unwrap();
+        let (mut reader, _) = Connection::from_stream(listener.accept().unwrap().0)
+            .unwrap()
+            .split();
+        reader.socket().unwrap().set_nonblocking(true).unwrap();
+        assert!(!reader.read_some().unwrap());
+        let mut frames = frame::encode(&[3, 1, 2, 3], None).unwrap();
+        frames.extend(frame::encode(&[4, 5], None).unwrap());
+        // Byte by byte: each read takes what arrived, the packets come whole.
+        let mut got = Vec::new();
+        for byte in &frames {
+            client.write_all(std::slice::from_ref(byte)).unwrap();
+            while !reader.read_some().unwrap() {
+                std::thread::yield_now();
+            }
+            got.extend(std::iter::from_fn(|| reader.buffered().unwrap()));
+        }
+        assert_eq!(got, [(3, vec![1, 2, 3]), (4, vec![5])]);
+        drop(client);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            match reader.read_some() {
+                Ok(false) => assert!(Instant::now() < deadline),
+                Ok(true) => panic!("no more bytes were sent"),
+                Err(e) => break assert_eq!(e.0, "Connection closed by the server"),
+            }
+        }
     }
 
     #[test]

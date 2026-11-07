@@ -784,7 +784,37 @@ impl PalettedContainer {
             }
             Palette::List(list) => {
                 let matching: Vec<u64> = list.iter().map(|&v| u64::from(predicate(v))).collect();
-                if matching.contains(&1) {
+                let count = matching.iter().filter(|&&m| m == 1).count();
+                if (1..=4).contains(&count) {
+                    // Few matching indexes: each word's fields holding one are
+                    // found at once, and only their bits are visited.
+                    let bits = usize::from(self.bits);
+                    let per = 64 / bits;
+                    let lo = (0..per).fold(0u64, |a, f| a | 1 << (f * bits));
+                    let hi = lo << (bits - 1);
+                    // Every field's bits below its top one.
+                    let low = lo * ((1u64 << (bits - 1)) - 1);
+                    let patterns: Vec<u64> = (0..matching.len() as u64)
+                        .filter(|&i| matching[i as usize] == 1)
+                        .map(|i| lo * i)
+                        .collect();
+                    for (w, &word) in self.words.iter().enumerate() {
+                        // A field's top bit set exactly when the field is zero
+                        // (no carry leaves a field, unlike the haszero test).
+                        let mut zero = 0;
+                        for &pattern in &patterns {
+                            let v = word ^ pattern;
+                            zero |= !(((v & low) + low) | v) & hi;
+                        }
+                        while zero != 0 {
+                            let i = w * per + zero.trailing_zeros() as usize / bits;
+                            if i < entries {
+                                out[i / 64] |= 1 << (i % 64);
+                            }
+                            zero &= zero - 1;
+                        }
+                    }
+                } else if count != 0 {
                     let (bits, m) = (usize::from(self.bits), mask(self.bits));
                     let per = 64 / bits;
                     for (w, &word) in self.words.iter().enumerate() {
@@ -882,6 +912,43 @@ mod tests {
         let mut bits = [0; 64];
         assert!(PalettedContainer::new(strategy, 3).fill_matching(wanted, &mut bits));
         assert_eq!(bits, [u64::MAX; 64]);
+    }
+
+    /// Every bit width and count of matching palette entries, sparse and
+    /// dense, against `get`.
+    #[test]
+    fn fill_matching_agrees_for_few_and_many_matches() {
+        let mut seed = 0x9E37_79B9_7F4A_7C15u64;
+        let mut next = |n: u64| {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed % n
+        };
+        for (strategy, sizes) in [
+            (Strategy::blocks(16), [2u64, 5, 16, 17, 40, 256]),
+            (Strategy::biomes(7), [2, 3, 5, 8, 2, 3]),
+        ] {
+            let entries = strategy.entries();
+            for distinct in sizes {
+                for wanted_count in 1..=6 {
+                    let values: Vec<u32> = (0..entries).map(|_| next(distinct) as u32).collect();
+                    let container = PalettedContainer::from_values(strategy, &values);
+                    let wanted: Vec<u32> =
+                        (0..wanted_count).map(|_| next(distinct) as u32).collect();
+                    let mut out = vec![u64::MAX; entries.div_ceil(64)];
+                    let any = container.fill_matching(|v| wanted.contains(&v), &mut out);
+                    for (i, &value) in values.iter().enumerate() {
+                        assert_eq!(
+                            out[i / 64] >> (i % 64) & 1 == 1,
+                            wanted.contains(&value),
+                            "{distinct} {wanted:?} {i}"
+                        );
+                    }
+                    assert_eq!(any, values.iter().any(|v| wanted.contains(v)));
+                }
+            }
+        }
     }
 
     const BLOCKS: Strategy = Strategy::blocks(16);

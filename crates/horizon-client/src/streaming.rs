@@ -415,18 +415,20 @@ impl GenerationScan {
             // Each area's square of columns, as one run per row. Players'
             // areas overlap (a server's players often stand together), so
             // the runs of a row are merged and each column is looked at once.
-            let mut runs: Vec<(i32, i32, i32)> = Vec::new();
-            for (center, radius) in std::iter::once((input.ranges.center, input.ranges.radius))
+            let r = margin.max(reach + 1);
+            let squares = std::iter::once((input.ranges.center, input.ranges.radius))
                 .chain(input.ranges.extra.iter().copied())
-            {
-                let r = radius + margin.max(reach + 1);
-                runs.extend((center.1 - r..=center.1 + r).map(|z| (z, center.0 - r, center.0 + r)));
-            }
-            if let Some(band) = input.ranges.band {
-                let r = margin.max(reach + 1);
-                runs.extend((band.z0 - r..=band.z1 + r).map(|z| (z, band.x0 - r, band.x1 + r)));
-            }
-            runs.sort_unstable();
+                .map(|((x, z), radius)| {
+                    let r = radius + r;
+                    (x - r, x + r, z - r, z + r)
+                })
+                .chain(
+                    input
+                        .ranges
+                        .band
+                        .map(|b| (b.x0 - r, b.x1 + r, b.z0 - r, b.z1 + r)),
+                );
+            let runs = row_runs(squares.collect());
             let mut runs = runs.into_iter().peekable();
             while let Some((z, x0, mut x1)) = runs.next() {
                 while let Some((_, _, next_x1)) =
@@ -493,6 +495,51 @@ impl GenerationScan {
             Some(wanted)
         }
     }
+}
+/// The rows of the squares `(x0, x1, z0, z1)` (inclusive) as runs
+/// `(z, x0, x1)`, by row and then by `x0`. Players in one chunk share a
+/// square, made into runs once.
+fn row_runs(mut squares: Vec<(i32, i32, i32, i32)>) -> Vec<(i32, i32, i32)> {
+    squares.sort_unstable();
+    squares.dedup();
+    let rows = |s: &(i32, i32, i32, i32)| (i64::from(s.3) - i64::from(s.2) + 1).max(0) as usize;
+    let total: usize = squares.iter().map(rows).sum();
+    let (Some(z0), Some(z1)) = (
+        squares.iter().map(|s| s.2).min(),
+        squares.iter().map(|s| s.3).max(),
+    ) else {
+        return Vec::new();
+    };
+    let span = (i64::from(z1) - i64::from(z0) + 1) as usize;
+    if span > 4 * total + 64 {
+        // Squares far apart: sorted, not counted by row.
+        let mut runs: Vec<_> = squares
+            .iter()
+            .flat_map(|&(x0, x1, za, zb)| (za..=zb).map(move |z| (z, x0, x1)))
+            .collect();
+        runs.sort_unstable();
+        return runs;
+    }
+    // A counting sort by row of squares already in `x0` order keeps each
+    // row in that order.
+    let mut start = vec![0usize; span + 1];
+    for s in &squares {
+        for z in s.2..=s.3 {
+            start[(z - z0) as usize + 1] += 1;
+        }
+    }
+    for i in 1..=span {
+        start[i] += start[i - 1];
+    }
+    let mut runs = vec![(0, 0, 0); total];
+    for &(x0, x1, za, zb) in &squares {
+        for z in za..=zb {
+            let at = &mut start[(z - z0) as usize];
+            runs[*at] = (z, x0, x1);
+            *at += 1;
+        }
+    }
+    runs
 }
 pub struct WorkerContext {
     pub assets: Arc<crate::assets::Assets>,
@@ -1973,11 +2020,25 @@ impl ExtraCover {
     ) -> Option<&'a ExtraCover> {
         cover.as_ref().filter(|c| c.extra == extra)
     }
-    /// Make it again if `extra` changed.
+    /// Bring it up to date if `extra` changed: the grid in place where it
+    /// can be (a few players crossed a chunk), else made again.
     fn refresh(cover: &mut Option<ExtraCover>, extra: &[((i32, i32), i32)]) {
         if extra.len() < 2 {
             *cover = None;
-        } else if cover.as_ref().is_none_or(|c| c.extra != extra) {
+            return;
+        }
+        let Some(c) = cover.as_mut() else {
+            *cover = Some(Self::new(extra));
+            return;
+        };
+        if c.extra == extra {
+            return;
+        }
+        if c.grid.as_mut().is_some_and(|g| g.update(&c.extra, extra)) {
+            c.extra.clear();
+            c.extra.extend_from_slice(extra);
+            c.tree = AreaTree::new(extra.iter().copied());
+        } else {
             *cover = Some(Self::new(extra));
         }
     }
@@ -2004,57 +2065,172 @@ struct CoverGrid {
     width: u32,
     depth: u32,
     cells: Box<[i8]>,
+    /// Per column, how many areas lie at each distance `0..=REACH` from it:
+    /// `cells` is the least with a count, so an area that leaves takes only
+    /// its own share away.
+    counts: Box<[[u16; ExtraCover::REACH as usize + 1]]>,
+}
+/// Columns `x0..=x1` by `z0..=z1`, inclusive.
+#[derive(Clone, Copy)]
+struct Rect {
+    x0: i64,
+    z0: i64,
+    x1: i64,
+    z1: i64,
+}
+impl Rect {
+    /// The columns within `ExtraCover::REACH` of `area`'s square.
+    fn reach_of(((x, z), r): ((i32, i32), i32)) -> Self {
+        let r = i64::from(r) + i64::from(ExtraCover::REACH);
+        let (x, z) = (i64::from(x), i64::from(z));
+        Self {
+            x0: x - r,
+            z0: z - r,
+            x1: x + r,
+            z1: z + r,
+        }
+    }
+    fn meet(self, o: Self) -> Option<Self> {
+        let m = Self {
+            x0: self.x0.max(o.x0),
+            z0: self.z0.max(o.z0),
+            x1: self.x1.min(o.x1),
+            z1: self.z1.min(o.z1),
+        };
+        (m.x0 <= m.x1 && m.z0 <= m.z1).then_some(m)
+    }
+    fn cells(self) -> u64 {
+        ((self.x1 - self.x0 + 1) * (self.z1 - self.z0 + 1)) as u64
+    }
 }
 impl CoverGrid {
+    /// Columns of room left around the areas when the grid is made, so that
+    /// players moving further out update it in place (`update`).
+    const SLACK: i64 = 16;
     fn new(extra: &[((i32, i32), i32)]) -> Option<Self> {
-        let reach = ExtraCover::REACH;
-        if extra
+        if !extra.iter().all(|&a| Self::sane(a)) {
+            return None;
+        }
+        let bounds = extra
             .iter()
-            .any(|&(_, r)| !(0..=ExtraCover::GRID_RADIUS).contains(&r))
-        {
-            return None;
+            .map(|&a| Rect::reach_of(a))
+            .reduce(|a, b| Rect {
+                x0: a.x0.min(b.x0),
+                z0: a.z0.min(b.z0),
+                x1: a.x1.max(b.x1),
+                z1: a.z1.max(b.z1),
+            })?;
+        let fits = |r: Rect| {
+            r.cells() <= ExtraCover::CELLS
+                && r.x0 >= i64::from(i32::MIN)
+                && r.z0 >= i64::from(i32::MIN)
+                && r.x1 <= i64::from(i32::MAX)
+                && r.z1 <= i64::from(i32::MAX)
+        };
+        let k = Self::SLACK;
+        let padded = Rect {
+            x0: bounds.x0 - k,
+            z0: bounds.z0 - k,
+            x1: bounds.x1 + k,
+            z1: bounds.z1 + k,
+        };
+        let r = [padded, bounds].into_iter().find(|&r| fits(r))?;
+        let (width, depth) = ((r.x1 - r.x0 + 1) as u32, (r.z1 - r.z0 + 1) as u32);
+        let size = (width * depth) as usize;
+        let mut grid = Self {
+            x0: r.x0 as i32,
+            z0: r.z0 as i32,
+            width,
+            depth,
+            cells: vec![(ExtraCover::REACH + 1) as i8; size].into_boxed_slice(),
+            counts: vec![[0; ExtraCover::REACH as usize + 1]; size].into_boxed_slice(),
+        };
+        for &area in extra {
+            grid.count(area, true);
         }
-        let k = i64::from(reach);
-        let (mut x0, mut z0, mut x1, mut z1) = (i64::MAX, i64::MAX, i64::MIN, i64::MIN);
-        for &((x, z), r) in extra {
-            let (x, z, r) = (i64::from(x), i64::from(z), i64::from(r) + k);
-            (x0, z0, x1, z1) = (x0.min(x - r), z0.min(z - r), x1.max(x + r), z1.max(z + r));
+        Some(grid)
+    }
+    /// An area a grid can hold: of a radius up to `ExtraCover::GRID_RADIUS`.
+    fn sane(area: ((i32, i32), i32)) -> bool {
+        (0..=ExtraCover::GRID_RADIUS).contains(&area.1)
+    }
+    fn rect(&self) -> Rect {
+        let (x0, z0) = (i64::from(self.x0), i64::from(self.z0));
+        Rect {
+            x0,
+            z0,
+            x1: x0 + i64::from(self.width) - 1,
+            z1: z0 + i64::from(self.depth) - 1,
         }
-        let (width, depth) = ((x1 - x0 + 1) as u64, (z1 - z0 + 1) as u64);
-        let fits = |lo: i64, hi: i64| lo >= i64::from(i32::MIN) && hi <= i64::from(i32::MAX);
-        if width.saturating_mul(depth) > ExtraCover::CELLS || !fits(x0, x1) || !fits(z0, z1) {
-            return None;
-        }
-        let (x0, z0, width, depth) = (x0 as i32, z0 as i32, width as u32, depth as u32);
-        let mut cells = vec![(reach + 1) as i8; (width * depth) as usize].into_boxed_slice();
-        // Inside a square counts as 0: no margin asked for is below it. Each
-        // row of a square is a run of one value with a slope at either end.
-        let lower = |run: &mut [i8], v: i8| run.iter_mut().for_each(|c| *c = (*c).min(v));
-        for &((cx, cz), r) in extra {
-            let area_reach = r + reach;
-            for dz in -area_reach..=area_reach {
-                let start = (cz + dz - z0) as usize * width as usize + (cx - x0) as usize;
-                let row = &mut cells[start - area_reach as usize..=start + area_reach as usize];
-                let flat = dz.abs().max(r);
-                let centre = area_reach as usize;
-                lower(
-                    &mut row[centre - flat as usize..=centre + flat as usize],
-                    (flat - r) as i8,
-                );
-                for d in flat + 1..=area_reach {
-                    let v = (d - r) as i8;
-                    lower(&mut row[centre - d as usize..=centre - d as usize], v);
-                    lower(&mut row[centre + d as usize..=centre + d as usize], v);
+    }
+    /// Adds `area` to (or takes it from) the counts of the columns within
+    /// its reach, which the grid holds, keeping `cells` their least.
+    fn count(&mut self, ((cx, cz), r): ((i32, i32), i32), add: bool) {
+        let c = Rect::reach_of(((cx, cz), r));
+        let (cx, cz, r) = (i64::from(cx), i64::from(cz), i64::from(r));
+        let width = self.width as usize;
+        for z in c.z0..=c.z1 {
+            let first =
+                (z - i64::from(self.z0)) as usize * width + (c.x0 - i64::from(self.x0)) as usize;
+            let dz = (z - cz).abs();
+            let span = first..first + (c.x1 - c.x0 + 1) as usize;
+            let cells = self.cells[span.clone()].iter_mut();
+            for ((cell, counts), x) in cells.zip(&mut self.counts[span]).zip(c.x0..) {
+                // How far outside the square: 0..=REACH within its reach.
+                let v = ((x - cx).abs().max(dz) - r).max(0) as usize;
+                if add {
+                    counts[v] += 1;
+                    *cell = (*cell).min(v as i8);
+                } else {
+                    counts[v] -= 1;
+                    if counts[v] == 0 && *cell == v as i8 {
+                        *cell = counts
+                            .iter()
+                            .position(|&n| n > 0)
+                            .map_or(ExtraCover::REACH as i8 + 1, |l| l as i8);
+                    }
                 }
             }
         }
-        Some(Self {
-            x0,
-            z0,
-            width,
-            depth,
-            cells,
-        })
+    }
+    /// Makes the grid `new`'s for the areas `extra` that `old` became,
+    /// counting in only the areas that came and went. False, with the grid
+    /// untouched, when one that came doesn't fit.
+    fn update(&mut self, old: &[((i32, i32), i32)], extra: &[((i32, i32), i32)]) -> bool {
+        let bounds = self.rect();
+        let (mut gone, mut came) = (old.to_vec(), extra.to_vec());
+        gone.sort_unstable();
+        came.sort_unstable();
+        // The multiset difference, either way: order doesn't matter.
+        let (mut i, mut j) = (0, 0);
+        let (mut left, mut right) = (Vec::new(), Vec::new());
+        while i < gone.len() || j < came.len() {
+            let (a, b) = (gone.get(i), came.get(j));
+            if a.is_some() && a == b {
+                i += 1;
+                j += 1;
+            } else if b.is_none() || a.is_some_and(|a| Some(a) < b) {
+                left.push(gone[i]);
+                i += 1;
+            } else {
+                right.push(came[j]);
+                j += 1;
+            }
+        }
+        let fits = |&area: &((i32, i32), i32)| {
+            let rect = Rect::reach_of(area);
+            Self::sane(area) && rect.meet(bounds).is_some_and(|m| m.cells() == rect.cells())
+        };
+        if !right.iter().all(fits) {
+            return false;
+        }
+        for area in left {
+            self.count(area, false);
+        }
+        for area in right {
+            self.count(area, true);
+        }
+        true
     }
     /// Whether (x, z) is within `margin` of an area's square, for a
     /// `margin` up to `ExtraCover::REACH`.
@@ -2911,6 +3087,79 @@ mod cover_tests {
                 }
             }
         }
+    }
+
+    /// Counted by row, the runs are the sorted ones up to the order of runs
+    /// sharing a row and a start.
+    #[test]
+    fn row_runs_are_sorted_by_row_and_start() {
+        let mut seed = 0x51_7CC1_B727_220Au64;
+        for case in 0..200 {
+            let spread = [5, 40, 100_000][case % 3];
+            let squares: Vec<_> = areas(&mut seed, 1 + case % 30, spread)
+                .into_iter()
+                .map(|((x, z), r)| (x - r, x + r + case as i32 % 3, z - r, z + r))
+                .collect();
+            let mut expected: Vec<_> = squares
+                .iter()
+                .collect::<std::collections::BTreeSet<_>>()
+                .into_iter()
+                .flat_map(|&(x0, x1, z0, z1)| (z0..=z1).map(move |z| (z, x0, x1)))
+                .collect();
+            expected.sort_unstable();
+            let mut runs = row_runs(squares);
+            assert!(runs.is_sorted_by_key(|&(z, x0, _)| (z, x0)), "case {case}");
+            runs.sort_unstable();
+            assert_eq!(runs, expected, "case {case}");
+        }
+        assert!(row_runs(Vec::new()).is_empty());
+    }
+
+    /// A grid brought up to date in place answers as one made afresh, as
+    /// players cross chunks, teleport, leave, join and are listed anew.
+    #[test]
+    fn an_updated_grid_answers_as_a_new_one() {
+        let mut seed = 0x2545_F491_4F6C_DD1Du64;
+        let mut extra = areas(&mut seed, 12, 20);
+        let mut cover = None;
+        ExtraCover::refresh(&mut cover, &extra);
+        let mut in_place = 0;
+        for step in 0..300 {
+            let mut next = |m: i32| areas(&mut seed, 1, m)[0];
+            let pick = next(1000).0.0.unsigned_abs() as usize % extra.len();
+            match step % 7 {
+                0 => extra[pick].0 = next(60).0,
+                1 if extra.len() > 2 => drop(extra.remove(pick)),
+                2 => extra.push(next(25)),
+                3 => extra[pick].1 = next(1).1,
+                // Guests listed in another order: the same areas.
+                5 => extra.rotate_left(pick),
+                _ => extra[pick].0.0 += 1 - 2 * (step % 2),
+            }
+            let before = cover
+                .as_ref()
+                .and_then(|c| c.grid.as_ref().map(|g| g.cells.as_ptr()));
+            ExtraCover::refresh(&mut cover, &extra);
+            let c = cover.as_ref().unwrap();
+            in_place += usize::from(before == c.grid.as_ref().map(|g| g.cells.as_ptr()));
+            let fresh = ExtraCover::new(&extra);
+            for z in -110..=110 {
+                for x in (-110 + (z + step).rem_euclid(3)..=110).step_by(3) {
+                    for m in 0..=ExtraCover::REACH {
+                        assert_eq!(
+                            c.within(x, z, m),
+                            fresh.within(x, z, m),
+                            "{step} ({x}, {z}) {m}"
+                        );
+                    }
+                }
+            }
+            assert_eq!(
+                c.tree.nearest_squared(5, -7, i64::MAX),
+                fresh.tree.nearest_squared(5, -7, i64::MAX)
+            );
+        }
+        assert!(in_place > 200, "{in_place}");
     }
 
     #[test]

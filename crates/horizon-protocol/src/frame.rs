@@ -33,9 +33,7 @@ pub fn contents(body: &[u8], threshold: Option<usize>) -> Result<Vec<u8>> {
         Some(_) => {
             let mut v = Vec::with_capacity(body.len() / 2 + 8);
             write_varint(&mut v, body.len() as i32);
-            let mut z = ZlibEncoder::new(v, Compression::default());
-            z.write_all(body)?;
-            z.finish()?
+            compress_into(v, body)?
         }
     };
     if inner.len() > MAX_FRAME {
@@ -45,6 +43,34 @@ pub fn contents(body: &[u8], threshold: Option<usize>) -> Result<Vec<u8>> {
         )));
     }
     Ok(inner)
+}
+
+/// Idle zlib encoders, reused across packets: setting up a fresh one (its
+/// window and hash tables) cost about as much as compressing a small packet.
+/// A reset encoder starts from the same state as a new one, so the bytes are
+/// the same. Bounded by how many threads compress at once.
+static ENCODERS: std::sync::Mutex<Vec<ZlibEncoder<Vec<u8>>>> = std::sync::Mutex::new(Vec::new());
+
+/// Append the zlib stream of `body` to `out`.
+fn compress_into(out: Vec<u8>, body: &[u8]) -> Result<Vec<u8>> {
+    let idle = || {
+        ENCODERS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    };
+    let pooled = idle().pop();
+    let mut z = match pooled {
+        Some(mut z) => {
+            z.reset(out)?;
+            z
+        }
+        None => ZlibEncoder::new(out, Compression::default()),
+    };
+    z.write_all(body)?;
+    z.try_finish()?;
+    let compressed = z.reset(Vec::new())?;
+    idle().push(z);
+    Ok(compressed)
 }
 
 /// A frame: the length prefix, then the [`contents`].
@@ -150,6 +176,24 @@ mod tests {
         let frame = split(&mut buffer).unwrap().unwrap();
         assert_eq!(Reader::new(&frame).varint().unwrap(), 5000);
         assert_eq!(decompress(frame, Some(256)).unwrap(), big);
+    }
+
+    #[test]
+    fn reused_encoders_compress_like_new_ones() {
+        let bodies: Vec<Vec<u8>> = (0..4u32)
+            .map(|n| {
+                (0..3000 + n * 997)
+                    .map(|i| (i * (n + 3) % 251) as u8)
+                    .collect()
+            })
+            .collect();
+        for body in bodies.iter().chain(bodies.iter()) {
+            let mut fresh = Vec::new();
+            write_varint(&mut fresh, body.len() as i32);
+            let mut z = ZlibEncoder::new(fresh, Compression::default());
+            z.write_all(body).unwrap();
+            assert_eq!(contents(body, Some(256)).unwrap(), z.finish().unwrap());
+        }
     }
 
     #[test]

@@ -1131,6 +1131,7 @@ pub fn main() -> horizon_client::Result<()> {
                     fluids_ahead: None,
                     kinds_ahead: None,
                     memo_ahead: None,
+                    blocks_ahead: None,
                 }
             };
         }

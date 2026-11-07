@@ -224,7 +224,7 @@ impl MobWorld<'_> {
         if self.nether {
             return false;
         }
-        self.world.light(x, y, z) >> 4 == 15
+        self.light_ahead(x, y, z) >> 4 == 15
     }
     /// Level.precipitationAt: raining, open to the sky, nothing motion
     /// blocking above, then the biome's precipitation at the position:
@@ -248,7 +248,7 @@ impl MobWorld<'_> {
     /// Level.getLightLevelDependentMagicValue: the dimension's brightness curve
     /// at the raw (sky darkened) light level.
     pub fn brightness(&self, x: i32, y: i32, z: i32) -> f32 {
-        let light = self.world.light(x, y, z);
+        let light = self.light_ahead(x, y, z);
         let sky = i32::from(light >> 4) - self.sky_darken();
         let level = sky.max(i32::from(light & 15)).clamp(0, 15) as f32;
         // DimensionType.getBrightness with ambient light 0 (overworld) / 0.1 (nether).
@@ -281,6 +281,24 @@ impl MobWorld<'_> {
                 creative: false,
                 passenger: s.passenger,
             }),
+        }
+    }
+    /// The block at `x, y, z`: from [`MobWorld::blocks_ahead`] when it was
+    /// read ahead there (the blocks hold still while the mobs tick), else
+    /// from the world.
+    pub fn block_ahead(&self, x: i32, y: i32, z: i32) -> BlockStateId {
+        match &self.blocks_ahead {
+            Some(read) if read.eye == [x, y, z] => read.eye_block,
+            Some(read) if read.below == [x, y, z] => read.below_block,
+            _ => self.world.block(x, y, z),
+        }
+    }
+    /// The packed light at `x, y, z` ([`crate::world::World::light`]), from
+    /// [`MobWorld::blocks_ahead`] when it was read ahead there.
+    pub fn light_ahead(&self, x: i32, y: i32, z: i32) -> u8 {
+        match &self.blocks_ahead {
+            Some(read) if read.eye == [x, y, z] => read.eye_light,
+            _ => self.world.light(x, y, z),
         }
     }
     /// The other mobs whose boxes may meet `area` (callers test the boxes),
