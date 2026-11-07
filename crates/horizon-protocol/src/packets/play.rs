@@ -2266,7 +2266,7 @@ packet!(
     SelectBundleItem { slot: i32 => VarInt, index: i32 => VarInt }
 );
 packet!(SetCarriedItem { slot: i16 => Short });
-packet!(SetCreativeModeSlot { slot: i16 => Short, item: Option<Stack> => Slot });
+packet!(SetCreativeModeSlot { slot: i16 => Short, item: Option<Stack> => crate::item::UntrustedSlot });
 packet!(UseItem { hand: i32 => VarInt, sequence: i32 => VarInt, yaw: f32 => Float, pitch: f32 => Float });
 packet!(UseItemOn {
     hand: i32 => VarInt,

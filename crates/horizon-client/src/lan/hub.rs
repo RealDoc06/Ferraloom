@@ -1844,7 +1844,7 @@ impl Hub {
         body: BodyFlags,
         living_flags: i8,
         bed: Option<[i32; 3]>,
-        skin: u8,
+        options: (u8, i32),
         health: f32,
         effects: &[EffectInstance],
     ) {
@@ -1884,9 +1884,7 @@ impl Hub {
         if (health - 1.0).abs() > f32::EPSILON && health != 20.0 {
             meta.push((9, serializer::FLOAT, Value::Float(health)));
         }
-        if skin != 0 {
-            meta.push((16, serializer::BYTE, Value::Byte(skin as i8)));
-        }
+        meta.extend(Self::option_meta(options));
         meta.extend(
             self.effect_meta(
                 effects
@@ -1976,7 +1974,7 @@ impl Hub {
                 h.body,
                 h.living_flags,
                 h.bed,
-                0x7F,
+                (0x7F, 1),
                 h.health,
                 &[],
             );
@@ -2013,7 +2011,7 @@ impl Hub {
                 guest_body(g),
                 g.living_flags,
                 g.bed,
-                g.info.model_customisation,
+                (g.info.model_customisation, g.info.main_hand),
                 g.health,
                 &g.effects.list,
             );
@@ -2160,11 +2158,42 @@ impl Hub {
 
     // ---- per-player state ------------------------------------------------
 
+    /// ServerPlayer.updateOptions' entity data: Avatar.DATA_PLAYER_MAIN_HAND
+    /// (15, right by default) and DATA_PLAYER_MODE_CUSTOMISATION (16, the
+    /// shown skin parts, none by default), each only when not the default.
+    fn option_meta((parts, main_hand): (u8, i32)) -> Vec<(u8, i32, Value)> {
+        let mut meta = Vec::new();
+        if main_hand != 1 {
+            meta.push((15, serializer::HUMANOID_ARM, Value::Id(main_hand)));
+        }
+        if parts != 0 {
+            meta.push((16, serializer::BYTE, Value::Byte(parts as i8)));
+        }
+        meta
+    }
+
     /// ServerPlayer.doTick: health, food, experience and the inventory menu.
     fn sync_player_state(&mut self, i: usize) {
+        // ServerPlayer.updateOptions in play: the skin parts and the main hand
+        // that changed go to the player too (its own model draws from them).
+        let g = &mut self.guests[i];
+        let options = (g.info.model_customisation, g.info.main_hand);
+        if g.sent_health.is_some() && options != g.sent_options {
+            let mut values = Vec::new();
+            if options.1 != g.sent_options.1 {
+                values.push((15, serializer::HUMANOID_ARM, Value::Id(options.1)));
+            }
+            if options.0 != g.sent_options.0 {
+                values.push((16, serializer::BYTE, Value::Byte(options.0 as i8)));
+            }
+            g.sent_options = options;
+            g.send(&C::SetEntityData(play::SetEntityData {
+                id: g.entity_id,
+                values,
+            }));
+        }
         // LivingEntity.startSleeping / stopSleeping: the pose and the bed go
         // to the player too (its client lies down in the bed from them).
-        let g = &mut self.guests[i];
         if g.bed != g.sent_bed {
             g.sent_bed = g.bed;
             let pose = if g.bed.is_some() { 2 } else { 0 };
@@ -2178,11 +2207,17 @@ impl Hub {
         }
         // ServerEntity.sendDirtyEntityData on the player's first tick: the
         // health its creation set is still dirty, and goes to the player too.
+        // The options its login set (updateOptions) are dirty then as well,
+        // and go out in the same packet, after the health.
         if self.guests[i].sent_health.is_none() {
-            let g = &self.guests[i];
+            let g = &mut self.guests[i];
+            let options = (g.info.model_customisation, g.info.main_hand);
+            g.sent_options = options;
+            let mut values = vec![(9, serializer::FLOAT, Value::Float(g.health))];
+            values.extend(Self::option_meta(options));
             g.send(&C::SetEntityData(play::SetEntityData {
                 id: g.entity_id,
-                values: vec![(9, serializer::FLOAT, Value::Float(g.health))],
+                values,
             }));
             // ServerPlayer.tick's CriteriaTriggers.TICK, then flushDirty. A
             // player who has been here has had the tick's criteria already.
