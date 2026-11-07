@@ -315,7 +315,8 @@ impl PlayerMotion {
     }
     /// `hurt_blocking` from a source whose causing entity is a living
     /// non-player (`living_cause`), which the `when_caused_by_living_non_player`
-    /// damage types scale with the difficulty.
+    /// damage types scale with the difficulty. Armor attribute reads follow
+    /// LivingEntity#getDamageAfterArmorAbsorb's BYPASSES_ARMOR gate.
     pub fn hurt_caused_by(
         &mut self,
         resources: &HealthResources,
@@ -332,8 +333,16 @@ impl PlayerMotion {
             .damage
             .source::<()>(source, None, None, None)
             .ok_or("unknown resident damage source")?;
-        let armor = self.attribute("minecraft:armor").unwrap_or(0.0) as f32;
-        let toughness = self.attribute("minecraft:armor_toughness").unwrap_or(0.0) as f32;
+        // Port of LivingEntity#getDamageAfterArmorAbsorb: bypassing armor
+        // must not evaluate its lazy attributes, including their dirty flags.
+        let (armor, toughness) = if source.bypasses(Bypass::Armor) {
+            (0.0, 0.0)
+        } else {
+            (
+                self.attribute("minecraft:armor").unwrap_or(0.0) as f32,
+                self.attribute("minecraft:armor_toughness").unwrap_or(0.0) as f32,
+            )
+        };
         let before = self.health.health() + self.health.absorption();
         let fire_ticks = self.fire_ticks;
         let source_name = source.definition().name.clone();
@@ -472,7 +481,7 @@ pub struct HurtRecord {
     /// Health and absorption lost.
     pub taken: f32,
     pub hurt: bool,
-    /// `minecraft:armor` and `minecraft:armor_toughness` when it came.
+    /// Armor and toughness evaluated for this hit, zero when it bypasses armor.
     pub armor: f32,
     pub toughness: f32,
     pub health: f32,
@@ -903,6 +912,35 @@ mod tests {
         assert!(hurt, "the arrow must hurt");
         assert_eq!(player.health.health(), 0.0, "the health must be spent");
         assert!(player.health.dead_or_dying(), "the player must be dead");
+    }
+
+    /// Port of LivingEntity#getDamageAfterArmorAbsorb's BYPASSES_ARMOR gate.
+    #[test]
+    fn fall_damage_keeps_armor_attributes_dirty() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../.local/horizon-client")
+            .join(horizon_core::VANILLA_VERSION);
+        if !root.join("movement-properties.nbt").exists() {
+            return;
+        }
+        let assets = crate::assets::Assets::load(&root).expect("prepared vanilla resources");
+        let resources = crate::motion::MotionResources::load(&root, &assets).unwrap();
+        let mut player =
+            crate::motion::PlayerMotion::new(&resources, horizon_core::geometry::Vec3::ZERO)
+                .unwrap();
+        let handles = ["minecraft:armor", "minecraft:armor_toughness"].map(|name| {
+            let key = player.attributes.key(name).unwrap();
+            let handle = player.attributes.get_instance(Some(key)).unwrap().unwrap();
+            assert!(player.attributes.instance(&handle).unwrap().is_dirty());
+            handle
+        });
+        let fall = resources.health.damage.id("minecraft:fall").unwrap();
+        player
+            .hurt(&resources.health, super::HealthRules::default(), fall, 5.0)
+            .unwrap();
+        for handle in handles {
+            assert!(player.attributes.instance(&handle).unwrap().is_dirty());
+        }
     }
 
     #[test]

@@ -1028,6 +1028,14 @@ name = "ferraloom-core"
 version = "0.1.0"
 
 [[package]]
+name = "ferraloom-game"
+version = "0.1.0"
+dependencies = [
+ "horizon-core",
+ "horizon-world",
+]
+
+[[package]]
 name = "fiat-crypto"
 version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1473,6 +1481,7 @@ dependencies = [
  "chrono",
  "cpal",
  "ferraloom-core",
+ "ferraloom-game",
  "flate2",
  "gilrs",
  "glam",
