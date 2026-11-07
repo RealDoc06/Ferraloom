@@ -268,6 +268,28 @@ impl Rules for ItemRules<'_> {
     }
 }
 
+/// Start loading what the turn of the guest `conn` reads first (their
+/// record, body and play state, scattered over the heap) while the guest
+/// before them takes theirs: a hint that changes nothing.
+fn prefetch_guest(host: &LanHost, conn: u32) {
+    use horizon_threads::{prefetch, prefetch_all};
+    let Some(g) = host.hub.guest(conn) else {
+        return;
+    };
+    prefetch_all(g);
+    prefetch(&g.position);
+    prefetch(&g.effects);
+    prefetch(&g.advancements);
+    prefetch(&g.moves);
+    prefetch_all(g.inventory.as_slice());
+    if let Some(m) = g.motion.as_deref() {
+        prefetch_all(m);
+    }
+    if let Some(play) = host.play.get(&conn) {
+        prefetch_all(&**play);
+    }
+}
+
 /// `tick_guests`' parts, each summed over the guests into one span while
 /// spans are summed (a span for each guest would cost more than some parts).
 struct GuestParts {
@@ -2462,9 +2484,12 @@ impl Game<'_> {
         }
         let pickups = PickupCells::new(&self.dropped);
         parts.mark(GuestPart::Menus);
-        for conn in conns {
+        for (k, &conn) in conns.iter().enumerate() {
             // What a guest left by `continue` did counts with the after part.
             parts.mark(GuestPart::After);
+            if let Some(&next) = conns.get(k + 1) {
+                prefetch_guest(host, next);
+            }
             let Some(gi) = host.hub.guest_index(conn) else {
                 continue;
             };
