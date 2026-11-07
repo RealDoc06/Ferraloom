@@ -556,6 +556,60 @@ impl Codec<Option<Stack>> for Slot {
     }
 }
 
+/// ItemStack.OPTIONAL_UNTRUSTED_STREAM_CODEC, what a creative client sends
+/// (ServerboundSetCreativeModeSlotPacket): [`Slot`]'s layout, except that
+/// DataComponentPatch.DELIMITED_STREAM_CODEC puts each added component's
+/// byte length before its value, and the reader moves past exactly that many
+/// bytes. A value this crate can't parse is kept as its raw bytes.
+pub struct UntrustedSlot;
+impl Codec<Option<Stack>> for UntrustedSlot {
+    fn read(r: &mut Reader) -> Result<Option<Stack>> {
+        let count = r.varint()?;
+        if count <= 0 {
+            return Ok(None);
+        }
+        let item = r.varint()?;
+        let positive = r.count(65536)?;
+        let negative = r.count(65536)?;
+        let mut added = Vec::with_capacity(positive.min(64));
+        for _ in 0..positive {
+            let kind = r.varint()?;
+            let len = r.count(i32::MAX as usize)?;
+            let bytes = r.bytes(len)?;
+            let component = Component::read(kind, &mut Reader::new(bytes))
+                .unwrap_or_else(|_| Component::Raw(bytes.to_vec()));
+            added.push((kind, component));
+        }
+        let removed = (0..negative).map(|_| r.varint()).collect::<Result<_>>()?;
+        Ok(Some(Stack {
+            item,
+            count,
+            added,
+            removed,
+        }))
+    }
+    fn write(v: &Option<Stack>, w: &mut Writer) {
+        let Some(s) = v else {
+            w.varint(0);
+            return;
+        };
+        w.varint(s.count);
+        w.varint(s.item);
+        w.varint(s.added.len() as i32);
+        w.varint(s.removed.len() as i32);
+        for (kind, c) in &s.added {
+            w.varint(*kind);
+            let mut value = Writer::new();
+            c.write(*kind, &mut value);
+            w.varint(value.data.len() as i32);
+            w.bytes(&value.data);
+        }
+        for kind in &s.removed {
+            w.varint(*kind);
+        }
+    }
+}
+
 /// ItemStackTemplate.STREAM_CODEC: the item, the count, then the patch.
 pub struct Template;
 impl Codec<Stack> for Template {
@@ -655,6 +709,27 @@ impl Codec<Option<Hashed>> for HashedSlot {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn untrusted_slot_reads_length_prefixed_components() {
+        // A creative client's stack: a damaged sword with a custom repair cost.
+        let stack = Some(Stack {
+            item: 7,
+            count: 1,
+            added: vec![(component::DAMAGE, Component::Int(300)), (component::REPAIR_COST, Component::Int(5))],
+            removed: vec![component::MAX_DAMAGE],
+        });
+        let mut w = Writer::new();
+        UntrustedSlot::write(&stack, &mut w);
+        // Each value is a one-byte VarInt length, then the value (300 is two VarInt bytes).
+        assert_eq!(w.data, [1, 7, 2, 1, component::DAMAGE as u8, 2, 0xAC, 0x02,
+            component::REPAIR_COST as u8, 1, 5, component::MAX_DAMAGE as u8]);
+        let mut r = Reader::new(&w.data);
+        assert_eq!(UntrustedSlot::read(&mut r).unwrap(), stack);
+        assert_eq!(r.remaining(), 0);
+        // The plain slot codec misreads the same bytes, which is what disconnected creative players.
+        assert_ne!(Slot::read(&mut Reader::new(&w.data)).ok().flatten(), stack);
+    }
     use crate::text::literal;
 
     fn round<T: PartialEq + std::fmt::Debug, C: Codec<T>>(v: T) {
