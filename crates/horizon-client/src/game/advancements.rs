@@ -100,6 +100,9 @@ pub(super) struct AdvState {
     pub(super) pending_tree: Option<std::thread::JoinHandle<Tree>>,
     /// `inventory_changed`'s criteria by item, built for `tree`.
     inventory_index: Option<(Arc<Tree>, Arc<adv::InventoryIndex>)>,
+    /// The `location` criteria's place tests, in `tree`'s list for the
+    /// trigger, built for `tree` (`None` where the conditions are walked).
+    place_tests: Option<(Arc<Tree>, Arc<[Option<adv::PlaceTest>]>)>,
 }
 /// The game's world for predicates.
 struct View<'a, 'g>(&'a Game<'g>);
@@ -459,6 +462,16 @@ impl Game<'_> {
         list: &[(usize, usize)],
         test: impl Fn(&Value, &dyn adv::World) -> bool,
     ) {
+        self.trigger_criteria_at(tree, list, |_, c, w| test(c, w));
+    }
+    /// `trigger_criteria` with a test that is also told the criterion's
+    /// place in `list`.
+    fn trigger_criteria_at(
+        &mut self,
+        tree: &Tree,
+        list: &[(usize, usize)],
+        test: impl Fn(usize, &Value, &dyn adv::World) -> bool,
+    ) {
         let mut hits = Vec::new();
         {
             let view = View(self);
@@ -466,7 +479,7 @@ impl Game<'_> {
             // advancement's progress is looked at once for its run of
             // criteria (the list is in tree order).
             let mut done: Option<(usize, bool)> = None;
-            for &(ai, ci) in list {
+            for (k, &(ai, ci)) in list.iter().enumerate() {
                 let a = &tree.list[ai];
                 let c = &a.criteria[ci];
                 if self.adv.progress.has(&a.id, &c.name) {
@@ -483,7 +496,7 @@ impl Game<'_> {
                 if finished {
                     continue;
                 }
-                if test(&c.conditions, &view) {
+                if test(k, &c.conditions, &view) {
                     hits.push((ai, ci));
                 }
             }
@@ -719,8 +732,26 @@ impl Game<'_> {
             self.trigger_levitation(start, (self.ticks - since) as i64);
         }
         if self.ticks.is_multiple_of(20) && self.trigger_open("minecraft:location") {
-            let me = self.player_entity();
-            self.trigger("minecraft:location", |c, w| {
+            self.trigger_location();
+        }
+    }
+    /// `PlayerTrigger.LOCATION`: a criterion that reads only the biome or the
+    /// structures the player is in is answered from them, looked up once.
+    fn trigger_location(&mut self) {
+        if self.remote.is_some() || self.no_player_here() {
+            return;
+        }
+        self.load_advancements();
+        let tree = self.adv.tree.clone();
+        let Some(list) = tree.by_trigger.get("minecraft:location") else {
+            return;
+        };
+        let tests = self.place_tests();
+        let me = self.player_entity();
+        let place = adv::PlaceAt::new(me.position);
+        self.trigger_criteria_at(&tree, list, |k, c, w| match &tests[k] {
+            Some(test) => test.test(&place, w),
+            None => {
                 let ctx = adv::Entities {
                     this: Some(&me),
                     origin: me.position,
@@ -728,8 +759,24 @@ impl Game<'_> {
                     block_pos: None,
                 };
                 adv::conditions(&c["player"], &ctx, w)
-            });
+            }
+        });
+    }
+    /// The place tests of the `location` criteria, for the tree in place.
+    fn place_tests(&mut self) -> Arc<[Option<adv::PlaceTest>]> {
+        let tree = self.adv.tree.clone();
+        if let Some((built, tests)) = &self.adv.place_tests
+            && Arc::ptr_eq(built, &tree)
+        {
+            return tests.clone();
         }
+        let tests: Arc<[Option<adv::PlaceTest>]> = (tree.by_trigger.get("minecraft:location"))
+            .into_iter()
+            .flatten()
+            .map(|&(ai, ci)| adv::PlaceTest::of(&tree.list[ai].criteria[ci].conditions["player"]))
+            .collect();
+        self.adv.place_tests = Some((tree, tests.clone()));
+        tests
     }
     /// A player condition plus one entity (`player`, `entity` keys).
     pub(super) fn trigger_entity(&mut self, name: &str, key: &str, target: &EntityView) {
