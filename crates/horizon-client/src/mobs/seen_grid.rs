@@ -23,7 +23,7 @@ struct Block {
 
 /// Snapshot indices by the column holding each box's minimum corner, each
 /// column's as a list linked through `next` (no allocation per column).
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct SeenGrid {
     /// Where in `slabs` each block that has held an entry is.
     blocks: FxHashMap<(i32, i32), u32>,
@@ -38,6 +38,8 @@ pub struct SeenGrid {
     reach: f64,
     /// Every species an entry has had, when kept ([`SeenGrid::keep_species`]).
     species: Option<SpeciesSet>,
+    /// How many times [`SeenGrid::note_species`] added a species.
+    species_added: u32,
 }
 const END: u32 = u32::MAX;
 
@@ -71,6 +73,7 @@ impl SeenGrid {
             columns: 0,
             reach: 0.0,
             species: None,
+            species_added: 0,
         };
         for (i, b) in boxes.enumerate() {
             let at = corner(b);
@@ -85,13 +88,22 @@ impl SeenGrid {
     /// then [`SeenGrid::may_hold`] can answer no.
     pub fn keep_species(&mut self, species: impl Iterator<Item = Species>) {
         let set = self.species.get_or_insert_default();
-        species.for_each(|s| set.insert(s));
+        species.for_each(|s| {
+            set.insert(s);
+        });
     }
     /// An entry is now of species `s` (kept only while the grid keeps them).
     pub fn note_species(&mut self, s: Species) {
-        if let Some(set) = &mut self.species {
-            set.insert(s);
+        if let Some(set) = &mut self.species
+            && set.insert(s)
+        {
+            self.species_added += 1;
         }
+    }
+    /// Changes whenever a species is added: [`SeenGrid::may_hold`]'s
+    /// answers stand while it is the same.
+    pub fn species_added(&self) -> u32 {
+        self.species_added
     }
     /// False only when the grid keeps species and no entry has ever been
     /// of one of `list`.
@@ -149,6 +161,30 @@ impl SeenGrid {
         self.next[i] = END;
         block.count -= 1;
     }
+    /// The columns [`SeenGrid::candidates`] reads for `area`, lowest and
+    /// highest; None when it scans every entry instead.
+    pub fn columns_for(&self, area: Aabb) -> Option<((i32, i32), (i32, i32))> {
+        // A box meets `area` only if its minimum corner is below area.max
+        // and within `reach` (plus a margin for rounding) of area.min.
+        let margin = self.reach + 1.0;
+        let lo = column(area.min(Axis::X) - margin, area.min(Axis::Z) - margin);
+        let hi = column(area.max(Axis::X), area.max(Axis::Z));
+        (!self.too_wide(lo, hi)).then_some((lo, hi))
+    }
+    /// Whether columns `lo..=hi` are more than the grid holds (or none).
+    pub fn too_wide(&self, lo: (i32, i32), hi: (i32, i32)) -> bool {
+        let span = |a: i32, b: i32| i64::from(b) - i64::from(a) + 1;
+        let (nx, nz) = (span(lo.0, hi.0), span(lo.1, hi.1));
+        nx < 1 || nz < 1 || nx.saturating_mul(nz) > self.columns as i64
+    }
+    /// The widest box the grid has held, which widens every query.
+    pub fn reach(&self) -> f64 {
+        self.reach
+    }
+    /// The column of entry `i`'s box.
+    pub fn column_of(&self, i: usize) -> (i32, i32) {
+        self.cell_of[i]
+    }
     /// Entry `i`'s box is now `b` (the mob moved or resized).
     pub fn update(&mut self, i: usize, b: Aabb) {
         self.reach = self.reach.max(width(b));
@@ -165,16 +201,9 @@ impl SeenGrid {
     /// columns than the grid holds (or is not finite): scan them all.
     pub fn candidates(&self, area: Aabb, out: &mut Vec<u32>) -> bool {
         out.clear();
-        // A box meets `area` only if its minimum corner is below area.max
-        // and within `reach` (plus a margin for rounding) of area.min.
-        let margin = self.reach + 1.0;
-        let lo = column(area.min(Axis::X) - margin, area.min(Axis::Z) - margin);
-        let hi = column(area.max(Axis::X), area.max(Axis::Z));
-        let span = |a: i32, b: i32| i64::from(b) - i64::from(a) + 1;
-        let (nx, nz) = (span(lo.0, hi.0), span(lo.1, hi.1));
-        if nx < 1 || nz < 1 || nx.saturating_mul(nz) > self.columns as i64 {
+        let Some((lo, hi)) = self.columns_for(area) else {
             return false;
-        }
+        };
         let (block_lo, block_hi) = (block_of(lo), block_of(hi));
         for bx in block_lo.0..=block_hi.0 {
             for bz in block_lo.1..=block_hi.1 {
@@ -203,15 +232,48 @@ impl SeenGrid {
     }
 }
 
+/// A set of columns, kept by block so that asking about a range of
+/// columns looks up a block or a few.
+#[derive(Default)]
+pub struct ColumnSet {
+    /// Each block's columns, as bits by [`cell_in`].
+    blocks: FxHashMap<(i32, i32), u16>,
+}
+impl ColumnSet {
+    pub fn insert(&mut self, at: (i32, i32)) {
+        *self.blocks.entry(block_of(at)).or_default() |= 1 << cell_in(at);
+    }
+    /// Whether any of columns `lo..=hi` is in.
+    pub fn meets(&self, lo: (i32, i32), hi: (i32, i32)) -> bool {
+        let (block_lo, block_hi) = (block_of(lo), block_of(hi));
+        (block_lo.0..=block_hi.0).any(|bx| {
+            (block_lo.1..=block_hi.1).any(|bz| {
+                let Some(&bits) = self.blocks.get(&(bx, bz)) else {
+                    return false;
+                };
+                let xs = lo.0.max(bx << BLOCK_SHIFT)..=hi.0.min(((bx + 1) << BLOCK_SHIFT) - 1);
+                xs.into_iter().any(|x| {
+                    let mut zs =
+                        lo.1.max(bz << BLOCK_SHIFT)..=hi.1.min(((bz + 1) << BLOCK_SHIFT) - 1);
+                    zs.any(|z| bits & 1 << cell_in((x, z)) != 0)
+                })
+            })
+        })
+    }
+}
+
 /// The species among a list of mobs, as bits (all of them past the 128th).
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct SpeciesSet([u64; 2], bool);
 impl SpeciesSet {
-    pub fn insert(&mut self, s: Species) {
+    /// Adds `s`; true when it was not in yet.
+    pub fn insert(&mut self, s: Species) -> bool {
+        let before = (self.0, self.1);
         match s as usize {
             i if i < 128 => self.0[i / 64] |= 1 << (i % 64),
             _ => self.1 = true,
         }
+        before != (self.0, self.1)
     }
     pub fn has(&self, s: Species) -> bool {
         let i = s as usize;
@@ -226,6 +288,30 @@ mod tests {
 
     fn boxed(x: f64, y: f64, z: f64, w: f64) -> Aabb {
         Aabb::new(Vec3::new(x, y, z), Vec3::new(x + w, y + 1.8, z + w))
+    }
+
+    #[test]
+    fn a_column_set_meets_exactly_the_ranges_holding_its_columns() {
+        let mut set = ColumnSet::default();
+        let columns = [(0, 0), (-1, 5), (7, -9), (-13, -4)];
+        for at in columns {
+            set.insert(at);
+        }
+        for lx in -16..10 {
+            for lz in -12..8 {
+                for (w, d) in [(0, 0), (1, 2), (5, 3)] {
+                    let (lo, hi) = ((lx, lz), (lx + w, lz + d));
+                    let inside = |&(x, z): &(i32, i32)| {
+                        (lo.0..=hi.0).contains(&x) && (lo.1..=hi.1).contains(&z)
+                    };
+                    assert_eq!(
+                        set.meets(lo, hi),
+                        columns.iter().any(inside),
+                        "{lo:?}..{hi:?}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

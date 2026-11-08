@@ -1108,7 +1108,7 @@ pub fn main() -> horizon_client::Result<()> {
                     data: &data,
                     player: player.clone(),
                     nearest_player: player.as_ref().filter(|p| !p.spectator).map(|p| p.position),
-                    others: $snapshot,
+                    others: horizon_client::mobs::Others::new($snapshot),
                     others_grid: $grid,
                     others_index: None,
                     daylight: (world.day_time.rem_euclid(24000)) < 12000,

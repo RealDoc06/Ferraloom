@@ -12,7 +12,7 @@ use horizon_client::{
     command::vanilla,
     containers::BlockEntity,
     entities::{Experience, ItemEntity},
-    fast_hash::FxHashSet,
+    fast_hash::FxHashMap,
     first_person::{Hand, SwingAnimation},
     items::ItemStack,
     lan::{
@@ -185,38 +185,53 @@ pub(super) struct GuestSwap {
 }
 
 /// Where the items guests can take lay when the guests' tick began, in cells
-/// of 4 by 4 blocks: most guests stand far from any, and a server has hundreds
-/// of guests and thousands of items. Items only move in their own tick, and
-/// what a guest's turn drops goes at the end of the list.
+/// of 4 by 4 blocks, by their places in the list: most guests stand far from
+/// any, and a server has hundreds of guests and thousands of items. Items only
+/// move in their own tick, and what a guest's turn drops goes at the end of
+/// the list.
 struct PickupCells {
-    cells: FxHashSet<(i32, i32)>,
+    cells: FxHashMap<(i32, i32), Vec<usize>>,
+    /// The list's length and last item then: a list that differs since (an
+    /// item taken or dropped) has its items looked at one by one.
+    len: usize,
     last: Option<u32>,
 }
 impl PickupCells {
     fn new(items: &[ItemEntity]) -> Self {
+        let mut cells: FxHashMap<(i32, i32), Vec<usize>> = FxHashMap::default();
+        for (i, d) in items
+            .iter()
+            .enumerate()
+            .filter(|(_, d)| d.pickup_delay == 0)
+        {
+            let cell = (
+                d.position.x.floor() as i32 >> 2,
+                d.position.z.floor() as i32 >> 2,
+            );
+            cells.entry(cell).or_default().push(i);
+        }
         Self {
-            cells: items
-                .iter()
-                .filter(|d| d.pickup_delay == 0)
-                .map(|d| {
-                    (
-                        d.position.x.floor() as i32 >> 2,
-                        d.position.z.floor() as i32 >> 2,
-                    )
-                })
-                .collect(),
+            cells,
+            len: items.len(),
             last: items.last().map(|d| d.id),
         }
     }
-    /// False when no item in reach of `at` (1.5 blocks across) can be taken,
-    /// which a look at every item would find too.
-    fn may_reach(&self, items: &[ItemEntity], at: [f64; 3]) -> bool {
-        if items.last().map(|d| d.id) != self.last {
-            return true;
+    /// The places, in order, of the items that may be in reach of `at` (1.5
+    /// blocks across): every item a look at the whole list would find, or
+    /// `None` when the list changed and that look is needed.
+    fn near(&self, items: &[ItemEntity], at: [f64; 3]) -> Option<Vec<usize>> {
+        if items.len() != self.len || items.last().map(|d| d.id) != self.last {
+            return None;
         }
         let cell = |v: f64| v.floor() as i32 >> 2;
-        (cell(at[0] - 2.0)..=cell(at[0] + 2.0))
-            .any(|x| (cell(at[2] - 2.0)..=cell(at[2] + 2.0)).any(|z| self.cells.contains(&(x, z))))
+        let mut near = Vec::new();
+        for x in cell(at[0] - 2.0)..=cell(at[0] + 2.0) {
+            for z in cell(at[2] - 2.0)..=cell(at[2] + 2.0) {
+                near.extend(self.cells.get(&(x, z)).into_iter().flatten());
+            }
+        }
+        near.sort_unstable();
+        Some(near)
     }
 }
 
@@ -249,6 +264,73 @@ impl Rules for ItemRules<'_> {
             "legs" => Some(2),
             "feet" => Some(3),
             _ => None,
+        }
+    }
+}
+
+/// Start loading what the turn of the guest `conn` reads first (their
+/// record, body and play state, scattered over the heap) while the guest
+/// before them takes theirs: a hint that changes nothing.
+fn prefetch_guest(host: &LanHost, conn: u32) {
+    use horizon_threads::{prefetch, prefetch_all};
+    let Some(g) = host.hub.guest(conn) else {
+        return;
+    };
+    prefetch_all(g);
+    prefetch(&g.position);
+    prefetch(&g.effects);
+    prefetch(&g.advancements);
+    prefetch(&g.moves);
+    prefetch_all(g.inventory.as_slice());
+    if let Some(m) = g.motion.as_deref() {
+        prefetch_all(m);
+    }
+    if let Some(play) = host.play.get(&conn) {
+        prefetch_all(&**play);
+    }
+}
+
+/// `tick_guests`' parts, each summed over the guests into one span while
+/// spans are summed (a span for each guest would cost more than some parts).
+struct GuestParts {
+    last: Option<std::time::Instant>,
+    sums: [f32; GuestPart::NAMES.len()],
+}
+#[derive(Clone, Copy)]
+enum GuestPart {
+    /// The menus, stations and advancements before the guests.
+    Menus,
+    /// A guest's sleep, death and hands, up to their server tick.
+    Hands,
+    /// `guest_server_tick`: the turn with the body.
+    Body,
+    TickEnd,
+    /// Maps, progress, cracks, pickups, orbs and death (and a dead guest's turn).
+    After,
+}
+impl GuestPart {
+    const NAMES: [&str; 5] = ["lg_menus", "lg_hands", "lg_body", "lg_tick_end", "lg_after"];
+}
+impl GuestParts {
+    fn start() -> Self {
+        Self {
+            last: horizon_client::spans::summing().then(std::time::Instant::now),
+            sums: [0.0; GuestPart::NAMES.len()],
+        }
+    }
+    /// The time since the last mark goes to `part`.
+    fn mark(&mut self, part: GuestPart) {
+        if let Some(last) = self.last.as_mut() {
+            let now = std::time::Instant::now();
+            self.sums[part as usize] += (now - *last).as_secs_f32() * 1000.0;
+            *last = now;
+        }
+    }
+    fn finish(self) {
+        if self.last.is_some() {
+            for (name, ms) in GuestPart::NAMES.into_iter().zip(self.sums) {
+                horizon_client::spans::summary_add_span(name, ms, ms);
+            }
         }
     }
 }
@@ -2382,6 +2464,7 @@ impl Game<'_> {
 
     /// Per tick, for every guest: dig, use items, pick up drops, die.
     pub(super) fn tick_guests(&mut self, host: &mut LanHost) {
+        let mut parts = GuestParts::start();
         self.lan_merchant_tick(host);
         self.lan_stations_tick(host);
         self.lan_tables_tick(host);
@@ -2400,7 +2483,13 @@ impl Game<'_> {
             self.refresh_hook_targets(host);
         }
         let pickups = PickupCells::new(&self.dropped);
-        for conn in conns {
+        parts.mark(GuestPart::Menus);
+        for (k, &conn) in conns.iter().enumerate() {
+            // What a guest left by `continue` did counts with the after part.
+            parts.mark(GuestPart::After);
+            if let Some(&next) = conns.get(k + 1) {
+                prefetch_guest(host, next);
+            }
             let Some(gi) = host.hub.guest_index(conn) else {
                 continue;
             };
@@ -2493,7 +2582,9 @@ impl Game<'_> {
                 play.attack_item = held;
             }
             self.guest_delayed_destroy(host, conn);
+            parts.mark(GuestPart::Hands);
             let turn = self.guest_server_tick(host, conn);
+            parts.mark(GuestPart::Body);
             // Player.tick's statistics and ServerPlayer.tick's triggers, then
             // PlayerAdvancements.flushDirty.
             let tick_end = |g: &mut Self, sleeping: bool| {
@@ -2517,13 +2608,16 @@ impl Game<'_> {
                     self.as_guest(host, conn, |g| tick_end(g, sleeping));
                 }
             }
+            parts.mark(GuestPart::TickEnd);
             self.lan_map_updates(host, conn);
             host.hub.flush_progress(conn);
             self.guest_dig_feedback(host, conn);
             self.guest_pickups(host, gi, &pickups);
             self.guest_orbs(host, gi);
             self.guest_die(host, gi, conn);
+            parts.mark(GuestPart::After);
         }
+        parts.finish();
     }
 
     /// `ServerPlayer.die` for a guest whose health has run out: the death
@@ -3269,13 +3363,16 @@ impl Game<'_> {
                 horizon_client::lan::playerdata::uuid_ints(g.uuid),
             )
         };
-        if mode == SPECTATOR || !cells.may_reach(&self.dropped, position) {
+        if mode == SPECTATOR {
             return;
         }
-        let near: Vec<usize> = self
-            .dropped
-            .iter()
-            .enumerate()
+        let candidates = cells.near(&self.dropped, position);
+        if candidates.as_ref().is_some_and(Vec::is_empty) {
+            return;
+        }
+        let near: Vec<usize> = (candidates.unwrap_or_else(|| (0..self.dropped.len()).collect()))
+            .into_iter()
+            .map(|i| (i, &self.dropped[i]))
             .filter(|(_, d)| {
                 d.pickup_delay == 0
                     && d.target.is_none_or(|t| t == uuid)
@@ -3619,7 +3716,7 @@ mod pickup_tests {
     }
 
     #[test]
-    fn the_cells_never_hide_an_item_in_reach() {
+    fn the_cells_give_every_item_in_reach_in_order() {
         let mut seed = 0x2545_f491_u64;
         let mut draw = |range: i32| {
             seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
@@ -3632,10 +3729,18 @@ mod pickup_tests {
         let mut skipped = 0;
         for _ in 0..4000 {
             let at = [draw(640), 64.0, draw(640)];
-            if !cells.may_reach(&items, at) {
-                skipped += 1;
-                assert!(!items.iter().any(|d| reaches(d, at)));
-            }
+            let all: Vec<usize> = (0..items.len())
+                .filter(|&i| reaches(&items[i], at))
+                .collect();
+            let near = cells.near(&items, at).expect("the list is as it was");
+            assert_eq!(
+                near.iter()
+                    .copied()
+                    .filter(|&i| reaches(&items[i], at))
+                    .collect::<Vec<_>>(),
+                all
+            );
+            skipped += usize::from(near.is_empty());
         }
         assert!(skipped > 0);
     }
@@ -3645,8 +3750,17 @@ mod pickup_tests {
         let mut items = vec![item(1, 0.0, 0.0, 0)];
         let cells = PickupCells::new(&items);
         let far = [1000.0, 64.0, 1000.0];
-        assert!(!cells.may_reach(&items, far));
+        assert_eq!(cells.near(&items, far), Some(Vec::new()));
         items.push(item(2, 1000.0, 1000.0, 0));
-        assert!(cells.may_reach(&items, far));
+        assert_eq!(cells.near(&items, far), None);
+        // One taken in the middle moves the others' places.
+        let mut items = vec![
+            item(1, 0.0, 0.0, 0),
+            item(2, 0.0, 0.0, 0),
+            item(3, 0.0, 0.0, 0),
+        ];
+        let cells = PickupCells::new(&items);
+        items.remove(1);
+        assert_eq!(cells.near(&items, [0.0; 3]), None);
     }
 }

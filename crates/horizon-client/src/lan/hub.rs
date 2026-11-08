@@ -429,6 +429,41 @@ fn entity_type(
     Some(id)
 }
 
+/// `Hub::stack_of` without its cache's upkeep (`Hub::stacks`).
+pub struct Stacks<'a> {
+    sync: &'a SyncData,
+    item_ids: &'a crate::fast_hash::FxHashMap<Arc<str>, i32>,
+}
+impl Stacks<'_> {
+    pub fn of(&self, s: &ItemStack) -> Option<horizon_protocol::item::Stack> {
+        let id = self.item_ids.get(&s.item).copied().unwrap_or_else(|| {
+            (self.sync.builtin.get("minecraft:item"))
+                .and_then(|i| i.id(&s.item))
+                .unwrap_or(0)
+        });
+        network_stack_with(self.sync, id, s)
+    }
+}
+
+/// A stack on the wire, its item's registry id `id`: the stacks inside it (a
+/// bundle's contents, a crossbow's projectiles) have ids of their own.
+fn network_stack_with(
+    sync: &SyncData,
+    id: i32,
+    s: &ItemStack,
+) -> Option<horizon_protocol::item::Stack> {
+    let item_id = |name: &str| {
+        if name == &*s.item {
+            return id;
+        }
+        sync.builtin
+            .get("minecraft:item")
+            .and_then(|i| i.id(name))
+            .unwrap_or(0)
+    };
+    stack_ref_to_network(item_id, |registry, name| sync.id(registry, name), s)
+}
+
 /// ChunkTrackingView.contains: the chunks a player at (cx, cz) with view
 /// distance `r` is sent (isWithinDistance with the neighbours' buffer).
 fn tracked(cx: i32, cz: i32, r: i32, x: i32, z: i32) -> bool {
@@ -672,21 +707,16 @@ impl Hub {
     }
     /// `stack` of a stack in place.
     pub fn stack_of(&mut self, s: &ItemStack) -> Option<horizon_protocol::item::Stack> {
-        let item = s.item.clone();
-        let id = self.item_id(&item);
-        let sync = self.sync.clone();
-        // The stacks inside it (a bundle's contents, a crossbow's projectiles)
-        // have ids of their own.
-        let item_id = |name: &str| {
-            if name == &*item {
-                return id;
-            }
-            sync.builtin
-                .get("minecraft:item")
-                .and_then(|i| i.id(name))
-                .unwrap_or(0)
-        };
-        stack_ref_to_network(item_id, |registry, name| sync.id(registry, name), s)
+        let id = self.item_id(&s.item);
+        network_stack_with(&self.sync, id, s)
+    }
+    /// `stack_of` for passes on other threads, which leave the item id cache
+    /// as it is: the ids it would keep are worked out again.
+    pub fn stacks(&self) -> Stacks<'_> {
+        Stacks {
+            sync: &self.sync,
+            item_ids: &self.item_ids,
+        }
     }
 
     pub fn broadcast(&self, packet: &C) {
@@ -1706,15 +1736,18 @@ impl Hub {
         }
         let mut changes: Vec<((i32, i32), u32)> = log.drain().collect();
         changes.sort_unstable();
+        let bounds = self.bounds_here();
         for ((x, z), sections) in changes {
             let tracked = |g: &Guest, x: i32, z: i32| {
                 g.sent_bounds.may_hold((x, z)) && g.sent_chunks.contains(&(x, z))
             };
-            let viewers: Vec<usize> = (0..self.guests.len())
+            let viewers: Vec<usize> = bounds
+                .iter()
+                .filter(|(_, b)| b.may_hold((x, z)))
+                .map(|&(i, _)| i)
                 .filter(|&i| {
                     let g = &self.guests[i];
-                    self.here(g)
-                        && tracked(g, x, z)
+                    g.sent_chunks.contains(&(x, z))
                         && (-1..=1).any(|dz| (-1..=1).any(|dx| !tracked(g, x + dx, z + dz)))
                 })
                 .collect();
@@ -1729,6 +1762,15 @@ impl Hub {
                 self.guests[i].sender.send_shared(&body);
             }
         }
+    }
+
+    /// The guests here, by index, with the bounds of what they were sent: a
+    /// short list to find a column's viewers in without reading every guest.
+    fn bounds_here(&self) -> Vec<(usize, super::guest::SentBounds)> {
+        (self.guests.iter().enumerate())
+            .filter(|(_, g)| self.here(g))
+            .map(|(i, g)| (i, g.sent_bounds))
+            .collect()
     }
 
     fn broadcast_block_changes(&mut self, world: &mut World) {
@@ -1750,14 +1792,13 @@ impl Hub {
                 .or_default()
                 .push(p);
         }
+        let bounds = self.bounds_here();
         for ((sx, sy, sz), positions) in sections {
-            let viewers: Vec<usize> = (0..self.guests.len())
-                .filter(|&i| {
-                    let g = &self.guests[i];
-                    g.sent_bounds.may_hold((sx, sz))
-                        && self.here(g)
-                        && g.sent_chunks.contains(&(sx, sz))
-                })
+            let viewers: Vec<usize> = bounds
+                .iter()
+                .filter(|(_, b)| b.may_hold((sx, sz)))
+                .map(|&(i, _)| i)
+                .filter(|&i| self.guests[i].sent_chunks.contains(&(sx, sz)))
                 .collect();
             if viewers.is_empty() {
                 continue;

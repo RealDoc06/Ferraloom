@@ -21,15 +21,15 @@ impl Hub {
 
     /// Send to every placed guest within `range` blocks of `at`.
     pub fn broadcast_near(&self, at: [f64; 3], range: f64, packet: &C, except: Option<u32>) {
-        let body: std::sync::Arc<[u8]> = packet.encode().into();
-        for g in self
-            .guests
-            .iter()
-            .filter(|g| self.here(g) && Some(g.conn) != except)
-        {
+        // The distance first: it reads the record alone, where `here`
+        // follows the dimension's name, and most players are far. The packet
+        // is made once someone hears it.
+        let mut body: Option<std::sync::Arc<[u8]>> = None;
+        for g in self.guests.iter() {
             let d: f64 = (0..3).map(|k| (g.position[k] - at[k]).powi(2)).sum();
-            if d <= range * range {
-                g.sender.send_shared(&body);
+            if d <= range * range && self.here(g) && Some(g.conn) != except {
+                g.sender
+                    .send_shared(body.get_or_insert_with(|| packet.encode().into()));
             }
         }
     }

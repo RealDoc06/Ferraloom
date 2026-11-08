@@ -1218,9 +1218,12 @@ impl Lcg {
 /// The guess goes on into `next`, the chunk to come with its open categories
 /// and all of `spawn_for_chunk`'s, from the state this one should leave: when
 /// every attempt here ends at its first read, that is where the next starts.
-/// The sections' headers of every start are hinted first, and only then
-/// their storage, so all their misses overlap instead of queueing one start
-/// after another. Hints only: no read or draw changes.
+/// The sections' headers of every start are hinted first, and only then the
+/// storage of this chunk's starts, so their misses overlap instead of
+/// queueing one start after another. The next chunk's starts only get their
+/// headers hinted: hinting their storage would wait for those headers, and
+/// the next chunk's own foresight hints it once they are in cache. Hints
+/// only: no read or draw changes.
 fn foresee_starts<L: NaturalLevel>(
     l: &L,
     seed: u64,
@@ -1244,7 +1247,7 @@ fn foresee_starts<L: NaturalLevel>(
     };
     let mut starts = [None; 2 * Category::ALL.len()];
     let (here, ahead) = starts.split_at_mut(Category::ALL.len());
-    for ((category, after), at) in categories.iter().zip(after).zip(here) {
+    for ((category, after), at) in categories.iter().zip(after).zip(here.iter_mut()) {
         if open & category.bit() != 0 {
             *at = start(&mut random, chunk);
         }
@@ -1257,8 +1260,8 @@ fn foresee_starts<L: NaturalLevel>(
             }
         }
     }
-    for (x, y, z) in starts.into_iter().flatten() {
-        l.prefetch_block(x, y, z);
+    for (x, y, z) in here.iter().flatten() {
+        l.prefetch_block(*x, *y, *z);
     }
 }
 

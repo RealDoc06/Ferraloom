@@ -5,6 +5,8 @@
 use super::{Game, shield::OFFHAND_SLOT};
 use horizon_client::{
     Result,
+    entities::ItemEntity,
+    fast_hash::FxHashMap,
     items::ItemStack,
     lan::{
         self, Lan, MAX_PLAYERS, NetConfig,
@@ -70,7 +72,7 @@ pub(super) struct LanHost {
     /// Blocks broken this tick (their sound is a level event for the guests).
     pub broken: Vec<[f64; 3]>,
     /// Hurt time, death and swing time (while swinging) of the mobs guests see.
-    mob_state: HashMap<super::Dim, HashMap<u32, (i32, bool, Option<i32>)>>,
+    mob_state: HashMap<super::Dim, FxHashMap<u32, (i32, bool, Option<i32>)>>,
     /// The guest each mob sees as its player, when not the host (game/lan_mobs.rs).
     pub mob_players: horizon_client::fast_hash::FxHashMap<u32, u32>,
     /// An integrated server's owner (game/integrated.rs).
@@ -314,7 +316,51 @@ fn mob_variant_meta(
     }
 }
 
-/// Mobs per piece of `lan_entities`' pass on the pool.
+/// What `lan_flush_effects` finds of one mob (by its place in the list)
+/// against the last tick's hurt time, death and swing time.
+struct MobLook {
+    i: usize,
+    id: u32,
+    state: (i32, bool, Option<i32>),
+    /// A hurt that restarted the hurt time, of a mob with a last damage.
+    hurt: bool,
+    died: bool,
+    /// A swing started since the last look, or restarted (its time went back).
+    swung: bool,
+}
+impl MobLook {
+    fn new(i: usize) -> Self {
+        Self {
+            i,
+            id: 0,
+            state: (0, false, None),
+            hurt: false,
+            died: false,
+            swung: false,
+        }
+    }
+    fn at(&mut self, m: &Mob, last: &FxHashMap<u32, (i32, bool, Option<i32>)>) {
+        let dead = !m.alive();
+        let old = last.get(&m.id).copied();
+        // LivingEntity.swing on a server (a melee hit, a thrown potion).
+        let swing = m.ai.swinging.then_some(m.ai.swing_time);
+        self.id = m.id;
+        self.state = (m.hurt_time, dead, swing);
+        self.hurt = m.hurt_time > old.map_or(0, |o| o.0) && !dead && m.last_damage.is_some();
+        self.died = dead && !old.is_some_and(|o| o.1);
+        self.swung = swing.is_some()
+            && !dead
+            && old
+                .and_then(|o| o.2)
+                .is_none_or(|before| swing.is_some_and(|time| time < before));
+    }
+}
+
+/// Dropped items per piece of `lan_entities`' pass on the pool.
+const ITEM_STATE_GRAIN: usize = 256;
+
+/// Mobs per piece of `lan_entities`' (and the riders' and the mob effects')
+/// pass on the pool.
 const MOB_STATE_GRAIN: usize = 128;
 
 /// A mob's synched data as ServerEntity sends it (only the values that differ
@@ -1463,18 +1509,24 @@ impl Game<'_> {
                 Holder::Knot(p) => knots.get(&p).map(|&id| id as i32),
             });
         });
-        for d in &self.dropped {
-            let stack = hub.stack_of(&d.stack);
-            let e = out.add(d.id as i32, entity_uuid(d.id), "minecraft:item");
+        // The items' states on the pool too, each from its item alone.
+        let mut items: Vec<(&ItemEntity, bool, &mut EntityState)> = (self.dropped.iter())
+            .zip(out.take(self.dropped.len()))
+            .map(|(d, e)| (d, self.entity_glowing(d.id), e))
+            .collect();
+        let stacks = hub.stacks();
+        horizon_threads::pool::for_each_mut(&mut items, ITEM_STATE_GRAIN, |(d, glowing, e)| {
+            e.reset(d.id as i32, entity_uuid(d.id), "minecraft:item");
             e.position = [d.position.x, d.position.y, d.position.z];
             e.on_ground = d.on_ground;
             e.velocity = [d.velocity.x, d.velocity.y, d.velocity.z];
             // Entity.DATA_SHARED_FLAGS_ID: glowing 0x40 (the Glowing tag).
-            if self.entity_glowing(d.id) {
+            if *glowing {
                 e.meta.push((0, serializer::BYTE, Value::Byte(0x40)));
             }
+            let stack = stacks.of(&d.stack);
             e.meta.push((8, serializer::ITEM_STACK, Value::Item(stack)));
-        }
+        });
         for o in &self.orbs {
             let e = out.add(o.id as i32, entity_uuid(o.id), "minecraft:experience_orb");
             e.position = [o.position.x, o.position.y, o.position.z];
@@ -1509,15 +1561,17 @@ impl Game<'_> {
         }
         let state = self.lan_host_state(&host);
         // An animal whose rider left the game (or the level) stops taking
-        // its input.
-        for m in &mut self.mobs {
-            if m.rider.is_some()
-                && self.riding != Some(m.id)
-                && !host.hub.guests.iter().any(|g| g.vehicle == Some(m.id))
-            {
-                m.rider = None;
-            }
-        }
+        // its input. Each mob is its own, so the pass runs on the pool: the
+        // first look at every mob this tick is mostly waiting on memory.
+        horizon_client::spans::time("lan_riders", || {
+            let riding = self.riding;
+            let vehicles: Vec<u32> = host.hub.guests.iter().filter_map(|g| g.vehicle).collect();
+            horizon_threads::pool::for_each_mut(&mut self.mobs, MOB_STATE_GRAIN, |m| {
+                if m.rider.is_some() && riding != Some(m.id) && !vehicles.contains(&m.id) {
+                    m.rider = None;
+                }
+            });
+        });
         // A dedicated server runs the hub without a host player.
         if state.is_some() || host.hub.config.dedicated {
             let has_guests = !host.hub.guests.is_empty();
@@ -1723,7 +1777,7 @@ impl Game<'_> {
                 .take()
                 .expect("the hub is back after the quiet commands");
         }
-        self.lan_flush_effects(&mut host);
+        horizon_client::spans::time("lan_effects", || self.lan_flush_effects(&mut host));
         if !paused {
             horizon_client::spans::time("lan_guests", || self.tick_guests(&mut host));
         }
@@ -1981,19 +2035,26 @@ impl Game<'_> {
             host.mob_state.clear();
             return;
         }
-        // Hurt and death animations of mobs.
-        let mut seen = HashMap::new();
-        for m in &self.mobs {
-            let dead = !m.alive();
-            let old = host
-                .mob_state
-                .get(&self.dim)
-                .and_then(|s| s.get(&m.id))
-                .copied();
+        // Hurt and death animations of mobs. Each mob is looked at on the
+        // pool against the last tick's state, each look its own; what the
+        // looks found goes out after, in the mobs' order.
+        let last = host.mob_state.remove(&self.dim).unwrap_or_default();
+        let mobs = &self.mobs;
+        let mut looks: Vec<MobLook> = (0..mobs.len()).map(MobLook::new).collect();
+        horizon_threads::pool::for_each_mut(&mut looks, MOB_STATE_GRAIN, |look| {
+            look.at(&mobs[look.i], &last);
+        });
+        let mut seen = FxHashMap::default();
+        seen.reserve(mobs.len());
+        for look in &looks {
+            seen.insert(look.id, look.state);
+            if !(look.hurt || look.died || look.swung) {
+                continue;
+            }
+            let m = &mobs[look.i];
             let at = [m.position.x, m.position.y, m.position.z];
             // LivingEntity.hurtServer: a hurt that restarted the hurt time.
-            if m.hurt_time > old.map_or(0, |o| o.0)
-                && !dead
+            if look.hurt
                 && let Some((source, _)) = m.last_damage
             {
                 use horizon_client::mobs::{DamageKind as K, Who};
@@ -2021,20 +2082,12 @@ impl Game<'_> {
                 let direct = cause.filter(|_| melee);
                 host.hub.damage_event(m.id as i32, kind, cause, direct, at);
             }
-            if dead && !old.is_some_and(|o| o.1) {
+            if look.died {
                 host.hub.entity_event(m.id as i32, 3, at);
             }
-            // LivingEntity.swing on a server (a melee hit, a thrown potion):
-            // ClientboundSwingAnimationPacket for the players around. A swing
-            // started since the last flush, or restarted (its time went back).
-            let swing = m.ai.swinging.then_some(m.ai.swing_time);
-            if let Some(time) = swing
-                && !dead
-                && old.and_then(|o| o.2).is_none_or(|before| time < before)
-            {
+            if look.swung {
                 host.hub.swing(m.id as i32, 0, at, None);
             }
-            seen.insert(m.id, (m.hurt_time, dead, swing));
         }
         host.mob_state.insert(self.dim, seen);
         // Level.broadcastEntityEvent(player, 2) of a spear's stab.

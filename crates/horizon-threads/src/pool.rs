@@ -175,6 +175,34 @@ pub fn for_each_mut_background<T: Send>(items: &mut [T], grain: usize, f: impl F
     for_each_mut_on(background, items, grain, f);
 }
 
+/// [`for_each_mut`] with a state each thread of the pass makes with `init`
+/// before its first item and lends `f` with each of its items (scratch
+/// space, a thread-local cache kept for the pass).
+pub fn for_each_mut_with<T: Send, S>(
+    items: &mut [T],
+    grain: usize,
+    init: impl Fn() -> S + Sync,
+    f: impl Fn(&mut S, &mut T) + Sync,
+) {
+    if items.len() <= grain {
+        let mut state = init();
+        items.iter_mut().for_each(|item| f(&mut state, item));
+        return;
+    }
+    let chunks = Mutex::new(items.chunks_mut(grain));
+    broadcast_on(pool(), &|| {
+        let mut state = None;
+        loop {
+            let next = chunks.lock().unwrap_or_else(PoisonError::into_inner).next();
+            let Some(chunk) = next else {
+                return;
+            };
+            let mine = state.get_or_insert_with(&init);
+            chunk.iter_mut().for_each(|item| f(mine, item));
+        }
+    });
+}
+
 fn for_each_mut_on<T: Send>(
     pool: fn() -> Option<&'static Pool>,
     items: &mut [T],
@@ -215,6 +243,29 @@ mod tests {
                 });
             }
         });
+    }
+
+    #[test]
+    fn each_thread_makes_its_state_once_a_pass() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let made = AtomicUsize::new(0);
+        let mut items = vec![0usize; 1000];
+        for_each_mut_with(
+            &mut items,
+            8,
+            || {
+                (
+                    made.fetch_add(1, Ordering::Relaxed),
+                    std::thread::current().id(),
+                )
+            },
+            |(_, thread), item| {
+                assert_eq!(*thread, std::thread::current().id());
+                *item += 1;
+            },
+        );
+        assert!(items.iter().all(|&item| item == 1));
+        assert!(made.load(Ordering::Relaxed) <= worker_count() + 1);
     }
 
     #[test]

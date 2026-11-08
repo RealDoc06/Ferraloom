@@ -928,6 +928,84 @@ pub fn conditions(v: &Value, ctx: &Entities, w: &dyn World) -> bool {
     }
 }
 
+/// A `location` criterion's player condition that reads only the biome, or
+/// only the structures, the player stands in: a lone `entity_properties`
+/// condition whose predicate is only a location with only `biomes` (or
+/// `structures`). Built once for a tree, it answers as `conditions` does
+/// with the player as `this`, without walking the JSON each time.
+#[derive(Clone, Debug, PartialEq)]
+pub enum PlaceTest {
+    Biomes(Value),
+    Structures(Value),
+}
+impl PlaceTest {
+    /// The test `player` (a criterion's `player` conditions) reduces to, if any.
+    pub fn of(player: &Value) -> Option<Self> {
+        let condition = match player {
+            Value::Array(list) if list.len() == 1 => &list[0],
+            other => other,
+        };
+        let o = condition.as_object()?;
+        let ty = o.get("condition").or_else(|| o.get("type"))?.as_str()?;
+        if ty != "minecraft:entity_properties" {
+            return None;
+        }
+        let [(key, location)] = single(o.get("predicate")?)?;
+        if key != "minecraft:location" && key != "location" {
+            return None;
+        }
+        let [(key, set)] = single(location)?;
+        if set.is_null() {
+            return None;
+        }
+        match key.as_str() {
+            "biomes" => Some(Self::Biomes(set.clone())),
+            "structures" => Some(Self::Structures(set.clone())),
+            _ => None,
+        }
+    }
+    /// `conditions` of the criterion for a player whose place `at` is.
+    pub fn test(&self, at: &PlaceAt, w: &dyn World) -> bool {
+        match self {
+            Self::Biomes(set) => id_matches(set, "worldgen/biome", at.biome(w), w),
+            Self::Structures(set) => at
+                .structures(w)
+                .iter()
+                .any(|s| id_matches(set, "worldgen/structure", s, w)),
+        }
+    }
+}
+/// The one entry of a JSON object that has exactly one.
+fn single(v: &Value) -> Option<[(&String, &Value); 1]> {
+    let o = v.as_object()?;
+    let mut entries = o.iter();
+    let first = entries.next()?;
+    entries.next().is_none().then_some([first])
+}
+/// The block a player stands in (`LocationPredicate` floors the position),
+/// with its biome and structures looked up once for all the criteria of a
+/// trigger: the world holds still while they are tested.
+pub struct PlaceAt {
+    pos: [i32; 3],
+    biome: std::cell::OnceCell<String>,
+    structures: std::cell::OnceCell<Vec<String>>,
+}
+impl PlaceAt {
+    pub fn new(position: [f64; 3]) -> Self {
+        Self {
+            pos: position.map(|v| v.floor() as i32),
+            biome: Default::default(),
+            structures: Default::default(),
+        }
+    }
+    fn biome(&self, w: &dyn World) -> &str {
+        self.biome.get_or_init(|| w.biome(self.pos))
+    }
+    fn structures(&self, w: &dyn World) -> &[String] {
+        self.structures.get_or_init(|| w.structures(self.pos))
+    }
+}
+
 /// One node of `TreeNodePosition`, the Walker layout of a display tree.
 struct Place {
     adv: usize,
@@ -1600,5 +1678,110 @@ mod tests {
             date_millis("2026-10-17 05:30:00 +0000")
         );
         assert_eq!(date_millis("not a date"), None);
+    }
+
+    /// A world whose biome and structures change with x, and that counts
+    /// its lookups.
+    struct Banded(std::cell::Cell<u32>);
+    impl World for Banded {
+        fn dimension(&self) -> &str {
+            "minecraft:overworld"
+        }
+        fn biome(&self, p: [i32; 3]) -> String {
+            self.0.set(self.0.get() + 1);
+            ["minecraft:plains", "minecraft:desert", "minecraft:jungle"]
+                [p[0].rem_euclid(3) as usize]
+                .into()
+        }
+        fn structures(&self, p: [i32; 3]) -> Vec<String> {
+            self.0.set(self.0.get() + 1);
+            match p[0].rem_euclid(3) {
+                0 => vec!["minecraft:fortress".into()],
+                1 => vec![
+                    "minecraft:village_plains".into(),
+                    "minecraft:stronghold".into(),
+                ],
+                _ => Vec::new(),
+            }
+        }
+        fn block(&self, p: [i32; 3]) -> (String, BTreeMap<String, String>) {
+            Flat.block(p)
+        }
+        fn fluid(&self, _: [i32; 3]) -> Option<String> {
+            None
+        }
+        fn can_see_sky(&self, _: [i32; 3]) -> bool {
+            true
+        }
+        fn light(&self, _: [i32; 3]) -> i32 {
+            15
+        }
+        fn smokey(&self, _: [i32; 3]) -> bool {
+            false
+        }
+        fn in_tag(&self, _: &str, tag: &str, id: &str) -> bool {
+            tag == "minecraft:is_hot" && id == "minecraft:desert"
+        }
+    }
+    #[test]
+    fn a_place_test_answers_as_the_conditions_do() {
+        let reduced = [
+            // adventuring_time's and find_fortress' shapes.
+            r#"{"entity":"this","predicate":{"minecraft:location":{"biomes":"minecraft:desert"}},"type":"minecraft:entity_properties"}"#,
+            r#"[{"condition":"minecraft:entity_properties","entity":"this","predicate":{"location":{"structures":"minecraft:fortress"}}}]"#,
+            r##"{"type":"minecraft:entity_properties","predicate":{"location":{"biomes":"#minecraft:is_hot"}}}"##,
+            r#"{"type":"minecraft:entity_properties","predicate":{"location":{"structures":["minecraft:stronghold","minecraft:ancient_city"]}}}"#,
+        ];
+        let general = [
+            r#"{"type":"minecraft:entity_properties","predicate":{"location":{"biomes":"minecraft:desert","dimension":"minecraft:the_nether"}}}"#,
+            r#"{"type":"minecraft:entity_properties","predicate":{"location":{"structures":null}}}"#,
+            r#"{"type":"minecraft:entity_properties","predicate":{"location":{"biomes":"minecraft:desert"},"flags":{"is_sneaking":true}}}"#,
+            r#"[{"type":"minecraft:entity_properties","predicate":{"location":{"biomes":"minecraft:desert"}}},{"type":"minecraft:inverted"}]"#,
+            r#"{"predicate":{"location":{"biomes":"minecraft:desert"}}}"#,
+            r#"{"type":"minecraft:location_check","predicate":{"biomes":"minecraft:desert"}}"#,
+            r#"null"#,
+        ];
+        let w = Banded(std::cell::Cell::new(0));
+        for (json, expect_reduced) in reduced
+            .iter()
+            .map(|j| (j, true))
+            .chain(general.iter().map(|j| (j, false)))
+        {
+            let v: Value = serde_json::from_str(json).unwrap();
+            let test = PlaceTest::of(&v);
+            assert_eq!(test.is_some(), expect_reduced, "{json}");
+            let Some(test) = test else {
+                continue;
+            };
+            for x in [-4.5, -0.25, 0.0, 0.75, 1.5, 2.0, 7.9] {
+                let me = EntityView {
+                    position: [x, 64.0, 3.0],
+                    ..Default::default()
+                };
+                let ctx = Entities {
+                    this: Some(&me),
+                    origin: me.position,
+                    tool: None,
+                    block_pos: None,
+                };
+                let place = PlaceAt::new(me.position);
+                assert_eq!(
+                    test.test(&place, &w),
+                    conditions(&v, &ctx, &w),
+                    "{json} at {x}"
+                );
+            }
+        }
+        // One look at the place serves every criterion.
+        let place = PlaceAt::new([1.0, 64.0, 3.0]);
+        let tests: Vec<PlaceTest> = reduced
+            .iter()
+            .filter_map(|j| PlaceTest::of(&serde_json::from_str(j).unwrap()))
+            .collect();
+        w.0.set(0);
+        for t in &tests {
+            t.test(&place, &w);
+        }
+        assert_eq!(w.0.get(), 2);
     }
 }
