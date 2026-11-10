@@ -2835,19 +2835,26 @@ def check_swings(host, guest, out):
     face_each_other(host, guest)
     hx, hy, hz = (int(v // 1) for v in pos_of(host))
     gx, gy, gz = (int(v // 1) for v in pos_of(guest))
-    # Stone by hand takes 7.5 seconds: ServerboundPunchPacket every tick keeps the arm swinging.
+    # Stone by hand takes 7.5 seconds: ServerboundSwingPacket every tick keeps the arm swinging.
     guest('command', command=f'setblock {gx} {gy} {gz + 1} minecraft:stone')
     host('command', command=f'setblock {hx} {hy} {hz + 1} minecraft:stone')
     host.wait(10)
-    def swinging(game):
+    def swings(game):
+        # The swings this game's client started on the other player's body (Mob extra.swings).
         # On its server thread the host's window is a client of its server too.
         if game is host and not SERVER_THREAD:
-            return lan_guest(host).get('model_swinging')
-        return any(e.get('swinging') for e in remote(game).get('player_equipment', []))
-    # Most samples: a swing restarts only past its first half (SwingState.startIfAble), so a sample can
-    # fall between two.
-    host_sees = watch_mining(guest, (gx, gy, gz + 1), lambda: swinging(host))
-    guest_sees = watch_mining(host, (hx, hy, hz + 1), lambda: swinging(guest))
+            return lan_guest(host).get('model_swings') or 0
+        return sum(e.get('swings', 0) for e in remote(game).get('player_equipment', []))
+    def watch(miner, watcher, pos):
+        # Counted, not sampled: the server sends a swing at most every 4 ticks (a restart needs the
+        # first half over, SwingState.startIfAble), and under load (2 fps under llvmpipe) a client's
+        # frame runs several ticks, so a swing can start and end between two samples of `swinging`.
+        before = swings(watcher)
+        miner.raw('break', *pos)
+        return swings(watcher) - before
+    # Stone by hand mines for 150 ticks: about 30 swings, a restart every 4 to 7 ticks (more under load).
+    host_sees = watch(guest, host, (gx, gy, gz + 1))
+    guest_sees = watch(host, guest, (hx, hy, hz + 1))
     # A hoe on dirt: the server tills it and swings the guest's hand, on the guest's screen too.
     # Where the guest stands now (an earlier check can leave it on a ledge it then drops from).
     gx, gy, gz = (int(v // 1) for v in pos_of(guest))
@@ -2868,8 +2875,8 @@ def check_swings(host, guest, out):
     hoe = {'swings': guest('state')['swings'] - before, 'soil': host.raw('block', *soil)['block']}
     guest('command', command=f'setblock {soil[0]} {soil[1]} {soil[2]} minecraft:stone')
     detail = {'host_sees_guest': host_sees, 'guest_sees_host': guest_sees, 'hoe': hoe}
-    assert sum(map(bool, host_sees)) >= 4, f'the host does not see the guest mine: {detail}'
-    assert sum(map(bool, guest_sees)) >= 4, f'the guest does not see the host mine: {detail}'
+    assert host_sees >= 10, f'the host does not see the guest mine: {detail}'
+    assert guest_sees >= 10, f'the guest does not see the host mine: {detail}'
     assert hoe == {'swings': 1, 'soil': 'minecraft:farmland'}, f'the guest\'s hoe: {detail}'
     return detail
 

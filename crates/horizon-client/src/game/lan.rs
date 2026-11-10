@@ -1097,6 +1097,8 @@ impl Game<'_> {
                     }),
                     // The host draws this guest's arm swinging.
                     "model_swinging": h.models.get(&g.conn).map(|m| m.ai.swinging),
+                    // How many swings the host started on this guest's body.
+                    "model_swings": h.models.get(&g.conn).map(|m| m.extra.swings),
                     // For how many ticks the host draws this guest using an item.
                     "model_using": h.models.get(&g.conn).map(|m| m.extra.using_item),
                 })).collect::<Vec<_>>(),

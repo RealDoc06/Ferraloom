@@ -750,6 +750,10 @@ pub struct Extra {
     /// The arm the current swing moves (`currentSwing.hand().asArm`): `Some(true)`
     /// for the right arm.
     pub swing_right_arm: Option<bool>,
+    /// Swings started (`SwingState.startIfAble` let them), for the harnesses:
+    /// at a few frames a second a swing can start and end between two
+    /// samples of `ai.swinging`, but it still counts here.
+    pub swings: u32,
     pub flag: bool,
     pub flag2: bool,
     /// Species scratch values (the wither's head targets and clocks).

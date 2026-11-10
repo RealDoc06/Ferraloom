@@ -6017,6 +6017,7 @@ impl Game<'_> {
                     serde_json::json!({
                         "id": m.id,
                         "swinging": m.ai.swinging,
+                        "swings": m.extra.swings,
                         "using": m.extra.using_item,
                         "armor": armor,
                         "main_hand": e.main_hand.as_deref(),
