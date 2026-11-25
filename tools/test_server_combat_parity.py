@@ -13,6 +13,11 @@ Bob made of vanilla's protocol code, waits on the server's game clock), with oth
   strength, then the sweep of a full-strength sword hit with and without Sweeping Edge, read back as Health;
 - an axe on a raised shield: the cooldown the shield gets (ClientboundCooldownPacket).
 
+Changes a case makes are a couple of ticks apart: vanilla puts equipment modifiers on in the player's tick
+(`detectEquipmentUpdates`) and sends dirty instances in the level's, so two changes in one tick share a packet
+differently than in Horizon, which puts them on at once; the client ends the same either way. It is midnight, so
+that no zombie burns.
+
 Each case is compared on its own. KNOWN lists the cases Horizon still gets wrong and why; one that matches again is
 reported, and should leave the list.
 """
@@ -48,7 +53,8 @@ MOB = '{NoAI:1b,Rotation:[90f,0f]}'
 
 def reset():
     """No other entity, Alice with nothing on her, her first hotbar slot selected, Bob back to watching."""
-    return ['cmd Alice kill @e[type=!player]', 'cmd Alice clear @s', 'cmd Alice effect clear @s', 'slot Alice 0', 'cmd Bob clear @s',
+    return ['cmd Alice kill @e[type=!player]', 'cmd Alice clear @s', 'ticks 2', 'cmd Alice effect clear @s',
+            'slot Alice 0', 'cmd Bob clear @s',
             f'cmd Alice tp Bob {B[0]} {B[1]} {B[2]} 180 0', *stand('Alice', A, -90), *stand('Bob', B, 180), 'ticks 5']
 
 
@@ -78,7 +84,8 @@ CASES = {
     'sword-axe': [*reset(), hold('minecraft:diamond_sword'), hold('minecraft:netherite_axe', 1), 'ticks 5',
                   'slot Alice 1', 'ticks 5', 'slot Alice 0', 'ticks 5'],
     'armour-then-hand': [*reset(), 'cmd Alice item replace entity @s armor.chest with minecraft:diamond_chestplate',
-                         'cmd Alice item replace entity @s armor.head with minecraft:netherite_helmet', 'ticks 5',
+                         'ticks 2', 'cmd Alice item replace entity @s armor.head with minecraft:netherite_helmet',
+                         'ticks 5',
                          hold('minecraft:iron_sword'), 'ticks 5', 'slot Alice 1', 'ticks 5'],
     'sweeping-edge': [*reset(), hold('minecraft:diamond_sword[enchantments={"minecraft:sweeping_edge":3}]'),
                       'ticks 5', 'slot Alice 1', 'ticks 5'],
@@ -102,7 +109,7 @@ CASES = {
 }
 # The flat world's slimes split when killed: three passes take the big ones' smallest children too.
 SETUP = ['cmd Alice gamerule spawn_mobs false', 'cmd Alice gamerule spawn_monsters false',
-         *['cmd Alice kill @e[type=!player]'] * 3, 'cmd Alice gamerule advance_time false', 'cmd Alice time set noon',
+         *['cmd Alice kill @e[type=!player]'] * 3, 'cmd Alice gamerule advance_time false', 'cmd Alice time set midnight',
          f'cmd Alice tp Alice {A[0]} {A[1]} {A[2]} -90 0', f'cmd Alice tp Bob {B[0]} {B[1]} {B[2]} 180 0', 'ticks 40']
 
 DATA = re.compile(r'^chat \S+ has the following entity data: (.*)$')
@@ -127,7 +134,17 @@ def compared(lines):
                 kept.append((who, subject, f'{who} {text}'))
         elif text.startswith(('cooldown ', 'error', 'disconnected')):
             kept.append((who, '~' + text.split(' ', 1)[0], f'{who} {text}'))
-    return {step: [line for *_, line in sorted(kept, key=lambda k: k[:2])] for step, kept in cases.items()}
+    def stream(kept):
+        out = []
+        for who, subject, line in sorted(kept, key=lambda k: k[:2]):
+            # A tracker re-sent what it already holds changes nothing on its client (vanilla re-sends every dirty
+            # instance, as when a hit wears the sword; Horizon's tracker sends changes): collapsed. The player's
+            # own stream stays exact.
+            if subject in ('Alice', 'Bob') and out and out[-1] == (who, subject, line):
+                continue
+            out.append((who, subject, line))
+        return [line for *_, line in out]
+    return {step: stream(kept) for step, kept in cases.items()}
 
 
 def main():
