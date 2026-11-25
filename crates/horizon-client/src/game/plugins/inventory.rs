@@ -768,7 +768,7 @@ impl Game<'_> {
         item: &mut ItemStack,
     ) -> bool {
         let world = super::world_index(self.dim);
-        let side = |game: &Game, p: (i32, i32, i32)| Side {
+        let side = |game: &Game<'_>, p: (i32, i32, i32)| Side {
             pos: [p.0, p.1, p.2],
             kind: top_type(game, Slots::Block(p)),
         };
