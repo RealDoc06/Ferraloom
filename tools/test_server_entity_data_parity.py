@@ -39,10 +39,7 @@ except ImportError:
 
 NAME = 'server-entity-data-parity'
 # Cases Horizon still gets wrong, and why.
-KNOWN = {
-    'arrow-player': "a player's arrow count is kept (PlayerMotion.stuck) but not yet sent: the player's entity data is "
-                    'lan/hub.rs player_state',
-}
+KNOWN = {}
 
 A = (0.5, -60.0, 0.5)  # Alice, facing east (yaw -90)
 V = (2.5, -60.0, 0.5)  # the mob, two blocks east

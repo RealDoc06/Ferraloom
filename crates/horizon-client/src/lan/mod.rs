@@ -150,6 +150,9 @@ pub struct NetConfig {
     /// sent in configuration when non-empty
     /// (ServerConfigurationPacketListenerImpl.startConfiguration).
     pub server_links: Vec<horizon_protocol::packets::configuration::ServerLink>,
+    /// Ferraloom: `enable-code-of-conduct`'s texts by language
+    /// (`DedicatedServer.getCodeOfConducts`); empty shows none.
+    pub code_of_conduct: std::collections::BTreeMap<String, String>,
 }
 impl NetConfig {
     /// MinecraftServer.enforceSecureProfile.
@@ -177,6 +180,7 @@ impl NetConfig {
             log: None,
             resource_pack: None,
             server_links: Vec::new(),
+            code_of_conduct: Default::default(),
         }
     }
 }
@@ -232,6 +236,9 @@ pub struct Shared {
     online: Mutex<Vec<(u128, String)>>,
     /// Profiles held by the host (the LAN host's own name).
     reserved: Mutex<HashSet<u128>>,
+    /// Ferraloom: the players whose "Allow Server Listings" is off
+    /// (ServerPlayer.allowsListing), shown as "Anonymous Player".
+    unlisted: Mutex<HashSet<u128>>,
     next: AtomicU32,
     stop: AtomicBool,
     random: Mutex<u64>,
@@ -289,6 +296,16 @@ impl Shared {
     }
     pub fn release(&self, uuid: u128) {
         self.online.lock().unwrap().retain(|(u, _)| *u != uuid);
+        self.unlisted.lock().unwrap().remove(&uuid);
+    }
+    /// The player's `allowsListing` (ClientInformation), for the status.
+    pub fn set_listed(&self, uuid: u128, listed: bool) {
+        let mut unlisted = self.unlisted.lock().unwrap();
+        if listed {
+            unlisted.remove(&uuid);
+        } else {
+            unlisted.insert(uuid);
+        }
     }
     pub fn online(&self) -> usize {
         self.online.lock().unwrap().len() + self.reserved.lock().unwrap().len()
@@ -318,7 +335,17 @@ impl Shared {
         if !self.config.hide_online_players && !online.is_empty() {
             let size = online.len().min(12);
             let offset = self.next_random(online.len() - size + 1);
-            let mut sample: Vec<(u128, String)> = online[offset..offset + size].to_vec();
+            // MinecraftServer.buildPlayerStatus: ANONYMOUS_PLAYER_PROFILE for
+            // a player who doesn't allow listing.
+            let unlisted = self.unlisted.lock().unwrap();
+            let mut sample: Vec<(u128, String)> = online[offset..offset + size]
+                .iter()
+                .map(|(u, n)| match unlisted.contains(u) {
+                    true => (0, "Anonymous Player".to_owned()),
+                    false => (*u, n.clone()),
+                })
+                .collect();
+            drop(unlisted);
             for i in (1..sample.len()).rev() {
                 let j = self.next_random(i + 1);
                 sample.swap(i, j);
@@ -424,6 +451,7 @@ impl Lan {
             max_players: AtomicUsize::new(config.max_players),
             online: Mutex::new(Vec::new()),
             reserved: Mutex::new(HashSet::new()),
+            unlisted: Mutex::new(HashSet::new()),
             next: AtomicU32::new(1),
             stop: AtomicBool::new(false),
             random: Mutex::new(crate::server::java_properties::now_millis() as u64 | 1),

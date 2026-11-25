@@ -269,6 +269,8 @@ pub struct Guest {
     /// Recipes unlocked since the client was last told
     /// (`ServerRecipeBook.addRecipes` sends them).
     pub recipes_unlocked: Vec<String>,
+    /// Ferraloom: the synced data and checks Horizon's hub left out.
+    pub meta: super::hub::player_meta::PlayerMeta,
 }
 
 impl Guest {
@@ -386,6 +388,7 @@ impl Guest {
             advancements_changed: Default::default(),
             scoreboard: Default::default(),
             recipes_unlocked: Vec::new(),
+            meta: Default::default(),
         }
     }
     pub fn send(&self, packet: &play::Clientbound) {

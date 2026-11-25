@@ -422,11 +422,7 @@ impl Game<'_> {
         // (ClientboundUpdateMobEffectPacket on placement).
         self.potions = Default::default();
         self.set_mode_id(0);
-        self.experience = Experience {
-            level: 0,
-            progress: 0.0,
-            total: 0,
-        };
+        self.experience = Experience::default();
         // The connected client never opens a server world (single player also
         // joins here), so load the registries its argument parsers and local
         // suggestions need before receiving the server's command tree.
@@ -2510,6 +2506,7 @@ impl Game<'_> {
                     level: p.level,
                     progress: p.progress,
                     total: p.total,
+                    ..Default::default()
                 }
             }
             // ClientPacketListener.handleSetTime: the game time, then

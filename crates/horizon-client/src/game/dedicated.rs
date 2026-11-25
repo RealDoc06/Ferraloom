@@ -660,6 +660,18 @@ impl Game<'_> {
                 );
                 Vec::new()
             },
+            // Ferraloom: enable-code-of-conduct (DedicatedServer.readCodeOfConducts).
+            code_of_conduct: if props.code_of_conduct {
+                horizon_client::lan::conn::read_code_of_conducts(std::path::Path::new(
+                    "codeofconduct",
+                ))
+                .unwrap_or_else(|e| {
+                    log("ERROR", &e);
+                    Default::default()
+                })
+            } else {
+                Default::default()
+            },
         };
         let config = HubConfig {
             default_game_mode: game_mode,
@@ -703,6 +715,12 @@ impl Game<'_> {
         self.log_saved_levels();
         if let Some(host) = self.lan.as_mut() {
             host.hub.entity_range_percent = props.entity_broadcast_range_percentage;
+            // Ferraloom: allow-flight and the chat and command spam thresholds.
+            host.hub.player_rules = horizon_client::lan::hub::player_meta::PlayerRules::dedicated(
+                props.allow_flight,
+                props.chat_spam_threshold_seconds,
+                props.command_spam_threshold_seconds,
+            );
         }
         *ADMIN.lock().unwrap() = Some(Admin {
             lists,

@@ -270,6 +270,10 @@ pub struct PlayerMotion {
     pub velocity: Vec3,
     pub ground: GroundState,
     pub collision: CollisionFlags,
+    /// Ferraloom: whether the server's own travel last hit something below
+    /// (`verticalCollisionBelow` after `ServerPlayer.doTick`), which the
+    /// next move packet reads as `playerStandsOnSomething`.
+    pub server_below: bool,
     pub history: MovementHistory,
     pub fall_distance: f64,
     pub stuck_multiplier: Vec3,
@@ -504,6 +508,7 @@ impl PlayerMotion {
             velocity: Vec3::ZERO,
             ground: GroundState::default(),
             collision: CollisionFlags::default(),
+            server_below: false,
             history: MovementHistory::default(),
             fall_distance: 0.0,
             stuck_multiplier: Vec3::ZERO,
@@ -1167,6 +1172,7 @@ impl MotionWorld<'_, '_, '_> {
         let travelled = self.player_travel(Vec3::ZERO);
         let p = &mut *self.player;
         p.server_copy = false;
+        p.server_below = p.collision.below;
         (p.position, p.ground, p.collision) = (position, ground, collision);
         (p.history, p.fall_distance, p.steps) = (history, fall_distance, steps);
         // The wall hit is the server's own: its sound and damage events stay.

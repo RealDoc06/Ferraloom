@@ -259,6 +259,27 @@ impl ServerAdvancements {
         }
     }
 
+    /// Ferraloom: whether the server has this advancement
+    /// (`ServerAdvancementManager.get`).
+    pub fn exists(&self, id: &str) -> bool {
+        self.tree.by_id.contains_key(id)
+    }
+
+    /// Ferraloom: a tab the advancements screen can select
+    /// (`PlayerAdvancements.setSelectedTab`): a root with a display.
+    pub fn is_tab(&self, id: &str) -> bool {
+        self.tree.by_id.get(id).is_some_and(|&i| {
+            let a = &self.tree.list[i];
+            a.parent.is_none() && a.display.is_some()
+        })
+    }
+
+    /// Ferraloom: the recipe a display id shows
+    /// (`RecipeManager.getRecipeFromDisplay`).
+    pub fn recipe_of_display(&self, display: i32) -> Option<&str> {
+        self.displays.recipe_of_display(display)
+    }
+
     /// `ServerRecipeBook.addRecipes`' packet for recipes just unlocked:
     /// each display, with its notification and highlighted. None when no
     /// recipe has a display.

@@ -680,6 +680,10 @@ pub struct Experience {
     pub level: i32,
     pub progress: f32,
     pub total: i32,
+    /// Ferraloom: `Player.DATA_SCORE_ID`, the points given since the player
+    /// last respawned without keeping them (`increaseScore`), which the
+    /// death screen shows.
+    pub score: i32,
 }
 impl Experience {
     /// `Player.getBaseExperienceReward`: keep-inventory and spectators drop none.
@@ -709,6 +713,7 @@ impl Experience {
     /// gained would play the level-up sound (`Player.giveExperienceLevels`).
     pub fn give(&mut self, points: i32) -> Option<i32> {
         let mut sound_level = None;
+        self.score = self.score.wrapping_add(points);
         self.progress += points as f32 / Self::needed(self.level) as f32;
         self.total = self.total.saturating_add(points).max(0);
         while self.progress >= 1.0 {
@@ -1026,6 +1031,7 @@ mod experience_tests {
                 level,
                 progress: 0.75,
                 total: 10_000,
+                ..Default::default()
             };
             assert_eq!(xp.death_reward(false), reward);
             assert_eq!(xp.death_reward(true), 0);
