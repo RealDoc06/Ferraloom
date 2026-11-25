@@ -986,6 +986,9 @@ impl Hub {
             let g = &self.guests[i];
             (g.name.clone(), g.uuid, g.entity_id, g.game_mode)
         };
+        // Ferraloom: the saved shoulder parrots (ServerPlayer.readAdditionalSaveData).
+        let g = &mut self.guests[i];
+        g.meta.shoulders = player_meta::shoulders_of(g.saved.as_ref());
         let g = &self.guests[i];
         g.send(&C::Login(play::Login {
             player_id: entity_id,
@@ -1184,10 +1187,16 @@ impl Hub {
                 effect,
             }));
         }
+        let changed = !changes.is_empty() || sent.len() != self.guests[i].sent_effects.len();
         for (e, added) in changes {
             sent.extend(self.send_effect(i, &e, added));
         }
         self.guests[i].sent_effects = sent;
+        // Ferraloom: the swirls those effects make go to the player too,
+        // once its first tick has sent the first ones.
+        if changed && self.guests[i].sent_health.is_some() {
+            self.sync_own_particles(i);
+        }
     }
 
     /// PlayerList.sendPlayerPermissionLevel: the op level as an entity event
@@ -1901,6 +1910,8 @@ impl Hub {
         options: (u8, i32),
         health: f32,
         effects: &[EffectInstance],
+        // Ferraloom: ticks frozen and shoulder parrots.
+        (frozen, shoulders): (i32, [Option<i32>; 2]),
     ) {
         let (sneaking, sprinting, sleeping) = flags;
         let shared = shared_flags(sneaking, sprinting, &body);
@@ -1963,6 +1974,7 @@ impl Hub {
             (10, serializer::PARTICLES, Value::Particles(Vec::new())),
             (11, serializer::BOOLEAN, Value::Bool(false)),
         ]);
+        player_meta::tracked_meta(frozen, shoulders, &mut state.meta, &mut state.defaults);
         state.precise = false;
         state.needs_sync = false;
         state.leash = None;
@@ -2031,6 +2043,7 @@ impl Hub {
                 (0x7F, 1),
                 h.health,
                 &[],
+                (0, [None; 2]),
             );
         }
         // Out of the hub while their states are made: what a state reads of
@@ -2068,6 +2081,7 @@ impl Hub {
                 (g.info.model_customisation, g.info.main_hand),
                 g.health,
                 &g.effects.list,
+                (g.motion.as_ref().map_or(0, |m| m.ticks_frozen), g.meta.shoulders),
             );
         }
         all.truncate(n);
@@ -2268,11 +2282,18 @@ impl Hub {
         // The options its login set (updateOptions) are dirty then as well,
         // and go out in the same packet, after the health.
         if self.guests[i].sent_health.is_none() {
+            // Ferraloom: so are its loaded effects' swirls and shoulder
+            // parrots (by index, as packDirty sends them).
+            let particles = self.own_particle_changes(i);
+            let own = self.own_meta_changes(i);
             let g = &mut self.guests[i];
             let options = (g.info.model_customisation, g.info.main_hand);
             g.sent_options = options;
             let mut values = vec![(9, serializer::FLOAT, Value::Float(g.health))];
+            values.extend(particles);
             values.extend(Self::option_meta(options));
+            values.extend(own);
+            values.sort_by_key(|v| v.0);
             g.send(&C::SetEntityData(play::SetEntityData {
                 id: g.entity_id,
                 values,
@@ -2334,6 +2355,17 @@ impl Hub {
                     values,
                 }));
             }
+        }
+        // Ferraloom: ServerEntity.sendDirtyEntityData of the ticks frozen and
+        // shoulder parrots to the player too (the frost overlay, its own
+        // parrots).
+        let values = self.own_meta_changes(i);
+        if !values.is_empty() {
+            let g = &self.guests[i];
+            g.send(&C::SetEntityData(play::SetEntityData {
+                id: g.entity_id,
+                values,
+            }));
         }
         // ServerEntity.sendDirtyEntityData: the shared flags go to the player
         // too, so the sprint a hit stops (Player.causeExtraKnockback) stops

@@ -85,11 +85,25 @@ pub struct RecordedCriteria {
     pub xp: Option<i32>,
     pub level: Option<i32>,
 }
+
+/// The entity data values a player's client holds of it (defaults: none
+/// frozen, empty shoulders, no swirls).
+#[derive(Clone, Debug, Default, PartialEq)]
+struct SentMeta {
+    frozen: i32,
+    shoulders: [Option<i32>; 2],
+    particles: Vec<(u8, i32, Value)>,
+}
+
 /// Per player: what this module keeps beside `Guest`.
 #[derive(Clone, Debug, Default)]
 pub struct PlayerMeta {
     /// What the scoreboard criteria were last set to (game/scoreboard.rs).
     pub recorded: RecordedCriteria,
+    /// `Player.DATA_SHOULDER_PARROT_LEFT/RIGHT`: the parrot variant on each
+    /// shoulder (`extractParrotVariant` of `ShoulderEntityLeft/Right`).
+    pub shoulders: [Option<i32>; 2],
+    sent: SentMeta,
     /// `clientIsFloating` and `aboveGroundTickCount`.
     floating: bool,
     above_ground_ticks: i32,
@@ -102,9 +116,62 @@ impl PlayerMeta {
     /// defaults; its shoulders are what it kept.
     pub fn respawned(&mut self) {
         self.recorded = RecordedCriteria::default();
+        self.sent = SentMeta::default();
         self.floating = false;
         self.above_ground_ticks = 0;
     }
+}
+
+/// `Player.extractParrotVariant`: the variant of a shoulder compound that
+/// holds a parrot (`Parrot.Variant.LEGACY_CODEC`, clamped to 0..=4).
+pub fn shoulder_variant(tag: Option<&horizon_world::nbt::Tag>) -> Option<i32> {
+    use horizon_world::nbt::Tag;
+    let tag = tag?;
+    match tag.get("id") {
+        Some(Tag::String(id)) if id.to_string_lossy() == "minecraft:parrot" => {}
+        _ => return None,
+    }
+    let variant = match tag.get("Variant")? {
+        Tag::Int(v) => *v,
+        Tag::Byte(v) => i32::from(*v),
+        Tag::Short(v) => i32::from(*v),
+        Tag::Long(v) => *v as i32,
+        _ => return None,
+    };
+    Some(variant.clamp(0, 4))
+}
+
+/// The shoulder parrots a player's saved compound holds.
+pub fn shoulders_of(saved: Option<&horizon_world::nbt::Tag>) -> [Option<i32>; 2] {
+    ["ShoulderEntityLeft", "ShoulderEntityRight"]
+        .map(|key| shoulder_variant(saved.and_then(|s| s.get(key))))
+}
+
+/// The entity data a player has beside Horizon's own (trackers' view):
+/// non-default values into `meta`, every entry's default into `defaults`.
+pub fn tracked_meta(
+    ticks_frozen: i32,
+    shoulders: [Option<i32>; 2],
+    meta: &mut Vec<(u8, i32, Value)>,
+    defaults: &mut Vec<(u8, i32, Value)>,
+) {
+    if ticks_frozen != 0 {
+        meta.push((7, serializer::INT, Value::Int(ticks_frozen)));
+    }
+    for (index, parrot) in [(19, shoulders[0]), (20, shoulders[1])] {
+        if let Some(variant) = parrot {
+            meta.push((
+                index,
+                serializer::OPTIONAL_UNSIGNED_INT,
+                Value::Id(variant + 1),
+            ));
+        }
+    }
+    defaults.extend([
+        (7, serializer::INT, Value::Int(0)),
+        (19, serializer::OPTIONAL_UNSIGNED_INT, Value::Id(0)),
+        (20, serializer::OPTIONAL_UNSIGNED_INT, Value::Id(0)),
+    ]);
 }
 
 /// `LivingEntity.isDeadOrDying` and the other states `tickPlayer` doesn't
@@ -134,6 +201,79 @@ impl Hub {
             return Vec::new();
         }
         host.into_iter().chain(guests).collect()
+    }
+
+    /// The guest's own entity data that changed since its client was told
+    /// (ServerEntity.sendDirtyEntityData to the player itself): ticks
+    /// frozen and shoulders, in index order. A new player's client
+    /// (joined, respawned) starts from the defaults; one that changed level
+    /// keeps what it had (ClientboundRespawnPacket.KEEP_ENTITY_DATA).
+    pub(super) fn own_meta_changes(&mut self, i: usize) -> Vec<(u8, i32, Value)> {
+        let g = &mut self.guests[i];
+        let frozen = g.motion.as_ref().map_or(0, |m| m.ticks_frozen);
+        let meta = &mut g.meta;
+        let mut values = Vec::new();
+        let base = &meta.sent;
+        if frozen != base.frozen {
+            values.push((7, serializer::INT, Value::Int(frozen)));
+        }
+        for (k, index) in [19u8, 20].into_iter().enumerate() {
+            if meta.shoulders[k] != base.shoulders[k] {
+                let id = meta.shoulders[k].map_or(0, |v| v + 1);
+                values.push((index, serializer::OPTIONAL_UNSIGNED_INT, Value::Id(id)));
+            }
+        }
+        meta.sent.frozen = frozen;
+        meta.sent.shoulders = meta.shoulders;
+        values
+    }
+
+    /// The guest's own effect swirls (`LivingEntity.DATA_EFFECT_PARTICLES`
+    /// and `DATA_EFFECT_AMBIENCE_ID`), which vanilla sends the player too:
+    /// the entries that changed since its client was told, after its
+    /// effects changed (`updateSynchronizedMobEffectParticles`).
+    pub(super) fn own_particle_changes(&mut self, i: usize) -> Vec<(u8, i32, Value)> {
+        let g = &self.guests[i];
+        let now = self.effect_meta(
+            g.effects
+                .list
+                .iter()
+                .filter(|e| e.visible)
+                .map(|e| (e.id, e.ambient)),
+        );
+        let g = &mut self.guests[i];
+        if now == g.meta.sent.particles {
+            return Vec::new();
+        }
+        let mut values = Vec::new();
+        for (index, default) in [
+            (
+                10,
+                (10, serializer::PARTICLES, Value::Particles(Vec::new())),
+            ),
+            (11, (11, serializer::BOOLEAN, Value::Bool(false))),
+        ] {
+            let was = g.meta.sent.particles.iter().find(|m| m.0 == index);
+            match now.iter().find(|m| m.0 == index) {
+                Some(entry) if was != Some(entry) => values.push(entry.clone()),
+                None if was.is_some() => values.push(default),
+                _ => {}
+            }
+        }
+        g.meta.sent.particles = now;
+        values
+    }
+
+    /// Send [`Self::own_particle_changes`], if any.
+    pub(super) fn sync_own_particles(&mut self, i: usize) {
+        let values = self.own_particle_changes(i);
+        if !values.is_empty() {
+            let g = &self.guests[i];
+            g.send(&C::SetEntityData(play::SetEntityData {
+                id: g.entity_id,
+                values,
+            }));
+        }
     }
 
     /// The end of handlePlayerPositionChange's accepted move:
@@ -262,6 +402,27 @@ fn no_blocks_around(g: &Guest, ctx: &TickCtx) -> bool {
 mod tests {
     use super::*;
     use horizon_world::nbt::Tag;
+
+    /// `extractParrotVariant`: a parrot's variant, clamped; anything else,
+    /// or a parrot with no variant saved, is no parrot.
+    #[test]
+    fn only_a_saved_parrot_with_a_variant_sits_on_a_shoulder() {
+        let entity = |id: &str, variant: Option<i32>| {
+            let mut tag = Tag::compound([("id", Tag::String(id.into()))]);
+            if let (Some(v), Tag::Compound(map)) = (variant, &mut tag) {
+                map.insert("Variant".into(), Tag::Int(v));
+            }
+            tag
+        };
+        let saved = Tag::compound([
+            ("ShoulderEntityLeft", entity("minecraft:parrot", Some(9))),
+            ("ShoulderEntityRight", entity("minecraft:parrot", None)),
+        ]);
+        assert_eq!(shoulders_of(Some(&saved)), [Some(4), None]);
+        let other = Tag::compound([("ShoulderEntityLeft", entity("minecraft:cat", Some(1)))]);
+        assert_eq!(shoulders_of(Some(&other)), [None, None]);
+        assert_eq!(shoulders_of(None), [None, None]);
+    }
 
     /// `TickThrottler(20, 200)`: the tenth message within a tick reaches the
     /// threshold, and each tick takes one off.

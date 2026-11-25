@@ -1792,6 +1792,8 @@ impl Game<'_> {
             self.lan_update_waypoints(&mut host, state.as_ref());
         });
         self.lan_sync_scoreboard(&mut host);
+        // Ferraloom: the guests' shoulder parrots, as their entity data.
+        self.lan_sync_shoulders(&mut host);
         self.lan_sync_border(&mut host);
         drop(holding);
         horizon_client::spans::time("lan_flush", || {

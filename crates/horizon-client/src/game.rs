@@ -2025,6 +2025,8 @@ struct Game<'a> {
     spare_craft_grid: Vec<Option<ItemStack>>,
     /// Their UUID (`Player.getUUID`).
     lan_acting_uuid: Option<u128>,
+    /// Ferraloom: guests whose shoulder parrots changed in their turn (game/shoulders.rs).
+    lan_shoulder_changes: Vec<(u128, [Option<i32>; 2])>,
     /// Command feedback to forward to a guest.
     chat_capture: Option<Vec<horizon_client::text::Text>>,
     /// Packets for the guest acting now, sent once its action returns.
@@ -14215,6 +14217,7 @@ impl<'a> Game<'a> {
             spare_acting_name: String::new(),
             spare_craft_grid: Vec::new(),
             lan_acting_uuid: None,
+            lan_shoulder_changes: Vec::new(),
             chat_capture: None,
             admin_feedback: Vec::new(),
             console_broadcast: None,
