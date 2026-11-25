@@ -252,8 +252,9 @@ const INTERACT: usize = 5;
 /// `Entities.of`, which makes an actor's object.
 const OF: usize = 6;
 const CHANGE_BLOCK: usize = 7;
+const COMBUST: usize = 8;
 
-static EVENTS: OnceLock<Entry<8>> = OnceLock::new();
+static EVENTS: OnceLock<Entry<9>> = OnceLock::new();
 
 /// At start: `EntityNative`'s methods bound, `EntityEvents`' looked up.
 pub(crate) fn load(env: &mut JNIEnv) -> jni::errors::Result<()> {
@@ -294,6 +295,7 @@ pub(crate) fn load(env: &mut JNIEnv) -> jni::errors::Result<()> {
             ("interact", format!("(JJ{a}Z)Z")),
             ("of", format!("({a})Lorg/bukkit/entity/Entity;")),
             ("changeBlock", format!("({a}IIII{S})Z")),
+            ("combust", format!("({a}F)F")),
         ],
     )?;
     let _ = EVENTS.set(entry);
@@ -554,6 +556,28 @@ pub fn entity_change_block(
         unsafe { events.invoke(env, CHANGE_BLOCK, boolean, &args) }?.z()
     })
     .unwrap_or(false)
+}
+
+/// `EntityCombustEvent` for `entity` catching fire for `seconds`: the
+/// seconds it burns, none when cancelled.
+pub fn entity_combust(
+    host: &mut dyn crate::PluginHost,
+    entity: Named,
+    seconds: f32,
+) -> Option<f32> {
+    let Some(events) = EVENTS.get() else {
+        return Some(seconds);
+    };
+    bridge::call(host, |env| {
+        let entity = actor(env, Some(entity))?;
+        let mut args = Vec::with_capacity(4);
+        args.extend(args3(&entity));
+        args.push(JValue::Float(seconds).as_jni());
+        let float = ReturnType::Primitive(Primitive::Float);
+        // SAFETY: `combust`'s signature in `load`.
+        unsafe { events.invoke(env, COMBUST, float, &args) }?.f()
+    })
+    .map_or(Some(seconds), |s| (!s.is_nan()).then_some(s))
 }
 
 /// `EntityNative.state`'s layout, mirrored in `EntityNative.java`.

@@ -16,6 +16,7 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
+import org.bukkit.event.entity.EntityCombustEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDamageEvent.DamageModifier;
@@ -212,6 +213,22 @@ public final class EntityEvents {
         } catch (Throwable ex) {
             Bridge.log(ex, "an entity changing a block");
             return false;
+        }
+    }
+
+    /** EntityCombustEvent as an entity catches fire: the seconds it burns, NaN when cancelled. */
+    public static float combust(long a, long b, String kind, float seconds) {
+        try {
+            Entity entity = Entities.of(a, b, kind);
+            if (entity == null) {
+                return seconds;
+            }
+            EntityCombustEvent event = new EntityCombustEvent(entity, seconds);
+            Bridge.server.pluginManager.callEvent(event);
+            return event.isCancelled() ? Float.NaN : event.getDuration();
+        } catch (Throwable ex) {
+            Bridge.log(ex, "an entity catching fire");
+            return seconds;
         }
     }
 

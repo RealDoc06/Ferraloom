@@ -14,7 +14,9 @@
 //! The lib cannot see the game, so the game installs [`Sites`] when plugins
 //! start; without plugins they are never set.
 use super::{Damage, Mob, MobEvent, MobWorld, Seen, Who, finalize, species, tick_loop};
-use ferraloom_plugins::{Actor, Change, EntityRef, EntityState, Location, Named, entity_flags};
+use ferraloom_plugins::{
+    Actor, Change, EntityRef, EntityState, Event, Location, Named, entity_flags,
+};
 use horizon_core::random::LegacyRandom;
 use std::{cell::RefCell, sync::OnceLock};
 
@@ -26,6 +28,9 @@ pub struct Sites {
     /// `EntityTargetEvent` for mob `m`, whose tick changed its target from
     /// `was`, in its serial turn of the pass (`w`): the target it keeps.
     pub target: fn(m: &mut Mob, was: Option<Who>, w: &MobWorld<'_>) -> Option<Who>,
+    /// `EntityCombustEvent` for mob `m`, whose tick set it burning for
+    /// `ticks`: the ticks it burns, none when cancelled.
+    pub combust: fn(m: &mut Mob, ticks: i32, w: &MobWorld<'_>) -> Option<i32>,
     /// `EntityChangeBlockEvent` for mob `m` changing the block at `pos` to
     /// state `to` (`minecraft:air`): true when cancelled.
     pub change_block: fn(m: &mut Mob, pos: [i32; 3], to: &str, w: &MobWorld<'_>) -> bool,
@@ -49,24 +54,41 @@ pub fn damage(m: &mut Mob, source: &Damage, base: f32, amount: f32) -> Option<f3
     }
 }
 
-/// Mob `m`'s tick in the pass while a plugin listens to `EntityTargetEvent`
-/// (`tick_loop`): `Mob.setTarget`'s event, at the end of the tick that changed
-/// the target. The target is a field set in many places, so the event fires
-/// once per tick that changed it, and a cancel puts the old target back. A
-/// speculative tick that changed it ticks again in turn.
-pub fn tick_targeting(
+/// The events [`tick_watched`] watches a tick for.
+pub const WATCHED: u64 = Event::mask(&[Event::EntityTarget, Event::EntityCombust]);
+
+/// Mob `m`'s tick in the pass while a plugin listens to one of [`WATCHED`]
+/// (`tick_loop`), its events at the end of the tick that set what they
+/// guard, as these are fields set in many places: `Mob.setTarget`'s
+/// `EntityTargetEvent` for a changed target (a cancel puts the old one
+/// back), `igniteForTicks`'s `EntityCombustEvent` for fire that grew (a
+/// cancel leaves the fire as it would have burned down). A speculative tick
+/// that set one ticks again in turn.
+pub fn tick_watched(
     m: &mut Mob,
     w: &MobWorld,
     random: &mut LegacyRandom,
     events: &mut Vec<MobEvent>,
 ) -> bool {
-    let was = m.ai.target;
+    let (target, fire) = (m.ai.target, m.fire_ticks);
     let kept = m.tick(w, random, events);
-    if m.ai.target != was
-        && !tick_loop::note_impure()
-        && let Some(sites) = SITES.get()
-    {
-        m.ai.target = (sites.target)(m, was, w);
+    let targeted = m.ai.target != target && ferraloom_plugins::listens(Event::EntityTarget);
+    let ignited = m.fire_ticks > fire && ferraloom_plugins::listens(Event::EntityCombust);
+    if !(targeted || ignited) || tick_loop::note_impure() {
+        return kept;
+    }
+    let Some(sites) = SITES.get() else {
+        return kept;
+    };
+    if ignited {
+        let ticks = m.fire_ticks;
+        m.fire_ticks = match (sites.combust)(m, ticks, w) {
+            Some(ticks) => ticks,
+            None => (fire - 1).max(fire.min(0)),
+        };
+    }
+    if targeted {
+        m.ai.target = (sites.target)(m, target, w);
     }
     kept
 }

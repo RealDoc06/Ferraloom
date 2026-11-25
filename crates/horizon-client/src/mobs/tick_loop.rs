@@ -347,9 +347,9 @@ impl MobLoop {
         }
         super::apply_mob_pushes(m, &mut self.pushes);
         let from = self.events.len();
-        // Ferraloom: EntityTargetEvent for a target this tick changed, in the serial turn.
-        let kept = if ferraloom_plugins::listens(ferraloom_plugins::Event::EntityTarget) {
-            super::plugin_sites::tick_targeting(m, &w, &mut self.random, &mut self.events)
+        // Ferraloom: EntityTargetEvent and EntityCombustEvent, in the serial turn (plugin_sites).
+        let kept = if ferraloom_plugins::listens_any(super::plugin_sites::WATCHED) {
+            super::plugin_sites::tick_watched(m, &w, &mut self.random, &mut self.events)
         } else {
             m.tick(&w, &mut self.random, &mut self.events)
         };
@@ -658,9 +658,9 @@ fn speculate(
     let mut events = Vec::new();
     let ticked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         record(|| {
-            // Ferraloom: a listened target change ticks again in turn (plugin_sites).
-            if ferraloom_plugins::listens(ferraloom_plugins::Event::EntityTarget) {
-                super::plugin_sites::tick_targeting(m, w, &mut random, &mut events)
+            // Ferraloom: a listened target change or ignition ticks again in turn (plugin_sites).
+            if ferraloom_plugins::listens_any(super::plugin_sites::WATCHED) {
+                super::plugin_sites::tick_watched(m, w, &mut random, &mut events)
             } else {
                 m.tick(w, &mut random, &mut events)
             }
@@ -858,6 +858,11 @@ mod tests {
         }
     }
 
+    /// An EntityCombustEvent listener that refuses every fifth mob.
+    fn plugin_combust(m: &mut Mob, ticks: i32, _: &MobWorld) -> Option<i32> {
+        (m.id < PLUGIN_MOBS || m.id % 5 != 0).then_some(ticks)
+    }
+
     /// An EntityChangeBlockEvent listener that refuses every other mob.
     fn plugin_change_block(m: &mut Mob, _: [i32; 3], _: &str, _: &MobWorld) -> bool {
         m.id >= PLUGIN_MOBS && m.id % 2 == 0
@@ -881,12 +886,14 @@ mod tests {
         super::super::plugin_sites::install(super::super::plugin_sites::Sites {
             damage: plugin_damage,
             target: plugin_target,
+            combust: plugin_combust,
             change_block: plugin_change_block,
         });
         ferraloom_plugins::latch_for_tests(&[
             Event::EntityTarget,
             Event::EntityDamage,
             Event::EntityChangeBlock,
+            Event::EntityCombust,
         ]);
         let listened = crowd(PLUGIN_MOBS);
         let events = TARGET_EVENTS.get();

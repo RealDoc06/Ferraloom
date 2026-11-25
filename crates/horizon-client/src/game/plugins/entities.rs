@@ -50,6 +50,7 @@ pub(super) fn install() {
     plugin_sites::install(plugin_sites::Sites {
         damage: site_damage,
         target: site_target,
+        combust: site_combust,
         change_block: site_change_block,
     });
 }
@@ -266,6 +267,18 @@ fn site_target(m: &mut Mob, was: Option<Who>, w: &MobWorld) -> Option<Who> {
             Actor::Entity(e) => Who::Mob(e.id),
         }),
     }
+}
+
+/// The mob pass's `EntityCombustEvent` site, in `m`'s serial turn.
+fn site_combust(m: &mut Mob, ticks: i32, w: &MobWorld) -> Option<i32> {
+    let entity = plugin_sites::named(m);
+    let mut host = SiteHost {
+        mob: m,
+        world: pass_world(w),
+        pass: Some(w),
+    };
+    let seconds = ferraloom_plugins::entity_combust(&mut host, entity, ticks as f32 / 20.0)?;
+    Some((seconds * 20.0) as i32)
 }
 
 /// The mob pass's `EntityChangeBlockEvent` site, at `m`'s commit.

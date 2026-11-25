@@ -33,10 +33,11 @@ pub enum Event {
     EntityExplode = 44,
     PlayerInteractEntity = 45,
     EntityChangeBlock = 46,
+    EntityCombust = 47,
 }
 
 impl Event {
-    pub const ALL: [Event; 11] = [
+    pub const ALL: [Event; 12] = [
         Event::PlayerJoin,
         Event::PlayerQuit,
         Event::AsyncPlayerChat,
@@ -48,10 +49,22 @@ impl Event {
         Event::EntityExplode,
         Event::PlayerInteractEntity,
         Event::EntityChangeBlock,
+        Event::EntityCombust,
     ];
 
     const fn bit(self) -> u64 {
         1 << self as u8
+    }
+
+    /// The bits of `events`, for [`listens_any`].
+    pub const fn mask(events: &[Event]) -> u64 {
+        let mut mask = 0;
+        let mut i = 0;
+        while i < events.len() {
+            mask |= events[i].bit();
+            i += 1;
+        }
+        mask
     }
 }
 
@@ -62,6 +75,13 @@ static FLAGS: AtomicU64 = AtomicU64::new(0);
 #[inline(always)]
 pub fn listens(event: Event) -> bool {
     FLAGS.load(Ordering::Relaxed) & event.bit() != 0
+}
+
+/// Whether a plugin listens to any event of `mask` ([`Event::mask`]) this
+/// tick: one load and one test, as [`listens`].
+#[inline(always)]
+pub fn listens_any(mask: u64) -> bool {
+    FLAGS.load(Ordering::Relaxed) & mask != 0
 }
 
 /// Latches the listener bits of `events` alone, for tests of event sites in
@@ -84,12 +104,20 @@ mod tests {
 
     #[test]
     fn bits_name_their_events_only() {
-        set(0b10 | 1 << 16 | 1 << 47);
+        set(0b10 | 1 << 16 | 1 << 48);
         assert!(!listens(Event::PlayerJoin));
         assert!(listens(Event::PlayerQuit));
         assert!(!listens(Event::AsyncPlayerChat));
         assert!(listens(Event::BlockBreak));
         assert_eq!(FLAGS.load(Ordering::Relaxed), 0b10 | 1 << 16);
+        assert!(listens_any(Event::mask(&[
+            Event::PlayerJoin,
+            Event::PlayerQuit
+        ])));
+        assert!(!listens_any(Event::mask(&[
+            Event::PlayerJoin,
+            Event::EntityTarget
+        ])));
         set(0);
         assert!(Event::ALL.iter().all(|&e| !listens(e)));
     }
