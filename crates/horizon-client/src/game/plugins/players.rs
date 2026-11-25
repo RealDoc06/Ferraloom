@@ -331,6 +331,7 @@ impl GameHost<'_, '_> {
                     level: g.xp_level,
                     progress: g.xp_progress,
                     total: g.xp_total,
+                    score: g.meta.score,
                 };
                 if field == Field::GiveExp {
                     xp.give(v as i32);
@@ -338,6 +339,8 @@ impl GameHost<'_, '_> {
                     give_levels(&mut xp, v as i32);
                 }
                 (g.xp_level, g.xp_progress, g.xp_total) = (xp.level, xp.progress, xp.total);
+                // Player.giveExperiencePoints also raises the death-screen score.
+                g.meta.score = xp.score;
             }
             Field::HeldSlot => match usize::try_from(v as i64) {
                 Ok(slot) if slot < 9 => {
