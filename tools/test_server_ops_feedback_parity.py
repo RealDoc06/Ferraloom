@@ -12,6 +12,13 @@ by step, the console sets the time, asks for the difficulty (a query, told to no
 deops Bob (who stops hearing of it) and ops him again, turns `send_command_feedback` off and on and saves, and
 Alice runs a command herself (Bob hears of it as an operator). Then again with `broadcast-console-to-ops=false`.
 Each player's chat in each step is compared exactly.
+
+The `admin` case runs the commands only a dedicated server has (Commands.CommandSelection.DEDICATED) from the
+players, with `op-permission-level=3`: Alice deops Bob, whose `/op`, `/banlist`, `/stop`, `/whitelist` and `/seed`
+are unknown to him; she ops him again at level 3, where `/banlist` works for him and `/save-off` (level 4) does not.
+Then Alice works the whitelist, the IP bans, saving, the idle timeout and `/transfer` (the Transfer packets each
+player gets are compared too), bans Bob (he hears of it before he is disconnected), reads and clears the ban list,
+and stops the server (both sides must disconnect her the same way).
 """
 import os
 from pathlib import Path
@@ -51,7 +58,29 @@ QUIET = [
     ('console-whitelist', ['whitelist add Alice'], []),
     ('alice', [], ['cmd Alice time set 3000']),
 ]
-CASES = {'broadcast': ({}, BROADCAST), 'quiet': ({'broadcast-console-to-ops': 'false'}, QUIET)}
+ADMIN = [
+    ('deop-bob', [], ['cmd Alice deop Bob']),
+    ('bob-refused', [], ['cmd Bob op Bob', 'cmd Bob banlist', 'cmd Bob stop', 'cmd Bob whitelist list', 'cmd Bob seed']),
+    ('op-bob', [], ['cmd Alice op Bob', 'cmd Alice op Bob']),
+    ('bob-level-3', [], ['cmd Bob banlist', 'cmd Bob save-off', 'cmd Bob whitelist list']),
+    ('whitelist', [], ['cmd Alice whitelist add Bob', 'cmd Alice whitelist add Bob', 'cmd Alice whitelist list',
+                       'cmd Alice whitelist on', 'cmd Alice whitelist on', 'cmd Alice whitelist off',
+                       'cmd Alice whitelist reload', 'cmd Alice whitelist remove Bob',
+                       'cmd Alice whitelist remove Bob']),
+    ('ip-bans', [], ['cmd Alice ban-ip 203.0.113.7 Spam', 'cmd Alice ban-ip 203.0.113.7', 'cmd Alice ban-ip Nobody',
+                     'cmd Alice banlist ips', 'cmd Alice pardon-ip 203.0.113.7', 'cmd Alice pardon-ip 203.0.113.7',
+                     'cmd Alice pardon-ip nonsense']),
+    ('saving', [], ['cmd Alice save-off', 'cmd Alice save-off', 'cmd Alice save-on', 'cmd Alice save-on',
+                    'cmd Alice save-all']),
+    ('idle', [], ['cmd Alice setidletimeout 30', 'cmd Alice setidletimeout 0']),
+    ('transfer', [], ['cmd Alice transfer 127.0.0.1 25599 Bob', 'cmd Alice transfer example.invalid']),
+    ('ban-bob', [], ['cmd Alice ban Bob Testing']),
+    ('banlist', [], ['cmd Alice ban Bob', 'cmd Alice banlist', 'cmd Alice pardon Bob', 'cmd Alice pardon Bob',
+                     'cmd Alice banlist players']),
+    ('stop', [], ['cmd Alice stop']),
+]
+CASES = {'broadcast': ({}, BROADCAST), 'quiet': ({'broadcast-console-to-ops': 'false'}, QUIET),
+         'admin': ({'op-permission-level': '3'}, ADMIN)}
 STEP_TICKS = 40
 # A step ends by the server's clock (Client.wait): after a round trip of Alice's (Bob is deopped for a while, so
 # his is not used). While send_command_feedback is off a command has no reply for her, so those steps wait for
@@ -59,7 +88,13 @@ STEP_TICKS = 40
 NO_SYNC = {'feedback-off', 'console-feedback-off'}
 # Steps whose reply can take longer than a step: the next step waits for this console line first. A loaded machine
 # took 2 s to save vanilla's world, and the transcript ended before "Saved the game".
-WAIT_FOR = {'console-save': r'System chat: Saved the game'}
+WAIT_FOR = {'console-save': r'System chat: Saved the game', 'saving': r'Saved the game\]'}
+# Cases in which players are disconnected on purpose: their `disconnected` lines are compared, not errors.
+DISCONNECTS = {'admin'}
+# The step that stops the server: the script ends with it.
+FINAL = 'stop'
+# What each player's transcript keeps.
+KEPT = ('chat ', 'transfer ', 'disconnected ')
 
 
 def run_side(label, case, server_command, client_command, build, world):
@@ -89,6 +124,9 @@ def run_side(label, case, server_command, client_command, build, world):
                     game_time(server)  # the console runs its queue in order: these commands have run
                     for action in actions:
                         client.tell(action)
+                    if step == FINAL:
+                        server.process.wait(timeout=120)
+                        break
                     if step in WAIT_FOR:
                         server.wait_for(WAIT_FOR[step], timeout=120)
                     client.wait(server, [] if step in NO_SYNC else ['Alice'], STEP_TICKS)
@@ -100,8 +138,8 @@ def run_side(label, case, server_command, client_command, build, world):
     if not out.exists():
         raise AssertionError(f'{label} {case}: the client wrote no transcript (see {build}/{label}-{case}-client.log)')
     lines = out.read_text(encoding='utf-8').splitlines()
-    errors = [l for l in lines if ' error ' in f' {l} ' or 'disconnected' in l]
-    return [f'{case} {l}' for l in lines if l.split(' ', 2)[2:3] and l.split(' ', 2)[2].startswith('chat ')], errors
+    errors = [l for l in lines if ' error ' in f' {l} ' or (case not in DISCONNECTS and 'disconnected' in l)]
+    return [f'{case} {l}' for l in lines if l.split(' ', 2)[2:3] and l.split(' ', 2)[2].startswith(KEPT)], errors
 
 
 def main():
@@ -152,7 +190,9 @@ def main():
         lines=len(vanilla), output_sha256=lab.digest(build / 'horizon.txt', 'sha256'),
         scope='The system chat two operators get on a dedicated server while the console and one of them run '
               'commands: broadcastToAdmins for the console (broadcast-console-to-ops on and off) and a player, '
-              'queries, deop and op, send_command_feedback off and on, and save-all.'))
+              'queries, deop and op, send_command_feedback off and on, and save-all; and the dedicated-only '
+              'commands run by players at their permission levels (op-permission-level 3), with their '
+              'transfers and disconnections.'))
     print(f'server ops feedback: {len(vanilla)} chat lines identical')
 
 
