@@ -162,9 +162,14 @@ final class Internals {
         return dotted.substring(at, end);
     }
 
-    /** The plugin whose class the error was thrown in: the first frame a plugin's class loader defined. */
+    /** The plugin whose class the error was thrown in. */
     private static Plugin owner(Throwable t) {
-        for (StackTraceElement frame : t.getStackTrace()) {
+        return owner(t.getStackTrace());
+    }
+
+    /** The plugin of the first frame a plugin's class loader defined, or null. */
+    static Plugin owner(StackTraceElement[] stack) {
+        for (StackTraceElement frame : stack) {
             for (Plugin plugin : Bridge.server.pluginManager.getPlugins()) {
                 ClassLoader loader = plugin.getClass().getClassLoader();
                 try {

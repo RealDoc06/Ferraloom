@@ -1,11 +1,20 @@
 package dev.ferraloom.testplugin;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
+import org.bukkit.BanList;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.World;
+import org.bukkit.ban.ProfileBanList;
+import org.bukkit.boss.BarColor;
+import org.bukkit.boss.BarStyle;
+import org.bukkit.boss.BossBar;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -16,6 +25,7 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.server.TabCompleteEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -23,8 +33,11 @@ import org.bukkit.plugin.java.JavaPlugin;
  * {@code [FerraloomTest] <kind>: <what>} lines that tools/plugins_e2e.py checks.
  */
 public final class TestPlugin extends JavaPlugin implements Listener {
+    private static final List<String> SUBCOMMANDS =
+            List.of("ping", "protect", "where", "tp", "stub", "lists", "pardon", "bar", "stall");
     private volatile boolean protect;
     private int timerRuns;
+    private BossBar bar;
 
     @Override
     public void onLoad() {
@@ -109,10 +122,67 @@ public final class TestPlugin extends JavaPlugin implements Listener {
                 + " cancelled=" + event.isCancelled());
     }
 
+    @EventHandler
+    public void onTabComplete(TabCompleteEvent event) {
+        getLogger().info("event: tab " + event.getBuffer() + " -> " + event.getCompletions());
+    }
+
+    /** The first argument's subcommands; later ones fall back to Bukkit's default (online player names). */
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (args.length != 1) {
+            return null;
+        }
+        return SUBCOMMANDS.stream().filter(s -> s.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
+    }
+
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (command.getName().equals("fadmin")) {
+            sender.sendMessage("admin ok");
+            return true;
+        }
         String sub = args.length == 0 ? "" : args[0].toLowerCase(Locale.ROOT);
         switch (sub) {
+            case "lists" -> {
+                OfflinePlayer o = getServer().getOfflinePlayer(args[1]);
+                UUID offline = UUID.nameUUIDFromBytes(("OfflinePlayer:" + args[1]).getBytes(StandardCharsets.UTF_8));
+                boolean isOffline = !o.isOnline() && o.getUniqueId().equals(offline);
+                o.setOp(true);
+                boolean op = o.isOp() && getServer().getOperators().contains(o);
+                o.setOp(false);
+                o.setWhitelisted(true);
+                boolean white = o.isWhitelisted() && getServer().getWhitelistedPlayers().contains(o);
+                o.setWhitelisted(false);
+                ProfileBanList bans = getServer().getBanList(BanList.Type.PROFILE);
+                bans.addBan(o.getPlayerProfile(), "testing bans", (Date) null, "FerraloomTest");
+                sender.sendMessage("lists: offline=" + isOffline + " op=" + op + "," + o.isOp() + " whitelist=" + white + ","
+                        + o.isWhitelisted() + " banned=" + o.isBanned());
+            }
+            case "pardon" -> {
+                OfflinePlayer o = getServer().getOfflinePlayer(args[1]);
+                ProfileBanList bans = getServer().getBanList(BanList.Type.PROFILE);
+                bans.pardon(o.getPlayerProfile());
+                sender.sendMessage("pardon: banned=" + o.isBanned());
+            }
+            case "bar" -> {
+                if (args.length > 1 && args[1].equals("off")) {
+                    bar.removeAll();
+                } else if (sender instanceof Player p) {
+                    bar = getServer().createBossBar("§cFerraloom bar", BarColor.RED, BarStyle.SOLID);
+                    bar.setProgress(0.5);
+                    bar.addPlayer(p);
+                }
+                sender.sendMessage("bar " + (bar == null ? 0 : bar.getPlayers().size()));
+            }
+            case "stall" -> {
+                try {
+                    Thread.sleep(Long.parseLong(args[1]) * 1000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                sender.sendMessage("stalled");
+            }
             case "ping" -> sender.sendMessage("pong " + sender.getName());
             case "protect" -> {
                 protect = args.length > 1 && args[1].equals("on");

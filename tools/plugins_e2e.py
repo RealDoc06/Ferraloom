@@ -13,7 +13,10 @@ server twice on a fresh flat world:
    events and messages, the command tree, a command's reply from a player and from the console, a stub's
    UnsupportedOperationException, chat format and cancel with listener priorities and ignoreCancelled,
    a cancelled block break leaving the block (and resending it) and an uncancelled one breaking it,
-   getLocation and teleport.
+   getLocation and teleport; the server area: a command hidden from a player without its permission,
+   tab completion (a TabCompleter, Bukkit's player-name default, TabCompleteEvent), a boss bar shown and
+   removed, an offline player's op, whitelist and ban round trip (the ban seen by vanilla's /banlist), and
+   the watchdog naming a plugin that stalls the server thread.
 
     python3 tools/plugins_e2e.py --engine target/release/horizon-client --bot target/release/examples/plugin_bot
 
@@ -203,8 +206,8 @@ def check_plugins(engine, bot_binary, built, out, scratch):
         bot.out.wait_for(rf'^chat .*FerraloomTest welcomes {PLAYER}')
         bot.out.wait_for(rf'^chat .*{PLAYER} joined through FerraloomTest')
         log.wait_for(rf'System chat: {PLAYER} joined through FerraloomTest')
-        bot.out.wait_for(r'^commands ftest=true$')
-        print('join event and message, command tree: ok')
+        bot.out.wait_for(r'^commands ftest=true fadmin=false$')
+        print('join event and message, command tree without a command the player may not use: ok')
 
         # Commands, from the player and the console; a stubbed method's exception.
         bot.send('command ftest ping')
@@ -227,6 +230,33 @@ def check_plugins(engine, bot_binary, built, out, scratch):
         bot.send('command ftest ping')
         bot.out.wait_for(rf'^chat pong {PLAYER}$', start=bot_mark)
         print('NMS adapter reached: plugin disabled in one line, others run: ok')
+
+        # Tab completion: the plugin's TabCompleter for the first word, Bukkit's player names after it.
+        mark = len(bot.out.lines)
+        bot.send('suggest ftest pr')
+        bot.out.wait_for(r'^suggestions 7 2 protect$', start=mark)
+        log.wait_for(r'\[FerraloomTest\] event: tab /ftest pr -> \[protect\]')
+        bot.send(f'suggest ftest ping {PLAYER[:2]}')
+        bot.out.wait_for(rf'^suggestions 12 2 {PLAYER}$', start=mark)
+        print('tab completion, TabCompleteEvent: ok')
+
+        # A plugin's boss bar, shown to the player and taken off.
+        mark = len(bot.out.lines)
+        bot.send('command ftest bar')
+        bot.out.wait_for(r'^boss add Ferraloom bar 0\.5$', start=mark)
+        bot.send('command ftest bar off')
+        bot.out.wait_for(r'^boss remove$', start=mark)
+        print('boss bar: ok')
+
+        # An offline player through the server's lists: op, whitelist, a ban vanilla's /banlist shows, a pardon.
+        mark = len(log.lines)
+        server.console('ftest lists Offliner')
+        log.wait_for(r'lists: offline=true op=true,false whitelist=true,false banned=true', start=mark)
+        server.console('banlist players')
+        log.wait_for(r'Offliner was banned by FerraloomTest: testing bans', start=mark)
+        server.console('ftest pardon Offliner')
+        log.wait_for(r'pardon: banned=false', start=mark)
+        print('offline player, ops, whitelist, bans: ok')
 
         # Where the player stands, and the block under their feet.
         mark = len(bot.out.lines)
@@ -293,6 +323,14 @@ def check_plugins(engine, bot_binary, built, out, scratch):
         log.wait_for(rf'\[FerraloomTest\] event: quit {PLAYER} online=true', start=mark)
         log.absent(rf'System chat: {PLAYER} left the game', mark)
         print('quit event, message removed: ok')
+
+        # A plugin stalling the server thread: the watchdog names it, with its stack, and the server goes on.
+        mark = len(log.lines)
+        server.console('ftest stall 13')
+        log.wait_for(r'The server thread has been stuck in FerraloomTest v1\.0 for 1\d s', start=mark, timeout=40)
+        log.wait_for(r'at dev\.ferraloom\.testplugin\.TestPlugin\.onCommand', start=mark)
+        log.wait_for(r'stalled', start=mark, timeout=20)
+        print('watchdog: ok')
     finally:
         if bot is not None and bot.process.poll() is None:
             bot.process.kill()
