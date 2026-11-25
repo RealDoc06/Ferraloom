@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 /// The bridged events, as bits of [`listens`]: `Bridge.EVENTS`' indices in
 /// `java/bridge/dev/ferraloom/bukkit/Bridge.java`. Each area keeps its own
-/// range (players 0-15, blocks 16-31; docs/ferraloom/plugins.md, "Fan-out").
+/// range (players 0-15, blocks 16-31, inventory 48-55; docs/ferraloom/plugins.md, "Fan-out").
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Event {
@@ -24,14 +24,26 @@ pub enum Event {
     AsyncPlayerChat = 2,
     // Blocks.
     BlockBreak = 16,
+    // Inventory.
+    InventoryClick = 48,
+    InventoryDrag = 49,
+    InventoryOpen = 50,
+    InventoryClose = 51,
+    InventoryMoveItem = 52,
 }
 
 impl Event {
-    pub const ALL: [Event; 4] = [
+    pub const ALL: [Event; 9] = [
         Event::PlayerJoin,
         Event::PlayerQuit,
         Event::AsyncPlayerChat,
         Event::BlockBreak,
+        // Inventory.
+        Event::InventoryClick,
+        Event::InventoryDrag,
+        Event::InventoryOpen,
+        Event::InventoryClose,
+        Event::InventoryMoveItem,
     ];
 
     const fn bit(self) -> u64 {

@@ -22,6 +22,7 @@ pub mod item_extras;
 #[cfg(target_os = "linux")]
 mod io_pool;
 pub mod menu;
+pub mod plugin_containers;
 pub mod playerdata;
 mod recipes;
 pub mod scoreboard;

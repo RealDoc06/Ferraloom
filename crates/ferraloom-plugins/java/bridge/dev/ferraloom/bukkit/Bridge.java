@@ -31,6 +31,12 @@ public final class Bridge {
         EVENTS[2] = AsyncPlayerChatEvent.getHandlerList();
         // Blocks: 16-31.
         EVENTS[16] = BlockBreakEvent.getHandlerList();
+        // Inventory: 48-55.
+        EVENTS[48] = org.bukkit.event.inventory.InventoryClickEvent.getHandlerList();
+        EVENTS[49] = org.bukkit.event.inventory.InventoryDragEvent.getHandlerList();
+        EVENTS[50] = org.bukkit.event.inventory.InventoryOpenEvent.getHandlerList();
+        EVENTS[51] = org.bukkit.event.inventory.InventoryCloseEvent.getHandlerList();
+        EVENTS[52] = org.bukkit.event.inventory.InventoryMoveItemEvent.getHandlerList();
     }
 
     /** {@link #tick}'s bit for "the command labels changed: ask {@link #commands} again". */

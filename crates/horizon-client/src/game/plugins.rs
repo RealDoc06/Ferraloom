@@ -13,6 +13,7 @@
 //! the packet handlers hold it and pass it in. What
 //! needs the hub in `Game::lan` (moving another player, a vanilla command)
 //! and comes while it is not waits for the start of the next tick ([`Pending`]).
+mod inventory;
 mod players;
 mod server;
 mod worlds;

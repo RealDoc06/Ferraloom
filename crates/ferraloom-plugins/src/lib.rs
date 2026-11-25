@@ -13,7 +13,7 @@
 //! (`horizon-client/src/game/plugins.rs`).
 //!
 //! One module per API area, each with its host trait, its natives and its
-//! event calls: [`players`], [`worlds`], [`server`]. [`bridge`] holds the JVM
+//! event calls: [`players`], [`worlds`], [`server`], [`inventory`]. [`bridge`] holds the JVM
 //! and the lifecycle.
 
 mod bridge;
@@ -30,6 +30,9 @@ mod worlds;
 pub use bridge::{Config, WorldSpec, console_command, disable, enable, running, start, tick};
 pub use commands::command_tree;
 pub use events::{Event, listens};
+pub use inventory::{
+    Click, Holder, InventoryHost, inventory_click, inventory_close, inventory_open,
+};
 pub use lent::{borrow_lent, lend};
 pub use players::{Joined, PlayerHost, chat, player_command, player_join, player_quit};
 pub use server::ServerHost;
@@ -57,6 +60,6 @@ pub struct Location {
 /// Host methods are leaves: they never call into plugins themselves. A host
 /// method that would fire an event lends itself to that dispatch, never the
 /// host it was called through.
-pub trait PluginHost: PlayerHost + WorldHost + ServerHost {}
+pub trait PluginHost: PlayerHost + WorldHost + ServerHost + InventoryHost {}
 
-impl<T: PlayerHost + WorldHost + ServerHost + ?Sized> PluginHost for T {}
+impl<T: PlayerHost + WorldHost + ServerHost + InventoryHost + ?Sized> PluginHost for T {}

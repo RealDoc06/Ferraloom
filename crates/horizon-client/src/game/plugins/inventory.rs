@@ -1,0 +1,643 @@
+//! The inventory area: players' inventories, plugins' containers and the
+//! menus that show them; container clicks, opens and closes.
+use super::GameHost;
+use crate::game::{Game, lan::LanHost};
+use ferraloom_plugins::{Click, Holder, InventoryHost, PlayerId};
+use horizon_client::{
+    items::ItemStack,
+    lan::{
+        guest::Guest,
+        menu::{Slots, input},
+        plugin_containers,
+    },
+};
+use horizon_protocol::packets::play::{self, Clientbound as C};
+use horizon_world::nbt::Tag;
+
+/// The y of the key a plugin container's menu is kept under: no block, so
+/// no lid opens and no reach check closes it.
+const PLUGIN_KEY_Y: i32 = -200_000;
+
+/// The slots of a player as Bukkit's `PlayerInventory` numbers them.
+struct Parts<'a> {
+    inventory: &'a mut Vec<Option<ItemStack>>,
+    armor: &'a mut [Option<ItemStack>; 4],
+    offhand: &'a mut Option<ItemStack>,
+    selected: &'a mut usize,
+    carried: &'a mut Option<ItemStack>,
+}
+
+impl Parts<'_> {
+    /// 0-35 the inventory (hotbar first), 36-39 boots to helmet, 40 the off hand.
+    fn slot(&mut self, slot: usize) -> Option<&mut Option<ItemStack>> {
+        match slot {
+            0..=35 => self.inventory.get_mut(slot),
+            36..=39 => Some(&mut self.armor[39 - slot]),
+            40 => Some(&mut *self.offhand),
+            _ => None,
+        }
+    }
+}
+
+impl GameHost<'_, '_> {
+    /// The player's slots: the game's own while it is their turn, else their record's.
+    fn parts(&mut self, id: PlayerId) -> Option<Parts<'_>> {
+        if self.game.lan_acting_uuid == Some(id) {
+            let g = &mut *self.game;
+            return Some(Parts {
+                inventory: &mut g.inventory,
+                armor: &mut g.armor,
+                offhand: &mut g.offhand,
+                selected: &mut g.selected,
+                carried: &mut g.carried,
+            });
+        }
+        let g = self.placed(id)?;
+        Some(Parts {
+            inventory: &mut g.inventory,
+            armor: &mut g.armor,
+            offhand: &mut g.offhand,
+            selected: &mut g.selected,
+            carried: &mut g.carried,
+        })
+    }
+
+    fn placed(&mut self, id: PlayerId) -> Option<&mut Guest> {
+        let hub = self.hub()?;
+        hub.hub.guests.iter_mut().find(|g| g.uuid == id && g.placed)
+    }
+
+    /// `f` with the game and the hub apart, wherever the hub is now.
+    fn split<R>(&mut self, f: impl FnOnce(&mut Game, &mut LanHost) -> R) -> Option<R> {
+        if let Some(hub) = self.hub.as_deref_mut() {
+            return Some(f(self.game, hub));
+        }
+        let mut hub = self.game.lan.take()?;
+        let r = f(self.game, &mut hub);
+        self.game.lan = Some(hub);
+        Some(r)
+    }
+
+    /// The game's world and the hub, both to read.
+    fn world_and_hub(&self) -> Option<(&horizon_client::world::World, &LanHost)> {
+        let hub: &LanHost = match &self.hub {
+            Some(h) => h,
+            None => self.game.lan.as_ref()?,
+        };
+        Some((&self.game.world, hub))
+    }
+}
+
+impl InventoryHost for GameHost<'_, '_> {
+    fn inventory_size(&mut self, at: Holder) -> Option<usize> {
+        match at {
+            Holder::Player(id) => self.parts(id).map(|_| 41),
+            Holder::Ender(id) => self.placed(id).map(|g| g.ender_items.len()),
+            Holder::Crafting(id) => self.placed(id).map(|_| 5),
+            Holder::Custom(id) => plugin_containers::size(id),
+            Holder::Menu(id) => self.placed(id)?.menu.as_ref().map(|m| m.size),
+            Holder::Block { world, pos } => {
+                let key = (pos[0], pos[1], pos[2]);
+                (world == super::world_index(self.game.dim))
+                    .then(|| self.game.world.block_entities.get(&key))
+                    .flatten()
+                    .map(|e| e.slots().len())
+            }
+        }
+    }
+
+    fn slot(&mut self, at: Holder, slot: usize) -> Option<ItemStack> {
+        match at {
+            Holder::Player(id) => self.parts(id)?.slot(slot)?.clone(),
+            Holder::Ender(id) => self.placed(id)?.ender_items.get(slot)?.clone(),
+            Holder::Crafting(id) => self.placed(id).and_then(|g| g.menu_slot(slot)),
+            Holder::Custom(id) => plugin_containers::get(id, slot),
+            Holder::Menu(id) => {
+                let (world, hub) = self.world_and_hub()?;
+                let g = hub.hub.guests.iter().find(|g| g.uuid == id && g.placed)?;
+                let m = g.menu.as_ref().filter(|m| slot < m.size)?;
+                m.slots.get(world, g, slot)
+            }
+            Holder::Block { world, pos } => {
+                if world != super::world_index(self.game.dim) {
+                    return None;
+                }
+                let e = self
+                    .game
+                    .world
+                    .block_entities
+                    .get(&(pos[0], pos[1], pos[2]))?;
+                e.slots().get(slot)?.clone()
+            }
+        }
+    }
+
+    fn set_slot(&mut self, at: Holder, slot: usize, item: Option<ItemStack>) -> bool {
+        match at {
+            Holder::Player(id) => match self.parts(id).as_mut().and_then(|p| p.slot(slot)) {
+                Some(s) => {
+                    *s = item;
+                    true
+                }
+                None => false,
+            },
+            Holder::Ender(id) => match self.placed(id).and_then(|g| g.ender_items.get_mut(slot)) {
+                Some(s) => {
+                    *s = item;
+                    true
+                }
+                None => false,
+            },
+            Holder::Crafting(id) => match self.placed(id) {
+                Some(g) if slot < 5 => {
+                    g.set_menu_slot(slot, item);
+                    true
+                }
+                _ => false,
+            },
+            Holder::Custom(id) => plugin_containers::set(id, slot, item),
+            Holder::Menu(id) => self
+                .split(|game, hub| {
+                    let Some(g) = hub.hub.guests.iter_mut().find(|g| g.uuid == id && g.placed)
+                    else {
+                        return false;
+                    };
+                    let Some(m) = g.menu.as_ref().filter(|m| slot < m.size) else {
+                        return false;
+                    };
+                    let slots = m.slots;
+                    let Some(mut items) = slots.read(&game.world, g) else {
+                        return false;
+                    };
+                    items[slot] = item;
+                    slots.write(&mut game.world, g, items);
+                    if let Slots::Block(key) | Slots::Double(key, _) = slots {
+                        game.container_changed(key);
+                    }
+                    true
+                })
+                .unwrap_or(false),
+            Holder::Block { world, pos } => {
+                if world != super::world_index(self.game.dim) {
+                    return false;
+                }
+                let key = (pos[0], pos[1], pos[2]);
+                let Some(e) = self.game.world.block_entities.get_mut(&key) else {
+                    return false;
+                };
+                let Some(s) = e.slots_mut().get_mut(slot) else {
+                    return false;
+                };
+                *s = item;
+                self.game.container_changed(key);
+                true
+            }
+        }
+    }
+
+    fn held_slot(&mut self, player: PlayerId) -> Option<usize> {
+        self.parts(player).map(|p| *p.selected)
+    }
+
+    fn set_held_slot(&mut self, player: PlayerId, slot: usize) -> bool {
+        if slot > 8 {
+            return false;
+        }
+        let Some(p) = self.parts(player) else {
+            return false;
+        };
+        *p.selected = slot;
+        // ServerPlayer's inventory.setSelectedSlot, told to the client at once.
+        if let Some(g) = self.placed(player) {
+            g.sent_selected = slot;
+            g.send(&C::SetHeldSlot(play::SetHeldSlot { slot: slot as i32 }));
+        }
+        true
+    }
+
+    fn cursor(&mut self, player: PlayerId) -> Option<ItemStack> {
+        self.parts(player)?.carried.clone()
+    }
+
+    fn set_cursor(&mut self, player: PlayerId, item: Option<ItemStack>) -> bool {
+        let Some(p) = self.parts(player) else {
+            return false;
+        };
+        *p.carried = item.clone();
+        self.split(|_, hub| {
+            let net = hub.hub.stack(&item);
+            if let Some(g) = hub.hub.guests.iter_mut().find(|g| g.uuid == player) {
+                g.send(&C::SetCursorItem(play::SetCursorItem { item: net }));
+            }
+        });
+        true
+    }
+
+    fn create_container(&mut self, size: usize) -> u32 {
+        plugin_containers::create(size)
+    }
+
+    fn drop_container(&mut self, id: u32) {
+        plugin_containers::remove(id);
+    }
+
+    fn open_container(&mut self, player: PlayerId, at: Holder, menu: &str, title: Tag) -> bool {
+        let dim = super::world_index(self.game.dim);
+        self.split(|game, hub| {
+            let Some(g) = hub.hub.guests.iter().find(|g| g.uuid == player && g.placed) else {
+                return false;
+            };
+            let conn = g.conn;
+            let (slots, pos) = match at {
+                Holder::Custom(id) => (Slots::Custom(id), (i32::MIN, PLUGIN_KEY_Y, id as i32)),
+                Holder::Block { world, pos } if world == dim => {
+                    let key = (pos[0], pos[1], pos[2]);
+                    (Slots::Block(key), key)
+                }
+                _ => return false,
+            };
+            let Some(items) = slots.read(&game.world, g) else {
+                return false;
+            };
+            // ServerPlayer.openMenu closes the menu that was open.
+            game.guest_container_closed(hub, conn);
+            game.lan_station_closed(hub, conn, None);
+            hub.hub.open_container(conn, menu, title, pos, slots, items);
+            true
+        })
+        .unwrap_or(false)
+    }
+
+    fn close_container(&mut self, player: PlayerId) -> bool {
+        self.split(|game, hub| {
+            let Some(gi) = hub
+                .hub
+                .guests
+                .iter()
+                .position(|g| g.uuid == player && g.placed)
+            else {
+                return false;
+            };
+            let conn = hub.hub.guests[gi].conn;
+            let open = hub.hub.guests[gi].menu.is_some();
+            if open {
+                game.guest_container_closed(hub, conn);
+                hub.hub.close_container(conn);
+            }
+            let closed = open
+                || game.lan_station_closed(hub, conn, None)
+                || game.lan_crafting_closed(hub, conn, None)
+                || game.lan_merchant_closed(hub, conn, None)
+                || game.lan_mount_closed(hub, conn, None);
+            if closed {
+                game.guest_carried_back(hub, gi);
+            }
+            closed
+        })
+        .unwrap_or(false)
+    }
+
+    fn resend_inventory(&mut self, player: PlayerId) {
+        self.split(|_, hub| {
+            let Some(gi) = hub
+                .hub
+                .guests
+                .iter()
+                .position(|g| g.uuid == player && g.placed)
+            else {
+                return;
+            };
+            hub.hub.send_inventory(gi);
+            // An open menu's slots all go again at the end of the tick.
+            if let Some(m) = hub.hub.guests[gi].menu.as_mut() {
+                m.sent.clear();
+            }
+        });
+    }
+}
+
+/// The `InventoryType` of a menu's top.
+fn top_type(game: &Game, slots: Slots) -> &'static str {
+    let key = match slots {
+        Slots::Ender => return "ENDER_CHEST",
+        Slots::Custom(_) => return "CHEST",
+        Slots::Double(..) => return "CHEST",
+        Slots::Block(key) => key,
+    };
+    let name = &game
+        .res
+        .facts()
+        .get(game.world.block(key.0, key.1, key.2))
+        .name;
+    match name.trim_start_matches("minecraft:") {
+        "barrel" => "BARREL",
+        "dispenser" => "DISPENSER",
+        "dropper" => "DROPPER",
+        "hopper" => "HOPPER",
+        "furnace" => "FURNACE",
+        "blast_furnace" => "BLAST_FURNACE",
+        "smoker" => "SMOKER",
+        "brewing_stand" => "BREWING",
+        "crafter" => "CRAFTER",
+        n if n.ends_with("shulker_box") => "SHULKER_BOX",
+        _ => "CHEST",
+    }
+}
+
+/// The top of a guest's open menu as Bukkit names it.
+fn top(game: &Game, g: &Guest, window: i32) -> Option<(Holder, &'static str, usize)> {
+    if window == 0 {
+        return Some((Holder::Crafting(g.uuid), "CRAFTING", 5));
+    }
+    let m = g.menu.as_ref().filter(|m| m.window == window)?;
+    // A single block's container is the block's, as its InventoryOpenEvent named it.
+    let holder = match m.slots {
+        Slots::Custom(id) => Holder::Custom(id),
+        Slots::Ender => Holder::Ender(g.uuid),
+        Slots::Block(key) => Holder::Block {
+            world: super::world_index(game.dim),
+            pos: [key.0, key.1, key.2],
+        },
+        Slots::Double(..) => Holder::Menu(g.uuid),
+    };
+    Some((holder, top_type(game, m.slots), m.size))
+}
+
+impl Game<'_> {
+    fn plugin_max_stack(&self, item: &ItemStack) -> u32 {
+        self.res.items().get(&item.item).map_or(64, |i| i.max_stack)
+    }
+
+    /// `Slot.mayPlace` as the click reads it: an armour slot takes its
+    /// armour only, a result slot nothing.
+    fn plugin_may_place(&self, window: i32, slot: usize, item: &ItemStack) -> bool {
+        if window != 0 {
+            return true;
+        }
+        match slot {
+            0 => false,
+            5..=8 => {
+                let wanted = ["head", "chest", "legs", "feet"][slot - 5];
+                self.res
+                    .items()
+                    .get(&item.item)
+                    .and_then(|i| i.equip_slot.as_deref())
+                    == Some(wanted)
+            }
+            _ => true,
+        }
+    }
+
+    /// CraftBukkit's reading of a container click
+    /// (`ServerGamePacketListenerImpl.handleContainerClick`): its `ClickType`
+    /// and `InventoryAction`, from the slots before the click.
+    fn plugin_click_kind(
+        &self,
+        g: &Guest,
+        p: &play::ContainerClick,
+        size: usize,
+    ) -> (&'static str, &'static str) {
+        let window = p.container;
+        let (slot, button) = (i32::from(p.slot), i32::from(p.button));
+        let item = |slot: i32| -> Option<ItemStack> {
+            let slot = usize::try_from(slot).ok()?;
+            if window == 0 {
+                return g.menu_slot(slot);
+            }
+            let m = g.menu.as_ref()?;
+            if slot < size {
+                return m.slots.get(&self.world, g, slot);
+            }
+            let n = slot - size;
+            let index = if n < 27 { 9 + n } else { n - 27 };
+            g.inventory.get(index).cloned().flatten()
+        };
+        let in_inventory = |slot: i32| {
+            if window == 0 {
+                slot >= 5
+            } else {
+                slot >= size as i32
+            }
+        };
+        let slot_max = |slot: i32| {
+            if window == 0 && (5..=8).contains(&slot) {
+                1
+            } else {
+                99
+            }
+        };
+        let carried = g.carried.as_ref();
+        match p.input {
+            input::PICKUP => {
+                let click = match button {
+                    0 => "LEFT",
+                    1 => "RIGHT",
+                    _ => return ("UNKNOWN", "UNKNOWN"),
+                };
+                let left = button == 0;
+                let action = if slot == -999 {
+                    match carried {
+                        Some(_) if left => "DROP_ALL_CURSOR",
+                        Some(_) => "DROP_ONE_CURSOR",
+                        None => "NOTHING",
+                    }
+                } else if slot < 0 {
+                    "NOTHING"
+                } else {
+                    match (item(slot), carried) {
+                        (None, None) => "NOTHING",
+                        (None, Some(_)) if left => "PLACE_ALL",
+                        (None, Some(_)) => "PLACE_ONE",
+                        (Some(_), None) if left => "PICKUP_ALL",
+                        (Some(_), None) => "PICKUP_HALF",
+                        (Some(clicked), Some(cursor))
+                            if self.plugin_may_place(window, slot as usize, cursor) =>
+                        {
+                            if clicked.same_item_same_components(cursor) {
+                                let wanted = if left { cursor.count as i64 } else { 1 };
+                                let room =
+                                    self.plugin_max_stack(&clicked) as i64 - clicked.count as i64;
+                                let to_place = wanted.min(room).min(99 - clicked.count as i64);
+                                match to_place {
+                                    1 => "PLACE_ONE",
+                                    n if n == cursor.count as i64 => "PLACE_ALL",
+                                    -1 => "PICKUP_ONE",
+                                    n if n < 0 => "PICKUP_SOME",
+                                    0 => "NOTHING",
+                                    _ => "PLACE_SOME",
+                                }
+                            } else if cursor.count <= slot_max(slot) {
+                                "SWAP_WITH_CURSOR"
+                            } else {
+                                "NOTHING"
+                            }
+                        }
+                        (Some(clicked), Some(cursor)) => {
+                            if cursor.same_item_same_components(&clicked)
+                                && clicked.count + cursor.count <= self.plugin_max_stack(cursor)
+                            {
+                                "PICKUP_ALL"
+                            } else {
+                                "NOTHING"
+                            }
+                        }
+                    }
+                };
+                (click, action)
+            }
+            input::QUICK_MOVE => {
+                let click = match button {
+                    0 => "SHIFT_LEFT",
+                    1 => "SHIFT_RIGHT",
+                    _ => return ("UNKNOWN", "UNKNOWN"),
+                };
+                let action = if slot >= 0 && item(slot).is_some() {
+                    "MOVE_TO_OTHER_INVENTORY"
+                } else {
+                    "NOTHING"
+                };
+                (click, action)
+            }
+            input::SWAP if (0..9).contains(&button) || button == 40 => {
+                let click = if button == 40 {
+                    "SWAP_OFFHAND"
+                } else {
+                    "NUMBER_KEY"
+                };
+                let hotbar = if button == 40 {
+                    g.offhand.clone()
+                } else {
+                    g.inventory.get(button as usize).cloned().flatten()
+                };
+                let clicked = item(slot);
+                let fits =
+                    |h: &ItemStack| slot >= 0 && self.plugin_may_place(window, slot as usize, h);
+                let action = match (&clicked, &hotbar) {
+                    (Some(_), None) => "HOTBAR_SWAP",
+                    (Some(_), Some(h)) if in_inventory(slot) && fits(h) => "HOTBAR_SWAP",
+                    (Some(_), Some(_)) => "HOTBAR_MOVE_AND_READD",
+                    (None, Some(h)) if fits(h) => "HOTBAR_SWAP",
+                    _ => "NOTHING",
+                };
+                (click, action)
+            }
+            input::CLONE if button == 2 => {
+                let clone = slot >= 0 && item(slot).is_some() && g.creative() && carried.is_none();
+                ("MIDDLE", if clone { "CLONE_STACK" } else { "NOTHING" })
+            }
+            input::THROW if slot >= 0 => {
+                let some = item(slot).is_some();
+                match button {
+                    0 => ("DROP", if some { "DROP_ONE_SLOT" } else { "NOTHING" }),
+                    1 => (
+                        "CONTROL_DROP",
+                        if some { "DROP_ALL_SLOT" } else { "NOTHING" },
+                    ),
+                    _ => ("UNKNOWN", "UNKNOWN"),
+                }
+            }
+            input::THROW => (if button == 1 { "RIGHT" } else { "LEFT" }, "NOTHING"),
+            input::PICKUP_ALL => {
+                let collect = slot >= 0
+                    && carried.is_some_and(|c| {
+                        let total = if window == 0 { 46 } else { size as i32 + 36 };
+                        (0..total).any(|s| item(s).is_some_and(|i| i.item == c.item))
+                    });
+                (
+                    "DOUBLE_CLICK",
+                    if collect {
+                        "COLLECT_TO_CURSOR"
+                    } else {
+                        "NOTHING"
+                    },
+                )
+            }
+            _ => ("UNKNOWN", "UNKNOWN"),
+        }
+    }
+
+    /// CraftBukkit's InventoryClickEvent in handleContainerClick, before
+    /// `AbstractContainerMenu.clicked`: true when a plugin cancelled the
+    /// click, which then changes nothing and the client is corrected
+    /// (every slot it claims and the cursor, as after any click). Drags
+    /// (`QUICK_CRAFT`) fire InventoryDragEvent instead; menus the game runs
+    /// itself (crafting table, anvil, trading...) fire nothing yet.
+    pub(in crate::game) fn plugin_click(
+        &mut self,
+        host: &mut LanHost,
+        conn: u32,
+        p: &play::ContainerClick,
+    ) -> bool {
+        if p.input == input::QUICK_CRAFT {
+            return false;
+        }
+        let Some(g) = host.hub.guest(conn).filter(|g| g.placed && !g.spectator()) else {
+            return false;
+        };
+        let Some((top, top_type, size)) = top(self, g, p.container) else {
+            return false;
+        };
+        let (click, action) = self.plugin_click_kind(g, p, size);
+        let event = Click {
+            player: g.uuid,
+            top,
+            top_type,
+            raw_slot: i32::from(p.slot),
+            click,
+            action,
+            hotbar_key: if click == "NUMBER_KEY" {
+                i32::from(p.button)
+            } else {
+                -1
+            },
+        };
+        let cancelled =
+            ferraloom_plugins::inventory_click(&mut GameHost::new(self, Some(host)), &event);
+        if cancelled {
+            host.hub.inventory_clicked(conn, p, &self.world, &[]);
+        }
+        cancelled
+    }
+
+    /// InventoryOpenEvent as a guest's container is about to open
+    /// (`ServerPlayer.openMenu`): true when a plugin cancelled it.
+    pub(in crate::game) fn plugin_opening(
+        &mut self,
+        host: &mut LanHost,
+        conn: u32,
+        slots: Slots,
+    ) -> bool {
+        let Some(id) = host.hub.guest(conn).map(|g| g.uuid) else {
+            return false;
+        };
+        let holder = match slots {
+            Slots::Custom(c) => Holder::Custom(c),
+            Slots::Ender => Holder::Ender(id),
+            Slots::Block(key) | Slots::Double(key, _) => Holder::Block {
+                world: super::world_index(self.dim),
+                pos: [key.0, key.1, key.2],
+            },
+        };
+        let kind = top_type(self, slots);
+        ferraloom_plugins::inventory_open(&mut GameHost::new(self, Some(host)), id, holder, kind)
+    }
+
+    /// InventoryCloseEvent as the client closes its window (`handleContainerClose`).
+    /// Always false: the close goes on.
+    pub(in crate::game) fn plugin_closed(
+        &mut self,
+        host: &mut LanHost,
+        conn: u32,
+        window: i32,
+    ) -> bool {
+        let Some(g) = host.hub.guest(conn).filter(|g| g.placed) else {
+            return false;
+        };
+        let Some((top, kind, _)) = top(self, g, window) else {
+            return false;
+        };
+        let id = g.uuid;
+        ferraloom_plugins::inventory_close(&mut GameHost::new(self, Some(host)), id, top, kind);
+        false
+    }
+}

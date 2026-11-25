@@ -18,3 +18,4 @@ org.bukkit.generator.structure.StructureType
 # Inventory.
 org.bukkit.inventory.ItemFactory
 org.bukkit.inventory.meta.ItemMeta
+org.bukkit.inventory.Inventory

@@ -6,17 +6,23 @@
 //!   plugin_bot --server 127.0.0.1:25565 --name Tester
 //!
 //! Input lines: `command <line>` (no slash), `chat <text>`, `dig <x> <y> <z>`
-//! (a creative player's START_DESTROY_BLOCK on the top face), `quit`.
+//! (a creative player's START_DESTROY_BLOCK on the top face), `click <window>
+//! <slot> <button> <mode>` (a container click, claiming what a vanilla client
+//! predicts for a left pickup), `close <window>`, `quit`.
 //! Output lines: `joined`, `pos <x> <y> <z>` for each teleport, `chat <text>`
 //! for each system message (its plain text), `block <x> <y> <z> <state>`,
 //! `commands ftest=<bool>` for each command tree (whether it names `ftest`),
-//! `disconnected <why>`.
+//! `open <window> <title>`, `content <window> <slot>=<item>...` (the
+//! non-empty slots), `slot <window> <slot> <item>`, `cursor <item>`, `close
+//! <window>` (an item is `<id>x<count>`, with `name=<text>` and `lore=<lines>`
+//! when it has them, or `empty`), `disconnected <why>`.
 use horizon_protocol::{
     PROTOCOL_VERSION,
     buf::{Reader, Writer},
     connection::{ConnWriter, Connection},
     crypto::offline_uuid,
     ids,
+    item::{Component, Hashed, Stack, component},
     packets::{
         Empty, configuration,
         handshake::{self, Intention},
@@ -26,6 +32,7 @@ use horizon_protocol::{
 };
 use horizon_world::nbt::Tag;
 use std::{
+    collections::HashMap,
     io::{BufRead, Write},
     sync::{Arc, Mutex},
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -151,6 +158,29 @@ fn plain(tag: &Tag, out: &mut String) {
     }
 }
 
+/// The open windows' slots and state ids, and the cursor, as the server told them.
+#[derive(Default)]
+struct Windows {
+    slots: HashMap<i32, (i32, Vec<Option<Stack>>)>,
+    cursor: Option<Stack>,
+}
+
+fn describe(s: &Option<Stack>) -> String {
+    let Some(s) = s else {
+        return "empty".into();
+    };
+    let mut out = format!("{}x{}", s.item, s.count);
+    if let Some(Component::Text(name)) = s.component(component::CUSTOM_NAME) {
+        let mut text = String::new();
+        plain(name, &mut text);
+        out.push_str(&format!(" name={text}"));
+    }
+    if let Some(Component::Lore(lines)) = s.component(component::LORE) {
+        out.push_str(&format!(" lore={}", lines.len()));
+    }
+    out
+}
+
 fn raw(id: i32, write: impl FnOnce(&mut Writer)) -> Vec<u8> {
     let mut w = Writer::new();
     w.varint(id);
@@ -159,7 +189,11 @@ fn raw(id: i32, write: impl FnOnce(&mut Writer)) -> Vec<u8> {
 }
 
 /// The play state: answers what a client must, prints what the test checks.
-fn read(mut reader: horizon_protocol::connection::ConnReader, writer: Arc<Mutex<ConnWriter>>) {
+fn read(
+    mut reader: horizon_protocol::connection::ConnReader,
+    writer: Arc<Mutex<ConnWriter>>,
+    windows: Arc<Mutex<Windows>>,
+) {
     use ids::play::clientbound as cb;
     use ids::play::serverbound as sb;
     let send = |body: Vec<u8>| writer.lock().unwrap().send(&body);
@@ -232,6 +266,56 @@ fn read(mut reader: horizon_protocol::connection::ConnReader, writer: Arc<Mutex<
                 }
                 Ok(())
             }
+            cb::OPEN_SCREEN
+            | cb::CONTAINER_SET_CONTENT
+            | cb::CONTAINER_SET_SLOT
+            | cb::SET_CURSOR_ITEM
+            | cb::CONTAINER_CLOSE => {
+                let mut w = windows.lock().unwrap();
+                match play::Clientbound::decode(id, &body) {
+                    Ok(play::Clientbound::OpenScreen(p)) => {
+                        let mut title = String::new();
+                        plain(&p.title, &mut title);
+                        say(format!("open {} {title}", p.container));
+                    }
+                    Ok(play::Clientbound::ContainerSetContent(p)) => {
+                        let filled: Vec<String> = p
+                            .items
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, s)| s.is_some())
+                            .map(|(i, s)| format!("{i}={}", describe(s)))
+                            .collect();
+                        say(format!("content {} {}", p.container, filled.join(" ")));
+                        w.slots.insert(p.container, (p.state, p.items));
+                        w.cursor = p.carried;
+                    }
+                    Ok(play::Clientbound::ContainerSetSlot(p)) => {
+                        say(format!(
+                            "slot {} {} {}",
+                            p.container,
+                            p.slot,
+                            describe(&p.item)
+                        ));
+                        if let Some((state, items)) = w.slots.get_mut(&p.container) {
+                            *state = p.state;
+                            if let Some(s) = items.get_mut(p.slot as usize) {
+                                *s = p.item;
+                            }
+                        }
+                    }
+                    Ok(play::Clientbound::SetCursorItem(p)) => {
+                        say(format!("cursor {}", describe(&p.item)));
+                        w.cursor = p.item;
+                    }
+                    Ok(play::Clientbound::ContainerClose(p)) => {
+                        say(format!("close {}", p.container));
+                        w.slots.remove(&p.container);
+                    }
+                    _ => {}
+                }
+                Ok(())
+            }
             cb::DISCONNECT | cb::START_CONFIGURATION => {
                 say(format!("disconnected packet {id}"));
                 std::process::exit(0);
@@ -269,9 +353,10 @@ fn main() {
     };
     let (reader, writer) = connection.split();
     let writer = Arc::new(Mutex::new(writer));
+    let windows = Arc::new(Mutex::new(Windows::default()));
     std::thread::spawn({
-        let writer = writer.clone();
-        move || read(reader, writer)
+        let (writer, windows) = (writer.clone(), windows.clone());
+        move || read(reader, writer, windows)
     });
     let mut sequence = 0;
     for line in std::io::stdin().lock().lines() {
@@ -308,6 +393,39 @@ fn main() {
                     sequence,
                 })
             }
+            "click" => {
+                let v: Vec<i32> = rest.split(' ').filter_map(|v| v.parse().ok()).collect();
+                let [window, slot, button, input] = v[..] else {
+                    eprintln!("plugin_bot: click <window> <slot> <button> <mode>");
+                    continue;
+                };
+                let mut w = windows.lock().unwrap();
+                let Windows { slots, cursor } = &mut *w;
+                let (state, items) = slots.entry(window).or_default();
+                let mut changed = Vec::new();
+                let mut carried = cursor.as_ref().map(Hashed::of);
+                // A vanilla client's prediction of a left pickup or put.
+                if input == 0
+                    && button == 0
+                    && let Some(s) = items.get_mut(slot as usize)
+                {
+                    std::mem::swap(s, cursor);
+                    changed.push((slot as i16, s.as_ref().map(Hashed::of)));
+                    carried = cursor.as_ref().map(Hashed::of);
+                }
+                play::Serverbound::ContainerClick(play::ContainerClick {
+                    container: window,
+                    state: *state,
+                    slot: slot as i16,
+                    button: button as i8,
+                    input,
+                    changed,
+                    carried,
+                })
+            }
+            "close" => play::Serverbound::ContainerClose(play::ContainerClose {
+                container: rest.trim().parse().unwrap_or(0),
+            }),
             "quit" => break,
             _ => {
                 eprintln!("plugin_bot: unknown input {line:?}");

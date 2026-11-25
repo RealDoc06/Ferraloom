@@ -437,6 +437,11 @@ final class FerraloomServer extends StubServer {
 
     @Override public <T extends org.bukkit.Keyed> org.bukkit.Registry<T> getRegistry(Class<T> type) { return FerraloomRegistries.get(type); } // Ferraloom: registries (blocks-worlds area, FerraloomRegistries)
     @Override public org.bukkit.inventory.ItemFactory getItemFactory() { return FerraloomItemFactory.INSTANCE; } // Ferraloom: items (inventory area, FerraloomItemFactory)
+    // Ferraloom: plugins' containers (inventory area, FerraloomInventories).
+    @Override public org.bukkit.inventory.Inventory createInventory(org.bukkit.inventory.InventoryHolder holder, int size) { return FerraloomInventories.create(holder, size, null); }
+    @Override public org.bukkit.inventory.Inventory createInventory(org.bukkit.inventory.InventoryHolder holder, int size, String title) { return FerraloomInventories.create(holder, size, title); }
+    @Override public org.bukkit.inventory.Inventory createInventory(org.bukkit.inventory.InventoryHolder holder, org.bukkit.event.inventory.InventoryType type) { return FerraloomInventories.create(holder, type, null); }
+    @Override public org.bukkit.inventory.Inventory createInventory(org.bukkit.inventory.InventoryHolder holder, org.bukkit.event.inventory.InventoryType type, String title) { return FerraloomInventories.create(holder, type, title); }
 
     @Override
     public void shutdown() {

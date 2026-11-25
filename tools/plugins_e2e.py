@@ -12,7 +12,9 @@ server twice on a fresh flat world:
    events and messages, the command tree, a command's reply from a player and from the console, a stub's
    UnsupportedOperationException, chat format and cancel with listener priorities and ignoreCancelled,
    a cancelled block break leaving the block (and resending it) and an uncancelled one breaking it,
-   getLocation and teleport.
+   getLocation and teleport, a chest GUI a command opens (its title, its items' names, lore and plugin
+   data) with a cancelled click leaving both sides as they were and an uncancelled one taking the item,
+   its close event, and a held item written through as CraftItemStack's mirror is.
 
     python3 tools/plugins_e2e.py --engine target/release/horizon-client --bot target/release/examples/plugin_bot
 
@@ -271,6 +273,38 @@ def check_plugins(engine, bot_binary, built, out, scratch):
         bot.send('command ftest where')
         bot.out.wait_for(r'^chat at world 10\.5 -50\.0 10\.5$', start=mark)
         print('getLocation, teleport: ok')
+
+        # A chest GUI a command opens: its title and its items' names and lore reach the client.
+        mark, log_mark = len(bot.out.lines), len(log.lines)
+        bot.send('command ftest gui')
+        _, opened = bot.out.wait_for(r'^open (\d+) Ferraloom GUI$', start=mark)
+        window = opened.split()[1]
+        log.wait_for(r'\[FerraloomTest\] event: open \S*Ferraloom GUI gui=true', start=log_mark)
+        _, content = bot.out.wait_for(rf'^content {window} ', start=mark)
+        emerald = re.search(r'\b13=(\d+)x1 name=Buy lore=1\b', content)
+        if not emerald or not re.search(r'\b0=\d+x2\b', content):
+            raise Failed(f'GUI content: {content}')
+        # A cancelled click on the priced emerald: the plugin sees it, nothing moves, the client is corrected.
+        mark, log_mark = len(bot.out.lines), len(log.lines)
+        bot.send(f'click {window} 13 0 0')
+        log.wait_for(r'event: click gui raw=13 LEFT PICKUP_ALL CONTAINER current=EMERALD price=5 '
+                     r'title=\S*Ferraloom GUI cancelled=true', start=log_mark)
+        bot.out.wait_for(rf'^slot {window} 13 {emerald.group(1)}x1 name=Buy lore=1$', start=mark)
+        bot.out.wait_for(r'^cursor empty$', start=mark)
+        # An uncancelled click takes the diamonds onto the cursor.
+        log_mark = len(log.lines)
+        bot.send(f'click {window} 0 0 0')
+        log.wait_for(r'event: click gui raw=0 LEFT PICKUP_ALL CONTAINER current=DIAMOND price=null '
+                     r'title=\S*Ferraloom GUI cancelled=false', start=log_mark)
+        mark = len(bot.out.lines)
+        bot.send('command ftest cursor')
+        bot.out.wait_for(r'^chat cursor DIAMOND 2$', start=mark)
+        bot.send(f'close {window}')
+        log.wait_for(r'event: close \S*Ferraloom GUI gui=true', start=log_mark)
+        # The held item a plugin reads is the slot's: taking two of five leaves three.
+        bot.send('command ftest hand')
+        bot.out.wait_for(r'^chat hand 3 true$', start=mark)
+        print('chest GUI: open, names and lore, cancelled and uncancelled clicks, close; held item mirror: ok')
 
         # The player leaves.
         mark = len(log.lines)

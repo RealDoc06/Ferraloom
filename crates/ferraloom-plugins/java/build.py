@@ -39,6 +39,7 @@ IMPLEMENTATIONS = [
     # Inventory.
     'dev.ferraloom.bukkit.FerraloomItemFactory',
     'dev.ferraloom.bukkit.FerraloomItemMeta',
+    'dev.ferraloom.bukkit.FerraloomInventory',
 ]
 # The bridge's own checks in tests/ (a main that throws on failure), run after the bridge compiles.
 TESTS = [

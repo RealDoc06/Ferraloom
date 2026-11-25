@@ -1178,6 +1178,12 @@ impl Game<'_> {
         // ServerPlayer.openMenu closes the menu that was open.
         self.guest_container_closed(host, conn);
         self.lan_station_closed(host, conn, None);
+        // Ferraloom: InventoryOpenEvent; a cancelled one opens nothing.
+        if ferraloom_plugins::listens(ferraloom_plugins::Event::InventoryOpen)
+            && self.plugin_opening(host, conn, slots)
+        {
+            return false;
+        }
         host.hub.open_container(
             conn,
             menu,
@@ -1583,6 +1589,10 @@ impl Game<'_> {
                     });
                 }
             }
+            // Ferraloom: InventoryClickEvent, before any menu takes the click.
+            S::ContainerClick(p)
+                if ferraloom_plugins::listens(ferraloom_plugins::Event::InventoryClick)
+                    && self.plugin_click(host, conn, &p) => {}
             S::ContainerClick(p) if self.lan_merchant_click(host, conn, &p) => {}
             S::ContainerClick(p) if self.lan_inventory_click(host, conn, &p) => {}
             S::ContainerClick(p) if self.lan_crafting_click(host, conn, &p) => {}
@@ -1610,6 +1620,10 @@ impl Game<'_> {
             }
             S::SetBeacon(p) => self.lan_station_beacon(host, conn, p.primary, p.secondary),
             S::SelectTrade(p) => self.lan_select_trade(host, conn, p.item),
+            // Ferraloom: InventoryCloseEvent; never takes the close.
+            S::ContainerClose(p)
+                if ferraloom_plugins::listens(ferraloom_plugins::Event::InventoryClose)
+                    && self.plugin_closed(host, conn, p.container) => {}
             S::ContainerClose(p) if self.lan_merchant_closed(host, conn, Some(p.container)) => {
                 self.guest_carried_back(host, gi);
             }
