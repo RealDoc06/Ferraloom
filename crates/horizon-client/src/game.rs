@@ -4449,11 +4449,7 @@ impl Game<'_> {
         let Some(component) = horizon_client::cooldowns::component(stack, default.as_ref()) else {
             return;
         };
-        let group = horizon_client::cooldowns::group(stack, default.as_ref());
-        self.cooldowns.add(Arc::clone(&group), component.ticks());
-        if self.lan_acting.is_some() {
-            self.guest_cooldowns.push((group, component.ticks()));
-        }
+        self.add_item_cooldown(stack, component.ticks());
     }
     /// One hand's turn in `startUseItem`: `useItemOn` the block aimed at,
     /// then `useItem`. Whether the click ends here (it acted or failed).

@@ -180,7 +180,14 @@ impl Game<'_> {
             // Another player's melee hit has no mob behind it.
             if let Some((from, disable)) = self.combat.player_attacker {
                 let fully = outcome.blocked >= damage;
-                self.blocked_by_attacker(&component, [from[0], from[2]], fully, disable, at);
+                self.blocked_by_attacker(
+                    &stack,
+                    &component,
+                    [from[0], from[2]],
+                    fully,
+                    disable,
+                    at,
+                );
             }
             return;
         };
@@ -226,7 +233,23 @@ impl Game<'_> {
             let _ = self.handle_mob_events(events);
             return;
         }
-        self.blocked_by_attacker(&component, [mx, mz], fully, disable, at);
+        self.blocked_by_attacker(&stack, &component, [mx, mz], fully, disable, at);
+    }
+    /// `ItemCooldowns.addCooldown(stack, ticks)`: the stack's cooldown group
+    /// (its `use_cooldown` group, else its item) starts an entry, and a
+    /// server's guest is sent it at its turn's end
+    /// (`ServerItemCooldowns.onCooldownStarted`).
+    pub(super) fn add_item_cooldown(&mut self, stack: &ItemStack, ticks: i32) {
+        let default = self
+            .res
+            .items()
+            .get(&stack.item)
+            .and_then(|i| i.use_cooldown.as_ref());
+        let group = horizon_client::cooldowns::group(stack, default);
+        self.cooldowns.add(std::sync::Arc::clone(&group), ticks);
+        if self.lan_acting.is_some() {
+            self.guest_cooldowns.push((group, ticks));
+        }
     }
 
     /// What a blocked melee hit does to the defender once the shield took
@@ -234,6 +257,7 @@ impl Game<'_> {
     /// blocked, then `Player.blockUsingItem` disables the shield.
     fn blocked_by_attacker(
         &mut self,
+        blocking_with: &ItemStack,
         component: &horizon_client::items::BlocksAttacks,
         attacker: [f64; 2],
         fully: bool,
@@ -265,7 +289,10 @@ impl Game<'_> {
             0
         };
         if ticks > 0 {
+            // `shield_cooldown` keeps the raise gate (and lan_e2e's view);
+            // the item cooldown is vanilla's, and what the client is sent.
             self.shield_cooldown = ticks;
+            self.add_item_cooldown(blocking_with, ticks as i32);
             self.using = None;
             if let Some(sound) = &component.disabled_sound {
                 let pitch = 0.8 + self.world.random.next_float() * 0.4;
