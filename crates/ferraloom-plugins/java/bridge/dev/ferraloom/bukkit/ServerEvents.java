@@ -61,4 +61,15 @@ public final class ServerEvents {
             return NONE;
         }
     }
+
+    /** The operator list changed (`/op`, `/deop`, a plugin): every online player's permissions again, as CraftBukkit's sendPlayerPermissionLevel. */
+    public static void opsChanged() {
+        try {
+            for (org.bukkit.entity.Player p : Bridge.server.getOnlinePlayers()) {
+                p.recalculatePermissions();
+            }
+        } catch (Throwable ex) {
+            Bridge.log(ex, "recalculating permissions");
+        }
+    }
 }

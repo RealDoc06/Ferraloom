@@ -49,7 +49,7 @@ pub use players::{
 };
 pub use server::{
     Ban, BanTarget, List, PluginBossBar, Profile, ServerHost, ServerLists, WhitelistFlag,
-    boss_bars_for, hidden_commands, set_lists, tab_complete, take_command_updates,
+    boss_bars_for, hidden_commands, ops_changed, set_lists, tab_complete, take_command_updates,
 };
 pub use worlds::{Border, Change, Query, Sound, WorldHost, chunk_event, save_event, weather_event};
 

@@ -87,9 +87,12 @@ pub enum Out {
 }
 
 /// PlayerList.canPlayerLogin for a dedicated server: the disconnect reason
-/// (bans, whitelist) for a profile connecting from an address, if refused.
+/// (bans, whitelist, then a full server: the last argument says whether it is
+/// full for this profile) for a profile connecting from an address, if refused.
+/// Ferraloom: the gate decides the full server too, so PlayerLoginEvent sees
+/// KICK_FULL and a plugin may let the player in, as CraftBukkit's does.
 pub type LoginGate =
-    Arc<dyn Fn(SocketAddr, u128, &str) -> Option<horizon_world::nbt::Tag> + Send + Sync>;
+    Arc<dyn Fn(SocketAddr, u128, &str, bool) -> Option<horizon_world::nbt::Tag> + Send + Sync>;
 
 /// online-mode=true: the key pair the server made at startup
 /// (MinecraftServer.initializeKeyPair) and how players are verified.
@@ -249,21 +252,23 @@ impl Shared {
         uuid: u128,
         name: &str,
     ) -> Option<horizon_world::nbt::Tag> {
+        let full = {
+            let online = self.online.lock().unwrap();
+            let bypass = self.config.bypasses_limit.as_ref().is_some_and(|b| b(uuid));
+            let taken = online.len() + self.reserved.lock().unwrap().len();
+            taken >= self.max_players() && !bypass
+        };
         if let Some(gate) = &self.config.gate
-            && let Some(reason) = gate(address, uuid, name)
+            && let Some(reason) = gate(address, uuid, name, full)
         {
             return Some(reason);
         }
         if self.reserved.lock().unwrap().contains(&uuid) {
             return Some(translatable("multiplayer.disconnect.duplicate_login", &[]));
         }
-        {
-            let online = self.online.lock().unwrap();
-            let bypass = self.config.bypasses_limit.as_ref().is_some_and(|b| b(uuid));
-            let taken = online.len() + self.reserved.lock().unwrap().len();
-            if taken >= self.max_players() && !bypass {
-                return Some(translatable("multiplayer.disconnect.server_full", &[]));
-            }
+        // Ferraloom: with a gate, the gate decided the full server.
+        if full && self.config.gate.is_none() {
+            return Some(translatable("multiplayer.disconnect.server_full", &[]));
         }
         if self.is_online(uuid) {
             let _ = self.events.send(NetEvent::Duplicate(uuid));

@@ -13,7 +13,7 @@ pub use bossbars::{PluginBossBar, boss_bars_for};
 use jni::{
     JNIEnv,
     objects::{JClass, JObjectArray, JString, JValue},
-    signature::ReturnType,
+    signature::{Primitive, ReturnType},
     sys::{JNI_FALSE, jboolean, jlong},
 };
 pub use lists::{Ban, BanTarget, List, Profile, ServerLists, WhitelistFlag, set_lists};
@@ -24,9 +24,10 @@ use std::{
 
 const TAB_COMPLETE: usize = 0;
 const HIDDEN_COMMANDS: usize = 1;
+const OPS_CHANGED: usize = 2;
 
 /// `ServerEvents`' entry points.
-static EVENTS: OnceLock<Entry<2>> = OnceLock::new();
+static EVENTS: OnceLock<Entry<3>> = OnceLock::new();
 
 /// What `Server` and the console read and change of the game.
 pub trait ServerHost {
@@ -77,10 +78,32 @@ pub(crate) fn load(env: &mut JNIEnv) -> jni::errors::Result<()> {
         [
             ("tabComplete", format!("(JJ{S})[{S}")),
             ("hiddenCommands", format!("(JJ)[{S}")),
+            ("opsChanged", "()V".to_owned()),
         ],
     )?;
     let _ = EVENTS.set(entry);
     Ok(())
+}
+
+/// The operator list changed: every online player's Bukkit permissions are
+/// recalculated (CraftBukkit does it in sendPlayerPermissionLevel), before
+/// their command trees are filtered again. One JNI call; nothing without plugins.
+pub fn ops_changed() {
+    let Some(events) = EVENTS.get() else {
+        return;
+    };
+    bridge::call_unlent(|env| {
+        // SAFETY: `opsChanged`'s signature in `load`.
+        unsafe {
+            events.invoke(
+                env,
+                OPS_CHANGED,
+                ReturnType::Primitive(Primitive::Void),
+                &[],
+            )
+        }?;
+        Ok(())
+    });
 }
 
 /// Players whose command tree is to be sent again, from any thread.

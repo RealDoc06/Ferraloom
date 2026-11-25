@@ -599,13 +599,17 @@ impl Game<'_> {
         self.streaming.radius = self.settings.render_distance;
         self.settle_spawn()?;
         let gate_lists = lists.clone();
-        let gate: LoginGate = Arc::new(move |address, uuid, name| {
+        let gate: LoginGate = Arc::new(move |address, uuid, name, full| {
             let user = NameAndId {
                 id: uuid,
                 name: name.to_owned(),
             };
             let mut lists = gate_lists.lock().unwrap();
-            let (refused, op) = (lists.can_login(address, &user), lists.ops.contains(&user));
+            // PlayerList.canPlayerLogin: bans, the whitelist, then a full server.
+            let refused = lists
+                .can_login(address, &user)
+                .or_else(|| full.then(|| translatable("multiplayer.disconnect.server_full", &[])));
+            let op = lists.ops.contains(&user);
             drop(lists);
             // Ferraloom: AsyncPlayerPreLoginEvent and PlayerLoginEvent (game/plugins/players.rs).
             super::plugins::login(address, uuid, name, op, refused)
@@ -856,6 +860,8 @@ impl Game<'_> {
             .iter()
             .map(|e| (e.user.id, e.level as u8))
             .collect();
+        // Ferraloom: plugins' permissions follow before the trees are filtered (CraftBukkit's sendPlayerPermissionLevel).
+        ferraloom_plugins::ops_changed();
         host.hub.resend_commands();
     }
 

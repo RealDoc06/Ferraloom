@@ -403,7 +403,7 @@ final class FerraloomServer extends StubServer {
         return command instanceof PluginCommand pc ? pc : null;
     }
 
-    /** CraftServer.dispatchCommand: a plugin's command, else vanilla's (run as the console). */
+    /** CraftServer.dispatchCommand: a plugin's command, else vanilla's as the sender (the console or a player). */
     @Override
     public boolean dispatchCommand(CommandSender sender, String commandLine) {
         if (!isPrimaryThread()) {
@@ -414,6 +414,10 @@ final class FerraloomServer extends StubServer {
         }
         if (sender instanceof ConsoleCommandSender) {
             return ServerNative.dispatchVanilla(commandLine);
+        }
+        if (sender instanceof FerraloomPlayer player) {
+            // A vanilla command as the player, as their own chat command runs (PlayerNative.command).
+            return player.performCommand(commandLine);
         }
         throw new UnsupportedOperationException(
                 "Ferraloom does not implement Server.dispatchCommand(CommandSender, String) yet for vanilla commands run by players");

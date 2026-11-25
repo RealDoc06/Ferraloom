@@ -23,7 +23,7 @@ server twice on a fresh flat world:
    (its title, its items' names, lore and plugin data) with a cancelled click leaving both sides as they
    were and an uncancelled one taking the item, its close event, and a held item written through as
    CraftItemStack's mirror is; the server area: a command hidden from a player without its permission, tab
-   completion (a TabCompleter, TabCompleteEvent), a boss bar shown and removed,
+   completion (a TabCompleter, Bukkit's player-name default, TabCompleteEvent), a boss bar shown and removed,
    an offline player's op, whitelist and ban round trip (the ban seen by vanilla's /banlist), and the
    watchdog naming a plugin that stalls the server thread.
 
@@ -251,12 +251,13 @@ def check_plugins(engine, bot_binary, built, out, scratch):
         bot.out.wait_for(rf'^chat pong {PLAYER}$', start=bot_mark)
         print('NMS adapter reached: plugin disabled in one line, others run: ok')
 
-        # Tab completion: the plugin's TabCompleter, then TabCompleteEvent. (Bukkit's player-name default
-        # needs Player.canSee, the players area's.)
+        # Tab completion: the plugin's TabCompleter for the first word, Bukkit's player names after it.
         mark = len(bot.out.lines)
         bot.send('suggest ftest pr')
         bot.out.wait_for(r'^suggestions 7 2 protect$', start=mark)
         log.wait_for(r'\[FerraloomTest\] event: tab /ftest pr -> \[protect\]')
+        bot.send(f'suggest ftest ping {PLAYER[:2]}')
+        bot.out.wait_for(rf'^suggestions 12 2 {PLAYER}$', start=mark)
         print('tab completion, TabCompleteEvent: ok')
 
         # A plugin's boss bar, shown to the player and taken off.

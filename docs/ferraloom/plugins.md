@@ -211,8 +211,11 @@ the baseline is the coordinator's next step; budget: no measurable MSPT differen
   player's permissions, tab completion of plugin commands (`TabCompleter`, `TabCompleteEvent`), server.properties
   getters (view distance, allow flight, world type, idle timeout...), spawn limits, `spigot().getConfig()`
   (defaults), `UnsafeValues.getDataVersion`. List changes are saved at once; an operator's new level and
-  commands reach them at the next tick. The methods `FerraloomPlayer` can delegate its own to are in
-  `FerraloomLists` (`isOp`, `setOp`, `isWhitelisted`, `setWhitelisted`, `isBanned`, `hasPlayedBefore`, `played`).
+  commands reach them at the next tick; `/op` and `/deop` recalculate online players' Bukkit permissions first,
+  as CraftBukkit's sendPlayerPermissionLevel does. `Player`'s op, ban and whitelist methods answer from the
+  same lists (`FerraloomLists`). `dispatchCommand` runs a vanilla command as a player too. A full server is
+  decided with the bans and the whitelist (PlayerList.canPlayerLogin's order), so `PlayerLoginEvent` sees
+  `KICK_FULL` and a plugin may let the player in, as on CraftBukkit.
 
 - Items (inventory area): `ItemStack` to and from the server as one `byte[]` (`ItemStack.CODEC` in network NBT;
   `src/inventory.rs` `to_java`/`from_java`, Java `Items.read`/`write`). The meta is the item's component patch
