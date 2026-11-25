@@ -36,6 +36,7 @@ use std::sync::{Arc, atomic::Ordering};
 
 /// GameEvent types (ClientboundGameEventPacket).
 pub mod chat;
+pub mod player_meta;
 
 pub mod game_event {
     pub const START_RAINING: u8 = 1;
@@ -2970,6 +2971,7 @@ impl Hub {
         // client's (ClientPacketListener.handleRespawn).
         g.effects = Default::default();
         g.sent_effects.clear();
+        g.meta.respawned();
         g.center = None;
         Arc::make_mut(&mut g.sent_chunks).clear();
         g.sent_bounds.clear();

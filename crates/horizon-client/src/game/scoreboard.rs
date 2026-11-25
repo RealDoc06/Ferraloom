@@ -20,16 +20,59 @@ use horizon_client::{
 use horizon_world::nbt::Tag;
 use std::collections::HashSet;
 
-/// What `ServerPlayer` last recorded for the criteria that follow the player.
-#[derive(Default)]
-pub(super) struct Recorded {
-    /// `lastRecordedHealthAndAbsorption` (compared as a float).
-    health_and_absorption: Option<f32>,
-    food: Option<i32>,
-    air: Option<i32>,
-    armor: Option<i32>,
-    xp: Option<i32>,
-    level: Option<i32>,
+// What `ServerPlayer` last recorded for the criteria that follow the
+// player (`lastRecordedHealthAndAbsorption`, compared as a float, and the
+// others); a guest's is on its `Guest`.
+use horizon_client::lan::hub::player_meta::RecordedCriteria as Recorded;
+
+/// The values `ServerPlayer.doTick` writes to the criteria that follow a player.
+struct Criteria {
+    health_and_absorption: f32,
+    food: i32,
+    air: i32,
+    /// `getArmorValue`: the armor attribute rounded down.
+    armor: i32,
+    xp: i32,
+    level: i32,
+}
+
+/// `ServerPlayer.doTick`'s `updateScoreForCriteria`: each value that changed
+/// since `rec` last recorded it goes to every objective of its criteria for
+/// `name`, shown as `display` (made only when something changed).
+fn record_criteria(
+    board: &mut Scoreboard,
+    rec: &mut Recorded,
+    name: &str,
+    display: impl FnOnce(&Scoreboard) -> Comp,
+    now: Criteria,
+) {
+    let mut display = Some(display);
+    let mut shown: Option<Comp> = None;
+    let mut show = |board: &Scoreboard| -> Comp {
+        if let Some(make) = display.take() {
+            shown = Some(make(board));
+        }
+        shown.clone().unwrap_or_else(|| literal(name))
+    };
+    if rec.health_and_absorption != Some(now.health_and_absorption) {
+        rec.health_and_absorption = Some(now.health_and_absorption);
+        let value = now.health_and_absorption.ceil() as i32;
+        let d = show(board);
+        board.for_all_objectives_with(sb::CRITERIA_HEALTH, name, Some(&d), |_| value);
+    }
+    for (criteria, last, value) in [
+        (sb::CRITERIA_FOOD, &mut rec.food, now.food),
+        (sb::CRITERIA_AIR, &mut rec.air, now.air),
+        (sb::CRITERIA_ARMOR, &mut rec.armor, now.armor),
+        (sb::CRITERIA_XP, &mut rec.xp, now.xp),
+        (sb::CRITERIA_LEVEL, &mut rec.level, now.level),
+    ] {
+        if *last != Some(value) {
+            *last = Some(value);
+            let d = show(board);
+            board.for_all_objectives_with(criteria, name, Some(&d), |_| value);
+        }
+    }
 }
 #[derive(Default)]
 pub(super) struct ScoreState {
@@ -346,6 +389,7 @@ impl Game<'_> {
             return;
         }
         self.load_scoreboard();
+        self.guest_criteria(host);
         host.hub.teams.clone_from(&self.score.board.teams);
         let view = horizon_client::lan::scoreboard::View::of(&self.score.board);
         for g in host.hub.guests.iter_mut().filter(|g| g.placed) {
@@ -353,6 +397,33 @@ impl Game<'_> {
                 g.send_all(&g.scoreboard.changes(&view));
                 g.scoreboard = view.clone();
             }
+        }
+    }
+    /// Ferraloom: `ServerPlayer.doTick`'s criteria for each player on the
+    /// server, under their own name. Recorded every tick as vanilla does,
+    /// with or without objectives, so an objective made later starts empty
+    /// until the value changes.
+    fn guest_criteria(&mut self, host: &mut super::lan::LanHost) {
+        let board = &mut self.score.board;
+        for g in host.hub.guests.iter_mut().filter(|g| g.placed) {
+            let Some(m) = g.motion.as_mut() else {
+                continue;
+            };
+            let now = Criteria {
+                health_and_absorption: g.health + m.health.absorption(),
+                food: g.food,
+                air: m.air,
+                armor: armor_value(m),
+                xp: g.xp_total,
+                level: g.xp_level,
+            };
+            let name = g.name.as_str();
+            // Player.getDisplayName: the name with the team's prefix, suffix and colour.
+            let display = |board: &Scoreboard| match board.players_team(name) {
+                Some(t) => t.formatted_name_comp(&literal(name)),
+                None => literal(name),
+            };
+            record_criteria(board, &mut g.meta.recorded, name, display, now);
         }
     }
     /// `ServerPlayer.doTick` score updates and the statistic criteria.
@@ -364,44 +435,16 @@ impl Game<'_> {
         if !board.objectives.is_empty() {
             let display = self.player_display_comp();
             if let Some(p) = self.player.as_mut() {
-                let health_and_absorption = p.health.health() + p.health.absorption();
-                let food = p.health.food.food;
-                // getArmorValue: the armor attribute rounded down.
-                let armor = p
-                    .attribute("minecraft:armor")
-                    .or_else(|_| p.attribute("armor"))
-                    .unwrap_or(0.0)
-                    .floor() as i32;
-                let rec = &mut self.score.recorded;
-                let board = &mut self.score.board;
-                if rec.health_and_absorption != Some(health_and_absorption) {
-                    rec.health_and_absorption = Some(health_and_absorption);
-                    let value = health_and_absorption.ceil() as i32;
-                    board.for_all_objectives_with(
-                        sb::CRITERIA_HEALTH,
-                        PLAYER_NAME,
-                        Some(&display),
-                        |_| value,
-                    );
-                }
-                for (criteria, last, value) in [
-                    (sb::CRITERIA_FOOD, &mut rec.food, food),
-                    // The air supply is full unless the player is drowning.
-                    (sb::CRITERIA_AIR, &mut rec.air, 300),
-                    (sb::CRITERIA_ARMOR, &mut rec.armor, armor),
-                    (sb::CRITERIA_XP, &mut rec.xp, self.experience.total),
-                    (sb::CRITERIA_LEVEL, &mut rec.level, self.experience.level),
-                ] {
-                    if *last != Some(value) {
-                        *last = Some(value);
-                        board.for_all_objectives_with(
-                            criteria,
-                            PLAYER_NAME,
-                            Some(&display),
-                            |_| value,
-                        );
-                    }
-                }
+                let now = Criteria {
+                    health_and_absorption: p.health.health() + p.health.absorption(),
+                    food: p.health.food.food,
+                    air: p.air,
+                    armor: armor_value(p),
+                    xp: self.experience.total,
+                    level: self.experience.level,
+                };
+                let (board, rec) = (&mut self.score.board, &mut self.score.recorded);
+                record_criteria(board, rec, PLAYER_NAME, |_| display, now);
             }
         }
         if self.ticks.is_multiple_of(20) {
@@ -862,4 +905,12 @@ mod tab_list_tests {
         assert_eq!(players[1].game_mode, 1);
         assert_eq!(players[1].latency, 123);
     }
+}
+
+/// `LivingEntity.getArmorValue`: the armor attribute rounded down.
+fn armor_value(p: &mut horizon_client::motion::PlayerMotion) -> i32 {
+    p.attribute("minecraft:armor")
+        .or_else(|_| p.attribute("armor"))
+        .unwrap_or(0.0)
+        .floor() as i32
 }
