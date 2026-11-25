@@ -482,6 +482,8 @@ fn tick_entity(
     m.previous_swell = m.swell;
     m.anim.begin_tick();
     m.age += 1;
+    // LivingEntity.tick: stuck arrows and stingers fall out (Ferraloom).
+    m.stuck.tick();
     m.ai.seen_cache.clear();
     if m.ai.last_hurt_by_player > 0 {
         m.ai.last_hurt_by_player -= 1;

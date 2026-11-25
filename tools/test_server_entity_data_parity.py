@@ -37,8 +37,6 @@ except ImportError:
 NAME = 'server-entity-data-parity'
 # Cases Horizon still gets wrong, and why.
 KNOWN = {
-    'arrow-mob': 'no arrow count on mobs',
-    'sting-mob': 'no stinger count on mobs',
     'fillbiome': 'ClientboundChunksBiomesPacket never sent',
     'falling-sand': 'ClientboundAddTransientBlockPacket never sent',
     'arrow-player': "a player's arrow count is kept (PlayerMotion.stuck) but not yet sent: the player's entity data is "

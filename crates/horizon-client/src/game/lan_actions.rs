@@ -2929,6 +2929,8 @@ impl Game<'_> {
             // LivingEntity.aiStep: a Riptide spin counts down on the server's
             // copy too, or it would stay in the spin pose (eye 0.4) for good.
             w.player.count_down_server_spin();
+            // Ferraloom: LivingEntity.tick lets stuck arrows and stingers go.
+            w.player.stuck.tick();
             // Player.tick ends with updatePlayerPose: a swimmer, or a player
             // crawling under a block, takes the short box its moves are checked with.
             let _ = w.update_player_pose();

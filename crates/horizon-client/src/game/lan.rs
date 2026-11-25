@@ -432,6 +432,14 @@ fn mob_meta(
     );
     defaults.push((10, serializer::PARTICLES, Value::Particles(Vec::new())));
     defaults.push((11, serializer::BOOLEAN, Value::Bool(false)));
+    // LivingEntity.DATA_ARROW_COUNT_ID and DATA_STINGER_COUNT_ID: what the
+    // client draws stuck in it (Ferraloom).
+    for (index, count) in [(12, m.stuck.arrows), (13, m.stuck.stingers)] {
+        if count > 0 {
+            meta.push((index, serializer::INT, Value::Int(i32::from(count))));
+        }
+        defaults.push((index, serializer::INT, Value::Int(0)));
+    }
     // Mob.DATA_MOB_FLAGS_ID: no AI 1, left-handed 2, aggressive 4 (what
     // draws a vindicator's axe, a skeleton's drawn bow, a piglin's raised
     // weapon).
