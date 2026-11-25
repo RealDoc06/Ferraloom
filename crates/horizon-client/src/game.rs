@@ -1745,7 +1745,6 @@ struct Game<'a> {
     saving_indicator: horizon_client::hud_overlays::SavingIndicator,
     /// This game's world is autosaving this tick (`MinecraftServer.isSaving`).
     autosaving: bool,
-    applied_modifiers: Vec<(String, String)>,
     experience: Experience,
     orbs: Vec<ExperienceOrb>,
     xp_delay: u32,
@@ -4450,11 +4449,7 @@ impl Game<'_> {
         let Some(component) = horizon_client::cooldowns::component(stack, default.as_ref()) else {
             return;
         };
-        let group = horizon_client::cooldowns::group(stack, default.as_ref());
-        self.cooldowns.add(Arc::clone(&group), component.ticks());
-        if self.lan_acting.is_some() {
-            self.guest_cooldowns.push((group, component.ticks()));
-        }
+        self.add_item_cooldown(stack, component.ticks());
     }
     /// One hand's turn in `startUseItem`: `useItemOn` the block aimed at,
     /// then `useItem`. Whether the click ends here (it acted or failed).
@@ -8725,8 +8720,7 @@ impl Game<'_> {
         ((self.attack_ticks as f32 + 0.5) / delay).clamp(0.0, 1.0)
     }
     /// `Player.isSweepAttack`: a charged, grounded sword hit below the movement limit.
-    pub(super) fn sweep_attack_position(&self, scale: f32, crit: bool) -> Option<[f64; 3]> {
-        let p = self.player.as_ref()?;
+    pub(super) fn sweep_attack_position(&mut self, scale: f32, crit: bool) -> Option<[f64; 3]> {
         let sword = self.held().is_some_and(|s| {
             self.res
                 .items()
@@ -8734,7 +8728,13 @@ impl Game<'_> {
                 .get("minecraft:swords")
                 .is_some_and(|tag| tag.contains(&*s.item))
         });
-        if !p.is_sweep_attack(scale, crit, sword) {
+        // getKnownMovement and getSpeed (the movement speed attribute), not
+        // the body's velocity and `speed` field, which a server player's
+        // client-driven body leaves unset.
+        let movement = self.known_player_movement();
+        let p = self.player.as_mut()?;
+        let speed = p.attribute("minecraft:movement_speed").ok()? as f32;
+        if !p.is_sweep_attack(scale, crit, sword, movement, speed) {
             return None;
         }
         let yaw = f64::from(self.yaw.to_radians());
@@ -9707,45 +9707,6 @@ impl Game<'_> {
         self.pickups.clear();
         self.riding = None;
         self.persist = Default::default();
-    }
-    /// Equipment attribute modifiers (LivingEntity.collectEquipmentChanges).
-    fn apply_equipment(&mut self) {
-        let Some(player) = self.player.as_mut() else {
-            return;
-        };
-        for (attribute, id) in std::mem::take(&mut self.applied_modifiers) {
-            let _ = player.set_modifier(&attribute, &id, 0.0, "add_value", false);
-        }
-        let slots = ["head", "chest", "legs", "feet"];
-        let mut equipped: Vec<(Option<&ItemStack>, &str)> = self
-            .armor
-            .iter()
-            .zip(slots)
-            .map(|(s, n)| (s.as_ref(), n))
-            .collect();
-        equipped.push((self.inventory[self.selected].as_ref(), "mainhand"));
-        for (stack, slot) in equipped {
-            let Some(info) = stack.and_then(|s| self.res.items().get(&s.item)) else {
-                continue;
-            };
-            for (attribute, id, amount, op, group) in &info.modifiers {
-                let matches = group == slot
-                    || group == "any"
-                    || (group == "armor" && slot != "mainhand")
-                    || (group == "hand" && slot == "mainhand");
-                // Main-hand attack modifiers are read by the attack code directly.
-                if !matches || slot == "mainhand" {
-                    continue;
-                }
-                if player
-                    .set_modifier(attribute, id, *amount, op, true)
-                    .is_ok()
-                {
-                    self.applied_modifiers.push((attribute.clone(), id.clone()));
-                }
-            }
-        }
-        self.apply_enchantment_attributes();
     }
     /// The armor hits among a tick's motion events (`Player.hurtArmor` from
     /// `getDamageAfterArmorAbsorb`), whatever the damage: a mob, an explosion,
@@ -14084,7 +14045,6 @@ impl<'a> Game<'a> {
             tool_highlight: Default::default(),
             saving_indicator: Default::default(),
             autosaving: false,
-            applied_modifiers: Vec::new(),
             experience: Experience::default(),
             orbs: Vec::new(),
             xp_delay: 0,
