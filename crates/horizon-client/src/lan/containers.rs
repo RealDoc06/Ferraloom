@@ -148,6 +148,43 @@ impl Hub {
         }
     }
 
+    /// `ChunkMap.sendToTrackingPlayers`: the players in the level that track
+    /// entity `id`, each sent `packets` in order.
+    pub fn send_to_tracking(&mut self, id: i32, packets: &[C]) {
+        self.finish_tracking();
+        let bodies: Vec<Vec<u8>> = packets.iter().map(C::encode).collect();
+        for g in self
+            .guests
+            .iter()
+            .filter(|g| self.here(g) && g.tracker.is_tracking(id))
+        {
+            for body in &bodies {
+                g.sender.send(body.clone());
+            }
+        }
+    }
+
+    /// Port of FallingBlockEntity#tick's landing: the falling block's
+    /// trackers are sent the block it set (ClientboundBlockUpdatePacket,
+    /// then ClientboundAddTransientBlockPacket), so their client shows the
+    /// block from the tick the entity goes.
+    pub fn falling_block_landed(&mut self, id: i32, pos: [i32; 3], state: u32) {
+        let mut w = horizon_protocol::buf::Writer::new();
+        // BlockPos.asLong.
+        let [x, y, z] = pos.map(i64::from);
+        w.i64((x & 0x3FF_FFFF) << 38 | (z & 0x3FF_FFFF) << 12 | (y & 0xFFF));
+        w.varint(state as i32);
+        let transient = C::Unknown(
+            horizon_protocol::ids::play::clientbound::ADD_TRANSIENT_BLOCK,
+            w.data,
+        );
+        let update = C::BlockUpdate(play::BlockUpdate {
+            pos,
+            state: state as i32,
+        });
+        self.send_to_tracking(id, &[update, transient]);
+    }
+
     /// `ServerLevel.broadcastDamageEvent`: the clients around show the hurt
     /// entity's flash and hear its hurt sound.
     pub fn damage_event(

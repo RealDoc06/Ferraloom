@@ -37,7 +37,6 @@ except ImportError:
 NAME = 'server-entity-data-parity'
 # Cases Horizon still gets wrong, and why.
 KNOWN = {
-    'falling-sand': 'ClientboundAddTransientBlockPacket never sent',
     'arrow-player': "a player's arrow count is kept (PlayerMotion.stuck) but not yet sent: the player's entity data is "
                     'lan/hub.rs player_state',
 }
