@@ -2,9 +2,11 @@ name: FerraloomTest
 version: '1.0'
 main: dev.ferraloom.testplugin.TestPlugin
 api-version: '26.3'
+# STARTUP: enabled before the worlds load, so it sees WorldInitEvent and WorldLoadEvent.
+load: STARTUP
 description: The plugin the bridge's end-to-end test (tools/plugins_e2e.py) loads.
 commands:
   ftest:
     description: Ferraloom's plugin bridge test
-    usage: /ftest <ping|protect on/off|where|tp x y z|stub|state|level n|mode m|show|freeze on/off|run|kickme>
+    usage: /ftest <ping|protect on/off|where|tp x y z|block x y z|set x y z data|world|storm on/off|physics|stub|state|level n|mode m|show|freeze on/off|run|kickme>
     aliases: [ft]

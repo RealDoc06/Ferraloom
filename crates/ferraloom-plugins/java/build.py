@@ -37,6 +37,10 @@ IMPLEMENTATIONS = [
     'dev.ferraloom.bukkit.FerraloomConsole',
     'dev.ferraloom.bukkit.FerraloomScheduler',
     'dev.ferraloom.bukkit.FerraloomUnsafe',
+    # Blocks and worlds.
+    'dev.ferraloom.bukkit.FerraloomChunk',
+    'dev.ferraloom.bukkit.FerraloomWorldBorder',
+    'dev.ferraloom.bukkit.FerraloomBlockState',
 ]
 TEST_PLUGINS = {'FerraloomTest': HERE / 'test-plugin', 'FerraloomNms': HERE / 'nms-plugin'}
 

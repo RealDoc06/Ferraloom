@@ -9,7 +9,8 @@
 //! (a creative player's START_DESTROY_BLOCK on the top face), `use <x> <y> <z>`
 //! (the main hand on the top face), `move <x> <y> <z>` (a move on the ground,
 //! then the tick's end), `sneak <on|off>`, `payload <channel> <text>` (a custom
-//! payload; `minecraft:register` registers a channel), `quit`.
+//! payload; `minecraft:register` registers a channel), `place <x> <y>
+//! <z>` (stone in the first hotbar slot, used on that block's top face), `quit`.
 //! Output lines: `joined`, `pos <x> <y> <z>` for each teleport, `chat <text>`
 //! for each system message (its plain text), `actionbar <text>` for an overlay
 //! one, `title <text>`, `subtitle <text>`, `tablist <header> | <footer>`,
@@ -378,6 +379,31 @@ fn main() {
                     eprintln!("plugin_bot: use <x> <y> <z>");
                     continue;
                 };
+                sequence += 1;
+                play::Serverbound::UseItemOn(play::UseItemOn {
+                    hand: 0,
+                    pos: [x, y, z],
+                    face: 1,
+                    cursor: [0.5, 1.0, 0.5],
+                    inside: false,
+                    world_border: false,
+                    sequence,
+                })
+            }
+            "place" => {
+                let pos: Vec<i32> = rest.split(' ').filter_map(|v| v.parse().ok()).collect();
+                let [x, y, z] = pos[..] else {
+                    eprintln!("plugin_bot: place <x> <y> <z>");
+                    continue;
+                };
+                // Stone (item 1 of 26.3's registry) in the selected hotbar slot (menu slot 36).
+                let stone = play::Serverbound::SetCreativeModeSlot(play::SetCreativeModeSlot {
+                    slot: 36,
+                    item: Some(horizon_protocol::item::Stack::new(1, 64)),
+                });
+                if writer.lock().unwrap().send(&stone.encode()).is_err() {
+                    break;
+                }
                 sequence += 1;
                 play::Serverbound::UseItemOn(play::UseItemOn {
                     hand: 0,
