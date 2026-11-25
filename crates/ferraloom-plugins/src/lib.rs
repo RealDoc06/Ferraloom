@@ -31,7 +31,10 @@ pub use commands::command_tree;
 pub use events::{Event, listens};
 pub use lent::{borrow_lent, lend};
 pub use players::{Joined, PlayerHost, chat, player_command, player_join, player_quit};
-pub use server::ServerHost;
+pub use server::{
+    Ban, BanTarget, List, PluginBossBar, Profile, ServerHost, ServerLists, WhitelistFlag,
+    boss_bars_for, hidden_commands, set_lists, tab_complete,
+};
 pub use worlds::{WorldHost, block_break};
 
 /// A player as the bridge names them: their UUID.

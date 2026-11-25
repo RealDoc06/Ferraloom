@@ -37,6 +37,13 @@ IMPLEMENTATIONS = [
     'dev.ferraloom.bukkit.FerraloomConsole',
     'dev.ferraloom.bukkit.FerraloomScheduler',
     'dev.ferraloom.bukkit.FerraloomUnsafe',
+    # Server.
+    'dev.ferraloom.bukkit.FerraloomOfflinePlayer',
+    'dev.ferraloom.bukkit.FerraloomProfile',
+    'dev.ferraloom.bukkit.FerraloomProfileBans',
+    'dev.ferraloom.bukkit.FerraloomIpBans',
+    'dev.ferraloom.bukkit.FerraloomHelpMap',
+    'dev.ferraloom.bukkit.FerraloomBossBar',
 ]
 TEST_PLUGINS = {'FerraloomTest': HERE / 'test-plugin', 'FerraloomNms': HERE / 'nms-plugin'}
 # Classes a test plugin compiles against but the server lacks, written at build time and kept out of its jar

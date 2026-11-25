@@ -25,4 +25,43 @@ final class ServerNative {
 
     /** Stops the server after the current tick. */
     static native void shutdown();
+
+    // The player lists (src/server/lists.rs), answered on any thread. Lists: 0 ops, 1 whitelist, 2 banned players.
+
+    /** The user cache's {uuid, name} for a name, else the profile service's (blocking); null when neither knows it. */
+    static native String[] profileByName(String name);
+
+    /** The user cache's name for a UUID, or null; never a lookup. */
+    static native String profileById(long most, long least);
+
+    /** A list's players as {uuid, name, uuid, name...}. */
+    static native String[] listed(int list);
+
+    static native boolean isListed(int list, long most, long least);
+
+    /** Adds to or removes from the operators (list 0) or the whitelist (1); saved at once. */
+    static native void setListed(int list, long most, long least, String name, boolean on);
+
+    /** {@code white-list} (0) or {@code enforce-whitelist} (1). */
+    static native boolean whitelistFlag(int flag);
+
+    /** Changes a whitelist flag and stores it in server.properties. */
+    static native void setWhitelistFlag(int flag, boolean on);
+
+    static native void reloadWhitelist();
+
+    /** Six strings per ban: target, uuid (null for an address), created millis, expiry millis (null: never), source, reason (may be null). */
+    static native String[] bans(boolean ip);
+
+    /** Bans a player (a nonzero UUID, {@code target} their name) or an address; {@code created} and {@code expires} -1 for now and never. */
+    static native void addBan(String target, long most, long least, long created, String source, long expires, String reason);
+
+    /** Lifts the ban of a player (a nonzero UUID) or of an address. */
+    static native void pardon(String target, long most, long least);
+
+    /**
+     * A plugin boss bar's whole state (src/server/bossbars.rs), from any thread: flags bit 0 darken the sky,
+     * 1 boss music, 2 fog, 3 visible; {@code players} their UUIDs' halves. A hidden bar or one with no players is shown to no one.
+     */
+    static native void bossBar(long most, long least, String title, float progress, int color, int style, int flags, long[] players);
 }

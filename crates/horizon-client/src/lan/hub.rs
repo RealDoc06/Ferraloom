@@ -1238,7 +1238,8 @@ impl Hub {
                     g.permission,
                     dedicated,
                     &self.sync.builtin,
-                    &self.extra_commands(),
+                    // Ferraloom: per player, for plugin commands' permissions.
+                    &self.extra_commands_for(g.uuid),
                 )
             }
             None => play::Commands {

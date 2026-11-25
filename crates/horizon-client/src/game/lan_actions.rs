@@ -2285,6 +2285,10 @@ impl Game<'_> {
         let Some(permission) = host.hub.guest(conn).map(|g| g.permission) else {
             return;
         };
+        // Ferraloom: a plugin command's arguments are its TabCompleter's.
+        if self.plugin_suggestions(host, conn, id, &text) {
+            return;
+        }
         let skip = usize::from(text.starts_with('/'));
         let command = &text[skip..];
         let d = vanilla::game_dispatcher();

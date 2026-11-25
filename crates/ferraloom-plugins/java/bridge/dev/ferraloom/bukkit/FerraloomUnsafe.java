@@ -24,6 +24,12 @@ final class FerraloomUnsafe extends StubUnsafeValues {
         }
     }
 
+    /** 26.3's world data version (horizon_core's), which plugins compare item and chunk data against. */
+    @Override
+    public int getDataVersion() {
+        return 5023;
+    }
+
     /** Classes load as they are: Ferraloom rewrites no plugin bytecode. */
     @Override
     public byte[] processClass(PluginDescriptionFile pdf, String path, byte[] clazz) {

@@ -6,10 +6,13 @@
 //!   plugin_bot --server 127.0.0.1:25565 --name Tester
 //!
 //! Input lines: `command <line>` (no slash), `chat <text>`, `dig <x> <y> <z>`
-//! (a creative player's START_DESTROY_BLOCK on the top face), `quit`.
+//! (a creative player's START_DESTROY_BLOCK on the top face), `suggest <text>`
+//! (the chat box asking for completions of `/<text>`), `quit`.
 //! Output lines: `joined`, `pos <x> <y> <z>` for each teleport, `chat <text>`
 //! for each system message (its plain text), `block <x> <y> <z> <state>`,
-//! `commands ftest=<bool>` for each command tree (whether it names `ftest`),
+//! `commands ftest=<bool> fadmin=<bool>` for each command tree (whether it
+//! names those), `boss add <title> <progress>` / `boss progress <progress>` /
+//! `boss remove` for boss bars, `suggestions <start> <length> <a,b,...>`,
 //! `disconnected <why>`.
 use horizon_protocol::{
     PROTOCOL_VERSION,
@@ -218,8 +221,46 @@ fn read(mut reader: horizon_protocol::connection::ConnReader, writer: Arc<Mutex<
                 Ok(())
             }
             cb::COMMANDS => {
-                let has = body.windows(b"ftest".len()).any(|w| w == b"ftest");
-                say(format!("commands ftest={has}"));
+                let has = |name: &[u8]| body.windows(name.len()).any(|w| w == name);
+                say(format!(
+                    "commands ftest={} fadmin={}",
+                    has(b"ftest"),
+                    has(b"fadmin")
+                ));
+                Ok(())
+            }
+            cb::BOSS_EVENT => {
+                if let Ok(play::Clientbound::BossEvent(e)) = play::Clientbound::decode(id, &body) {
+                    match e.action {
+                        play::BossAction::Add { name, progress, .. } => {
+                            let mut text = String::new();
+                            plain(&name, &mut text);
+                            say(format!("boss add {text} {progress}"));
+                        }
+                        play::BossAction::UpdateProgress { progress } => {
+                            say(format!("boss progress {progress}"))
+                        }
+                        play::BossAction::Remove => say("boss remove".into()),
+                        _ => {}
+                    }
+                }
+                Ok(())
+            }
+            cb::COMMAND_SUGGESTIONS => {
+                let mut words = Vec::new();
+                let read = (|| {
+                    let (_id, start, length) = (r.varint()?, r.varint()?, r.varint()?);
+                    for _ in 0..r.varint()? {
+                        words.push(r.string(32767)?);
+                        if r.bool()? {
+                            r.nbt()?;
+                        }
+                    }
+                    Ok::<_, horizon_protocol::Error>((start, length))
+                })();
+                if let Ok((start, length)) = read {
+                    say(format!("suggestions {start} {length} {}", words.join(",")));
+                }
                 Ok(())
             }
             cb::BLOCK_UPDATE => {
@@ -307,6 +348,16 @@ fn main() {
                     direction: 1,
                     sequence,
                 })
+            }
+            "suggest" => {
+                let body = raw(ids::play::serverbound::COMMAND_SUGGESTION, |w| {
+                    w.varint(1);
+                    w.string(&format!("/{rest}"));
+                });
+                if writer.lock().unwrap().send(&body).is_err() {
+                    break;
+                }
+                continue;
             }
             "quit" => break,
             _ => {
