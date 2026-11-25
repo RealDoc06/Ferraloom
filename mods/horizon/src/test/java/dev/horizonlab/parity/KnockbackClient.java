@@ -88,7 +88,9 @@ import net.minecraft.world.phys.Vec3;
  * server sets it, teleports, the system chat (command feedback), and for
  * tools/test_server_combat_parity.py the ClientboundUpdateAttributesPacket
  * (instances sorted by attribute, as vanilla's set has no order; modifiers in
- * the packet's order) and ClientboundCooldownPacket it receives.
+ * the packet's order) and ClientboundCooldownPacket it receives, and for
+ * tools/test_server_items_parity.py the inventory's ClientboundContainerSetSlotPacket
+ * stacks with their component patch.
  */
 public final class KnockbackClient {
     private static volatile String step = "start";
@@ -375,6 +377,10 @@ public final class KnockbackClient {
                         }
                         java.util.Collections.sort(instances);
                         record("attributes " + seen.getOrDefault(a.getEntityId(), "id" + a.getEntityId()) + " " + String.join(" | ", instances));
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket s
+                        && s.getContainerId() == 0 && !s.getItem().isEmpty()) {
+                        // tools/test_server_items_parity.py: the inventory slot and its stack's component patch.
+                        record("slot " + s.getSlot() + " " + describe(s.getItem()));
                     } else if (p instanceof net.minecraft.network.protocol.game.ClientboundCooldownPacket c) {
                         record("cooldown " + c.cooldownGroup() + " " + c.duration());
                     } else if (p instanceof ClientboundSystemChatPacket c
@@ -416,6 +422,17 @@ public final class KnockbackClient {
             } catch (Exception e) {
                 if (!socket.isClosed()) record("error play " + e);
             }
+        }
+
+        /** An item, its count and its component patch, each component once, sorted. */
+        private static String describe(net.minecraft.world.item.ItemStack stack) {
+            List<String> parts = new ArrayList<>();
+            var split = stack.getComponentsPatch().split();
+            for (var c : split.added()) parts.add(c.type() + "=" + c.value());
+            for (var t : split.removed()) parts.add("!" + t);
+            java.util.Collections.sort(parts);
+            return net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()) + " x" + stack.getCount()
+                + (parts.isEmpty() ? "" : " " + String.join(" ", parts));
         }
 
         private record Received(Packet<?> packet, byte[] payload) {}
