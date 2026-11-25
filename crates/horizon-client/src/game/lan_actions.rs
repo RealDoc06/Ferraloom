@@ -93,12 +93,6 @@ pub(super) struct GuestPlay {
     xp_delay: u32,
     /// What last killed the guest outright (`/kill`): the death message's key.
     death_cause: Option<String>,
-    /// The equipment modifiers on the guest's attributes (`apply_equipment`)
-    /// and the armour and main hand they were put on for: the hub's player
-    /// is a `ServerPlayer` too, whose worn armour counts
-    /// (`LivingEntity.collectEquipmentChanges`).
-    modifiers: Vec<(String, String)>,
-    equipped: Option<Vec<Option<ItemStack>>>,
     /// The guest's cast fishing hook (`Player.fishing`).
     pub(super) hook: Option<super::fishing::Hook>,
     sculk: super::sculk::PlayerEvents,
@@ -180,8 +174,6 @@ pub(super) struct GuestSwap {
     swings: u32,
     /// How many projectiles there were: those added since are the guest's.
     projectiles: usize,
-    /// The host's equipment modifiers.
-    modifiers: Vec<(String, String)>,
 }
 
 /// Where the items guests can take lay when the guests' tick began, in cells
@@ -239,13 +231,6 @@ impl GuestPlay {
     /// The item in use: its slot and for how many ticks.
     pub(super) fn using(&self) -> Option<(usize, u32)> {
         self.using
-    }
-    /// Whether the equipment modifiers were last put on for this armour and
-    /// main hand (`apply_equipment`).
-    fn wears(&self, armor: &[Option<ItemStack>; 4], held: Option<&ItemStack>) -> bool {
-        self.equipped
-            .as_ref()
-            .is_some_and(|e| e.len() == 5 && e[..4] == armor[..] && e[4].as_ref() == held)
     }
 }
 
@@ -414,8 +399,8 @@ impl Game<'_> {
         let mut play = host.play.remove(&conn).unwrap_or_default();
         if fresh {
             // A new body (joined, respawned, changed level): nothing on it yet,
-            // its effects' modifiers and armor protection included.
-            play.equipped = None;
+            // its effects' modifiers and armor protection included (its
+            // equipment's are on `PlayerMotion::last_equipment`).
             play.potions = Default::default();
             play.sculk = Default::default();
         }
@@ -568,18 +553,8 @@ impl Game<'_> {
         let entity_events = std::mem::take(&mut self.guest_entity_events);
         let swings = self.swings_started;
         let projectiles = self.creatures.projectiles.len();
-        let modifiers = std::mem::replace(
-            &mut self.applied_modifiers,
-            std::mem::take(&mut play.modifiers),
-        );
-        // Its worn armour on its attributes, when it changed.
-        let held = self.inventory.get(self.selected).and_then(Option::as_ref);
-        if !play.wears(&self.armor, held) {
-            let mut equipped: Vec<Option<ItemStack>> = self.armor.to_vec();
-            equipped.push(held.cloned());
-            self.apply_equipment();
-            play.equipped = Some(equipped);
-        }
+        // Its equipment's modifiers on its attributes, for the slots that changed.
+        self.apply_equipment();
         // The player's effects are on the new body before anything it does
         // (the movement that brought it, a landing): vanilla keeps the same
         // entity through a level change, with its attributes and effects.
@@ -637,7 +612,6 @@ impl Game<'_> {
             entity_events,
             swings,
             projectiles,
-            modifiers,
             combat: host_combat,
         })
     }
@@ -668,9 +642,16 @@ impl Game<'_> {
             && (g.vehicle.is_some() || g.vehicle_good.is_none())
             && g.sleeping == g.bed.is_some()
             && play.stats.events.is_empty()
-            && play.wears(
-                &g.armor,
-                g.inventory.get(g.selected).and_then(Option::as_ref),
+            && super::lan_attributes::wears(
+                m,
+                [
+                    g.inventory.get(g.selected).and_then(Option::as_ref),
+                    g.offhand.as_ref(),
+                    g.armor[3].as_ref(),
+                    g.armor[2].as_ref(),
+                    g.armor[1].as_ref(),
+                    g.armor[0].as_ref(),
+                ],
             )
     }
 
@@ -772,13 +753,7 @@ impl Game<'_> {
         self.right = self.using.is_some();
         self.stat_criteria_changed(&name, stat_events);
         self.stats.unheard = self.score.board.objectives.is_empty();
-        let held = self.inventory.get(self.selected).and_then(Option::as_ref);
-        if !swap.play.wears(&self.armor, held) {
-            let mut equipped: Vec<Option<ItemStack>> = self.armor.to_vec();
-            equipped.push(held.cloned());
-            self.apply_equipment();
-            swap.play.equipped = Some(equipped);
-        }
+        self.apply_equipment();
         self.update_totem_ready();
     }
 
@@ -838,13 +813,11 @@ impl Game<'_> {
             entity_events,
             swings,
             projectiles,
-            modifiers,
         } = swap;
         self.sculk.swap_player(&mut play.sculk);
         // The guest's damage record back into their slot, the host's in place.
         let guest_combat = std::mem::replace(&mut self.combat, combat);
         self.guest_combat.insert(conn, guest_combat);
-        play.modifiers = std::mem::replace(&mut self.applied_modifiers, modifiers);
         // What the guest shot is theirs (Projectile.setOwner).
         for p in self.creatures.projectiles.iter_mut().skip(projectiles) {
             if p.owner == Some(horizon_client::mobs::Who::Player) && p.guest.is_none() {

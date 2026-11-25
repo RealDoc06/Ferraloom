@@ -6,11 +6,13 @@ use super::Game;
 use super::commands::Target;
 use horizon_client::{
     effects,
+    items::ItemStack,
     lan::attributes::{add_modifier, generic_syncable, instance, operation_named},
     mobs::{
         Mob,
         finalize::{self, Attr, Op},
     },
+    motion::PlayerMotion,
 };
 use horizon_protocol::packets::play::{AttributeModifier, AttributeSnapshot};
 use std::sync::Arc;
@@ -23,7 +25,93 @@ fn slot_in_group(group: &str, slot: &str) -> bool {
         || (group == "armor" && matches!(slot, "feet" | "legs" | "chest" | "head" | "body"))
 }
 
+/// A player's `EquipmentSlot`s in `EquipmentSlot.VALUES` order, as
+/// `PlayerMotion::last_equipment` holds them.
+const PLAYER_SLOTS: [&str; 6] = ["mainhand", "offhand", "feet", "legs", "chest", "head"];
+
+/// `ItemStack.forEachModifier(EquipmentSlot)`: the item's own modifiers for
+/// `slot`, then those of its enchantments whose slots cover it, each id
+/// suffixed with the slot (`EnchantmentAttributeEffect.idForSlot`), as
+/// (attribute, id, amount, operation).
+fn stack_modifiers(
+    items: &horizon_client::items::Items,
+    enchantments: &horizon_client::enchant::Enchantments,
+    stack: &ItemStack,
+    slot: &str,
+) -> Vec<(String, String, f64, String)> {
+    let mut out: Vec<(String, String, f64, String)> = items
+        .get(&stack.item)
+        .into_iter()
+        .flat_map(|info| &info.modifiers)
+        .filter(|m| slot_in_group(&m.4, slot))
+        .map(|(attribute, id, amount, op, _)| (attribute.clone(), id.clone(), *amount, op.clone()))
+        .collect();
+    // One row per slot group an enchantment lists: two groups covering the
+    // slot are one match (`Enchantment.matchingSlot`).
+    for (attribute, id, amount, op, group) in enchantments.modifier_rows(stack) {
+        let id = format!("{id}/{slot}");
+        if slot_in_group(&group, slot) && !out.iter().any(|m| m.0 == attribute && m.1 == id) {
+            out.push((attribute, id, amount, op));
+        }
+    }
+    out
+}
+
+/// Whether `apply_equipment` would leave the body as it is: its last stacks
+/// are `equipment` (in `PLAYER_SLOTS` order).
+pub(super) fn wears(body: &PlayerMotion, equipment: [Option<&ItemStack>; 6]) -> bool {
+    body.last_equipment
+        .iter()
+        .zip(equipment)
+        .all(|(last, now)| last.as_ref() == now)
+}
+
 impl Game<'_> {
+    /// The attribute part of `LivingEntity.detectEquipmentUpdates`
+    /// (`collectEquipmentChanges`) for the player: each slot whose stack no
+    /// longer matches the last one (`ItemStack.matches`) takes the old
+    /// stack's modifiers off, then each changed slot's new stack puts its own
+    /// on, the main hand's attack damage and speed included. Only changed
+    /// slots touch the map, so only their attributes are synced
+    /// (`getAttributesToSync`): the client's attack indicator reads the
+    /// attack speed it is sent. A diff of six stacks when nothing changed;
+    /// the last stacks live on the body (`PlayerMotion::last_equipment`), so
+    /// a new one gets everything put on again.
+    pub(super) fn apply_equipment(&mut self) {
+        let current = [
+            self.inventory.get(self.selected).and_then(Option::as_ref),
+            self.offhand.as_ref(),
+            self.armor[3].as_ref(),
+            self.armor[2].as_ref(),
+            self.armor[1].as_ref(),
+            self.armor[0].as_ref(),
+        ];
+        let Some(player) = self.player.as_mut() else {
+            return;
+        };
+        // Empty (no allocation) on the usual tick, when nothing changed.
+        let changed: Vec<usize> = (0..PLAYER_SLOTS.len())
+            .filter(|&i| current[i] != player.last_equipment[i].as_ref())
+            .collect();
+        let (items, enchantments) = (self.res.items(), &self.res.stations().enchantments);
+        let modifiers = |stack: Option<&ItemStack>, i: usize| {
+            stack.map_or_else(Vec::new, |s| {
+                stack_modifiers(items, enchantments, s, PLAYER_SLOTS[i])
+            })
+        };
+        for &i in &changed {
+            for (attribute, id, _, op) in modifiers(player.last_equipment[i].as_ref(), i) {
+                let _ = player.set_modifier(&attribute, &id, 0.0, &op, false);
+            }
+        }
+        for &i in &changed {
+            for (attribute, id, amount, op) in modifiers(current[i], i) {
+                let _ = player.set_modifier(&attribute, &id, amount, &op, true);
+            }
+            player.last_equipment[i] = current[i].cloned();
+        }
+    }
+
     /// `getAttributeValue(KNOCKBACK_RESISTANCE)` of a mob: its own value plus
     /// the modifiers of the items it wears or holds in matching slots.
     pub(super) fn mob_knockback_resistance(&self, m: &Mob) -> f64 {

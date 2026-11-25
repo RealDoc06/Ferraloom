@@ -348,6 +348,11 @@ pub struct PlayerMotion {
     pub teleported: bool,
     pub events: Vec<MotionEvent>,
     pub attributes: LiveAttributes<Box<dyn FnMut() -> i32>>,
+    /// `LivingEntity.lastEquipmentItems`: the stacks whose modifiers are on
+    /// `attributes`, in `EquipmentSlot` order (mainhand, offhand, feet, legs,
+    /// chest, head). The game's `apply_equipment` keeps it; a new body starts
+    /// with nothing on it.
+    pub last_equipment: [Option<crate::items::ItemStack>; 6],
     pub impulse: ImpulseContext,
     /// `ServerPlayer.spawnExtraParticlesOnFall`: a mace smash on a grounded
     /// target makes the next landing throw up the block below.
@@ -515,6 +520,7 @@ impl PlayerMotion {
             glide_ending: false,
             glider_wear: 0,
             location_effects: LocationEffects::default(),
+            last_equipment: Default::default(),
             auto_spin_attack_ticks: 0,
             auto_spin_attack_dmg: 0.0,
             spin_targets: Vec::new(),
