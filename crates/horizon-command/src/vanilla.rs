@@ -541,10 +541,33 @@ fn apply_vanilla_order(d: &mut Dispatcher) {
 /// (SharedConstants.DEBUG_DEV_COMMANDS), plus Horizon's own commands when
 /// the server turned them on (`set_horizon_commands`).
 pub fn game_dispatcher() -> &'static Dispatcher {
-    game_tree(
-        std::env::var_os("HORIZON_DEV_COMMANDS").is_some(),
-        HORIZON_COMMANDS.load(std::sync::atomic::Ordering::Relaxed),
-    )
+    let dev = std::env::var_os("HORIZON_DEV_COMMANDS").is_some();
+    let horizon = HORIZON_COMMANDS.load(std::sync::atomic::Ordering::Relaxed);
+    // Ferraloom: a dedicated server runs its own command selection.
+    if DEDICATED.load(std::sync::atomic::Ordering::Relaxed) {
+        return dedicated_tree(dev, horizon);
+    }
+    game_tree(dev, horizon)
+}
+/// Whether this process is a dedicated server
+/// (`Commands.CommandSelection.DEDICATED`): `game_dispatcher` then returns
+/// [`dedicated_tree`]. Set once, before the server's first command.
+static DEDICATED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+pub fn set_dedicated(on: bool) {
+    DEDICATED.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+/// The tree of a dedicated server: [`game_tree`]'s with the dedicated-only
+/// commands (`tree_server`) and without the integrated-only ones.
+pub(crate) fn dedicated_tree(dev: bool, horizon: bool) -> &'static Dispatcher {
+    static TREES: [std::sync::OnceLock<Dispatcher>; 4] = [const { std::sync::OnceLock::new() }; 4];
+    TREES[usize::from(dev) * 2 + usize::from(horizon)].get_or_init(|| {
+        let mut d = build_with(dev);
+        super::tree_server::make_dedicated(&mut d);
+        if horizon {
+            horizon_commands(&mut d, 0);
+        }
+        d
+    })
 }
 /// Whether this process's server has Horizon's own commands (`/pregen`). Off
 /// by default, so `/help` and the command tree are vanilla's; a dedicated

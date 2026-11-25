@@ -18,6 +18,7 @@ pub mod tree_execute;
 pub mod tree_extra;
 pub mod tree_misc;
 pub mod tree_scoreboard;
+pub mod tree_server;
 pub mod tree_world;
 pub mod vanilla;
 mod vanilla_order;
