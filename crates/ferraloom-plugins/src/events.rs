@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 /// The bridged events, as bits of [`listens`]: `Bridge.EVENTS`' indices in
 /// `java/bridge/dev/ferraloom/bukkit/Bridge.java`. Each area keeps its own
-/// range (players 0-15, blocks 16-31, inventory 48-55; docs/ferraloom/plugins.md, "Fan-out").
+/// range (players 0-15, blocks 16-31, worlds 32-39, inventory 48-55; docs/ferraloom/plugins.md, "Fan-out").
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u16)]
 pub enum Event {
@@ -24,6 +24,27 @@ pub enum Event {
     AsyncPlayerChat = 2,
     // Blocks.
     BlockBreak = 16,
+    BlockPlace = 17,
+    BlockPhysics = 18,
+    BlockFromTo = 19,
+    BlockBurn = 20,
+    BlockIgnite = 21,
+    BlockGrow = 22,
+    BlockFade = 23,
+    BlockForm = 24,
+    BlockSpread = 25,
+    LeavesDecay = 26,
+    BlockPistonExtend = 27,
+    BlockPistonRetract = 28,
+    BlockRedstone = 29,
+    SignChange = 30,
+    BlockExplode = 31,
+    // Worlds.
+    ChunkLoad = 32,
+    ChunkUnload = 33,
+    WeatherChange = 34,
+    ThunderChange = 35,
+    WorldSave = 36,
     // Inventory.
     InventoryClick = 48,
     InventoryDrag = 49,
@@ -35,11 +56,31 @@ pub enum Event {
 }
 
 impl Event {
-    pub const ALL: [Event; 11] = [
+    pub const ALL: [Event; 31] = [
         Event::PlayerJoin,
         Event::PlayerQuit,
         Event::AsyncPlayerChat,
         Event::BlockBreak,
+        Event::BlockPlace,
+        Event::BlockPhysics,
+        Event::BlockFromTo,
+        Event::BlockBurn,
+        Event::BlockIgnite,
+        Event::BlockGrow,
+        Event::BlockFade,
+        Event::BlockForm,
+        Event::BlockSpread,
+        Event::LeavesDecay,
+        Event::BlockPistonExtend,
+        Event::BlockPistonRetract,
+        Event::BlockRedstone,
+        Event::SignChange,
+        Event::BlockExplode,
+        Event::ChunkLoad,
+        Event::ChunkUnload,
+        Event::WeatherChange,
+        Event::ThunderChange,
+        Event::WorldSave,
         // Inventory.
         Event::InventoryClick,
         Event::InventoryDrag,
@@ -98,7 +139,7 @@ mod tests {
 
     #[test]
     fn bits_name_their_events_only() {
-        set(&[0b10 | 1 << 16 | 1 << 40, u64::MAX >> 1]);
+        set(&[0b10 | 1 << 16 | 1 << 39, u64::MAX >> 1]);
         assert!(!listens(Event::PlayerJoin));
         assert!(listens(Event::PlayerQuit));
         assert!(!listens(Event::AsyncPlayerChat));

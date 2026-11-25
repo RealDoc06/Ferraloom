@@ -2,8 +2,8 @@
 //!
 //! `ferraloom_plugins` runs the JVM and the Bukkit API; this module is the
 //! game's side: [`GameHost`], the host over `Game`, and the calls the event
-//! sites make, one file per API area (`plugins/players.rs`, `worlds.rs`,
-//! `server.rs`) as in the crate. A site in upstream code is one line behind
+//! sites make, one file per API area (`plugins/players.rs`, `blocks.rs`,
+//! `worlds.rs`, `server.rs`) as in the crate. A site in upstream code is one line behind
 //! `ferraloom_plugins::listens`, so without a listener (and always without a
 //! `plugins/` jar) it costs one branch.
 //!
@@ -13,6 +13,7 @@
 //! the packet handlers hold it and pass it in. What
 //! needs the hub in `Game::lan` (moving another player, a vanilla command)
 //! and comes while it is not waits for the start of the next tick ([`Pending`]).
+mod blocks;
 mod inventory;
 mod players;
 mod server;
@@ -38,6 +39,8 @@ enum Pending {
     Message(PlayerId, String),
     Teleport(PlayerId, Location),
     Vanilla(String),
+    /// A guest's inventory, sent again (their client predicted a change a plugin cancelled).
+    Inventory(PlayerId),
 }
 
 thread_local! {
@@ -149,6 +152,7 @@ impl Game<'_> {
     pub(super) fn enable_plugins(&mut self) {
         if ferraloom_plugins::running() {
             ferraloom_plugins::enable(&mut GameHost::new(self, None));
+            blocks::sync_level_hooks();
         }
     }
 
@@ -156,6 +160,7 @@ impl Game<'_> {
     pub(super) fn disable_plugins(&mut self) {
         if ferraloom_plugins::running() {
             ferraloom_plugins::disable(&mut GameHost::new(self, None));
+            blocks::sync_level_hooks();
         }
     }
 
@@ -175,12 +180,24 @@ impl Game<'_> {
                 Pending::Vanilla(line) => {
                     server::run_vanilla(self, &line);
                 }
+                Pending::Inventory(id) => {
+                    if let Some(host) = self.lan.as_mut()
+                        && let Some(i) = host
+                            .hub
+                            .guests
+                            .iter()
+                            .position(|g| g.uuid == id && g.placed)
+                    {
+                        host.hub.send_inventory(i);
+                    }
+                }
             }
         }
         let tick = self.ticks as i64;
         if let Some(labels) = ferraloom_plugins::tick(&mut GameHost::new(self, None), tick) {
             set_labels(self, labels);
         }
+        blocks::sync_level_hooks();
         STOP.swap(false, Ordering::Relaxed)
     }
 }

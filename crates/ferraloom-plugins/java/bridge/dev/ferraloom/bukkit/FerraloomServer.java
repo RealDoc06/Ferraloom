@@ -155,6 +155,9 @@ final class FerraloomServer extends StubServer {
                     enablePlugin(plugin);
                 }
             }
+            if (order == PluginLoadOrder.STARTUP) {
+                WorldEvents.loaded(this); // Ferraloom: worlds area, WorldInitEvent and WorldLoadEvent.
+            }
         }
         DefaultPermissions.registerCorePermissions();
     }
@@ -442,6 +445,11 @@ final class FerraloomServer extends StubServer {
     @Override public org.bukkit.inventory.Inventory createInventory(org.bukkit.inventory.InventoryHolder holder, int size, String title) { return FerraloomInventories.create(holder, size, title); }
     @Override public org.bukkit.inventory.Inventory createInventory(org.bukkit.inventory.InventoryHolder holder, org.bukkit.event.inventory.InventoryType type) { return FerraloomInventories.create(holder, type, null); }
     @Override public org.bukkit.inventory.Inventory createInventory(org.bukkit.inventory.InventoryHolder holder, org.bukkit.event.inventory.InventoryType type, String title) { return FerraloomInventories.create(holder, type, title); }
+    // Blocks area: BlockData (Blocks).
+    @Override public org.bukkit.block.data.BlockData createBlockData(org.bukkit.Material material) { return Blocks.parse(material, null); }
+    @Override public org.bukkit.block.data.BlockData createBlockData(org.bukkit.Material material, java.util.function.Consumer<? super org.bukkit.block.data.BlockData> consumer) { org.bukkit.block.data.BlockData data = createBlockData(material); if (consumer != null) { consumer.accept(data); } return data; }
+    @Override public org.bukkit.block.data.BlockData createBlockData(String data) { return Blocks.parse(null, data); }
+    @Override public org.bukkit.block.data.BlockData createBlockData(org.bukkit.Material material, String data) { return Blocks.parse(material, data); }
 
     @Override
     public void shutdown() {

@@ -26,6 +26,7 @@ const AREAS: &[fn(&mut JNIEnv) -> jni::errors::Result<()>] = &[
     crate::server::load,
     crate::players::load,
     crate::worlds::load,
+    crate::blocks::load,
     crate::inventory::load,
 ];
 

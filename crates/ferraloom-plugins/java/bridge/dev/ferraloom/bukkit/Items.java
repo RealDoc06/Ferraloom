@@ -32,7 +32,10 @@ public final class Items {
         return stack == null ? new ItemStack(Material.AIR) : stack;
     }
 
-    /** Air of any kind: no item (Material.isAir without the block registry). */
+    /**
+     * Air of any kind: no item. Not Material.isAir, which asks the server's block table: items are
+     * converted on any thread (an async task's ItemStack), and this check needs no server.
+     */
     public static boolean isAir(Material material) {
         return material == Material.AIR || material == Material.CAVE_AIR || material == Material.VOID_AIR;
     }
