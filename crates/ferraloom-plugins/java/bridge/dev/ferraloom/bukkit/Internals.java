@@ -171,13 +171,17 @@ final class Internals {
     static Plugin owner(StackTraceElement[] stack) {
         for (StackTraceElement frame : stack) {
             for (Plugin plugin : Bridge.server.pluginManager.getPlugins()) {
+                if (!plugin.isEnabled()) {
+                    // A disabled plugin's class loader is closed: asking it throws.
+                    continue;
+                }
                 ClassLoader loader = plugin.getClass().getClassLoader();
                 try {
                     if (Class.forName(frame.getClassName(), false, loader).getClassLoader() == loader) {
                         return plugin;
                     }
-                } catch (ClassNotFoundException | LinkageError e) {
-                    // Not this plugin's class.
+                } catch (ClassNotFoundException | LinkageError | IllegalStateException e) {
+                    // Not this plugin's class, or its jar closed under us.
                 }
             }
         }

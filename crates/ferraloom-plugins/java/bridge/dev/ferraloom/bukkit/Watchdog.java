@@ -72,7 +72,12 @@ final class Watchdog extends Thread {
             }
             if (now - since >= WARN_AFTER && (reported == 0 || now - reported >= REPEAT)) {
                 reported = now;
-                report(stack, now - since);
+                try {
+                    report(stack, now - since);
+                } catch (RuntimeException e) {
+                    // The watchdog must outlive whatever a report trips over.
+                    Bridge.server.logger.warning("The watchdog could not report a stall: " + e);
+                }
             }
         }
     }
