@@ -30,6 +30,10 @@ final class FerraloomUnsafe extends StubUnsafeValues {
         return clazz;
     }
 
+    // Ferraloom: registries (blocks-worlds area, FerraloomRegistries): OldEnum.valueOf and Biome.CUSTOM.
+    @Override public <B extends org.bukkit.Keyed> B get(org.bukkit.Registry<B> registry, org.bukkit.NamespacedKey key) { return key == null ? null : registry.get(key); }
+    @Override public org.bukkit.block.Biome getCustomBiome() { return FerraloomRegistries.CUSTOM_BIOME; }
+
     /** Dotted version numbers, part by part ({@code 1.21} < {@code 26.3}); a part that is not a number counts as 0. */
     static int compare(String a, String b) {
         String[] x = a.split("\\.");
