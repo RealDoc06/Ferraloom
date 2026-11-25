@@ -23,7 +23,7 @@ import org.bukkit.entity.EntityType;
  * type's own interface ({@link EntityType#getEntityClass}: {@code Zombie},
  * {@code Wolf}, {@code Item}...), so every {@code instanceof} a plugin tests
  * answers as on CraftBukkit, without a class per type. A call goes to the
- * first of {@link FerraloomMob}, {@link FerraloomLivingEntity} and
+ * first of {@link FerraloomItem}, {@link FerraloomMob}, {@link FerraloomLivingEntity} and
  * {@link FerraloomEntity} that declares the method; a default method runs as
  * the interface wrote it; anything else throws "Ferraloom does not implement
  * Zombie.isBaby() yet", as a stub does.
@@ -134,6 +134,16 @@ public final class Entities {
         return (T) made;
     }
 
+    /** World.dropItem and dropItemNaturally: the item entity. */
+    public static org.bukkit.entity.Item dropItem(FerraloomWorld world, Location at, org.bukkit.inventory.ItemStack stack,
+            boolean naturally) {
+        if (stack == null || Items.write(stack) == null) {
+            throw new IllegalArgumentException("Cannot drop air");
+        }
+        Object made = EntityNative.dropItem(world.index, at.getX(), at.getY(), at.getZ(), Items.write(stack), naturally);
+        return (org.bukkit.entity.Item) made;
+    }
+
     /** "Zombie" for ZOMBIE, as CraftBukkit's class names read. */
     static String simpleName(EntityType type) {
         Class<?> c = type.getEntityClass();
@@ -149,7 +159,8 @@ public final class Entities {
         /** For each interface method, the implementation's method and which object answers it. */
         private static final Map<Method, Target> TARGETS = new ConcurrentHashMap<>();
         private static final Target NONE = new Target(null, -1);
-        private static final Class<?>[] LAYERS = {FerraloomMob.class, FerraloomLivingEntity.class, FerraloomEntity.class};
+        private static final Class<?>[] LAYERS = {FerraloomItem.class, FerraloomMob.class, FerraloomLivingEntity.class,
+                FerraloomEntity.class};
 
         private final FerraloomEntity core;
         /** LAYERS' objects for this entity; the living ones are null for an entity that is not alive. */
@@ -159,7 +170,8 @@ public final class Entities {
             this.core = core;
             boolean alive = core.type.isAlive();
             FerraloomLivingEntity living = alive ? new FerraloomLivingEntity(core) : null;
-            this.layers = new Object[] {alive ? new FerraloomMob(core, living) : null, living, core};
+            this.layers = new Object[] {core.type == EntityType.ITEM ? new FerraloomItem(core) : null,
+                    alive ? new FerraloomMob(core, living) : null, living, core};
         }
 
         private record Target(MethodHandle handle, int layer) {

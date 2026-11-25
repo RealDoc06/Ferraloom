@@ -24,7 +24,11 @@ use horizon_client::{
     fast_hash::FxHashMap,
     mobs::{Damage, DamageKind, MobWorld, Who, plugin_sites},
 };
-use horizon_core::geometry::{Aabb, Vec3};
+use horizon_core::{
+    geometry::{Aabb, Vec3},
+    random::RandomSource,
+};
+use horizon_items::items::ItemStack;
 use std::cell::{Cell, RefCell};
 
 thread_local! {
@@ -572,6 +576,54 @@ impl EntityHost for GameHost<'_, '_> {
         Reach::Here(found)
     }
 
+    fn item_stack(&mut self, e: EntityRef) -> Reach<Option<ItemStack>> {
+        if e.generation != EntityRef::new(0, ITEM).generation {
+            return Reach::Gone;
+        }
+        match self.game.dropped.iter().find(|d| d.id == e.id) {
+            Some(item) => Reach::Here(Some(item.stack.clone())),
+            None => Reach::Gone,
+        }
+    }
+
+    fn set_item_stack(&mut self, e: EntityRef, stack: Option<ItemStack>) -> Reach<bool> {
+        if e.generation != EntityRef::new(0, ITEM).generation {
+            return Reach::Gone;
+        }
+        let Some(i) = self.game.dropped.iter().position(|d| d.id == e.id) else {
+            return Reach::Gone;
+        };
+        match stack {
+            Some(stack) => self.game.dropped[i].stack = stack,
+            None => {
+                self.game.dropped.remove(i);
+            }
+        }
+        Reach::Here(true)
+    }
+
+    /// CraftWorld.dropItem: pickup delay 10; `dropItemNaturally` moves it up
+    /// to a quarter block off the spot first.
+    fn drop_item(
+        &mut self,
+        at: Location,
+        stack: ItemStack,
+        naturally: bool,
+    ) -> Reach<Option<Named>> {
+        if at.world != world_index(self.game.dim) {
+            return Reach::Elsewhere;
+        }
+        let mut pos = [at.x, at.y, at.z];
+        if naturally {
+            let r = &mut self.game.world.random;
+            pos[0] += f64::from(r.next_float()) * 0.5 - 0.25;
+            pos[1] += f64::from(r.next_float()) * 0.5 - 0.25;
+            pos[2] += f64::from(r.next_float()) * 0.5 - 0.25;
+        }
+        self.game.spawn_item(stack, pos, [0.0, 0.2, 0.0], 10);
+        Reach::Here(Some(Named::entity(self.game.next_entity, ITEM)))
+    }
+
     /// Mobs only yet; CreatureSpawnEvent's reason is CUSTOM.
     fn spawn(&mut self, kind: &str, at: Location) -> Reach<Option<Named>> {
         if at.world != world_index(self.game.dim) || DIMS.get(at.world).is_none() {
@@ -685,7 +737,14 @@ impl Game<'_> {
             .get()
             .filter(|(id, _)| *id == m.id)
             .and_then(|(_, conn)| conn);
-        let kept = self.with_site_host(|h| {
+        let stacks: Vec<ItemStack> = items
+            .iter()
+            .filter_map(|d| match d {
+                Drop::Item(stack) => Some(crate::game::creatures::from_loot(stack)),
+                Drop::Orb(_) => None,
+            })
+            .collect();
+        let died = self.with_site_host(|h| {
             let killer = killer
                 .and_then(|conn| h.guest_uuid(conn))
                 .map(Named::player)
@@ -693,16 +752,30 @@ impl Game<'_> {
                     Some(Who::Mob(id)) => h.named_who(m.id, Who::Mob(id)),
                     _ => None,
                 });
-            ferraloom_plugins::entity_death(h, victim, killer, damage_type, experience)
+            ferraloom_plugins::entity_death(h, victim, killer, damage_type, experience, &stacks)
         });
         KILLER.set(None);
-        if kept == experience {
+        let ferraloom_plugins::Died {
+            experience: kept,
+            drops,
+        } = died;
+        if kept == experience && drops.is_none() {
             return items;
         }
-        let mut out: Vec<Drop> = items
-            .into_iter()
-            .filter(|d| matches!(d, Drop::Item(_)))
-            .collect();
+        let mut out: Vec<Drop> = match drops {
+            // A plugin's drops drop here, as dropAllDeathLoot drops each.
+            Some(drops) => {
+                let at = [m.position.x, m.position.y + 0.5, m.position.z];
+                for stack in drops {
+                    self.spawn_item(stack, at, [0.0, 0.2, 0.0], 10);
+                }
+                Vec::new()
+            }
+            None => items
+                .into_iter()
+                .filter(|d| matches!(d, Drop::Item(_)))
+                .collect(),
+        };
         if kept > 0 {
             out.push(Drop::Orb(kept));
         }

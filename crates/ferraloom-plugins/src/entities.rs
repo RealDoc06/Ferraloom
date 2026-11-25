@@ -19,6 +19,7 @@ use crate::{
     bridge::{self, Entry, obj},
     natives::{self, Fail, guard, halves, jbool, player_id, string, with_host},
 };
+use horizon_items::items::ItemStack;
 use jni::{
     JNIEnv,
     objects::{JClass, JIntArray, JObject, JString, JValue},
@@ -259,6 +260,23 @@ pub trait EntityHost {
     fn spawn(&mut self, _kind: &str, _at: Location) -> Reach<Option<Named>> {
         Reach::Elsewhere
     }
+    /// An item entity's stack (`Item.getItemStack`).
+    fn item_stack(&mut self, _e: EntityRef) -> Reach<Option<ItemStack>> {
+        Reach::Elsewhere
+    }
+    /// `Item.setItemStack`; none (air) removes the item.
+    fn set_item_stack(&mut self, _e: EntityRef, _stack: Option<ItemStack>) -> Reach<bool> {
+        Reach::Elsewhere
+    }
+    /// `World.dropItem` (`naturally`: `dropItemNaturally`'s offset): the item entity.
+    fn drop_item(
+        &mut self,
+        _at: Location,
+        _stack: ItemStack,
+        _naturally: bool,
+    ) -> Reach<Option<Named>> {
+        Reach::Elsewhere
+    }
 }
 
 // `EntityEvents`' methods, by index.
@@ -298,6 +316,13 @@ pub(crate) fn load(env: &mut JNIEnv) -> jni::errors::Result<()> {
             ),
             ("list", &format!("(I[D)[{O}"), list as *mut c_void),
             ("spawn", &format!("({S}IDDDFF){O}"), spawn as *mut c_void),
+            ("itemStack", "(II)[B", item_stack as *mut c_void),
+            ("setItemStack", "(II[B)Z", set_item_stack as *mut c_void),
+            (
+                "dropItem",
+                &format!("(IDDD[BZ){O}"),
+                drop_item as *mut c_void,
+            ),
         ],
     )?;
     // Each actor crosses as three values: `(a, b, kind)`, see `actor`.
@@ -307,7 +332,7 @@ pub(crate) fn load(env: &mut JNIEnv) -> jni::errors::Result<()> {
         "dev/ferraloom/bukkit/EntityEvents",
         [
             ("damage", format!("({a}{a}{S}{S}DDDD)D")),
-            ("death", format!("({a}{a}{S}I)I")),
+            ("death", format!("({a}{a}{S}I[[B)[{O}")),
             ("spawn", format!("({a}{S})Z")),
             ("target", format!("({a}{a}{S})[J")),
             ("explode", format!("({a}IDDDF[I)[I")),
@@ -395,30 +420,68 @@ pub fn entity_damage(host: &mut dyn crate::PluginHost, d: &Damage) -> Option<f64
     .map_or(Some(d.dealt), |dealt| (!dealt.is_nan()).then_some(dealt))
 }
 
-/// `EntityDeathEvent`, as the entity dies: the experience to drop.
+/// What an `EntityDeathEvent` left: the experience, and the drops when a
+/// plugin changed them (none: the game's own stand).
+pub struct Died {
+    pub experience: i32,
+    pub drops: Option<Vec<ItemStack>>,
+}
+
+/// `EntityDeathEvent`, as the entity dies, its loot collected and not dropped.
 pub fn entity_death(
     host: &mut dyn crate::PluginHost,
     victim: Named,
     killer: Option<Named>,
     damage_type: &str,
     experience: i32,
-) -> i32 {
+    drops: &[ItemStack],
+) -> Died {
+    let unchanged = Died {
+        experience,
+        drops: None,
+    };
     let Some(events) = EVENTS.get() else {
-        return experience;
+        return unchanged;
     };
     bridge::call(host, |env| {
         let victim = actor(env, Some(victim))?;
         let killer = actor(env, killer)?;
         let kind = env.new_string(damage_type)?;
-        let mut args = Vec::with_capacity(8);
+        let items = env.new_object_array(drops.len() as jint, "[B", JObject::null())?;
+        for (i, stack) in drops.iter().enumerate() {
+            let bytes = crate::inventory::to_java(env, Some(stack))?;
+            env.set_object_array_element(&items, i as jint, &bytes)?;
+            env.delete_local_ref(bytes)?;
+        }
+        let mut args = Vec::with_capacity(9);
         args.extend(args3(&victim));
         args.extend(args3(&killer));
-        args.extend([obj(&kind), JValue::Int(experience).as_jni()]);
-        let int = ReturnType::Primitive(Primitive::Int);
+        args.extend([obj(&kind), JValue::Int(experience).as_jni(), obj(&items)]);
         // SAFETY: `death`'s signature in `load`.
-        unsafe { events.invoke(env, DEATH, int, &args) }?.i()
+        let out = unsafe { events.invoke(env, DEATH, ReturnType::Array, &args) }?.l()?;
+        let out = jni::objects::JObjectArray::from(out);
+        let exp = env.get_object_array_element(&out, 0)?;
+        let experience = env.call_method(&exp, "intValue", "()I", &[])?.i()?;
+        let changed = jni::objects::JObjectArray::from(env.get_object_array_element(&out, 1)?);
+        if changed.is_null() {
+            return Ok(Died {
+                experience,
+                drops: None,
+            });
+        }
+        let mut drops = Vec::new();
+        for i in 0..env.get_array_length(&changed)? {
+            let bytes = jni::objects::JByteArray::from(env.get_object_array_element(&changed, i)?);
+            if let Ok(Some(stack)) = crate::inventory::from_java(env, &bytes) {
+                drops.push(stack);
+            }
+        }
+        Ok(Died {
+            experience,
+            drops: Some(drops),
+        })
     })
-    .unwrap_or(experience)
+    .unwrap_or(unchanged)
 }
 
 /// `CreatureSpawnEvent` (an `EntitySpawnEvent`) for an entity about to be
@@ -890,6 +953,77 @@ extern "system" fn spawn(
                 let _ = env.throw_new(
                     "java/lang/IllegalStateException",
                     "Ferraloom spawns entities only in the world being ticked now \
+                     (the overworld between ticks) yet",
+                );
+                Err(Fail::Jni)
+            }
+        }
+    })
+}
+
+extern "system" fn item_stack(mut env: JNIEnv, _: JClass, id: jint, generation: jint) -> jobject {
+    guard(&mut env, std::ptr::null_mut(), |env| {
+        let found = with_host(|h| h.item_stack(handle(id, generation)))
+            .ok_or(Fail::NoHost("Item.getItemStack"))?;
+        match found {
+            Reach::Here(stack) => Ok(crate::inventory::to_java(env, stack.as_ref())?.into_raw()),
+            Reach::Gone => Ok(std::ptr::null_mut()),
+            Reach::Elsewhere => Err(unreachable_here(env, "Item.getItemStack")),
+        }
+    })
+}
+
+extern "system" fn set_item_stack(
+    mut env: JNIEnv,
+    _: JClass,
+    id: jint,
+    generation: jint,
+    bytes: jni::objects::JByteArray,
+) -> jboolean {
+    guard(&mut env, JNI_FALSE, |env| {
+        let stack = crate::inventory::from_java(env, &bytes)?;
+        let done = with_host(|h| h.set_item_stack(handle(id, generation), stack))
+            .ok_or(Fail::NoHost("Item.setItemStack"))?;
+        match done {
+            Reach::Here(done) => Ok(jbool(done)),
+            Reach::Gone => Ok(JNI_FALSE),
+            Reach::Elsewhere => Err(unreachable_here(env, "Item.setItemStack")),
+        }
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+extern "system" fn drop_item(
+    mut env: JNIEnv,
+    _: JClass,
+    world: jint,
+    x: jdouble,
+    y: jdouble,
+    z: jdouble,
+    bytes: jni::objects::JByteArray,
+    naturally: jboolean,
+) -> jobject {
+    guard(&mut env, std::ptr::null_mut(), |env| {
+        let Some(stack) = crate::inventory::from_java(env, &bytes)? else {
+            return Ok(std::ptr::null_mut());
+        };
+        let at = Location {
+            world: usize::try_from(world).unwrap_or(usize::MAX),
+            x,
+            y,
+            z,
+            yaw: 0.0,
+            pitch: 0.0,
+        };
+        let dropped = with_host(|h| h.drop_item(at, stack, naturally != 0))
+            .ok_or(Fail::NoHost("World.dropItem"))?;
+        match dropped {
+            Reach::Here(Some(who)) => Ok(object(env, who)?.into_raw()),
+            Reach::Here(None) | Reach::Gone => Ok(std::ptr::null_mut()),
+            Reach::Elsewhere => {
+                let _ = env.throw_new(
+                    "java/lang/IllegalStateException",
+                    "Ferraloom drops items only in the world being ticked now \
                      (the overworld between ticks) yet",
                 );
                 Err(Fail::Jni)

@@ -87,6 +87,15 @@ final class EntityNative {
     /** A world's entities, players included, within {minX, minY, minZ, maxX, maxY, maxZ} when given. */
     static native Object[] list(int world, double[] within);
 
+    /** An item entity's stack ({@link Items#read}'s bytes), or null when it is gone. */
+    static native byte[] itemStack(int id, int generation);
+
+    /** Item.setItemStack ({@link Items#write}'s bytes; null removes the item). */
+    static native boolean setItemStack(int id, int generation, byte[] stack);
+
+    /** World.dropItem: the item entity. */
+    static native Object dropItem(int world, double x, double y, double z, byte[] stack, boolean naturally);
+
     /** World.spawnEntity: the new entity, or null when it cannot spawn. */
     static native Object spawn(String kind, int world, double x, double y, double z, float yaw, float pitch);
 }

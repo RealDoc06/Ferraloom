@@ -36,7 +36,7 @@ pub use blocks::{
 pub use bridge::{Config, WorldSpec, console_command, disable, enable, running, start, tick};
 pub use commands::command_tree;
 pub use entities::{
-    Actor, Change as EntityChange, Damage, EntityHost, EntityRef, EntityState, Named, Reach,
+    Actor, Change as EntityChange, Damage, Died, EntityHost, EntityRef, EntityState, Named, Reach,
     SpawnReason, Targeted, creature_spawn, entity_change_block, entity_combust, entity_damage,
     entity_death, entity_explode, entity_target, flags as entity_flags, interact_entity,
 };

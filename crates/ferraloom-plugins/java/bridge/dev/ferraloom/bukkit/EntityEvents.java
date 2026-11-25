@@ -81,20 +81,46 @@ public final class EntityEvents {
         }
     }
 
-    /** EntityDeathEvent as the entity dies: the experience it drops. Its drops are not bridged yet (inventory area). */
-    public static int death(long va, long vb, String vk, long ka, long kb, String kk, String type, int experience) {
+    /**
+     * EntityDeathEvent as the entity dies, its loot collected and not dropped: {experience, the drops as
+     * {@link Items#write}'s bytes, or null when no plugin changed them}.
+     */
+    public static Object[] death(long va, long vb, String vk, long ka, long kb, String kk, String type, int experience,
+            byte[][] drops) {
+        Object[] unchanged = {experience, null};
         try {
             if (!(Entities.of(va, vb, vk) instanceof LivingEntity victim)) {
-                return experience;
+                return unchanged;
             }
             FerraloomDamageSource source = FerraloomDamageSource.of(type, Entities.of(ka, kb, kk), null);
-            List<ItemStack> drops = new ArrayList<>();
-            EntityDeathEvent event = new EntityDeathEvent(victim, source, drops, experience);
+            List<ItemStack> list = new ArrayList<>(drops.length);
+            for (byte[] d : drops) {
+                ItemStack stack = Items.read(d);
+                if (stack != null) {
+                    list.add(stack);
+                }
+            }
+            List<ItemStack> before = new ArrayList<>();
+            for (ItemStack stack : list) {
+                before.add(stack.clone());
+            }
+            EntityDeathEvent event = new EntityDeathEvent(victim, source, list, experience);
             Bridge.server.pluginManager.callEvent(event);
-            return Math.max(0, event.getDroppedExp());
+            int exp = Math.max(0, event.getDroppedExp());
+            if (event.getDrops().equals(before)) {
+                return new Object[] {exp, null};
+            }
+            List<byte[]> out = new ArrayList<>();
+            for (ItemStack stack : event.getDrops()) {
+                byte[] bytes = Items.write(stack);
+                if (bytes != null) {
+                    out.add(bytes);
+                }
+            }
+            return new Object[] {exp, out.toArray(new byte[0][])};
         } catch (Throwable ex) {
             Bridge.log(ex, "an entity dying");
-            return experience;
+            return unchanged;
         }
     }
 
