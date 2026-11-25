@@ -20,6 +20,18 @@ impl Hub {
         }
     }
 
+    /// One player's command tree again, as their plugin permissions now
+    /// filter it (they joined; `Player.updateCommands`).
+    pub fn resend_plugin_commands(&self, player: u128) {
+        if let Some(i) = self
+            .guests
+            .iter()
+            .position(|g| g.uuid == player && g.placed)
+        {
+            self.send_commands(i);
+        }
+    }
+
     /// [`Self::extra_commands`] for one player: without the plugin commands
     /// they may not use (CraftBukkit's nodes require `testPermissionSilent`).
     /// Asks the plugins once per command tree sent, only while they have commands.

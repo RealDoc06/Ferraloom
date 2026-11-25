@@ -206,6 +206,8 @@ final class FerraloomServer extends StubServer {
         FerraloomPlayer player = new FerraloomPlayer(this, id, name, entityId, op);
         online.add(player);
         byId.put(id, player);
+        // Their first command tree went out before this object existed: again, filtered by their permissions.
+        ServerNative.updateCommands(id.getMostSignificantBits(), id.getLeastSignificantBits());
         return player;
     }
 

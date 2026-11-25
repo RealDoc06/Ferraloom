@@ -39,16 +39,19 @@ public final class ServerEvents {
         }
     }
 
-    /** The plugin command labels a player may not use (Command.testPermissionSilent): left out of their command tree. */
+    /**
+     * The plugin command labels a player may not use (Command.testPermissionSilent): left out of their
+     * command tree. A player whose join the plugins have not seen yet (their first tree is sent before
+     * PlayerJoinEvent) is shown no command that needs a permission; their tree is sent again once they
+     * have joined (ServerNative.updateCommands).
+     */
     public static String[] hiddenCommands(long most, long least) {
         try {
             FerraloomPlayer player = Bridge.server.online(new UUID(most, least));
-            if (player == null) {
-                return NONE;
-            }
             List<String> hidden = new ArrayList<>();
             for (Map.Entry<String, Command> e : Bridge.server.commandMap.known().entrySet()) {
-                if (!e.getValue().testPermissionSilent(player)) {
+                boolean allowed = player == null ? e.getValue().getPermission() == null : e.getValue().testPermissionSilent(player);
+                if (!allowed) {
                     hidden.add(e.getKey());
                 }
             }

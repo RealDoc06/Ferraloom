@@ -14,10 +14,13 @@ use jni::{
     JNIEnv,
     objects::{JClass, JObjectArray, JString, JValue},
     signature::ReturnType,
-    sys::{JNI_FALSE, jboolean},
+    sys::{JNI_FALSE, jboolean, jlong},
 };
 pub use lists::{Ban, BanTarget, List, Profile, ServerLists, WhitelistFlag, set_lists};
-use std::{ffi::c_void, sync::OnceLock};
+use std::{
+    ffi::c_void,
+    sync::{Mutex, OnceLock},
+};
 
 const TAB_COMPLETE: usize = 0;
 const HIDDEN_COMMANDS: usize = 1;
@@ -59,6 +62,11 @@ pub(crate) fn load(env: &mut JNIEnv) -> jni::errors::Result<()> {
     let more: Vec<_> = lists::natives()
         .into_iter()
         .chain(bossbars::natives())
+        .chain([(
+            "updateCommands",
+            "(JJ)V".to_owned(),
+            update_commands as *mut c_void,
+        )])
         .collect();
     let more: Vec<(&str, &str, *mut c_void)> =
         more.iter().map(|(n, s, f)| (*n, s.as_str(), *f)).collect();
@@ -73,6 +81,25 @@ pub(crate) fn load(env: &mut JNIEnv) -> jni::errors::Result<()> {
     )?;
     let _ = EVENTS.set(entry);
     Ok(())
+}
+
+/// Players whose command tree is to be sent again, from any thread.
+static COMMAND_UPDATES: Mutex<Vec<PlayerId>> = Mutex::new(Vec::new());
+
+extern "system" fn update_commands(mut env: JNIEnv, _: JClass, most: jlong, least: jlong) {
+    guard(&mut env, (), |_| {
+        COMMAND_UPDATES
+            .lock()
+            .unwrap()
+            .push(natives::player_id(most, least));
+        Ok(())
+    })
+}
+
+/// The players to send their command tree again (they joined, or a plugin
+/// called `Player.updateCommands`) since the last call; at a tick's start.
+pub fn take_command_updates() -> Vec<PlayerId> {
+    std::mem::take(&mut *COMMAND_UPDATES.lock().unwrap())
 }
 
 /// A `String[]` as strings (null elements skipped).

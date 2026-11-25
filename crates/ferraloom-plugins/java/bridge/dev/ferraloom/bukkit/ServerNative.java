@@ -59,6 +59,9 @@ final class ServerNative {
     /** Lifts the ban of a player (a nonzero UUID) or of an address. */
     static native void pardon(String target, long most, long least);
 
+    /** Sends a player their command tree again at the next tick's start (they joined; Player.updateCommands). */
+    static native void updateCommands(long most, long least);
+
     /**
      * A plugin boss bar's whole state (src/server/bossbars.rs), from any thread: flags bit 0 darken the sky,
      * 1 boss music, 2 fog, 3 visible; {@code players} their UUIDs' halves. A hidden bar or one with no players is shown to no one.

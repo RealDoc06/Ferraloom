@@ -341,11 +341,21 @@ pub(in crate::game) fn register_lists(
     }));
 }
 
-/// At a tick's start: operators a plugin changed reach the hub, as `/op`'s do.
+/// At a tick's start (plugins running): operators a plugin changed reach
+/// the hub, as `/op`'s do, and players who joined since, or whose plugin
+/// called `Player.updateCommands`, get their command tree again.
 pub(super) fn apply_list_changes(game: &mut Game) {
     if OPS_CHANGED.swap(false, Ordering::Relaxed)
         && let Some(lists) = dedicated::admin(|a| a.lists.clone())
     {
         game.sync_ops(&lists);
+    }
+    let updates = ferraloom_plugins::take_command_updates();
+    if !updates.is_empty()
+        && let Some(host) = game.lan.as_mut()
+    {
+        for player in updates {
+            host.hub.resend_plugin_commands(player);
+        }
     }
 }

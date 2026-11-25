@@ -43,7 +43,7 @@ pub use lent::{borrow_lent, lend};
 pub use players::{Joined, PlayerHost, chat, player_command, player_join, player_quit};
 pub use server::{
     Ban, BanTarget, List, PluginBossBar, Profile, ServerHost, ServerLists, WhitelistFlag,
-    boss_bars_for, hidden_commands, set_lists, tab_complete,
+    boss_bars_for, hidden_commands, set_lists, tab_complete, take_command_updates,
 };
 pub use worlds::{Border, Change, Query, Sound, WorldHost, chunk_event, save_event, weather_event};
 
