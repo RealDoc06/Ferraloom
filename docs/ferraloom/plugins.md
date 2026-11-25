@@ -196,7 +196,7 @@ the baseline is the coordinator's next step; budget: no measurable MSPT differen
 
 **Players** (`src/players.rs`, `game/plugins/players.rs`): `Player`, `HumanEntity` (but its inventory) and
 `OfflinePlayer` for online players: health, maximum health, absorption, food, saturation, exhaustion,
-experience and levels (`giveExp`, `giveExpLevels`), game mode, flying (when allowed), allow-flight, walk and
+experience and levels (`giveExp`, `giveExpLevels`), game mode, flying (when allowed), walk and
 fly speed (read), allow-flight (set too; a game mode change ends it, as `updatePlayerAbilities` does), sneaking, sprinting, swimming, gliding, sleeping, dead, in a vehicle, velocity (read and
 set), fire, air, fall distance, freeze ticks, pose, facing, eyes, size and bounding box, respawn point,
 effects (`PotionEffect` add, read, remove), ping, locale, address, client view distance, `hasPlayedBefore`,
