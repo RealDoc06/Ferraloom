@@ -234,7 +234,7 @@ pub trait EntityHost {
     fn entity(&mut self, e: EntityRef) -> Reach<EntityState>;
     /// A change: `Here(true)` once it is made or queued, `Here(false)` for
     /// one this entity cannot take.
-    fn change(&mut self, e: EntityRef, change: Change) -> Reach<bool>;
+    fn change_entity(&mut self, e: EntityRef, change: Change) -> Reach<bool>;
     /// The entities of a world (players included), within a box
     /// (`[min x, y, z, max x, y, z]`) when one is given. `Gone` (an empty
     /// list) for a world that is not the level in place; `Elsewhere` where
@@ -748,7 +748,7 @@ fn decode(what: jint, v: &[f64], text: Option<String>) -> Option<Change> {
 }
 
 fn apply(env: &mut JNIEnv, e: EntityRef, change: Change) -> Result<jboolean, Fail> {
-    match with_host(|h| EntityHost::change(h, e, change)).ok_or(Fail::NoHost("Entity's setters"))? {
+    match with_host(|h| h.change_entity(e, change)).ok_or(Fail::NoHost("Entity's setters"))? {
         Reach::Here(done) => Ok(jbool(done)),
         Reach::Gone => Ok(JNI_FALSE),
         Reach::Elsewhere => Err(unreachable_here(env, "Changing another entity")),

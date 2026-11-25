@@ -330,7 +330,7 @@ impl EntityHost for SiteHost<'_, '_> {
     }
 
     /// The mob in hand changes at once; another entity after the pass, in mob order.
-    fn change(&mut self, e: EntityRef, change: Change) -> Reach<bool> {
+    fn change_entity(&mut self, e: EntityRef, change: Change) -> Reach<bool> {
         if plugin_sites::is(e, self.mob) {
             return Reach::Here(plugin_sites::apply(self.mob, self.world, change));
         }
@@ -502,7 +502,7 @@ impl EntityHost for GameHost<'_, '_> {
         Reach::Gone
     }
 
-    fn change(&mut self, e: EntityRef, change: Change) -> Reach<bool> {
+    fn change_entity(&mut self, e: EntityRef, change: Change) -> Reach<bool> {
         let world = world_index(self.game.dim);
         if let Some(i) = self.mob_index(e) {
             if let Change::Teleport(to) = change
@@ -630,7 +630,7 @@ impl Game<'_> {
         }
         let mut host = GameHost::new(self, None);
         for (e, change) in queued {
-            EntityHost::change(&mut host, e, change);
+            host.change_entity(e, change);
         }
     }
 
