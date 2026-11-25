@@ -12,7 +12,11 @@ server twice on a fresh flat world:
    events and messages, the command tree, a command's reply from a player and from the console, a stub's
    UnsupportedOperationException, chat format and cancel with listener priorities and ignoreCancelled,
    a cancelled block break leaving the block (and resending it) and an uncancelled one breaking it,
-   getLocation and teleport; the world load events, block reads (type, data, light, biome) and writes,
+   getLocation and teleport; the players area: the login events (a refused name), the player's state
+   read and set, titles, action bar, tab list and sounds, PlayerInteractEvent, PlayerToggleSneakEvent,
+   PlayerCommandPreprocessEvent rewriting and cancelling, a cancelled PlayerMoveEvent sending the player
+   back, game mode changes and their event, plugin messages both ways, performCommand, kickPlayer;
+   the blocks and worlds areas: the world load events, block reads (type, data, light, biome) and writes,
    BlockPhysicsEvent, a cancelled and an uncancelled block place, world reads (heights, chunks, border,
    game rules, another dimension) and a storm with its WeatherChangeEvent; a chest GUI a command opens
    (its title, its items' names, lore and plugin data) with a cancelled click leaving both sides as they
@@ -127,11 +131,11 @@ class Server:
 
 
 class Bot:
-    def __init__(self, binary, port, out):
-        self.process = subprocess.Popen([str(binary), '--server', f'127.0.0.1:{port}', '--name', PLAYER],
+    def __init__(self, binary, port, out, name=PLAYER):
+        self.process = subprocess.Popen([str(binary), '--server', f'127.0.0.1:{port}', '--name', name],
                                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                         text=True)
-        self.out = Lines(self.process, out / 'bot.log', 'bot')
+        self.out = Lines(self.process, out / f'bot-{name}.log', f'bot {name}')
 
     def send(self, line):
         self.process.stdin.write(line + '\n')
@@ -209,7 +213,11 @@ def check_plugins(engine, bot_binary, built, out, scratch):
         _, line = bot.out.wait_for(r'^joined$|^disconnected', timeout=120)
         if line.startswith('disconnected'):
             raise Failed(f'bot: {line}')
+        log.wait_for(rf'\[FerraloomTest\] event: prelogin {PLAYER} primary=false')
+        log.wait_for(rf'\[FerraloomTest\] event: login {PLAYER} result=ALLOWED primary=true')
         log.wait_for(rf'\[FerraloomTest\] event: join {PLAYER} [0-9a-f-]{{36}} online=1')
+        # CraftPlayer.sendSupportedChannels: the channels plugins listen on.
+        bot.out.wait_for(r'^payload minecraft:register ferraloom:test$')
         bot.out.wait_for(rf'^chat .*FerraloomTest welcomes {PLAYER}')
         bot.out.wait_for(rf'^chat .*{PLAYER} joined through FerraloomTest')
         log.wait_for(rf'System chat: {PLAYER} joined through FerraloomTest')
@@ -223,8 +231,47 @@ def check_plugins(engine, bot_binary, built, out, scratch):
         log.wait_for(r'pong CONSOLE')
         bot.send('command ftest stub')
         bot.out.wait_for(r'^chat .*An internal error occurred while attempting to perform this command')
-        log.wait_for(r'Ferraloom does not implement Player\.getHealth\(\) yet')
+        log.wait_for(r'Ferraloom does not implement Player\.getShoulderEntityLeft\(\) yet')
         print('commands, stub exception: ok')
+
+        # The player's state, read and set; metadata.
+        bot.send('command ftest state')
+        bot.out.wait_for(r'^chat state health=20\.0 food=20 mode=CREATIVE level=0 flying=false sneaking=false '
+                         r'locale=en_us address=127\.0\.0\.1 played=false online=true meta=42$')
+        bot.send('command ftest level 7')
+        bot.out.wait_for(r'^experience 7$')
+        bot.send('command ftest state')
+        bot.out.wait_for(r'^chat state .* level=7 ')
+        print('player state and metadata: ok')
+
+        # What a player is sent.
+        mark = len(bot.out.lines)
+        bot.send('command ftest show')
+        bot.out.wait_for(r'^title Hello$', start=mark)
+        bot.out.wait_for(r'^subtitle from FerraloomTest$', start=mark)
+        bot.out.wait_for(r'^actionbar bar from FerraloomTest$', start=mark)
+        bot.out.wait_for(r'^tablist FerraloomTest header \| FerraloomTest footer$', start=mark)
+        # By registry id, or by name when the id is unknown (Holder.direct).
+        bot.out.wait_for(r'^sound (\d+ -|-1 minecraft:block\.note_block\.pling)$', start=mark)
+        print('titles, action bar, tab list, sound: ok')
+
+        # PlayerCommandPreprocessEvent: a rewritten line runs, a cancelled one does not; performCommand.
+        mark = len(bot.out.lines)
+        bot.send('command hello')
+        bot.out.wait_for(rf'^chat pong {PLAYER}$', start=mark)
+        bot.send('command blocked now')
+        log.wait_for(r'event: preprocess cancelled /blocked now')
+        bot.send('command ftest run')
+        bot.out.wait_for(r'^chat commands\.list\.players\[', start=mark)
+        print('command preprocess, performCommand: ok')
+
+        # Plugin messages both ways, once the client registered the channel.
+        mark = len(bot.out.lines)
+        bot.send('payload minecraft:register ferraloom:test')
+        bot.send('payload ferraloom:test ping')
+        log.wait_for(rf'message: ferraloom:test ping from {PLAYER}')
+        bot.out.wait_for(r'^payload ferraloom:test pong ping$', start=mark)
+        print('plugin messages: ok')
 
         # Where the player stands, and the block under their feet.
         mark = len(bot.out.lines)
@@ -287,6 +334,18 @@ def check_plugins(engine, bot_binary, built, out, scratch):
         bot.send('command ftest storm off')
         bot.out.wait_for(r'^chat storm false$', start=mark)
         print('storm and WeatherChangeEvent: ok')
+
+        # PlayerInteractEvent for a click on the block, the toggle of sneaking.
+        # (The hand holds the stone the place test gave it.)
+        log_mark = len(log.lines)
+        bot.send('use {} {} {}'.format(*below))
+        log.wait_for(r'event: interact RIGHT_CLICK_BLOCK {} {} {} UP HAND material=STONE item=STONEx\d+'.format(*below),
+                     start=log_mark)
+        bot.send('sneak on')
+        log.wait_for(rf'event: sneak {PLAYER} true')
+        bot.send('sneak off')
+        log.wait_for(rf'event: sneak {PLAYER} false')
+        print('interact, sneak toggle: ok')
 
         # A cancelled break leaves the block and resends it; an uncancelled one breaks it.
         bot.send('command ftest protect on')
@@ -370,6 +429,41 @@ def check_plugins(engine, bot_binary, built, out, scratch):
         bot.send('command ftest hand')
         bot.out.wait_for(r'^chat hand 3 true$', start=mark)
         print('chest GUI: open, names and lore, cancelled and uncancelled clicks, close; held item mirror: ok')
+
+        # A cancelled PlayerMoveEvent sends the player back; uncancelled, the move stands.
+        bot.send('command ftest freeze on')
+        bot.out.wait_for(r'^chat freeze true$')
+        mark = len(bot.out.lines)
+        bot.send('move 12.5 -50 10.5')
+        log.wait_for(r'event: move to 12\.5 -50\.0 10\.5 cancelled')
+        bot.out.wait_for(r'^pos 10\.5 -50(\.0)? 10\.5$', start=mark)
+        bot.send('command ftest freeze off')
+        bot.out.wait_for(r'^chat freeze false$')
+        mark = len(bot.out.lines)
+        bot.send('move 12.5 -50 10.5')
+        bot.send('command ftest where')
+        bot.out.wait_for(r'^chat at world 12\.5 -50\.0 10\.5$', start=mark)
+        print('move event: ok')
+
+        # setGameMode, through PlayerGameModeChangeEvent.
+        mark = len(bot.out.lines)
+        bot.send('command ftest mode survival')
+        log.wait_for(rf'event: gamemode {PLAYER} SURVIVAL')
+        bot.out.wait_for(r'^gamemode 0$', start=mark)
+        bot.send('command ftest state')
+        bot.out.wait_for(r'^chat state .* mode=SURVIVAL ', start=mark)
+        print('game mode: ok')
+
+        # A name AsyncPlayerPreLoginEvent refuses; a player a plugin kicks.
+        refused = Bot(bot_binary, port, out, 'Refused')
+        refused.out.wait_for(r'^disconnected refused: .*FerraloomTest refuses Refused', timeout=60)
+        kicked = Bot(bot_binary, port, out, 'Kicked')
+        kicked.out.wait_for(r'^joined$', timeout=120)
+        kicked.send('command ftest kickme')
+        log.wait_for(r'event: kick Kicked FerraloomTest kicked you')
+        kicked.out.wait_for(r'^disconnected', timeout=30)
+        log.wait_for(r'Kicked lost connection: FerraloomTest kicked you')
+        print('login refused, kickPlayer: ok')
 
         # The player leaves.
         mark = len(log.lines)

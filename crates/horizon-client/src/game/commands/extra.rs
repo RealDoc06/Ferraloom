@@ -661,8 +661,12 @@ impl Game<'_> {
         };
         let mut count = 0;
         for (conn, name) in guests {
+            // Ferraloom: PlayerKickEvent; cancelled, they stay (game/plugins/players.rs).
+            let Some(tag) = self.plugin_kick(conn, &reason.plain(), tag.clone()) else {
+                continue;
+            };
             if let Some(lan) = self.lan.as_mut() {
-                lan.hub.kick(conn, tag.clone());
+                lan.hub.kick(conn, tag);
             }
             self.feedback(Text::translate(
                 "commands.kick.success",

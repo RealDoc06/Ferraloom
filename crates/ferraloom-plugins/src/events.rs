@@ -22,6 +22,20 @@ pub enum Event {
     PlayerJoin = 0,
     PlayerQuit = 1,
     AsyncPlayerChat = 2,
+    PlayerMove = 3,
+    PlayerTeleport = 4,
+    PlayerInteract = 5,
+    PlayerCommandPreprocess = 6,
+    PlayerToggleSneak = 7,
+    PlayerToggleSprint = 8,
+    PlayerToggleFlight = 9,
+    PlayerItemHeld = 10,
+    PlayerGameModeChange = 11,
+    PlayerChangedWorld = 12,
+    PlayerRespawn = 13,
+    PlayerKick = 14,
+    /// `PlayerDeathEvent`, which listens through `EntityDeathEvent`'s handler list.
+    PlayerDeath = 15,
     // Blocks.
     BlockBreak = 16,
     BlockPlace = 17,
@@ -56,10 +70,23 @@ pub enum Event {
 }
 
 impl Event {
-    pub const ALL: [Event; 31] = [
+    pub const ALL: [Event; 44] = [
         Event::PlayerJoin,
         Event::PlayerQuit,
         Event::AsyncPlayerChat,
+        Event::PlayerMove,
+        Event::PlayerTeleport,
+        Event::PlayerInteract,
+        Event::PlayerCommandPreprocess,
+        Event::PlayerToggleSneak,
+        Event::PlayerToggleSprint,
+        Event::PlayerToggleFlight,
+        Event::PlayerItemHeld,
+        Event::PlayerGameModeChange,
+        Event::PlayerChangedWorld,
+        Event::PlayerRespawn,
+        Event::PlayerKick,
+        Event::PlayerDeath,
         Event::BlockBreak,
         Event::BlockPlace,
         Event::BlockPhysics,
@@ -107,6 +134,26 @@ impl Event {
 /// own: inventory 64-127, players 128-191, blocks 192-255, entities 256-319,
 /// server 320-383, worlds 384-447.
 pub(crate) const WORDS: usize = 7;
+
+/// Whether a plugin listens to any of `events` this tick. With a constant
+/// list the masks are constants: one load and one test per word it names.
+#[inline(always)]
+pub fn listens_any(events: &[Event]) -> bool {
+    let mut masks = [0u64; WORDS];
+    let mut i = 0;
+    while i < events.len() {
+        masks[events[i].word()] |= events[i].bit();
+        i += 1;
+    }
+    let mut w = 0;
+    while w < WORDS {
+        if masks[w] != 0 && FLAGS[w].load(Ordering::Relaxed) & masks[w] != 0 {
+            return true;
+        }
+        w += 1;
+    }
+    false
+}
 
 /// The bits of the events with listeners; all 0 without plugins.
 static FLAGS: [AtomicU64; WORDS] = [const { AtomicU64::new(0) }; WORDS];
