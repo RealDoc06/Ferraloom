@@ -328,6 +328,9 @@ impl Hub {
             && !allow_flight
             && !g.spectator()
             && !g.creative()
+            // Abilities.mayfly also covers flight a plugin granted
+            // (Player.setAllowFlight), which must not count as floating.
+            && !g.allow_flight
             && !g.fall_flying
             && !super::guest_body(g).spin_attack
             && g.effects.get("levitation").is_none()
