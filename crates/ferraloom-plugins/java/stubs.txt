@@ -1,0 +1,10 @@
+# The interfaces StubGen writes a stub for (dev.ferraloom.bukkit.stub.Stub<Name>), one per line.
+# A fan-out area adds the interfaces it starts implementing; the bridge class
+# extending the stub is its implementation, and tools/Coverage.java measures it.
+org.bukkit.Server
+org.bukkit.UnsafeValues
+org.bukkit.World
+org.bukkit.block.Block
+org.bukkit.command.ConsoleCommandSender
+org.bukkit.entity.Player
+org.bukkit.scheduler.BukkitScheduler
