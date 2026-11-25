@@ -135,7 +135,7 @@ an id plus a generation the host checks, so a stale handle answers as removed, n
 | A Java exception crosses JNI anyway | `bridge::call` logs it with its trace and clears it. |
 | A Rust panic in a native | Caught (`natives::guard`) and thrown into Java as `RuntimeException`; never unwinds into the JVM. |
 | A plugin with server internals | Loads with one warning; reaching a missing internal disables it with one line at the next tick, the others run on. |
-| A plugin loops or deadlocks on the main thread | The tick stalls, as on Spigot. Not isolated; a watchdog that logs the main thread's Java stack is future work. |
+| A plugin loops or deadlocks on the main thread | The tick stalls, as on Spigot. Not isolated. The watchdog (`Watchdog.java`, Spigot's as a warning) logs `The server thread has been stuck in X v1.0 for 10 s (tick N):` and the thread's Java stack once the server thread has sat in one call into Java for 10 s with no tick starting, then every 5 s; a stall in the server's own code (no Java stack) is not reported. |
 | The JVM crashes (a plugin's native library, OOM) | The process goes down with it: the price of in-process. `-Xmx` through `FERRALOOM_JVM_OPTIONS` bounds the heap. |
 
 Java's own `SIGSEGV` handling replaces the process's once the JVM starts; a Rust stack overflow then crashes
@@ -151,6 +151,12 @@ through the JVM's handler instead of Rust's message. Only with plugins.
 | A command line | A lookup in a label set before any JNI; vanilla commands never reach the JVM. | |
 | An event with listeners | One JNI call with its arguments (a few strings), the listeners' own time. | |
 | Join/quit with plugins | One JNI call each, listener or not (the player objects). | |
+| Plugin boss bars | None shown: one relaxed load per viewer in the tick's boss bar update. With bars: a lock and a scan per viewer, the titles converted per viewer as custom bars' are. | `boss_bars_for` |
+| A command tree sent, plugins with commands | One JNI call (the labels the player may not use, `Command.testPermissionSilent`); none without plugin commands. | `Hub::extra_commands_for` |
+| A completion request | Vanilla commands: one `OnceLock` check. A plugin command's arguments: one JNI call, the TabCompleter's time. | `plugin_suggestions` |
+| Player lists, offline players | No tick cost: answered when asked, on any thread, under the lists' locks. `getOfflinePlayer(name)` in online mode may block on the profile service for a name the user cache lacks, as CraftBukkit's does. | |
+| Watchdog | Plugins only: a volatile write per tick, a wake-up per second; the stack is read only when no tick started since the last wake-up. | |
+| A log record with a throwable | One cause-chain walk for a missing server internal (`Internals.reached`); records without a throwable, none. | |
 
 The event bit is a plain static and `listens` is `#[inline(always)]` over `FLAGS.load(Relaxed) & bit != 0`,
 so the site compiles to the bit test and nothing else. `break_block_as_player` in the release build
@@ -189,12 +195,23 @@ the baseline is the coordinator's next step; budget: no measurable MSPT differen
   `getUniqueId`, `getLocation`, `getWorld`, `teleport` (across worlds too), `isOnline`, `isOp`, permissions.
 - `World`: name, UID, environment, key, heights, game time and time of day, players, `getBlockAt`.
   `Block`: position, world, location, type (the loaded level in place).
+- The server area: `getOfflinePlayer(String/UUID)` (online, else in online mode the user cache or profile
+  service, else the offline UUID, CraftServer's order), `getOfflinePlayers` (the player files), `OfflinePlayer`
+  (op, whitelist, ban, played before, first and last played from the player file), `getOperators`, the
+  whitelist (`hasWhitelist`, enforced, `getWhitelistedPlayers`, `reloadWhitelist`), `getBanList` (profile and
+  IP, `BanEntry` save and remove), `banIP`, `PlayerProfile` (no textures), `matchPlayer`, boss bars
+  (`createBossBar`; keyed ones not yet), the help map (a topic per command), the command tree filtered by each
+  player's permissions, tab completion of plugin commands (`TabCompleter`, `TabCompleteEvent`), server.properties
+  getters (view distance, allow flight, world type, idle timeout...), spawn limits, `spigot().getConfig()`
+  (defaults), `UnsafeValues.getDataVersion`. List changes are saved at once; an operator's new level and
+  commands reach them at the next tick. The methods `FerraloomPlayer` can delegate its own to are in
+  `FerraloomLists` (`isOp`, `setOp`, `isWhitelisted`, `setWhitelisted`, `isBanned`, `hasPlayedBefore`, `played`).
 
 Known differences from CraftBukkit, each for its area to remove: join/quit messages are sent as plain
 translations (no hover); `BlockBreakEvent.setDropItems`/`setExpToDrop` are ignored and the block entity is
 not resent; `Block.getType` reads only the level in place; `AsyncPlayerChatEvent`'s lines go out unsigned;
-`PlayerChatEvent` (the deprecated sync one) is not fired; the command tree shows every plugin command to
-everyone (no permission filter, no tab completion); legacy plugins (no `api-version`) load without
+`PlayerChatEvent` (the deprecated sync one) is not fired; a player's command tree follows their permissions
+when it is sent (join, op changes), and `Player.updateCommands` does not resend it yet; legacy plugins (no `api-version`) load without
 legacy-material support; plugins run on the dedicated server only, not in single player or LAN worlds.
 
 ## Fan-out
