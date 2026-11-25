@@ -251,8 +251,9 @@ const EXPLODE: usize = 4;
 const INTERACT: usize = 5;
 /// `Entities.of`, which makes an actor's object.
 const OF: usize = 6;
+const CHANGE_BLOCK: usize = 7;
 
-static EVENTS: OnceLock<Entry<7>> = OnceLock::new();
+static EVENTS: OnceLock<Entry<8>> = OnceLock::new();
 
 /// At start: `EntityNative`'s methods bound, `EntityEvents`' looked up.
 pub(crate) fn load(env: &mut JNIEnv) -> jni::errors::Result<()> {
@@ -292,6 +293,7 @@ pub(crate) fn load(env: &mut JNIEnv) -> jni::errors::Result<()> {
             ("explode", format!("({a}IDDDF[I)[I")),
             ("interact", format!("(JJ{a}Z)Z")),
             ("of", format!("({a})Lorg/bukkit/entity/Entity;")),
+            ("changeBlock", format!("({a}IIII{S})Z")),
         ],
     )?;
     let _ = EVENTS.set(entry);
@@ -523,6 +525,33 @@ pub fn interact_entity(
         let boolean = ReturnType::Primitive(Primitive::Boolean);
         // SAFETY: `interact`'s signature in `load`.
         unsafe { events.invoke(env, INTERACT, boolean, &args) }?.z()
+    })
+    .unwrap_or(false)
+}
+
+/// `EntityChangeBlockEvent` for `entity` about to change the block at `pos`
+/// in `world` to state `to` (`minecraft:air`): true when cancelled.
+pub fn entity_change_block(
+    host: &mut dyn crate::PluginHost,
+    entity: Named,
+    world: usize,
+    pos: [i32; 3],
+    to: &str,
+) -> bool {
+    let Some(events) = EVENTS.get() else {
+        return false;
+    };
+    bridge::call(host, |env| {
+        let entity = actor(env, Some(entity))?;
+        let to = env.new_string(to)?;
+        let mut args = Vec::with_capacity(8);
+        args.extend(args3(&entity));
+        args.push(JValue::Int(world as jint).as_jni());
+        args.extend(pos.map(|v| JValue::Int(v).as_jni()));
+        args.push(obj(&to));
+        let boolean = ReturnType::Primitive(Primitive::Boolean);
+        // SAFETY: `changeBlock`'s signature in `load`.
+        unsafe { events.invoke(env, CHANGE_BLOCK, boolean, &args) }?.z()
     })
     .unwrap_or(false)
 }

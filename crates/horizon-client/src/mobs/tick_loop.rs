@@ -409,6 +409,14 @@ impl MobLoop {
         let was = self.grid.column_of(i);
         self.grid.update(i, self.snapshot[i].bounds);
         self.grid.note_species(self.snapshot[i].species);
+        // Ferraloom: EntityChangeBlockEvent for the blocks this tick changes, in mob order.
+        if ferraloom_plugins::listens(ferraloom_plugins::Event::EntityChangeBlock) {
+            let w = MobWorld {
+                others: Others::new(&self.snapshot),
+                ..cx.base.clone()
+            };
+            super::plugin_sites::change_blocks(&mut self.mobs[i], &mut self.events, from, &w);
+        }
         match track {
             Some(track) => {
                 if changed {
@@ -850,6 +858,11 @@ mod tests {
         }
     }
 
+    /// An EntityChangeBlockEvent listener that refuses every other mob.
+    fn plugin_change_block(m: &mut Mob, _: [i32; 3], _: &str, _: &MobWorld) -> bool {
+        m.id >= PLUGIN_MOBS && m.id % 2 == 0
+    }
+
     /// An EntityDamageEvent listener that cancels half and halves the rest.
     fn plugin_damage(m: &mut Mob, _: &super::super::Damage, _: f32, amount: f32) -> Option<f32> {
         if m.id < PLUGIN_MOBS {
@@ -868,8 +881,13 @@ mod tests {
         super::super::plugin_sites::install(super::super::plugin_sites::Sites {
             damage: plugin_damage,
             target: plugin_target,
+            change_block: plugin_change_block,
         });
-        ferraloom_plugins::latch_for_tests(&[Event::EntityTarget, Event::EntityDamage]);
+        ferraloom_plugins::latch_for_tests(&[
+            Event::EntityTarget,
+            Event::EntityDamage,
+            Event::EntityChangeBlock,
+        ]);
         let listened = crowd(PLUGIN_MOBS);
         let events = TARGET_EVENTS.get();
         ferraloom_plugins::latch_for_tests(&[]);

@@ -6,13 +6,16 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.bukkit.Bukkit;
 import org.bukkit.ExplosionResult;
 import org.bukkit.Location;
 import org.bukkit.block.Block;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.CreatureSpawnEvent;
+import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDamageEvent.DamageModifier;
@@ -183,6 +186,32 @@ public final class EntityEvents {
         } catch (Throwable ex) {
             Bridge.log(ex, "an explosion");
             return blocks;
+        }
+    }
+
+    /**
+     * EntityChangeBlockEvent before an entity changes a block to state {@code to}: true when cancelled. Its
+     * BlockData is the blocks area's ({@code Bukkit.createBlockData}); until that exists it is null.
+     */
+    public static boolean changeBlock(long a, long b, String kind, int world, int x, int y, int z, String to) {
+        try {
+            Entity entity = Entities.of(a, b, kind);
+            FerraloomWorld in = Bridge.server.world(world);
+            if (entity == null || in == null) {
+                return false;
+            }
+            BlockData data;
+            try {
+                data = Bukkit.createBlockData(to);
+            } catch (RuntimeException ex) {
+                data = null;
+            }
+            EntityChangeBlockEvent event = new EntityChangeBlockEvent(entity, new FerraloomBlock(in, x, y, z, null), data);
+            Bridge.server.pluginManager.callEvent(event);
+            return event.isCancelled();
+        } catch (Throwable ex) {
+            Bridge.log(ex, "an entity changing a block");
+            return false;
         }
     }
 

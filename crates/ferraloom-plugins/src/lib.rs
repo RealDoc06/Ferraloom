@@ -31,8 +31,8 @@ pub use bridge::{Config, WorldSpec, console_command, disable, enable, running, s
 pub use commands::command_tree;
 pub use entities::{
     Actor, Change, Damage, EntityHost, EntityRef, EntityState, Named, Reach, SpawnReason, Targeted,
-    creature_spawn, entity_damage, entity_death, entity_explode, entity_target,
-    flags as entity_flags, interact_entity,
+    creature_spawn, entity_change_block, entity_damage, entity_death, entity_explode,
+    entity_target, flags as entity_flags, interact_entity,
 };
 pub use events::{Event, latch_for_tests, listens};
 pub use lent::{borrow_lent, lend};

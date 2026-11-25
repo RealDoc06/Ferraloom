@@ -26,6 +26,9 @@ pub struct Sites {
     /// `EntityTargetEvent` for mob `m`, whose tick changed its target from
     /// `was`, in its serial turn of the pass (`w`): the target it keeps.
     pub target: fn(m: &mut Mob, was: Option<Who>, w: &MobWorld<'_>) -> Option<Who>,
+    /// `EntityChangeBlockEvent` for mob `m` changing the block at `pos` to
+    /// state `to` (`minecraft:air`): true when cancelled.
+    pub change_block: fn(m: &mut Mob, pos: [i32; 3], to: &str, w: &MobWorld<'_>) -> bool,
 }
 
 static SITES: OnceLock<Sites> = OnceLock::new();
@@ -66,6 +69,48 @@ pub fn tick_targeting(
         m.ai.target = (sites.target)(m, was, w);
     }
     kept
+}
+
+/// `EntityChangeBlockEvent` for the blocks mob `m`'s tick changes: its
+/// events from `from` on (`tick_loop`'s commit of the mob, in mob order, so
+/// the speculative and serial passes ask alike and no tick runs again for
+/// it). A cancelled change's event goes; an enderman keeps what it held.
+/// The mob's other state stays as its tick left it (a sheep that ate the
+/// grass it was refused is still fed).
+pub fn change_blocks(m: &mut Mob, events: &mut Vec<MobEvent>, from: usize, w: &MobWorld) {
+    let Some(sites) = SITES.get() else {
+        return;
+    };
+    let name = |state| w.registry.state(state).map(|s| s.name.clone());
+    let mut i = from;
+    while i < events.len() {
+        let change = match &events[i] {
+            MobEvent::SetBlock { pos, state } => name(*state).map(|n| (*pos, n)),
+            MobEvent::SetBlockName { pos, name, .. } => Some((*pos, (*name).to_owned())),
+            MobEvent::BreakBlock { pos, .. } | MobEvent::BreakDoor { pos } => {
+                Some((*pos, "minecraft:air".to_owned()))
+            }
+            _ => None,
+        };
+        let Some((pos, to)) = change else {
+            i += 1;
+            continue;
+        };
+        if !(sites.change_block)(m, pos, &to, w) {
+            i += 1;
+            continue;
+        }
+        if let MobEvent::SetBlock { state, .. } = events.remove(i)
+            && m.species() == super::Species::Enderman
+        {
+            // EndermanTakeBlockGoal and LeaveBlockGoal change the carried block only once allowed.
+            m.extra.carried = if to == "minecraft:air" {
+                None
+            } else {
+                Some(state)
+            };
+        }
+    }
 }
 
 thread_local! {

@@ -32,10 +32,11 @@ pub enum Event {
     EntityTarget = 43,
     EntityExplode = 44,
     PlayerInteractEntity = 45,
+    EntityChangeBlock = 46,
 }
 
 impl Event {
-    pub const ALL: [Event; 10] = [
+    pub const ALL: [Event; 11] = [
         Event::PlayerJoin,
         Event::PlayerQuit,
         Event::AsyncPlayerChat,
@@ -46,6 +47,7 @@ impl Event {
         Event::EntityTarget,
         Event::EntityExplode,
         Event::PlayerInteractEntity,
+        Event::EntityChangeBlock,
     ];
 
     const fn bit(self) -> u64 {

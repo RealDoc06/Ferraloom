@@ -48,6 +48,7 @@ pub(super) fn install() {
     plugin_sites::install(plugin_sites::Sites {
         damage: site_damage,
         target: site_target,
+        change_block: site_change_block,
     });
 }
 
@@ -207,6 +208,18 @@ fn site_target(m: &mut Mob, was: Option<Who>, w: &MobWorld) -> Option<Who> {
             Actor::Entity(e) => Who::Mob(e.id),
         }),
     }
+}
+
+/// The mob pass's `EntityChangeBlockEvent` site, at `m`'s commit.
+fn site_change_block(m: &mut Mob, pos: [i32; 3], to: &str, w: &MobWorld) -> bool {
+    let entity = plugin_sites::named(m);
+    let world = pass_world(w);
+    let mut host = SiteHost {
+        mob: m,
+        world,
+        pass: Some(w),
+    };
+    ferraloom_plugins::entity_change_block(&mut host, entity, world, pos, to)
 }
 
 /// The restricted host of events fired inside mob code: the mob in hand,
