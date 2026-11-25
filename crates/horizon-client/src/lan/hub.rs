@@ -2520,7 +2520,9 @@ impl Hub {
                 // handlePlayerAbilities: the client flies only if it may.
                 S::PlayerAbilities(p) => {
                     let g = &mut self.guests[i];
-                    g.flying = p.flags & 2 != 0 && (g.creative() || g.spectator());
+                    // Ferraloom: or a plugin's allow-flight (Player.setAllowFlight).
+                    let may_fly = g.creative() || g.spectator() || g.allow_flight;
+                    g.flying = p.flags & 2 != 0 && may_fly;
                 }
                 S::MovePlayerPos(p) => {
                     self.move_player(i, Some([p.x, p.y, p.z]), None, p.flags, ctx, events);
@@ -2859,6 +2861,8 @@ impl Hub {
             return;
         };
         g.game_mode = mode;
+        // Ferraloom: updatePlayerAbilities sets mayfly from the mode, a plugin's allow-flight ends.
+        g.allow_flight = false;
         // GameType.updatePlayerAbilities: a spectator flies, survival and
         // adventure don't, creative keeps what it had.
         if g.spectator() {

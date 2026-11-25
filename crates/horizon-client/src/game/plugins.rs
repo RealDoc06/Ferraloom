@@ -16,6 +16,7 @@
 mod blocks;
 mod inventory;
 mod players;
+pub(super) use players::{INBOX_EVENTS, login};
 mod server;
 mod worlds;
 
@@ -41,6 +42,8 @@ enum Pending {
     Message(PlayerId, String),
     Teleport(PlayerId, Location),
     Vanilla(String),
+    /// A vanilla command a plugin runs as a player (`Player.performCommand`).
+    Command(super::lan_actions::GuestCommand),
     /// A guest's inventory, sent again (their client predicted a change a plugin cancelled).
     Inventory(PlayerId),
 }
@@ -182,6 +185,9 @@ impl Game<'_> {
                 Pending::Vanilla(line) => {
                     server::run_vanilla(self, &line);
                 }
+                Pending::Command(command) => {
+                    self.run_guest_command(command);
+                }
                 Pending::Inventory(id) => {
                     if let Some(host) = self.lan.as_mut()
                         && let Some(i) = host
@@ -196,6 +202,7 @@ impl Game<'_> {
             }
         }
         server::apply_list_changes(self);
+        self.plugin_snapshots();
         let tick = self.ticks as i64;
         if let Some(labels) = ferraloom_plugins::tick(&mut GameHost::new(self, None), tick) {
             set_labels(self, labels);

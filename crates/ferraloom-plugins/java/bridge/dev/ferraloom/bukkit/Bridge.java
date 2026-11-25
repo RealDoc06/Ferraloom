@@ -32,6 +32,20 @@ public final class Bridge {
         EVENTS[0] = PlayerJoinEvent.getHandlerList();
         EVENTS[1] = PlayerQuitEvent.getHandlerList();
         EVENTS[2] = AsyncPlayerChatEvent.getHandlerList();
+        EVENTS[3] = org.bukkit.event.player.PlayerMoveEvent.getHandlerList();
+        EVENTS[4] = org.bukkit.event.player.PlayerTeleportEvent.getHandlerList();
+        EVENTS[5] = org.bukkit.event.player.PlayerInteractEvent.getHandlerList();
+        EVENTS[6] = org.bukkit.event.player.PlayerCommandPreprocessEvent.getHandlerList();
+        EVENTS[7] = org.bukkit.event.player.PlayerToggleSneakEvent.getHandlerList();
+        EVENTS[8] = org.bukkit.event.player.PlayerToggleSprintEvent.getHandlerList();
+        EVENTS[9] = org.bukkit.event.player.PlayerToggleFlightEvent.getHandlerList();
+        EVENTS[10] = org.bukkit.event.player.PlayerItemHeldEvent.getHandlerList();
+        EVENTS[11] = org.bukkit.event.player.PlayerGameModeChangeEvent.getHandlerList();
+        EVENTS[12] = org.bukkit.event.player.PlayerChangedWorldEvent.getHandlerList();
+        EVENTS[13] = org.bukkit.event.player.PlayerRespawnEvent.getHandlerList();
+        EVENTS[14] = org.bukkit.event.player.PlayerKickEvent.getHandlerList();
+        // PlayerDeathEvent has no list of its own: its listeners are EntityDeathEvent's.
+        EVENTS[15] = org.bukkit.event.entity.EntityDeathEvent.getHandlerList();
         // Blocks: 16-31.
         EVENTS[16] = BlockBreakEvent.getHandlerList();
         EVENTS[17] = org.bukkit.event.block.BlockPlaceEvent.getHandlerList();

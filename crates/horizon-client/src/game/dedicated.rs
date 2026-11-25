@@ -604,7 +604,11 @@ impl Game<'_> {
                 id: uuid,
                 name: name.to_owned(),
             };
-            gate_lists.lock().unwrap().can_login(address, &user)
+            let mut lists = gate_lists.lock().unwrap();
+            let (refused, op) = (lists.can_login(address, &user), lists.ops.contains(&user));
+            drop(lists);
+            // Ferraloom: AsyncPlayerPreLoginEvent and PlayerLoginEvent (game/plugins/players.rs).
+            super::plugins::login(address, uuid, name, op, refused)
         });
         let bypass_lists = lists.clone();
         let favicon = std::fs::read("server-icon.png")
@@ -752,6 +756,8 @@ impl Game<'_> {
                 // `save-off`: the periodic save inside the tick is skipped.
                 self.ticks = self.ticks.max(1);
             }
+            // Ferraloom: logins waiting for PlayerLoginEvent, paused or not (game/plugins/players.rs).
+            self.plugin_logins();
             // Ferraloom: the plugins' scheduler heartbeat (tickChildren's, so not while paused).
             if !paused && self.tick_plugins() {
                 admin(|a| a.stop = true);
@@ -826,8 +832,14 @@ impl Game<'_> {
             .map(|g| g.conn)
             .collect();
         for conn in idle {
-            host.hub
-                .kick(conn, translatable("multiplayer.disconnect.idling", &[]));
+            // Ferraloom: PlayerKickEvent (game/plugins/players.rs).
+            let tag = translatable("multiplayer.disconnect.idling", &[]);
+            let reason = "You have been idle for too long!";
+            if let Some(tag) = self.plugin_kick(conn, reason, tag)
+                && let Some(host) = self.lan.as_mut()
+            {
+                host.hub.kick(conn, tag);
+            }
         }
     }
 

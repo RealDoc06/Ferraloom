@@ -202,13 +202,12 @@ final class FerraloomServer extends StubServer {
 
     // Players.
 
-    FerraloomPlayer join(UUID id, String name, int entityId, boolean op) {
-        FerraloomPlayer player = new FerraloomPlayer(this, id, name, entityId, op);
+    /** A player's object (made at login, see PlayerEvents.login) goes online. */
+    void join(FerraloomPlayer player) {
         online.add(player);
-        byId.put(id, player);
-        // Their first command tree went out before this object existed: again, filtered by their permissions.
-        ServerNative.updateCommands(id.getMostSignificantBits(), id.getLeastSignificantBits());
-        return player;
+        byId.put(player.id, player);
+        // Their first command tree went out before they joined: again, filtered by their permissions.
+        ServerNative.updateCommands(player.id.getMostSignificantBits(), player.id.getLeastSignificantBits());
     }
 
     void leave(FerraloomPlayer player) {
