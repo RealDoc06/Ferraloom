@@ -1345,6 +1345,13 @@ impl Player {
     pub fn receive(&self, id: i32, payload: &[u8]) -> Result<(), Ended> {
         match play::Serverbound::decode(id, payload) {
             Ok(play::Serverbound::KeepAlive(k)) => self.alive.store(k.id, Ordering::Relaxed),
+            // Ferraloom: handlePingRequest answers on the connection's thread,
+            // so the debug ping chart measures the network alone.
+            Ok(play::Serverbound::PingRequest(p)) => {
+                let body = play::Clientbound::PongResponse(p).encode();
+                self.pending.fetch_add(body.len(), Ordering::Relaxed);
+                let _ = self.tx.send(Out::Packet(body));
+            }
             Ok(play::Serverbound::ResourcePack(r))
                 if r.action == PACK_DECLINED && self.required_pack =>
             {
