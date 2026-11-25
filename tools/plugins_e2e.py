@@ -57,6 +57,10 @@ PROPERTIES = {
     'view-distance': '3',
     'simulation-distance': '3',
     'pause-when-empty-seconds': '-1',
+    # The scripted player sends commands and chat far faster than a person; without this the server
+    # kicks it for spamming, as vanilla would.
+    'command-spam-threshold-seconds': '100000',
+    'chat-spam-threshold-seconds': '100000',
 }
 
 
