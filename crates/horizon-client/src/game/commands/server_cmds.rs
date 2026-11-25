@@ -410,6 +410,7 @@ impl Game<'_> {
             let Some(mut host) = self.lan.take() else {
                 return;
             };
+            let ok = saved.is_ok();
             let lines = match saved {
                 Ok(()) => save.lines,
                 Err(e) => {
@@ -427,7 +428,7 @@ impl Game<'_> {
                     }),
                 );
             }
-            if saved.is_ok() {
+            if ok {
                 self.admin_feedback = save.admin;
                 self.send_admin_feedback(&mut host, Some(save.conn));
             }
