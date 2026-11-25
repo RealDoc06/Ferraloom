@@ -749,8 +749,8 @@ impl Game<'_> {
                 self.ticks = self.ticks.max(1);
             }
             // Ferraloom: the plugins' scheduler heartbeat (tickChildren's, so not while paused).
-            if !paused {
-                state.stop |= self.tick_plugins();
+            if !paused && self.tick_plugins() {
+                admin(|a| a.stop = true);
             }
             // MinecraftServer.tickServer: while paused only the connections run.
             self.tick_server_timed(paused)?;
