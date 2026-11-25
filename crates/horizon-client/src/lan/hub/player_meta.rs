@@ -41,3 +41,28 @@ impl PlayerMeta {
         self.recorded = RecordedCriteria::default();
     }
 }
+
+impl Hub {
+    /// The entity ids of the spectating players, which the players who are
+    /// not spectating never pair with (`ServerPlayer.broadcastToPlayer`; a
+    /// spectator's camera is always its own here). Empty, and nothing
+    /// allocated, while nobody spectates.
+    pub(super) fn hidden_spectators(&self, ctx: &TickCtx) -> Vec<i32> {
+        const SPECTATOR: i32 = 3;
+        let host = ctx
+            .host
+            .filter(|h| h.game_mode == SPECTATOR)
+            .map(|h| h.entity_id);
+        let mut guests = self
+            .guests
+            .iter()
+            .filter(|g| self.here(g) && g.spectator())
+            .map(|g| g.entity_id)
+            .peekable();
+        if host.is_none() && guests.peek().is_none() {
+            return Vec::new();
+        }
+        host.into_iter().chain(guests).collect()
+    }
+
+}

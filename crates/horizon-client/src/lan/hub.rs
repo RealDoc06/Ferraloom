@@ -356,6 +356,8 @@ struct TrackView {
     tracker: Tracker,
     /// Filled and let go by the pass.
     slot: Option<super::conn::SlotFiller>,
+    /// Ferraloom: a spectator, who sees the players `TrackPass::hidden` hides.
+    spectator: bool,
 }
 
 /// All a tracking pass beside the tick needs (`Hub::track_beside`).
@@ -366,6 +368,8 @@ struct TrackPass {
     states: Arc<States>,
     riding: Riding,
     views: Vec<TrackView>,
+    /// Ferraloom: the spectating players the others don't see (`Viewer::hidden`).
+    hidden: Vec<i32>,
     types: std::collections::HashMap<String, i32>,
     /// Names the entity types (the tests' passes do without).
     sync: Option<Arc<SyncData>>,
@@ -391,6 +395,7 @@ impl TrackPass {
                 chunks: &v.chunks,
                 tracker: &mut v.tracker,
                 out,
+                hidden: if v.spectator { &[] } else { &self.hidden },
             })
             .collect();
         let (types, sync) = (&mut self.types, &self.sync);
@@ -2060,8 +2065,9 @@ impl Hub {
         }
         all.truncate(n);
         self.guests = guests;
+        let hidden = self.hidden_spectators(ctx);
         if let Some(states) = self.entity_states.take() {
-            return self.track_beside(all, states);
+            return self.track_beside(all, states, hidden);
         }
         let entities: Vec<&EntityState> = all.iter().chain(ctx.entities).collect();
         // ChunkMap.tick: the level's entities, once for all its players.
@@ -2079,6 +2085,7 @@ impl Hub {
             .filter(|g| here(g))
             .zip(outs.iter_mut())
             .map(|(g, out)| Viewer {
+                hidden: if g.spectator() { &[] } else { &hidden },
                 entity_id: g.entity_id,
                 moved: std::mem::take(&mut g.moved),
                 position: g.position,
@@ -2108,7 +2115,7 @@ impl Hub {
     /// packets take a slot in its queue here and fill it from there. It reads
     /// what it was given and the players' trackers, which come back at
     /// [`Self::finish_tracking`], and nothing the tick does meanwhile.
-    fn track_beside(&mut self, players: Vec<EntityState>, states: Arc<States>) {
+    fn track_beside(&mut self, players: Vec<EntityState>, states: Arc<States>, hidden: Vec<i32>) {
         let dimension = self.config.dimension.clone();
         let here = |g: &&mut Guest| g.placed && g.dimension == dimension;
         let views = self
@@ -2124,6 +2131,7 @@ impl Hub {
                 chunks: g.sent_chunks.clone(),
                 tracker: std::mem::take(&mut g.tracker),
                 slot: Some(g.sender.reserve()),
+                spectator: g.spectator(),
             })
             .collect();
         let mut level = self.entities.remove(&dimension).unwrap_or_default();
@@ -2136,6 +2144,7 @@ impl Hub {
             states,
             riding: self.riding.clone(),
             views,
+            hidden,
             types: std::mem::take(&mut self.entity_types),
             sync: Some(self.sync.clone()),
         };
@@ -3333,6 +3342,7 @@ mod tests {
                     chunks,
                     tracker,
                     out,
+                    hidden: &[],
                 })
                 .collect();
             level.tick(&entities, &Riding::default(), &mut viewers, |_| Some(1));
@@ -3374,6 +3384,7 @@ mod tests {
                         chunks: Arc::new(chunks_at(i as i32, tick)),
                         tracker: std::mem::take(tracker),
                         slot: Some(sender.reserve()),
+                        spectator: false,
                     };
                     sender.send(vec![tick as u8, 1]);
                     view
@@ -3387,6 +3398,7 @@ mod tests {
                 states: Arc::new(game(tick)),
                 riding: Riding::default(),
                 views,
+                hidden: Vec::new(),
                 types: Default::default(),
                 sync: None,
             };

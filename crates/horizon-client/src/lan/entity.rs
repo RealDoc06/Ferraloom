@@ -661,6 +661,10 @@ pub struct Viewer<'a> {
     pub tracker: &'a mut Tracker,
     /// What the tick sends it, in order.
     pub out: &'a mut Vec<PacketBody>,
+    /// Ferraloom: entities it never pairs with, the spectating players a
+    /// player who is not one doesn't see (ServerPlayer.broadcastToPlayer).
+    /// Empty unless someone spectates.
+    pub hidden: &'a [i32],
 }
 
 /// One entity as this tick's range checks read it: where it is
@@ -694,7 +698,7 @@ fn sees(v: &Viewer, p: &Probe, chunks: &[(i32, i32)], held: &mut [u8]) -> bool {
 fn in_range(v: &Viewer, p: &Probe) -> bool {
     let range = f64::from(p.range.min(v.view_distance * 16));
     let (dx, dz) = (v.position[0] - p.x, v.position[2] - p.z);
-    dx * dx + dz * dz <= range * range
+    dx * dx + dz * dz <= range * range && (v.hidden.is_empty() || !v.hidden.contains(&p.id))
 }
 
 /// Whether anything in a chunk can be within `range` of the viewer: a probe
@@ -1269,6 +1273,7 @@ mod tests {
                                 chunks: &chunks,
                                 tracker,
                                 out,
+                                hidden: &[],
                             })
                             .collect();
                         let start = Instant::now();
@@ -1697,6 +1702,7 @@ mod tests {
         out: [Vec<PacketBody>; 2],
         positions: [[f64; 3]; 2],
         moved: [bool; 2],
+        hidden: [Vec<i32>; 2],
     }
 
     impl Clients {
@@ -1707,6 +1713,7 @@ mod tests {
                 out: Default::default(),
                 positions: [[0.0, 64.0, 0.0]; 2],
                 moved: [false; 2],
+                hidden: Default::default(),
             }
         }
         fn tick(&mut self, level: &mut Entities, entities: &[&EntityState]) {
@@ -1724,6 +1731,7 @@ mod tests {
                     chunks: &self.chunks,
                     tracker: t0,
                     out: o0,
+                    hidden: &self.hidden[0],
                 },
                 Viewer {
                     entity_id: 2,
@@ -1733,6 +1741,7 @@ mod tests {
                     chunks: &self.chunks,
                     tracker: t1,
                     out: o1,
+                    hidden: &self.hidden[1],
                 },
             ];
             level.tick(entities, &Riding::default(), &mut viewers, |_| Some(100));
@@ -1781,6 +1790,32 @@ mod tests {
         // The other client (at the origin, its entity not in the level)
         // checks every pair each tick.
         assert!(clients.trackers[1].is_tracking(7));
+    }
+
+    /// ServerPlayer.broadcastToPlayer: a spectating player is never paired
+    /// with a client that hides it, and one that becomes hidden goes when
+    /// its pair is checked again (a section change), not before.
+    #[test]
+    fn hidden_entities_are_not_paired() {
+        let mut level = Entities::default();
+        let mut c = Clients::new();
+        let mut me = state(0.0);
+        (me.id, me.kind) = (1, "minecraft:player".into());
+        let tracks = |c: &Clients, i: usize| c.trackers[i].is_tracking(7);
+        c.tick(&mut level, &[&me, &state(0.0)]);
+        assert!(tracks(&c, 0));
+        // Hidden while tracked: kept while neither side changes section.
+        c.hidden[0] = vec![7];
+        c.tick(&mut level, &[&me, &state(1.0)]);
+        assert!(tracks(&c, 0));
+        c.tick(&mut level, &[&me, &state(20.0)]);
+        assert!(!tracks(&c, 0));
+        // Never paired again while hidden, however the client moves.
+        c.moved[0] = true;
+        c.tick(&mut level, &[&me, &state(20.0)]);
+        assert!(!tracks(&c, 0));
+        // The other client hides nothing.
+        assert!(tracks(&c, 1));
     }
 
     #[test]
@@ -1863,6 +1898,7 @@ mod tests {
                         chunks: &chunks,
                         tracker,
                         out,
+                        hidden: &[],
                     })
                     .collect();
                 // Nothing a client gets depends on the order the clients run in.
