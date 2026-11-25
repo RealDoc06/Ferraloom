@@ -556,6 +556,10 @@ impl Game<'_> {
         let mut targets = self.exploded_positions(center, radius, resists);
         self.explosion_hurt_entities(center, radius, damage_type);
         if interaction != BlockInteraction::Keep {
+            // Ferraloom: EntityExplodeEvent before blocks break (CraftBukkit's interactWithBlocks).
+            if ferraloom_plugins::listens(ferraloom_plugins::Event::EntityExplode) {
+                targets = self.plugin_explode(center, radius, targets);
+            }
             // Util.shuffle(list, level.random)
             for i in (2..=targets.len()).rev() {
                 let swap = self.world.random.next_int_bound(i as i32).unwrap_or(0) as usize;

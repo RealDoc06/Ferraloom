@@ -738,6 +738,13 @@ impl<'a> Game<'a> {
             mob.persistent = persistent;
             let id = mob.id;
             self.mobs.push(mob);
+            // Ferraloom: CreatureSpawnEvent as the mob is added (game/plugins/entities.rs).
+            if ferraloom_plugins::listens(ferraloom_plugins::Event::EntitySpawn) {
+                use ferraloom_plugins::SpawnReason::{ChunkGen, Natural};
+                if self.plugin_spawned(id, if persistent { ChunkGen } else { Natural }) {
+                    continue;
+                }
+            }
             self.enchant_spawn_equipment(id);
             if !persistent {
                 self.spawn_jockeys(id, true);

@@ -13,6 +13,9 @@ commands:
   fadmin:
     description: Only for those with ferraloomtest.admin (operators)
     permission: ferraloomtest.admin
+  fentity:
+    description: The entities area's checks
+    usage: /fentity <pigs|shield|quadruple on|off|name N|kill|remove|mob>
 permissions:
   ferraloomtest.admin:
     default: op

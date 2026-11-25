@@ -77,6 +77,15 @@ public final class Bridge {
         EVENTS[52] = org.bukkit.event.inventory.InventoryMoveItemEvent.getHandlerList();
         EVENTS[54] = org.bukkit.event.player.PlayerItemConsumeEvent.getHandlerList();
         EVENTS[55] = org.bukkit.event.player.PlayerSwapHandItemsEvent.getHandlerList();
+        // Entities: 40-47.
+        EVENTS[40] = org.bukkit.event.entity.EntityDamageEvent.getHandlerList();
+        EVENTS[41] = org.bukkit.event.entity.EntityDeathEvent.getHandlerList();
+        EVENTS[42] = org.bukkit.event.entity.EntitySpawnEvent.getHandlerList();
+        EVENTS[43] = org.bukkit.event.entity.EntityTargetEvent.getHandlerList();
+        EVENTS[44] = org.bukkit.event.entity.EntityExplodeEvent.getHandlerList();
+        EVENTS[45] = org.bukkit.event.player.PlayerInteractEntityEvent.getHandlerList();
+        EVENTS[46] = org.bukkit.event.entity.EntityChangeBlockEvent.getHandlerList();
+        EVENTS[47] = org.bukkit.event.entity.EntityCombustEvent.getHandlerList();
     }
 
     /** {@link #tick}'s bit for "the command labels changed: ask {@link #commands} again". */

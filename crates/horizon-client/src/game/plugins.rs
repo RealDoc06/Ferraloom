@@ -15,6 +15,8 @@
 //! and comes while it is not waits for the start of the next tick ([`Pending`]).
 mod blocks;
 mod inventory;
+// Entities.
+pub(super) mod entities;
 mod players;
 pub(super) use players::{INBOX_EVENTS, login};
 mod server;
@@ -150,6 +152,10 @@ impl Game<'_> {
         };
         if let Err(e) = ferraloom_plugins::start(&config, &mut GameHost::new(self, None)) {
             super::dedicated::log("ERROR", &format!("No plugins loaded: {e}"));
+        }
+        // Entities: the sites inside mob code.
+        if ferraloom_plugins::running() {
+            entities::install();
         }
     }
 

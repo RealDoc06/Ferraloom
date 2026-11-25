@@ -186,7 +186,7 @@ pub(crate) fn register(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{InventoryHost, Location, PlayerHost, ServerHost, WorldHost};
+    use crate::{EntityHost, InventoryHost, Location, PlayerHost, ServerHost, WorldHost};
 
     /// A host that records what it is told.
     #[derive(Default)]
@@ -223,6 +223,8 @@ mod tests {
             self.stopped = true;
         }
     }
+
+    impl EntityHost for Host {}
 
     #[test]
     fn uuid_halves_round_trip() {

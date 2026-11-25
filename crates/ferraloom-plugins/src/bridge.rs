@@ -28,6 +28,7 @@ const AREAS: &[fn(&mut JNIEnv) -> jni::errors::Result<()>] = &[
     crate::worlds::load,
     crate::blocks::load,
     crate::inventory::load,
+    crate::entities::load,
 ];
 
 /// A dimension as Bukkit sees it.

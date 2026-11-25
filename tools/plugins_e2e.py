@@ -22,7 +22,9 @@ server twice on a fresh flat world:
    game rules, another dimension) and a storm with its WeatherChangeEvent; a chest GUI a command opens
    (its title, its items' names, lore and plugin data) with a cancelled click leaving both sides as they
    were and an uncancelled one taking the item, its close event, and a held item written through as
-   CraftItemStack's mirror is; the server area: a command hidden from a player without its permission, tab
+   CraftItemStack's mirror is; entities: spawn events and a cancelled spawn, damage events cancelled and
+   changed, reads and changes of an entity, using an entity, death and its killer; the server area: a
+   command hidden from a player without its permission, tab
    completion (a TabCompleter, Bukkit's player-name default, TabCompleteEvent), a boss bar shown and removed,
    an offline player's op, whitelist and ban round trip (the ban seen by vanilla's /banlist), and the
    watchdog naming a plugin that stalls the server thread.
@@ -509,6 +511,8 @@ def check_plugins(engine, bot_binary, built, out, scratch):
         log.wait_for(r'Kicked lost connection: FerraloomTest kicked you')
         print('login refused, kickPlayer: ok')
 
+        check_entities(server, bot)
+
         # The player leaves.
         mark = len(log.lines)
         bot.send('quit')
@@ -536,6 +540,91 @@ def check_plugins(engine, bot_binary, built, out, scratch):
     # The plugin loader's chunk ticket cleanup at disable reaches every world.
     log.absent(r'removing chunk tickets', mark)
     print('onDisable at stop: ok')
+
+
+def check_entities(server, bot):
+    """The entities area: spawn events and their cancel, damage events (cancelled, changed), entity reads and
+    changes, using an entity, death with its killer."""
+    log = server.out
+    time.sleep(2)  # The teleported player lands.
+    mark = len(bot.out.lines)
+    bot.send('command ftest where')
+    _, where = bot.out.wait_for(r'^chat at world (-?[\d.]+) (-?[\d.]+) (-?[\d.]+)$', start=mark)
+    x, y, z = (float(v) for v in where.split()[3:6])
+
+    # A cancelled spawn adds no mob.
+    bot.send('command fentity pigs off')
+    bot.out.wait_for(r'^chat pigs false$')
+    mark = len(log.lines)
+    server.console(f'summon minecraft:pig {x + 2} {y} {z + 2}')
+    log.wait_for(r'event: spawn PIG id=\d+ reason=DEFAULT cancelled=true', start=mark)
+    server.console(f'execute positioned {x + 2} {y} {z + 2} if entity @e[type=minecraft:pig,distance=..1] run say pig')
+    server.console('say checked')
+    log.wait_for(r'\[Server\] checked', start=mark)
+    log.absent(r'\[Server\] pig', mark)
+
+    # The cow the checks act on: its spawn event set its AI off.
+    mark = len(log.lines)
+    server.console(f'summon minecraft:cow {x + 2} {y} {z}')
+    _, line = log.wait_for(r'event: spawn COW id=(\d+) reason=DEFAULT cancelled=false', start=mark)
+    cow = re.search(r'id=(\d+)', line).group(1)
+    mark = len(bot.out.lines)
+    bot.send('command fentity mob')
+    bot.out.wait_for(r'^chat mob COW health=10\.0 max=10\.0 name=null ai=false valid=true animals=true monster=false$',
+                     start=mark)
+    print('spawn event, cancelled spawn, entity reads and setAI: ok')
+
+    # A cancelled hit leaves the health; a quadrupled one takes four times the fist's 1.
+    bot.send('command fentity shield on')
+    bot.out.wait_for(r'^chat shield true$')
+    mark = len(log.lines)
+    bot.send(f'attack {cow}')
+    log.wait_for(rf'event: damage COW by {PLAYER} cause=ENTITY_ATTACK final=1\.0 cancelled=true', start=mark)
+    bot.send('command fentity shield off')
+    bot.send('command fentity quadruple on')
+    bot.out.wait_for(r'^chat quadruple true$')
+    mark = len(bot.out.lines)
+    bot.send('command fentity mob')
+    bot.out.wait_for(r'^chat mob COW health=10\.0 ', start=mark)
+    time.sleep(1)  # Past the cow's hurt cooldown, as vanilla's.
+    mark = len(log.lines)
+    bot.send(f'attack {cow}')
+    log.wait_for(rf'event: damage COW by {PLAYER} cause=ENTITY_ATTACK final=4\.0 cancelled=false', start=mark)
+    mark = len(bot.out.lines)
+    bot.send('command fentity mob')
+    bot.out.wait_for(r'^chat mob COW health=6\.0 ', start=mark)
+    print('damage event: cancelled, damage changed: ok')
+
+    # A custom name; using the entity is cancelled.
+    mark = len(bot.out.lines)
+    bot.send('command fentity name Bessie')
+    bot.out.wait_for(r'^chat named Bessie$', start=mark)
+    bot.send('command fentity mob')
+    bot.out.wait_for(r'^chat mob COW health=6\.0 max=10\.0 name=Bessie ', start=mark)
+    mark = len(log.lines)
+    bot.send(f'interact {cow}')
+    log.wait_for(rf'event: interact COW by {PLAYER} hand=HAND cancelled=true', start=mark)
+    print('setCustomName, interact event: ok')
+
+    # setHealth(0) kills it at the next tick: the death event, its killer the player who last hit it.
+    mark = len(log.lines)
+    bot.send('command fentity kill')
+    _, line = log.wait_for(r'event: death COW exp=\d+ killer=\w+ drops=\d+', start=mark)
+    mark = len(bot.out.lines)
+    bot.send('command fentity mob')
+    bot.out.wait_for(r'^chat mob COW .* valid=false ', start=mark)
+    print(f'setHealth(0), death event ({line.split("event: ")[1]}), a dead handle: ok')
+
+    # The death's loot became one diamond; World.dropItem adds another; World.getEntities finds both.
+    time.sleep(1)
+    mark = len(bot.out.lines)
+    bot.send('command fentity diamonds')
+    bot.out.wait_for(r'^chat diamonds 1$', start=mark)
+    bot.send('command fentity drop')
+    bot.out.wait_for(r'^chat dropped DROPPED_ITEM DIAMOND$|^chat dropped ITEM DIAMOND$', start=mark)
+    bot.send('command fentity diamonds')
+    bot.out.wait_for(r'^chat diamonds 2$', start=mark)
+    print('death drops changed, World.dropItem, World.getEntities, Item.getItemStack: ok')
 
 
 def target_dir():

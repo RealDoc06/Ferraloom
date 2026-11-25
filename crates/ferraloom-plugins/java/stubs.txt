@@ -29,3 +29,6 @@ org.bukkit.block.BlockState
 org.bukkit.inventory.ItemFactory
 org.bukkit.inventory.meta.ItemMeta
 org.bukkit.inventory.Inventory
+org.bukkit.entity.Entity
+org.bukkit.entity.LivingEntity
+org.bukkit.entity.Mob

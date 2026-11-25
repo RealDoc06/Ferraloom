@@ -330,9 +330,13 @@ impl Game<'_> {
             // No network until it is opened to the LAN; the memory connection
             // is not compressed (`Connection.isMemoryConnection`).
             listen: false,
-            gate: Some(Arc::new(move |_, uuid, _| {
-                (uuid != owner && published.published.load(Ordering::Relaxed) == 0)
-                    .then(|| translatable("multiplayer.disconnect.not_whitelisted", &[]))
+            gate: Some(Arc::new(move |_, uuid, _, full| {
+                if uuid != owner && published.published.load(Ordering::Relaxed) == 0 {
+                    return Some(translatable("multiplayer.disconnect.not_whitelisted", &[]));
+                }
+                // Ferraloom: with a gate, the gate decides the full server too
+                // (lan/mod.rs LoginGate), after the whitelist as in canPlayerLogin.
+                full.then(|| translatable("multiplayer.disconnect.server_full", &[]))
             })),
             // IntegratedServer.initServer: the MOTD names the owner and the world.
             ..NetConfig::lan(

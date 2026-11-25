@@ -271,7 +271,10 @@ impl MobLoop {
             Mode::Check => {
                 let mut serial = self.clone();
                 let seq = raider::hurt_seq();
+                // Ferraloom: the plugin changes queued by the serial run go (plugin_sites).
+                let queued = super::plugin_sites::queued();
                 serial.run(cx, Mode::Serial);
+                super::plugin_sites::unqueue_after(queued);
                 raider::set_hurt_seq(seq);
                 let stats = self.run_speculative(cx);
                 if let Some(diff) = self.differs(&serial) {
@@ -344,7 +347,12 @@ impl MobLoop {
         }
         super::apply_mob_pushes(m, &mut self.pushes);
         let from = self.events.len();
-        let kept = m.tick(&w, &mut self.random, &mut self.events);
+        // Ferraloom: EntityTargetEvent and EntityCombustEvent, in the serial turn (plugin_sites).
+        let kept = if ferraloom_plugins::listens_any(super::plugin_sites::WATCHED) {
+            super::plugin_sites::tick_watched(m, &w, &mut self.random, &mut self.events)
+        } else {
+            m.tick(&w, &mut self.random, &mut self.events)
+        };
         // This tick's reads, for the next one over the same blocks.
         m.ai.move_memo.keep_reads(read.fluids, read.kinds);
         drop(w);
@@ -401,6 +409,14 @@ impl MobLoop {
         let was = self.grid.column_of(i);
         self.grid.update(i, self.snapshot[i].bounds);
         self.grid.note_species(self.snapshot[i].species);
+        // Ferraloom: EntityChangeBlockEvent for the blocks this tick changes, in mob order.
+        if ferraloom_plugins::listens(ferraloom_plugins::Event::EntityChangeBlock) {
+            let w = MobWorld {
+                others: Others::new(&self.snapshot),
+                ..cx.base.clone()
+            };
+            super::plugin_sites::change_blocks(&mut self.mobs[i], &mut self.events, from, &w);
+        }
         match track {
             Some(track) => {
                 if changed {
@@ -641,7 +657,14 @@ fn speculate(
     let mut random = start.clone();
     let mut events = Vec::new();
     let ticked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        record(|| m.tick(w, &mut random, &mut events))
+        record(|| {
+            // Ferraloom: a listened target change or ignition ticks again in turn (plugin_sites).
+            if ferraloom_plugins::listens_any(super::plugin_sites::WATCHED) {
+                super::plugin_sites::tick_watched(m, w, &mut random, &mut events)
+            } else {
+                m.tick(w, &mut random, &mut events)
+            }
+        })
     }));
     let Ok((kept, reads)) = ticked else {
         *m = *backup.take()?;
@@ -795,10 +818,114 @@ mod tests {
     /// speculation both keeps ticks and runs some again.
     #[test]
     fn speculative_ticks_match_the_serial_loop() {
+        let Some(totals) = crowd(1000) else {
+            return;
+        };
+        assert!(totals.reran > 0, "{totals:?}");
+        assert!(totals.reran < totals.speculated, "{totals:?}");
+    }
+
+    /// Ferraloom: the fake plugin below acts on these mobs only, so the other
+    /// tests of this binary, which see its listener bits too, tick as without it.
+    const PLUGIN_MOBS: u32 = 900_000_000;
+
+    thread_local! {
+        static TARGET_EVENTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
+    /// A plugin's EntityTargetEvent listener that cancels a third of the
+    /// changes and marks the new target of another third (a change queued
+    /// for another entity).
+    fn plugin_target(
+        m: &mut Mob,
+        was: Option<super::super::Who>,
+        _: &MobWorld,
+    ) -> Option<super::super::Who> {
+        if m.id < PLUGIN_MOBS {
+            return m.ai.target;
+        }
+        TARGET_EVENTS.set(TARGET_EVENTS.get() + 1);
+        match m.id % 3 {
+            0 => was,
+            1 => {
+                if let Some(super::super::Who::Mob(t)) = m.ai.target {
+                    let e = ferraloom_plugins::EntityRef::new(t, "villager");
+                    super::super::plugin_sites::queue(
+                        e,
+                        ferraloom_plugins::EntityChange::Glowing(true),
+                    );
+                }
+                m.ai.target
+            }
+            _ => m.ai.target,
+        }
+    }
+
+    /// An EntityCombustEvent listener that refuses every fifth mob.
+    fn plugin_combust(m: &mut Mob, ticks: i32, _: &MobWorld) -> Option<i32> {
+        (m.id < PLUGIN_MOBS || !m.id.is_multiple_of(5)).then_some(ticks)
+    }
+
+    /// An EntityChangeBlockEvent listener that refuses every other mob.
+    fn plugin_change_block(m: &mut Mob, _: [i32; 3], _: &str, _: &MobWorld) -> bool {
+        m.id >= PLUGIN_MOBS && m.id.is_multiple_of(2)
+    }
+
+    /// An EntityDamageEvent listener that cancels half and halves the rest.
+    fn plugin_damage(m: &mut Mob, _: &super::super::Damage, _: f32, amount: f32) -> Option<f32> {
+        if m.id < PLUGIN_MOBS {
+            return Some(amount);
+        }
+        (!m.id.is_multiple_of(2)).then_some(amount * 0.5)
+    }
+
+    /// Ferraloom: with plugins listening to the mob pass's events, the
+    /// speculative pass still gives the serial loop's results, the changes
+    /// queued for other entities included, and only the mobs whose tick
+    /// changed their target tick again in turn for it.
+    #[test]
+    fn speculative_ticks_match_the_serial_loop_with_entity_listeners() {
+        use ferraloom_plugins::Event;
+        super::super::plugin_sites::install(super::super::plugin_sites::Sites {
+            damage: plugin_damage,
+            target: plugin_target,
+            combust: plugin_combust,
+            change_block: plugin_change_block,
+        });
+        ferraloom_plugins::latch_for_tests(&[
+            Event::EntityTarget,
+            Event::EntityDamage,
+            Event::EntityChangeBlock,
+            Event::EntityCombust,
+        ]);
+        let listened = crowd(PLUGIN_MOBS);
+        let events = TARGET_EVENTS.get();
+        ferraloom_plugins::latch_for_tests(&[]);
+        let Some(totals) = listened else {
+            return;
+        };
+        // The four runs of each tick (serial, check's two, speculative) call
+        // the listener for the same changes.
+        assert!(
+            events > 0 && events.is_multiple_of(4),
+            "{events} {totals:?}"
+        );
+        assert!(totals.reran < totals.speculated, "{totals:?}");
+        eprintln!(
+            "with target and damage listeners: {} of {} speculative ticks ran again in turn, {} target events",
+            totals.reran,
+            totals.speculated,
+            events / 4
+        );
+    }
+
+    /// The crowd's 80 ticks, serially and speculatively, ids from `first_id`:
+    /// how the speculation went, or none without the game's resources.
+    fn crowd(first_id: u32) -> Option<Stats> {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../.local/horizon-client/26.3");
         if !root.join("horizon-resources.json").exists() {
-            return;
+            return None;
         }
         let assets = Assets::load(&root).unwrap();
         let registry = assets.registry;
@@ -867,7 +994,7 @@ mod tests {
         let ground = f64::from(MIN_Y + 3);
         let mut mobs = Vec::new();
         let mut add = |kind: &str, x: f64, z: f64, setup: &dyn Fn(&mut Mob)| {
-            let id = 1000 + mobs.len() as u32;
+            let id = first_id + mobs.len() as u32;
             let mut m = Mob::new(
                 id,
                 Arc::new(types.types[kind].clone()),
@@ -978,12 +1105,26 @@ mod tests {
                 random.clone(),
             );
             let mut serial = start.clone();
+            drop(super::super::plugin_sites::take_queued());
             serial.run(&cx, Mode::Serial);
+            let serial_queue = super::super::plugin_sites::take_queued();
+            // The game's FERRALOOM_CHECK_MOBS=1: both ways, compared, its serial run's changes put back.
+            start.clone().run(&cx, Mode::Check);
+            let checked_queue = super::super::plugin_sites::take_queued();
+            assert_eq!(
+                checked_queue, serial_queue,
+                "tick {tick}: check mode's queued changes"
+            );
             let mut speculative = start;
             let stats = speculative.run(&cx, Mode::Speculative);
             if let Some(diff) = speculative.differs(&serial) {
                 panic!("tick {tick}: {diff}");
             }
+            let queue = super::super::plugin_sites::take_queued();
+            assert_eq!(
+                queue, serial_queue,
+                "tick {tick}: the plugins' queued changes"
+            );
             totals.speculated += stats.speculated;
             totals.reran += stats.reran;
             // What the game does after the loop, for the next tick.
@@ -1002,8 +1143,7 @@ mod tests {
             mobs = after;
             random = next;
         }
-        assert!(totals.reran > 0, "{totals:?}");
-        assert!(totals.reran < totals.speculated, "{totals:?}");
         assert!(mobs.iter().any(|m| m.species() == Species::Parrot));
+        Some(totals)
     }
 }

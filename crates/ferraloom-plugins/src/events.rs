@@ -67,10 +67,20 @@ pub enum Event {
     InventoryMoveItem = 52,
     PlayerItemConsume = 54,
     PlayerSwapHandItems = 55,
+    // Entities: 40-47. One bit can stand for a group of Bukkit events (`Bridge.EVENTS`).
+    EntityDamage = 40,
+    EntityDeath = 41,
+    /// `EntitySpawnEvent`'s list: `CreatureSpawnEvent` is one.
+    EntitySpawn = 42,
+    EntityTarget = 43,
+    EntityExplode = 44,
+    PlayerInteractEntity = 45,
+    EntityChangeBlock = 46,
+    EntityCombust = 47,
 }
 
 impl Event {
-    pub const ALL: [Event; 44] = [
+    pub const ALL: [Event; 52] = [
         Event::PlayerJoin,
         Event::PlayerQuit,
         Event::AsyncPlayerChat,
@@ -116,6 +126,14 @@ impl Event {
         Event::InventoryMoveItem,
         Event::PlayerItemConsume,
         Event::PlayerSwapHandItems,
+        Event::EntityDamage,
+        Event::EntityDeath,
+        Event::EntitySpawn,
+        Event::EntityTarget,
+        Event::EntityExplode,
+        Event::PlayerInteractEntity,
+        Event::EntityChangeBlock,
+        Event::EntityCombust,
     ];
 
     /// The word of [`FLAGS`] holding the event's bit.
@@ -178,6 +196,17 @@ pub(crate) fn set(words: &[u64]) {
             Ordering::Relaxed,
         );
     }
+}
+
+/// Latches the listener bits of `events` alone, for tests of event sites in
+/// other crates (no JVM). Never called by the game.
+#[doc(hidden)]
+pub fn latch_for_tests(events: &[Event]) {
+    let mut words = [0; WORDS];
+    for e in events {
+        words[e.word()] |= e.bit();
+    }
+    set(&words);
 }
 
 #[cfg(test)]

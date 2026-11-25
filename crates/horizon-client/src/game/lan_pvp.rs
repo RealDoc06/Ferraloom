@@ -287,6 +287,8 @@ impl Game<'_> {
         // Player.attack: the hurt (with its knockback away from the
         // attacker), then causeExtraKnockback along the attacker's yaw.
         let land = |g: &mut Self| {
+            // Ferraloom: the attacking player, for EntityDamageByEntityEvent (game/plugins/entities.rs).
+            let _attacker = super::plugins::entities::pvp_attacker(s.attacker);
             g.combat.player_attacker = Some((s.from, s.disable_blocking));
             let hurt = g.mob_hits_player(s.amount, s.from, "minecraft:player_attack");
             g.combat.player_attacker = None;
