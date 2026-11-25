@@ -383,7 +383,7 @@ public final class PlayerEvents {
      * PlayerInteractEvent. {@code world} is -1 without a block. Answers bit 1 for useInteractedBlock() == DENY and
      * bit 2 for useItemInHand() == DENY.
      */
-    public static int interact(long most, long least, int action, String item, int world, int x, int y, int z,
+    public static int interact(long most, long least, int action, byte[] item, int world, int x, int y, int z,
             int face, boolean offHand, double px, double py, double pz, boolean hasPoint) {
         FerraloomPlayer player = online(most, least);
         if (player == null) {
@@ -393,9 +393,8 @@ public final class PlayerEvents {
             World w = world < 0 ? null : Bridge.server.world(world);
             Block block = w == null ? null : w.getBlockAt(x, y, z);
             BlockFace blockFace = block == null ? BlockFace.SELF : FACES[face];
-            Material material = Material.matchMaterial(item);
             Vector point = hasPoint ? new Vector(px, py, pz) : null;
-            PlayerInteractEvent event = new Interact(player, Action.values()[action], material, block, blockFace,
+            PlayerInteractEvent event = new Interact(player, Action.values()[action], item, block, blockFace,
                     offHand ? EquipmentSlot.OFF_HAND : EquipmentSlot.HAND, point);
             Bridge.server.pluginManager.callEvent(event);
             return (event.useInteractedBlock() == Event.Result.DENY ? 1 : 0)
@@ -406,40 +405,39 @@ public final class PlayerEvents {
         }
     }
 
-    /**
-     * PlayerInteractEvent with the held item known by its material only: {@code getItem()} needs the bridge's
-     * ItemStack (the inventory area) and throws until then.
-     */
+    /** PlayerInteractEvent whose item is read from its bytes when a listener first asks (Items.read allocates). */
     private static final class Interact extends PlayerInteractEvent {
-        private final Material material;
+        private final byte[] bytes;
+        private ItemStack read;
 
-        Interact(Player who, Action action, Material material, Block block, BlockFace face, EquipmentSlot hand,
+        Interact(Player who, Action action, byte[] item, Block block, BlockFace face, EquipmentSlot hand,
                 Vector point) {
             super(who, action, null, block, face, hand, point);
-            this.material = material == null || material.isAir() ? Material.AIR : material;
+            this.bytes = item;
         }
 
         @Override
         public ItemStack getItem() {
-            if (material == Material.AIR) {
-                return null;
+            if (read == null && bytes != null) {
+                read = Items.read(bytes);
             }
-            throw new UnsupportedOperationException("Ferraloom does not implement PlayerInteractEvent.getItem() yet");
+            return read;
         }
 
         @Override
         public Material getMaterial() {
-            return material;
+            ItemStack item = getItem();
+            return item == null ? Material.AIR : item.getType();
         }
 
         @Override
         public boolean hasItem() {
-            return material != Material.AIR;
+            return bytes != null;
         }
 
         @Override
         public boolean isBlockInHand() {
-            return hasItem() && material.isBlock();
+            return hasItem() && getMaterial().isBlock();
         }
     }
 

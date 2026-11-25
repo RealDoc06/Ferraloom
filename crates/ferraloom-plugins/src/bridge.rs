@@ -6,7 +6,8 @@ use crate::{PluginHost, events, jvm, natives};
 use jni::{
     JNIEnv, JavaVM,
     objects::{
-        GlobalRef, JClass, JObject, JObjectArray, JStaticMethodID, JString, JValue, JValueOwned,
+        GlobalRef, JClass, JLongArray, JObject, JObjectArray, JStaticMethodID, JString, JValue,
+        JValueOwned,
     },
     signature::{Primitive, ReturnType},
     sys::jvalue,
@@ -26,6 +27,7 @@ const AREAS: &[fn(&mut JNIEnv) -> jni::errors::Result<()>] = &[
     crate::players::load,
     crate::worlds::load,
     crate::blocks::load,
+    crate::inventory::load,
 ];
 
 /// A dimension as Bukkit sees it.
@@ -190,9 +192,9 @@ pub fn start(config: &Config, host: &mut dyn PluginHost) -> Result<bool, String>
                     "dev/ferraloom/bukkit/Bridge",
                     [
                         ("start", format!("({S}{S}[{S}[III{S}Z)V")),
-                        ("enable", "()J".into()),
+                        ("enable", "()[J".into()),
                         ("disable", "()V".into()),
-                        ("tick", "(J)J".into()),
+                        ("tick", "(J)[J".into()),
                         ("commands", format!("()[{S}")),
                         ("consoleCommand", format!("({S})Z")),
                     ],
@@ -241,14 +243,25 @@ fn void() -> ReturnType {
     ReturnType::Primitive(Primitive::Void)
 }
 
+/// `Bridge.tick`'s and `Bridge.enable`'s answer: the event bits, word by word.
+fn words(env: &mut JNIEnv, value: JValueOwned) -> jni::errors::Result<Vec<u64>> {
+    let array = JLongArray::from(value.l()?);
+    let mut words = vec![0; env.get_array_length(&array)? as usize];
+    env.get_long_array_region(&array, 0, &mut words)?;
+    Ok(words.into_iter().map(|w| w as u64).collect())
+}
+
 /// Every plugin's `onEnable`, once the worlds are loaded.
 pub fn enable(host: &mut dyn PluginHost) {
-    let long = ReturnType::Primitive(Primitive::Long);
     // SAFETY: `enable`'s signature in `start`.
-    if let Some(bits) = call(host, |env| {
-        unsafe { bridge_entry().invoke(env, ENABLE, long, &[]) }?.j()
+    if let Some(mut bits) = call(host, |env| {
+        let answer = unsafe { bridge_entry().invoke(env, ENABLE, ReturnType::Array, &[]) }?;
+        words(env, answer)
     }) {
-        events::set(bits as u64 & !COMMANDS_CHANGED);
+        if let Some(first) = bits.first_mut() {
+            *first &= !COMMANDS_CHANGED;
+        }
+        events::set(&bits);
     }
 }
 
@@ -258,7 +271,7 @@ pub fn disable(host: &mut dyn PluginHost) {
     call(host, |env| {
         unsafe { bridge_entry().invoke(env, DISABLE, void(), &[]) }.map(drop)
     });
-    events::set(0);
+    events::set(&[]);
 }
 
 /// The start of server tick `tick`: what plugins sent from other threads
@@ -267,14 +280,18 @@ pub fn disable(host: &mut dyn PluginHost) {
 /// label when they changed since the last time.
 pub fn tick(host: &mut dyn PluginHost, tick: i64) -> Option<Vec<String>> {
     natives::drain_deferred(host);
-    let long = ReturnType::Primitive(Primitive::Long);
     let args = [JValue::Long(tick).as_jni()];
     // SAFETY: `tick`'s signature in `start`.
-    let bits = call(host, |env| {
-        unsafe { bridge_entry().invoke(env, TICK, long, &args) }?.j()
-    })? as u64;
-    events::set(bits & !COMMANDS_CHANGED);
-    if bits & COMMANDS_CHANGED == 0 {
+    let mut bits = call(host, |env| {
+        let answer = unsafe { bridge_entry().invoke(env, TICK, ReturnType::Array, &args) }?;
+        words(env, answer)
+    })?;
+    let changed = bits.first().is_some_and(|w| w & COMMANDS_CHANGED != 0);
+    if let Some(first) = bits.first_mut() {
+        *first &= !COMMANDS_CHANGED;
+    }
+    events::set(&bits);
+    if !changed {
         return None;
     }
     call(host, |env| {

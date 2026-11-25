@@ -1068,12 +1068,12 @@ impl Game<'_> {
         } else {
             g.inventory.get(g.selected).and_then(Option::as_ref)
         };
-        let item = held.map_or_else(|| "minecraft:air".to_owned(), |s| s.item.to_string());
+        let item = held.cloned();
         let world = world_index(Dim::from_id(&g.dimension));
         let interact = Interact {
             player: id,
             action,
-            item: &item,
+            item: item.as_ref(),
             block: block.map(|(pos, face, _)| (world, pos, face)),
             off_hand,
             point: block.map(|(_, _, p)| p.map(f64::from)),
@@ -1152,13 +1152,11 @@ impl Game<'_> {
         if self.pick().is_some() {
             return;
         }
-        let item = self
-            .stack_in(self.selected)
-            .map_or_else(|| "minecraft:air".to_owned(), |s| s.item.to_string());
+        let item = self.stack_in(self.selected).cloned();
         let interact = Interact {
             player: id,
             action: Action::LeftClickAir,
-            item: &item,
+            item: item.as_ref(),
             block: None,
             off_hand: false,
             point: None,

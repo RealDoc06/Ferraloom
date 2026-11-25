@@ -410,8 +410,8 @@ pub enum Action {
 pub struct Interact<'a> {
     pub player: PlayerId,
     pub action: Action,
-    /// The held item's id (`minecraft:air` for none): `getMaterial`.
-    pub item: &'a str,
+    /// The item in the hand that clicked, none for an empty hand.
+    pub item: Option<&'a horizon_items::items::ItemStack>,
     /// The block clicked: world, position, `BlockFace`'s ordinal.
     pub block: Option<(usize, [i32; 3], i32)>,
     /// The off hand's turn.
@@ -549,7 +549,7 @@ pub(crate) fn load(env: &mut JNIEnv) -> jni::errors::Result<()> {
             ("kick", sig("(JJ$$)[$")),
             ("move", format!("(JJ{LOC}{LOC})[D")),
             ("teleport", format!("(JJ{LOC}{LOC}I)[D")),
-            ("interact", sig("(JJI$IIIIIZDDDZ)I")),
+            ("interact", "(JJI[BIIIIIZDDDZ)I".into()),
             ("respawn", format!("(JJ{LOC}ZZ)[D")),
             ("gameModeChange", "(JJI)Z".into()),
             ("toggle", "(JJIZ)Z".into()),
@@ -918,7 +918,7 @@ pub fn player_interact(host: &mut dyn crate::PluginHost, i: &Interact) -> Intera
         return Interaction::default();
     };
     let bits = bridge::call(host, |env| {
-        let item = env.new_string(i.item)?;
+        let item = crate::inventory::to_java(env, i.item)?;
         let (world, pos, face) = i.block.unwrap_or((usize::MAX, [0; 3], 0));
         let point = i.point.unwrap_or_default();
         let mut args = id_args(i.player).to_vec();

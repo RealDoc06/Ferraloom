@@ -1111,6 +1111,59 @@ final class FerraloomPlayer extends StubPlayer {
     public void resetPlayerWeather() {
     }
 
+    /** CraftLivingEntity.getLineOfSight: the blocks from the eyes to the first one not transparent. */
+    private List<org.bukkit.block.Block> lineOfSight(Set<org.bukkit.Material> transparent, int maxDistance,
+            int maxLength) {
+        List<org.bukkit.block.Block> blocks = new ArrayList<>();
+        java.util.Iterator<org.bukkit.block.Block> blocksSeen = new org.bukkit.util.BlockIterator(this,
+                Math.min(maxDistance, 120));
+        while (blocksSeen.hasNext()) {
+            org.bukkit.block.Block block = blocksSeen.next();
+            blocks.add(block);
+            if (maxLength != 0 && blocks.size() > maxLength) {
+                blocks.remove(0);
+            }
+            org.bukkit.Material material = block.getType();
+            if (transparent == null ? !material.isAir() : !transparent.contains(material)) {
+                break;
+            }
+        }
+        return blocks;
+    }
+
+    @Override
+    public List<org.bukkit.block.Block> getLineOfSight(Set<org.bukkit.Material> transparent, int maxDistance) {
+        return lineOfSight(transparent, maxDistance, 0);
+    }
+
+    @Override
+    public org.bukkit.block.Block getTargetBlock(Set<org.bukkit.Material> transparent, int maxDistance) {
+        return lineOfSight(transparent, maxDistance, 1).get(0);
+    }
+
+    @Override
+    public List<org.bukkit.block.Block> getLastTwoTargetBlocks(Set<org.bukkit.Material> transparent,
+            int maxDistance) {
+        return lineOfSight(transparent, maxDistance, 2);
+    }
+
+    /**
+     * The first block whose material is solid along the eyes' line, within the distance; none when there is
+     * none. Whole blocks only (CraftBukkit traces their collision shapes).
+     */
+    @Override
+    public org.bukkit.block.Block getTargetBlockExact(int maxDistance) {
+        java.util.Iterator<org.bukkit.block.Block> blocksSeen = new org.bukkit.util.BlockIterator(this,
+                Math.min(maxDistance, 120));
+        while (blocksSeen.hasNext()) {
+            org.bukkit.block.Block block = blocksSeen.next();
+            if (block.getType().isSolid()) {
+                return block;
+            }
+        }
+        return null;
+    }
+
     /** Players are never hidden here (hidePlayer is not bridged). */
     @Override
     public boolean canSee(Player player) {
@@ -1354,6 +1407,22 @@ final class FerraloomPlayer extends StubPlayer {
     public Set<PermissionAttachmentInfo> getEffectivePermissions() {
         return permissions.getEffectivePermissions();
     }
+
+    // Inventory (inventory area: FerraloomInventories, FerraloomPlayerInventory).
+
+    final FerraloomInventories.Of inventories = new FerraloomInventories.Of(this);
+
+    @Override public org.bukkit.inventory.PlayerInventory getInventory() { return inventories.inventory(); }
+    @Override public org.bukkit.inventory.Inventory getEnderChest() { return inventories.enderChest(); }
+    @Override public org.bukkit.inventory.InventoryView getOpenInventory() { return inventories.openView(); }
+    @Override public org.bukkit.inventory.InventoryView openInventory(org.bukkit.inventory.Inventory inventory) { return inventories.openInventory(inventory); }
+    @Override public void openInventory(org.bukkit.inventory.InventoryView view) { inventories.openInventory(view.getTopInventory()); }
+    @Override public void closeInventory() { inventories.closeInventory(); }
+    @Override public void updateInventory() { inventories.update(); }
+    @Override public org.bukkit.inventory.ItemStack getItemOnCursor() { return inventories.cursor(); }
+    @Override public void setItemOnCursor(org.bukkit.inventory.ItemStack item) { inventories.setCursor(item); }
+    @Override public org.bukkit.inventory.ItemStack getItemInHand() { return inventories.inventory().getItemInMainHand(); }
+    @Override public void setItemInHand(org.bukkit.inventory.ItemStack item) { inventories.inventory().setItemInMainHand(item); }
 
     // Object: CraftPlayer's identity is the UUID.
 

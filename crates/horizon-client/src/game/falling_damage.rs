@@ -95,6 +95,17 @@ impl Game<'_> {
                 false,
             )
         });
+        if let Landing::Placed(now) = landing
+            && block.id != 0
+        {
+            // FallingBlockEntity.tick sends the state setBlockAndUpdate left,
+            // before ConcretePowderBlock.onLand may solidify it.
+            let powder = (self.res.facts().get(block.state).name).ends_with("_concrete_powder");
+            let sent = if powder { block.state } else { now };
+            if let Some(host) = self.lan.as_mut() {
+                host.hub.falling_block_landed(block.id as i32, pos, sent.0);
+            }
+        }
         if matches!(landing, Landing::Broken)
             && block.drop_item
             && self.ui.rules.bool("entity_drops")

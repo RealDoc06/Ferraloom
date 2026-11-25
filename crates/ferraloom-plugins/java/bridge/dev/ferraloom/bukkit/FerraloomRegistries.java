@@ -63,6 +63,7 @@ final class FerraloomRegistries {
         FACTORIES.put(org.bukkit.GameRule.class, FerraloomGameRule::new);
         // Entities.
         // Inventory.
+        FACTORIES.put(org.bukkit.inventory.ItemType.class, FerraloomItemType::new);
         // Server.
     }
 

@@ -924,6 +924,8 @@ pub struct Mob {
     pub climbing: bool,
     pub fire_ticks: i32,
     pub ticks_frozen: i32,
+    /// Ferraloom: the arrows and stingers stuck in it (entity data 12, 13).
+    pub stuck: crate::arrows::StuckCounts,
     pub glowing: bool,
     pub air: i32,
     pub last_hurt: f32,
@@ -1068,6 +1070,16 @@ pub enum MobEvent {
         effect: &'static str,
         ticks: i32,
         amplifier: i32,
+    },
+    /// `Bee.doHurtTarget`: a sting of `bee` (the `sting` damage type) on
+    /// the player or a mob. If it hurt, the target has one more stinger and
+    /// `poison` ticks of poison (none on easy).
+    Sting {
+        target: Who,
+        bee: u32,
+        amount: f32,
+        from: [f64; 3],
+        poison: i32,
     },
     /// Damage of a given type to the player (guardian lasers, thorns).
     DamagePlayer {
@@ -2095,6 +2107,7 @@ impl Mob {
             climbing: false,
             fire_ticks: 0,
             ticks_frozen: 0,
+            stuck: Default::default(),
             glowing: false,
             air: 300,
             last_hurt: 0.0,

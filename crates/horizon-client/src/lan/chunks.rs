@@ -326,15 +326,6 @@ impl SectionCoder {
                 values.push(v as i32);
             }
         }
-        let biome_values: Vec<i32> = (0..BIOMES)
-            .map(|j| {
-                let internal = section.biomes.get(j) as u16;
-                self.biome_ids
-                    .get(usize::from(internal))
-                    .copied()
-                    .unwrap_or(0)
-            })
-            .collect();
         (
             horizon_protocol::chunk::Section {
                 non_empty,
@@ -351,10 +342,24 @@ impl SectionCoder {
                         crate::chunk::block_strategy().global_bits,
                     ),
                 },
-                biomes: Paletted::from_values(&biome_values, Strategy::Biomes, self.biome_bits),
+                biomes: self.biomes(section),
             },
             entities,
         )
+    }
+
+    /// The section's biomes as its PalettedContainer, in network ids.
+    fn biomes(&self, section: &Section) -> Paletted {
+        let values: Vec<i32> = (0..BIOMES)
+            .map(|j| {
+                let internal = section.biomes.get(j) as u16;
+                self.biome_ids
+                    .get(usize::from(internal))
+                    .copied()
+                    .unwrap_or(0)
+            })
+            .collect();
+        Paletted::from_values(&values, Strategy::Biomes, self.biome_bits)
     }
 }
 
@@ -566,6 +571,16 @@ impl ChunkEncoder {
         self.sky = sky;
         // The heightmaps depend on the level's height.
         self.heights.lock().unwrap().clear();
+    }
+    /// `ClientboundChunksBiomesPacket.ChunkBiomeData`'s buffer: the biomes
+    /// of each of the level's sections, as the column's body has them.
+    /// Ferraloom: for `/fillbiome` (`ChunkMap.resendBiomesForChunks`).
+    pub fn biomes(&self, chunk: &Chunk) -> Vec<u8> {
+        let mut w = Writer::new();
+        for section in &chunk.sections[self.sections.clone()] {
+            self.coder.biomes(section).write(&mut w);
+        }
+        w.data
     }
     pub fn entity_type(&self, state: u32) -> Option<i32> {
         self.entity_types

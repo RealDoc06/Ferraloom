@@ -14,6 +14,7 @@
 //! needs the hub in `Game::lan` (moving another player, a vanilla command)
 //! and comes while it is not waits for the start of the next tick ([`Pending`]).
 mod blocks;
+mod inventory;
 mod players;
 pub(super) use players::{INBOX_EVENTS, login};
 mod server;

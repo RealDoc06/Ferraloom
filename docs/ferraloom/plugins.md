@@ -155,6 +155,9 @@ through the JVM's handler instead of Rust's message. Only with plugins.
 | `PlayerMoveEvent` and the toggles, no listener | One test of a constant mask (`listens_any`) per level pass per tick, in `game/lan.rs`; packet handling is untouched. | |
 | `PlayerMoveEvent` with a listener | Each tick, per guest of the level: a walk over its queued packets (a few) before the hub handles them; per move, a squared distance and an angle against its last event (a thread-local map). Past CraftBukkit's thresholds (1/256 of a block squared, 10 degrees), which a walking player passes every tick: one JNI call with fifteen primitive arguments (no Rust allocation), in Java a `PlayerMoveEvent`, two `Location`s and a `UUID`; null answers an unchanged move. About a microsecond plus the listeners per moving player. | |
 | A player getter (`getHealth`...) | One JNI call answering the whole state as a `double[41]`. Off the server thread the tick's snapshot answers: the first such read turns on storing one per player at each tick's start (one struct per player), never before. | |
+| A container click, drag, open or close with a listener | One JNI call with ints and three short strings; no item is converted unless a plugin asks the event for one. | |
+| A hopper transfer with an `InventoryMoveItemEvent` listener | One JNI call, the one item's NBT to Java and back, two inventory objects and the event. Without a listener: the flag test. | |
+| An item stack sent to a client | One emptiness check of `StackData::other` more than before (`lan/item_extras.rs`); a stack with unmodelled components clones each one sent. | |
 
 The event bit is a plain static and `listens` is `#[inline(always)]` over `FLAGS.load(Relaxed) & bit != 0`,
 so the site compiles to the bit test and nothing else. `break_block_as_player` in the release build
@@ -193,6 +196,21 @@ the baseline is the coordinator's next step; budget: no measurable MSPT differen
   `getUniqueId`, `getLocation`, `getWorld`, `teleport` (across worlds too), `isOnline`, `isOp`, permissions.
 - `World`: name, UID, environment, key, heights, game time and time of day, players, `getBlockAt`.
   `Block`: position, world, location, type (the loaded level in place).
+- Items (inventory area): `ItemStack` to and from the server as one `byte[]` (`ItemStack.CODEC` in network NBT;
+  `src/inventory.rs` `to_java`/`from_java`, Java `Items.read`/`write`). The meta is the item's component patch
+  itself, so what neither side models survives a round trip; names and lore as CraftChatMessage converts them,
+  plugin data in `custom_data`'s `PublicBukkitValues`, item flags as `tooltip_display`; skull, potion, leather,
+  book and enchanted book metas; `ItemType` from the server's item table. Inventories: `PlayerInventory`,
+  ender chests, block containers, `Server.createInventory` (a plugin's container lives in the server as
+  `Slots::Custom`), `openInventory`, `closeInventory`, `updateInventory`, the cursor and held slot; a slot's
+  item writes through to the slot as CraftItemStack's mirror does. Events: `InventoryClickEvent` (CraftBukkit's
+  click types and actions; a cancelled click is corrected on the client), `InventoryDragEvent`,
+  `InventoryOpenEvent`, `InventoryCloseEvent`, `InventoryMoveItemEvent` (hoppers), `PlayerItemConsumeEvent`,
+  `PlayerSwapHandItemsEvent`. Menus the game runs itself (crafting table, anvil, trading, stations) fire no
+  click events yet.
+
+Blocks and worlds (registries, `BlockData`, blocks and worlds in every dimension, block and world events,
+hook costs): [plugins-blocks-worlds.md](plugins-blocks-worlds.md).
 
 **Players** (`src/players.rs`, `game/plugins/players.rs`): `Player`, `HumanEntity` (but its inventory) and
 `OfflinePlayer` for online players: health, maximum health, absorption, food, saturation, exhaustion,

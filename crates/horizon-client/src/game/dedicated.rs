@@ -563,6 +563,8 @@ impl Game<'_> {
         lists.use_whitelist = props.white_list;
         lists.enforce_whitelist = props.enforce_whitelist;
         let lists = Arc::new(Mutex::new(lists));
+        // Ferraloom: functions compile at `function-permission-level` (Main's WorldLoader.InitConfig).
+        super::functions::set_compilation_level(props.function_permission_level);
         // Ferraloom: plugins load (onLoad) before the level, as CraftBukkit's do.
         self.start_plugins(&level_name, &props, port);
         log("INFO", &format!("Preparing level \"{level_name}\""));
