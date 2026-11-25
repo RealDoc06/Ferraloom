@@ -357,7 +357,35 @@ impl Hub {
         self.detect_spam(i, true);
     }
 
+    /// handleClientInformation's `UPDATE_HAT`: everyone hears when the
+    /// player shows or hides the hat layer. Also whether the server list
+    /// may name them (`allowsListing`).
+    pub(super) fn client_information_changed(&mut self, i: usize, old_parts: u8) {
+        let g = &self.guests[i];
+        let (uuid, listed) = (g.uuid, g.info.allows_listing);
+        let hat = shows_hat(g.info.model_customisation);
+        self.lan.shared.set_listed(uuid, listed);
+        if hat != shows_hat(old_parts) && g.placed {
+            self.broadcast(&C::PlayerInfoUpdate(play::PlayerInfoUpdate {
+                actions: UPDATE_HAT,
+                entries: vec![play::PlayerInfo {
+                    uuid,
+                    show_hat: Some(hat),
+                    ..Default::default()
+                }],
+            }));
+        }
+    }
 }
+
+/// ClientboundPlayerInfoUpdatePacket.Action.UPDATE_HAT.
+const UPDATE_HAT: u8 = 0x80;
+
+/// `Player.isModelPartShown(PlayerModelPart.HAT)` (bit 6).
+pub fn shows_hat(model_customisation: u8) -> bool {
+    model_customisation & 0x40 != 0
+}
+
 /// `getMaximumFlyingTicks`: 80 ticks at the default gravity, more for less.
 fn max_flying_ticks(g: &mut Guest) -> i32 {
     let gravity = g.motion.as_mut().map_or(0.08, |m| {

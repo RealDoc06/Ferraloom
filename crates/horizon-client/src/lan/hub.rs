@@ -902,7 +902,10 @@ impl Hub {
             latency: Some(latency),
             display_name: Some(None),
             list_order: Some(0),
-            show_hat: Some(true),
+            // Ferraloom: Player.isModelPartShown(HAT), the host's always.
+            show_hat: Some(
+                guest.is_none_or(|g| player_meta::shows_hat(g.info.model_customisation)),
+            ),
         }
     }
     /// ClientboundPlayerInfoUpdatePacket.createPlayerInitializing: every action.
@@ -986,9 +989,11 @@ impl Hub {
             let g = &self.guests[i];
             (g.name.clone(), g.uuid, g.entity_id, g.game_mode)
         };
-        // Ferraloom: the saved shoulder parrots (ServerPlayer.readAdditionalSaveData).
+        // Ferraloom: the saved shoulder parrots (ServerPlayer.readAdditionalSaveData)
+        // and whether the server list may name the player.
         let g = &mut self.guests[i];
         g.meta.shoulders = player_meta::shoulders_of(g.saved.as_ref());
+        self.lan.shared.set_listed(g.uuid, g.info.allows_listing);
         let g = &self.guests[i];
         g.send(&C::Login(play::Login {
             player_id: entity_id,
@@ -2605,8 +2610,10 @@ impl Hub {
                     let g = &mut self.guests[i];
                     g.view_distance =
                         i32::from(info.view_distance).clamp(2, self.config.view_distance);
+                    let old_parts = g.info.model_customisation;
                     g.info = info;
                     g.center = None;
+                    self.client_information_changed(i, old_parts);
                 }
                 S::PlayerInput(p) => {
                     self.guests[i].input = p.flags;
