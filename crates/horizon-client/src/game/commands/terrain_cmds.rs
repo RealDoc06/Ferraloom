@@ -232,6 +232,7 @@ impl Game<'_> {
                 self.world.dirty_sections.insert((key.0, sy, key.1));
             }
         }
+        self.lan_resend_biomes(lo, hi, &touched);
         self.feedback(Text::translate(
             "commands.fillbiome.success.count",
             &[
@@ -245,6 +246,50 @@ impl Game<'_> {
             ],
         ));
         Ok(changed)
+    }
+
+    /// Port of ChunkMap#resendBiomesForChunks: each player in the level is
+    /// sent the biomes of the changed columns it has, in one
+    /// ClientboundChunksBiomesPacket (`FillBiomeCommand`'s z-then-x order).
+    fn lan_resend_biomes(
+        &self,
+        lo: [i32; 3],
+        hi: [i32; 3],
+        touched: &std::collections::HashSet<(i32, i32)>,
+    ) {
+        let Some(host) = self.lan.as_ref() else {
+            return;
+        };
+        let columns: Vec<(i32, i32)> = ((lo[2] >> 4)..=(hi[2] >> 4))
+            .flat_map(|z| ((lo[0] >> 4)..=(hi[0] >> 4)).map(move |x| (x, z)))
+            .filter(|key| touched.contains(key))
+            .collect();
+        let mut bodies = Vec::with_capacity(columns.len());
+        for &(x, z) in &columns {
+            if let Some(chunk) = self.world.chunks.get(&(x, z)) {
+                bodies.push(((x, z), host.hub.encoder.biomes(chunk)));
+            }
+        }
+        for g in host.hub.guests.iter().filter(|g| host.hub.here(g)) {
+            let mine: Vec<_> = bodies
+                .iter()
+                .filter(|(key, _)| g.sent_chunks.contains(key))
+                .collect();
+            if mine.is_empty() {
+                continue;
+            }
+            let mut w = horizon_protocol::buf::Writer::new();
+            w.varint(mine.len() as i32);
+            for ((x, z), body) in mine {
+                // ChunkPos.pack: x in the low half, z in the high.
+                w.i64(i64::from(*x as u32) | i64::from(*z as u32) << 32);
+                w.byte_array(body);
+            }
+            g.send(&horizon_protocol::packets::play::Clientbound::Unknown(
+                horizon_protocol::ids::play::clientbound::CHUNKS_BIOMES,
+                w.data,
+            ));
+        }
     }
 
     // ---- /worldborder -----------------------------------------------------------------------
