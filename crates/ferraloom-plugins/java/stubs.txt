@@ -8,3 +8,10 @@ org.bukkit.block.Block
 org.bukkit.command.ConsoleCommandSender
 org.bukkit.entity.Player
 org.bukkit.scheduler.BukkitScheduler
+# Blocks and worlds.
+org.bukkit.enchantments.Enchantment
+org.bukkit.GameEvent
+org.bukkit.MusicInstrument
+org.bukkit.potion.PotionEffectType
+org.bukkit.generator.structure.Structure
+org.bukkit.generator.structure.StructureType
