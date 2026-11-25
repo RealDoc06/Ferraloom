@@ -138,10 +138,12 @@ mod passengers;
 mod persist;
 mod perspective;
 mod pick_entity;
+// Ferraloom: Bukkit plugins (docs/ferraloom/plugins.md).
 mod pickups;
 mod piglins;
 mod piston_push;
 mod player_equip;
+mod plugins;
 mod postprocess;
 mod potions;
 mod powder_snow;
@@ -4253,6 +4255,12 @@ impl Game<'_> {
             .res
             .items()
             .can_destroy_block(self.held(), self.creative)
+        {
+            return Ok(());
+        }
+        // Ferraloom: BlockBreakEvent, before anything breaks (game/plugins.rs).
+        if ferraloom_plugins::listens(ferraloom_plugins::Event::BlockBreak)
+            && self.plugin_block_break(pos)
         {
             return Ok(());
         }

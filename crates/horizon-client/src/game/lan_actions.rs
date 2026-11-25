@@ -367,7 +367,8 @@ impl Game<'_> {
         f: impl FnOnce(&mut Self) -> R,
     ) -> Option<R> {
         let swap = self.enter_guest(host, conn)?;
-        let result = f(self);
+        // Ferraloom: plugin events in the guest's turn reach the hub (game/plugins.rs).
+        let result = super::plugins::lend_hub(host, || f(self));
         self.leave_guest(host, swap);
         Some(result)
     }
@@ -2146,6 +2147,10 @@ impl Game<'_> {
         signed: Option<Vec<(String, horizon_client::lan::hub::chat::ChatMessage)>>,
     ) {
         if self.guest_message_command(host, conn, command, signed.as_ref()) {
+            return;
+        }
+        // Ferraloom: a Bukkit plugin's command (game/plugins.rs).
+        if self.plugin_guest_command(host, conn, command.trim_start_matches('/')) {
             return;
         }
         // ListPlayersCommand needs no permission and lists every player.
