@@ -435,6 +435,8 @@ final class FerraloomServer extends StubServer {
         return unsafe;
     }
 
+    @Override public <T extends org.bukkit.Keyed> org.bukkit.Registry<T> getRegistry(Class<T> type) { return FerraloomRegistries.get(type); } // Ferraloom: registries (blocks-worlds area, FerraloomRegistries)
+
     @Override
     public void shutdown() {
         ServerNative.shutdown();
