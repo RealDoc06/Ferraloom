@@ -475,7 +475,7 @@ impl Game<'_> {
         };
         let host = host.clone();
         let port = Self::int(ctx, "port").unwrap_or(25565);
-        let players = if ctx.has("players") {
+        let players = if ctx.get("players").is_some() {
             self.entities(ctx, "players", true)?
         } else {
             // CommandSourceStack.getPlayerOrException.

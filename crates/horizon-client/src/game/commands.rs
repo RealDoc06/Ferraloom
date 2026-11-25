@@ -152,7 +152,10 @@ impl Game<'_> {
             .rev()
             .find(|&i| input.is_char_boundary(i))
             .unwrap_or(0);
-        context.push(&input[start..cursor]);
+        // Ferraloom: MutableComponent.append(String) skips an empty string.
+        if start < cursor {
+            context.push(&input[start..cursor]);
+        }
         if cursor < input.len() {
             context.push(
                 Text::literal(&input[cursor..])
