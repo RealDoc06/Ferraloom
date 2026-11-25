@@ -164,6 +164,34 @@ impl Hub {
         }
     }
 
+    /// Port of Entity#sendTeleportTransitionToPlayers: each player riding
+    /// entity `id` gets its packet in `riders` (by the player's entity id),
+    /// then, when `tracked` is given, the players tracking it but riding it.
+    pub fn teleport_entity(
+        &mut self,
+        id: i32,
+        riders: &[(i32, play::TeleportEntity)],
+        tracked: Option<play::TeleportEntity>,
+    ) {
+        self.finish_tracking();
+        for (rider, packet) in riders {
+            if let Some(g) = self.guests.iter().find(|g| g.entity_id == *rider) {
+                g.send(&C::TeleportEntity(packet.clone()));
+            }
+        }
+        let Some(packet) = tracked else {
+            return;
+        };
+        let body = C::TeleportEntity(packet).encode();
+        for g in self.guests.iter().filter(|g| {
+            self.here(g)
+                && g.tracker.is_tracking(id)
+                && !riders.iter().any(|(rider, _)| *rider == g.entity_id)
+        }) {
+            g.sender.send(body.clone());
+        }
+    }
+
     /// Port of FallingBlockEntity#tick's landing: the falling block's
     /// trackers are sent the block it set (ClientboundBlockUpdatePacket,
     /// then ClientboundAddTransientBlockPacket), so their client shows the

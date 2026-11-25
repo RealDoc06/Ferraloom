@@ -81,7 +81,8 @@ import net.minecraft.world.phys.Vec3;
  * at that place, on the ground or not), {@code sprint NAME on|off}, {@code
  * sync NAME} (a round trip through the server thread; "synced NAME" on stdout when
  * it is back), {@code attack NAME TARGET} (ServerboundAttackPacket then the swing; TARGET is a
- * player's name or an entity type's path, the last one added), {@code use
+ * player's name or an entity type's path, the last one added), {@code interact
+ * NAME TARGET} (ServerboundInteractPacket, main hand, on such a target), {@code use
  * NAME} (ServerboundUseItemPacket, main hand), {@code slot NAME N}
  * (ServerboundSetCarriedItemPacket) and {@code end}. Each player records the
  * ClientboundSetEntityMotionPacket it receives, its own sprint flag as the
@@ -91,7 +92,8 @@ import net.minecraft.world.phys.Vec3;
  * the packet's order) and ClientboundCooldownPacket it receives; for
  * tools/test_server_entity_data_parity.py every entity's arrow and stinger
  * counts (entity data 12 and 13) and on-fire bit as they change, the biomes of
- * each ClientboundChunksBiomesPacket and the ClientboundAddTransientBlockPacket.
+ * each ClientboundChunksBiomesPacket, ClientboundAddTransientBlockPacket and
+ * ClientboundTeleportEntityPacket.
  */
 public final class KnockbackClient {
     private static volatile String step = "start";
@@ -126,6 +128,7 @@ public final class KnockbackClient {
                     }
                     case "sprint" -> players.get(w[1]).sprint(w[2].equals("on"));
                     case "attack" -> players.get(w[1]).attack(w[2]);
+                    case "interact" -> players.get(w[1]).interact(w[2]);
                     case "use" -> players.get(w[1]).send(new ServerboundUseItemPacket(InteractionHand.MAIN_HAND, 0, 0, 0));
                     case "punch" -> players.get(w[1]).send(net.minecraft.network.protocol.game.ServerboundPunchPacket.INSTANCE);
                     case "slot" -> players.get(w[1]).send(new net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket(Integer.parseInt(w[2])));
@@ -277,6 +280,17 @@ public final class KnockbackClient {
             send(ServerboundPunchPacket.INSTANCE);
         }
 
+        /** ServerboundInteractPacket on the last TARGET added, main hand (a boat to board). */
+        void interact(String target) throws Exception {
+            Integer entity = last.get(target);
+            if (entity == null) {
+                record("error no " + target + " to interact with");
+                return;
+            }
+            send(new net.minecraft.network.protocol.game.ServerboundInteractPacket(entity, InteractionHand.MAIN_HAND,
+                new Vec3(0.0, 0.3, 0.0), false));
+        }
+
         void close() throws Exception {
             if (socket != null) socket.close();
         }
@@ -398,6 +412,15 @@ public final class KnockbackClient {
                             }
                             record("biomes " + c.pos().x() + "," + c.pos().z() + " " + String.join(" ", sections));
                         }
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundTeleportEntityPacket t) {
+                        var c = t.change();
+                        List<String> relatives = new ArrayList<>();
+                        for (var relative : t.relatives()) relatives.add(relative.name());
+                        java.util.Collections.sort(relatives);
+                        record(String.format(java.util.Locale.ROOT, "tpentity %s %.3f %.3f %.3f %.5f %.5f %.5f %.2f %.2f %s %s",
+                            seen.getOrDefault(t.id(), "id" + t.id()), c.position().x, c.position().y, c.position().z,
+                            c.deltaMovement().x, c.deltaMovement().y, c.deltaMovement().z, c.yRot(), c.xRot(),
+                            String.join(",", relatives), t.onGround()));
                     } else if (p instanceof net.minecraft.network.protocol.game.ClientboundAddTransientBlockPacket t) {
                         record("transient " + t.getPos().toShortString() + " " + t.getBlockState());
                     } else if (p instanceof net.minecraft.network.protocol.game.ClientboundUpdateAttributesPacket a) {

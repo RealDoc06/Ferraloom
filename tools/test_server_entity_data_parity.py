@@ -10,7 +10,10 @@ made of vanilla's protocol code, waits on the server's game clock), with these c
 - a zombie with NoAI at noon: it burns (`Mob.aiStep` → `burnUndead` runs without AI), seen as the on-fire bit;
 - `/fillbiome` around the players: the ClientboundChunksBiomesPacket each is sent (`ChunkMap.resendBiomesForChunks`),
   read section by section as the client reads it;
-- sand that lands: the ClientboundAddTransientBlockPacket its trackers get (`FallingBlockEntity.tick`).
+- sand that lands: the ClientboundAddTransientBlockPacket its trackers get (`FallingBlockEntity.tick`);
+- `/tp` of an item at rest (its trackers) and of a boat Bob rides (Bob, its controller): the
+  ClientboundTeleportEntityPacket each player is sent (`Entity.sendTeleportTransitionToPlayers`). An item's yaw is
+  random on vanilla's side and left out.
 
 Each case is compared on its own. KNOWN lists the cases Horizon still gets wrong and why; one that matches again is
 reported, and should leave the list.
@@ -73,6 +76,14 @@ CASES = {
     'fillbiome': [*reset(), 'cmd Alice fillbiome -16 -64 -16 15 -49 15 minecraft:desert', 'ticks 5'],
     'falling-sand': [*reset(), f'cmd Alice summon minecraft:falling_block {V[0]} {V[1] + 5} {V[2] + 2} '
                      '{BlockState:{Name:"minecraft:sand"}}', 'ticks 40'],
+    # An item at rest on the ground, moved along it.
+    'tp-item': [*reset(), f'cmd Alice summon minecraft:item {V[0]} {V[1]} {V[2] + 2} '
+                '{Item:{id:"minecraft:stone",count:1},PickupDelay:32767s}', 'ticks 40',
+                f'cmd Alice tp @e[type=minecraft:item,limit=1] {V[0] + 2} {V[1]} {V[2] + 2}', 'ticks 5'],
+    'tp-boat-rider': [*reset(), f'cmd Alice summon minecraft:oak_boat {V[0]} {V[1]} {V[2] + 3}', 'ticks 5',
+                      'interact Bob oak_boat', 'ticks 5',
+                      f'cmd Alice tp @e[type=minecraft:oak_boat,limit=1] {V[0] + 2} {V[1]} {V[2] + 3}', 'ticks 5',
+                      'cmd Alice ride Bob dismount'],
 }
 # The flat world's slimes split when killed: three passes take the big ones' smallest children too.
 SETUP = ['cmd Alice gamerule spawn_mobs false', 'cmd Alice gamerule spawn_monsters false',
@@ -85,7 +96,7 @@ LIVING = ('self', 'Alice', 'Bob', 'zombie')
 
 def compared(lines):
     """Per case, what each player was sent: the arrow and stinger counts of the players and the zombie, the zombie's
-    on-fire bit, the biomes and the transient blocks. Each receiver's stream about one subject keeps its order; how
+    on-fire bit, the biomes, the transient blocks and the entity teleports. Each receiver's stream about one subject keeps its order; how
     streams about different subjects interleave is the server's to choose, so they are compared apart."""
     cases = {}
     for line in lines:
@@ -100,6 +111,11 @@ def compared(lines):
             continue
         if word in ('arrows', 'stingers') and subject in LIVING or word == 'fire' and subject == 'zombie':
             kept.append((who, subject, f'{who} {text}'))
+        elif word == 'tpentity':
+            fields = text.split(' ')
+            if subject == 'item':
+                fields[8:10] = ['~', '~']
+            kept.append((who, subject, f'{who} {" ".join(fields)}'))
         elif word in ('biomes', 'transient', 'error', 'disconnected'):
             kept.append((who, '~' + word, f'{who} {text}'))
     return {step: [line for *_, line in sorted(kept, key=lambda k: k[:2])] for step, kept in cases.items()}
@@ -157,7 +173,7 @@ def main():
         cases=len(CASES), known=sorted(KNOWN), output_sha256=lab.digest(build / 'horizon.txt', 'sha256'),
         scope='Entity data and world changes a dedicated server owns, as two vanilla-codec players get them: arrow '
               'and stinger counts on a mob and a player, the sun burning a NoAI zombie, /fillbiome resending the '
-              "chunks' biomes and a landing falling block's transient block."))
+              "chunks' biomes, a landing falling block's transient block and /tp of an item and a ridden boat."))
     print(f'server entity data: {len(CASES) - len(KNOWN)} of {len(CASES)} cases identical')
 
 
