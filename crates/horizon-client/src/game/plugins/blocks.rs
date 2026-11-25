@@ -553,6 +553,9 @@ impl PlayerHost for LevelHost<'_, '_> {
     }
 }
 
+// Entities: not reachable inside a level's block tick (every read throws, as a restricted host's).
+impl ferraloom_plugins::EntityHost for LevelHost<'_, '_> {}
+
 impl ServerHost for LevelHost<'_, '_> {
     fn console_message(&mut self, message: &str) {
         crate::game::dedicated::log("INFO", &horizon_client::text::Text::legacy(message).plain());

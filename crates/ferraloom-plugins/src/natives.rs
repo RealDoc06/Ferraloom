@@ -217,24 +217,7 @@ mod tests {
         }
     }
 
-    impl EntityHost for Host {
-        fn entity(&mut self, _: crate::EntityRef) -> crate::Reach<crate::EntityState> {
-            crate::Reach::Gone
-        }
-        fn change_entity(
-            &mut self,
-            _: crate::EntityRef,
-            _: crate::EntityChange,
-        ) -> crate::Reach<bool> {
-            crate::Reach::Gone
-        }
-        fn entities(&mut self, _: usize, _: Option<[f64; 6]>) -> crate::Reach<Vec<crate::Named>> {
-            crate::Reach::Gone
-        }
-        fn spawn(&mut self, _: &str, _: Location) -> crate::Reach<Option<crate::Named>> {
-            crate::Reach::Elsewhere
-        }
-    }
+    impl EntityHost for Host {}
 
     #[test]
     fn uuid_halves_round_trip() {

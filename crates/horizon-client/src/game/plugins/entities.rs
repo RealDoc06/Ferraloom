@@ -337,14 +337,6 @@ impl EntityHost for SiteHost<'_, '_> {
         plugin_sites::queue(e, change);
         Reach::Here(true)
     }
-
-    fn entities(&mut self, _: usize, _: Option<[f64; 6]>) -> Reach<Vec<Named>> {
-        Reach::Elsewhere
-    }
-
-    fn spawn(&mut self, _: &str, _: Location) -> Reach<Option<Named>> {
-        Reach::Elsewhere
-    }
 }
 
 impl PlayerHost for SiteHost<'_, '_> {

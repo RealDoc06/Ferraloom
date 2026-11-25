@@ -229,20 +229,32 @@ impl SpawnReason {
 }
 
 /// What `Entity` and `LivingEntity` read and change of the game.
+///
+/// Every method has a default that answers [`Reach::Elsewhere`] (thrown as
+/// `IllegalStateException`): a host that cannot reach entities implements
+/// none of them.
 pub trait EntityHost {
     /// One read of an entity.
-    fn entity(&mut self, e: EntityRef) -> Reach<EntityState>;
+    fn entity(&mut self, _e: EntityRef) -> Reach<EntityState> {
+        Reach::Elsewhere
+    }
     /// A change: `Here(true)` once it is made or queued, `Here(false)` for
     /// one this entity cannot take.
-    fn change_entity(&mut self, e: EntityRef, change: Change) -> Reach<bool>;
+    fn change_entity(&mut self, _e: EntityRef, _change: Change) -> Reach<bool> {
+        Reach::Elsewhere
+    }
     /// The entities of a world (players included), within a box
     /// (`[min x, y, z, max x, y, z]`) when one is given. `Gone` (an empty
     /// list) for a world that is not the level in place; `Elsewhere` where
     /// no world is reachable (a restricted host).
-    fn entities(&mut self, world: usize, within: Option<[f64; 6]>) -> Reach<Vec<Named>>;
+    fn entities(&mut self, _world: usize, _within: Option<[f64; 6]>) -> Reach<Vec<Named>> {
+        Reach::Elsewhere
+    }
     /// `World.spawnEntity`: `Here(None)` when that type cannot spawn there,
     /// `Elsewhere` when the world is not reachable from here.
-    fn spawn(&mut self, kind: &str, at: Location) -> Reach<Option<Named>>;
+    fn spawn(&mut self, _kind: &str, _at: Location) -> Reach<Option<Named>> {
+        Reach::Elsewhere
+    }
 }
 
 // `EntityEvents`' methods, by index.
