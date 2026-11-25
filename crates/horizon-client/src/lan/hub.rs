@@ -255,6 +255,8 @@ pub struct Hub {
     /// `spawn-protection` (dedicated servers): the radius around the world
     /// spawn that only operators may change.
     pub spawn_protection: i32,
+    /// Ferraloom: `allow-flight` and the spam thresholds (dedicated servers).
+    pub player_rules: player_meta::PlayerRules,
     chat_type: i32,
     dimension_type: i32,
     clock_ids: Vec<i32>,
@@ -655,6 +657,7 @@ impl Hub {
             ops: Default::default(),
             entity_range_percent: 100,
             spawn_protection: 0,
+            player_rules: Default::default(),
             weather: (false, 0.0, 0.0),
             level_sync: Default::default(),
             chat_type,
@@ -1273,6 +1276,10 @@ impl Hub {
     /// and motion they name are sent as zero changes.
     fn teleport_relative(&mut self, i: usize, position: Option<[f64; 3]>, relatives: i32) {
         let ticks = self.ticks;
+        if position.is_some() {
+            // Ferraloom: ServerPlayer.teleportTo's resetFlyingTicks.
+            self.reset_flying_ticks(i);
+        }
         let g = &mut self.guests[i];
         g.teleport_tick = ticks;
         if let Some(p) = position {
@@ -2464,6 +2471,10 @@ impl Hub {
         let g = &mut self.guests[i];
         g.first_good = g.position;
         g.known_moves = g.received_moves;
+        // Ferraloom: tickPlayer's floating kick and the spam throttlers.
+        if self.tick_connection(i, events) {
+            return;
+        }
         let mut budget = 400;
         while budget > 0 {
             let Some(packet) = self.guests[i].inbox.pop_front() else {
@@ -2601,6 +2612,11 @@ impl Hub {
                     ) {
                         break;
                     }
+                }
+                // Ferraloom: detectCommandRateSpam once the command is the game's.
+                p @ (S::ChatCommand(_) | S::ChatCommandSigned(_)) => {
+                    events.push(HostEvent::Packet(conn, Box::new(p)));
+                    self.detect_command_spam(i);
                 }
                 other => events.push(HostEvent::Packet(conn, Box::new(other))),
             }
@@ -2758,6 +2774,8 @@ impl Hub {
         g.head_yaw = g.yaw;
         g.on_ground = flags & 1 != 0;
         g.ticks = g.ticks.max(1);
+        // Ferraloom: clientIsFloating, from how far this move rose.
+        self.update_floating(i, to[1] - start[1], ctx);
         #[cfg(feature = "profiler")]
         if absent_target && start != to {
             self.corrections.accepted_into_absent_target += 1;

@@ -223,6 +223,8 @@ impl Hub {
             sender: uuid,
             text: message.content,
         });
+        // Ferraloom: broadcastChatMessage's detectChatRateSpam.
+        self.detect_chat_spam(i);
     }
 
     /// handleChatSessionUpdate: a new profile key, validated against the

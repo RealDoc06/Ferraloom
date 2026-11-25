@@ -691,6 +691,12 @@ impl Game<'_> {
         self.log_saved_levels();
         if let Some(host) = self.lan.as_mut() {
             host.hub.entity_range_percent = props.entity_broadcast_range_percentage;
+            // Ferraloom: allow-flight and the chat and command spam thresholds.
+            host.hub.player_rules = horizon_client::lan::hub::player_meta::PlayerRules::dedicated(
+                props.allow_flight,
+                props.chat_spam_threshold_seconds,
+                props.command_spam_threshold_seconds,
+            );
         }
         let mut state = ServerState {
             lists,
