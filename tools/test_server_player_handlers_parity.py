@@ -89,6 +89,11 @@ CASES = {
     'build-too-high': ([*holding('stone'), 'cmd Alice setblock 0 319 0 minecraft:stone', 'cmd Alice tp @s 0.5 316 0.5',
                         'pos Alice 0.5 316 0.5 0 -90 0'], ['useon Alice 0 319 0 1 0.5 1 0.5', 'ticks 2'], ('overlay',)),
     'build-too-low': (holding('stone'), ['useon Alice 0 -65 0 0 0.5 0 0.5', 'ticks 2'], ('overlay',)),
+    'tag-block': ([*CLEAR, 'cmd Alice setblock 3 -60 3 minecraft:chest',
+                   'cmd Alice item replace block 3 -60 3 container.0 with minecraft:diamond'],
+                  ['tagblock Alice 7 3 -60 3', 'tagblock Alice 8 5 -61 5', 'ticks 2'], ('tag',)),
+    'tag-entity': ([*CLEAR, *summon('cow', 4.5)], ['tagentity Alice 9 cow', 'tagentity Alice 10 Bob', 'ticks 2'],
+                   ('tag',)),
 }
 SETUP = ['cmd Alice gamerule spawn_mobs false', 'cmd Alice gamerule spawn_monsters false',
          'cmd Alice gamerule advance_time false', 'cmd Alice time set noon', 'ticks 20']

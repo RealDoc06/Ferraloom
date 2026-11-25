@@ -1777,6 +1777,9 @@ impl Game<'_> {
             S::TeleportToEntity(p) if spectator => self.guest_spectate_teleport(host, gi, p.uuid),
             // Ferraloom: handleSpectatorAction (game/lan_spectate.rs).
             S::SpectatorAction(p) => self.guest_spectator_action(host, gi, p.target),
+            // Ferraloom: F3+I (game/lan_editors.rs).
+            S::EntityTagQuery(p) => self.guest_entity_tag_query(host, gi, p.transaction, p.id),
+            S::BlockEntityTagQuery(p) => self.guest_block_tag_query(host, gi, p.transaction, p.pos),
             S::ChangeGameMode(p) if host.hub.guests[gi].permission >= 2 => {
                 if let Some(mode) = usize::try_from(p.mode)
                     .ok()

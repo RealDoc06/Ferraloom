@@ -83,6 +83,7 @@ mod lan_actions;
 mod lan_attributes;
 mod lan_chat;
 mod lan_crafting;
+mod lan_editors;
 mod lan_entities;
 mod lan_mobs;
 mod lan_mount_menu;

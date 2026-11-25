@@ -158,6 +158,15 @@ public final class KnockbackClient {
                             new net.minecraft.core.BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3])),
                             net.minecraft.core.Direction.from3DDataValue(Integer.parseInt(a[4])), ++p.sequence));
                     }
+                    case "tagentity" -> {
+                        String[] a = w[2].split(" ");
+                        players.get(w[1]).tagEntity(Integer.parseInt(a[0]), a[1]);
+                    }
+                    case "tagblock" -> {
+                        String[] a = w[2].split(" ");
+                        players.get(w[1]).send(new net.minecraft.network.protocol.game.ServerboundBlockEntityTagQueryPacket(Integer.parseInt(a[0]),
+                            new net.minecraft.core.BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3]))));
+                    }
                     case "sync" -> {
                         try {
                             players.get(w[1]).sync();
@@ -309,6 +318,15 @@ public final class KnockbackClient {
             send(new net.minecraft.network.protocol.game.ServerboundSpectatorActionPacket(java.util.OptionalInt.of(entity)));
         }
 
+        void tagEntity(int transaction, String target) throws Exception {
+            Integer entity = last.get(target);
+            if (entity == null) {
+                record("error no " + target + " to query");
+                return;
+            }
+            send(new net.minecraft.network.protocol.game.ServerboundEntityTagQueryPacket(transaction, entity));
+        }
+
         void attack(String target) throws Exception {
             Integer entity = last.get(target);
             if (entity == null) {
@@ -423,6 +441,9 @@ public final class KnockbackClient {
                         record("dialog " + d.dialog().getRegisteredNameIfPresent().orElse("direct"));
                     } else if (p instanceof net.minecraft.network.protocol.common.ClientboundClearDialogPacket) {
                         record("dialog clear");
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundTagQueryPacket t) {
+                        record("tag " + t.getTransactionId() + " "
+                            + (t.getTag() == null ? "none" : String.join(",", new java.util.TreeSet<>(t.getTag().keySet()))));
                     } else if (p instanceof net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket u && loaded) {
                         net.minecraft.core.BlockPos at = u.getPos();
                         record("block " + at.getX() + " " + at.getY() + " " + at.getZ() + " "

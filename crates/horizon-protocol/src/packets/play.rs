@@ -1924,7 +1924,13 @@ packet_enum!(Clientbound, crate::ids::play::clientbound {
     ClearDialog(Empty) = CLEAR_DIALOG,
     ShowDialog(ShowDialog) = SHOW_DIALOG,
     SetCamera(SetCamera) = SET_CAMERA,
+    TagQuery(TagQuery) = TAG_QUERY,
 });
+packet!(
+    /// ClientboundTagQueryPacket: the answer to a tag query, `Tag::End` for
+    /// no block entity (Ferraloom).
+    TagQuery { transaction: i32 => VarInt, tag: Tag => Nbt }
+);
 packet!(
     /// ClientboundSetCameraPacket: the entity the client's camera follows
     /// (its own player to stop; Ferraloom).
@@ -2052,6 +2058,14 @@ impl Codec<TrackedWaypoint> for TrackedWaypoint {
 
 packet!(AcceptTeleportation { id: i32 => VarInt, x: f64 => Double, y: f64 => Double, z: f64 => Double, yaw: f32 => Float, pitch: f32 => Float });
 packet!(Attack { id: i32 => VarInt });
+packet!(
+    /// ServerboundBlockEntityTagQueryPacket: F3+I on a block (Ferraloom).
+    BlockEntityTagQuery { transaction: i32 => VarInt, pos: [i32; 3] => Pos }
+);
+packet!(
+    /// ServerboundEntityTagQueryPacket: F3+I on an entity (Ferraloom).
+    EntityTagQuery { transaction: i32 => VarInt, id: i32 => VarInt }
+);
 packet!(TeleportToEntity { uuid: u128 => Uuid });
 packet!(
     /// ServerboundSpectatorActionPacket: the entity a spectator clicked to
@@ -2305,6 +2319,8 @@ packet_enum!(Serverbound, crate::ids::play::serverbound {
     SetGameRule(SetGameRule) = SET_GAME_RULE,
     AcceptTeleportation(AcceptTeleportation) = ACCEPT_TELEPORTATION,
     Attack(Attack) = ATTACK,
+    BlockEntityTagQuery(BlockEntityTagQuery) = BLOCK_ENTITY_TAG_QUERY,
+    EntityTagQuery(EntityTagQuery) = ENTITY_TAG_QUERY,
     TeleportToEntity(TeleportToEntity) = TELEPORT_TO_ENTITY,
     ChangeGameMode(ChangeGameMode) = CHANGE_GAME_MODE,
     Chat(Chat) = CHAT,
