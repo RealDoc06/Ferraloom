@@ -211,7 +211,11 @@ def server_dir(directory, world):
     return port
 
 
-def run_side(label, server_command, client_command, build, world):
+def run_side(label, server_command, client_command, build, world, cases=None, setup=None):
+    """Runs SETUP then each case's script against one server, the transcript's lines back (`cases` and `setup`
+    default to this harness's; test_server_combat_parity.py passes its own)."""
+    cases = CASES if cases is None else cases
+    setup = SETUP if setup is None else setup
     directory = build / label
     port = server_dir(directory, world)
     out = build / f'{label}.txt'
@@ -278,9 +282,9 @@ def run_side(label, server_command, client_command, build, world):
                     send(f'join {name}')
                     server.wait_for(rf'{name} joined the game', timeout=120)
                     wait_ticks(server, 40)
-                for line in SETUP:
+                for line in setup:
                     send(line)
-                for case, lines in CASES.items():
+                for case, lines in cases.items():
                     send(f'step {case}')
                     for line in lines:
                         send(line)
@@ -334,7 +338,8 @@ def main():
     subprocess.run(['javac', '--release', str(lock['minecraft']['java_major']), '-proc:none', '-nowarn', '-sourcepath',
                     lab.ROOT / 'mods/horizon/src/test/java', '-cp', dependencies, '-d', classes, oracle],
                    cwd=lab.ROOT, check=True, capture_output=True)
-    subprocess.run(['cargo', 'build', '--profile', 'fast', '-p', 'horizon-client', '--bin', 'horizon-client'], cwd=lab.ROOT,
+    subprocess.run(['cargo', 'build', '--profile', 'fast', '-p', 'horizon-client', '--no-default-features',
+                    '--bin', 'horizon-client'], cwd=lab.ROOT,
                    check=True, capture_output=True)
     import json
     metadata = json.loads(subprocess.check_output(['cargo', 'metadata', '--no-deps', '--format-version', '1'],
