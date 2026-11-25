@@ -22,21 +22,61 @@ pub enum Event {
     PlayerJoin = 0,
     PlayerQuit = 1,
     AsyncPlayerChat = 2,
+    PlayerMove = 3,
+    PlayerTeleport = 4,
+    PlayerInteract = 5,
+    PlayerCommandPreprocess = 6,
+    PlayerToggleSneak = 7,
+    PlayerToggleSprint = 8,
+    PlayerToggleFlight = 9,
+    PlayerItemHeld = 10,
+    PlayerGameModeChange = 11,
+    PlayerChangedWorld = 12,
+    PlayerRespawn = 13,
+    PlayerKick = 14,
+    /// `PlayerDeathEvent`, which listens through `EntityDeathEvent`'s handler list.
+    PlayerDeath = 15,
     // Blocks.
     BlockBreak = 16,
 }
 
 impl Event {
-    pub const ALL: [Event; 4] = [
+    pub const ALL: [Event; 17] = [
         Event::PlayerJoin,
         Event::PlayerQuit,
         Event::AsyncPlayerChat,
+        Event::PlayerMove,
+        Event::PlayerTeleport,
+        Event::PlayerInteract,
+        Event::PlayerCommandPreprocess,
+        Event::PlayerToggleSneak,
+        Event::PlayerToggleSprint,
+        Event::PlayerToggleFlight,
+        Event::PlayerItemHeld,
+        Event::PlayerGameModeChange,
+        Event::PlayerChangedWorld,
+        Event::PlayerRespawn,
+        Event::PlayerKick,
+        Event::PlayerDeath,
         Event::BlockBreak,
     ];
 
     const fn bit(self) -> u64 {
         1 << self as u8
     }
+}
+
+/// Whether a plugin listens to any of `events` this tick: with a constant
+/// list, one load and one test, as [`listens`].
+#[inline(always)]
+pub fn listens_any(events: &[Event]) -> bool {
+    let mut mask = 0;
+    let mut i = 0;
+    while i < events.len() {
+        mask |= events[i].bit();
+        i += 1;
+    }
+    FLAGS.load(Ordering::Relaxed) & mask != 0
 }
 
 /// The bits of the events with listeners; 0 without plugins.

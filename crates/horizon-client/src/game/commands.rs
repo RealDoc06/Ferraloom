@@ -981,6 +981,12 @@ impl Game<'_> {
         if self.mode == mode {
             return false;
         }
+        // Ferraloom: PlayerGameModeChangeEvent; cancelled, nothing changes (game/plugins/players.rs).
+        if ferraloom_plugins::listens(ferraloom_plugins::Event::PlayerGameModeChange)
+            && self.plugin_game_mode(mode)
+        {
+            return false;
+        }
         self.set_mode(mode);
         if self.screen == Screen::Inventory && (self.creative || self.spectator()) {
             self.screen = Screen::Playing;

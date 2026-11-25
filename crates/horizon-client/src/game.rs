@@ -4468,7 +4468,9 @@ impl Game<'_> {
         let hands_full = self.stack_in(self.selected).is_some() || self.offhand.is_some();
         let mut anchor_passed = false;
         // MultiPlayerGameMode.useItemOn: blocks react first.
+        // Ferraloom: PlayerInteractEvent's useInteractedBlock DENY (game/plugins/players.rs).
         if !(sneaking && hands_full)
+            && !self.plugin_denies_block()
             && let Some(hit) = block_hit
         {
             let held = self.held().cloned();
@@ -4572,6 +4574,10 @@ impl Game<'_> {
                     return Ok(true);
                 }
             }
+        }
+        // Ferraloom: PlayerInteractEvent's useItemInHand DENY (game/plugins/players.rs).
+        if self.plugin_denies_item() {
+            return Ok(false);
         }
         let Some(stack) = self.held().cloned() else {
             return Ok(false);

@@ -1180,6 +1180,10 @@ impl Game<'_> {
     }
     /// `ChangeDimensionTrigger`.
     pub(super) fn trigger_dimension(&mut self, from: Dim, to: Dim) {
+        // Ferraloom: PlayerChangedWorldEvent, from the same place (game/plugins/players.rs).
+        if ferraloom_plugins::listens(ferraloom_plugins::Event::PlayerChangedWorld) {
+            self.plugin_changed_world(from);
+        }
         let (from, to) = (from.id().to_owned(), to.id().to_owned());
         self.trigger("minecraft:changed_dimension", move |c, _| {
             c["from"].as_str().is_none_or(|f| f == from) && c["to"].as_str().is_none_or(|t| t == to)

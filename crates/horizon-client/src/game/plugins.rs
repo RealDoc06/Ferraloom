@@ -14,6 +14,7 @@
 //! needs the hub in `Game::lan` (moving another player, a vanilla command)
 //! and comes while it is not waits for the start of the next tick ([`Pending`]).
 mod players;
+pub(super) use players::{INBOX_EVENTS, login};
 mod server;
 mod worlds;
 
@@ -37,6 +38,8 @@ enum Pending {
     Message(PlayerId, String),
     Teleport(PlayerId, Location),
     Vanilla(String),
+    /// A vanilla command a plugin runs as a player (`Player.performCommand`).
+    Command(super::lan_actions::GuestCommand),
 }
 
 thread_local! {
@@ -174,8 +177,12 @@ impl Game<'_> {
                 Pending::Vanilla(line) => {
                     server::run_vanilla(self, &line);
                 }
+                Pending::Command(command) => {
+                    self.run_guest_command(command);
+                }
             }
         }
+        self.plugin_snapshots();
         let tick = self.ticks as i64;
         if let Some(labels) = ferraloom_plugins::tick(&mut GameHost::new(self, None), tick) {
             set_labels(self, labels);

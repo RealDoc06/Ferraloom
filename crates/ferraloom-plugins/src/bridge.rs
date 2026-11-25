@@ -323,6 +323,16 @@ pub(crate) fn call_unlent<R>(f: impl FnOnce(&mut JNIEnv) -> jni::errors::Result<
     }
 }
 
+/// [`call_unlent`] from a thread the JVM has not seen (a connection's login
+/// thread), which stays attached from then on, as a daemon thread.
+pub(crate) fn call_attached<R>(f: impl FnOnce(&mut JNIEnv) -> jni::errors::Result<R>) -> Option<R> {
+    let rt = RUNTIME.get()?;
+    if rt.vm.get_env().is_err() {
+        rt.vm.attach_current_thread_as_daemon().ok()?;
+    }
+    call_unlent(f)
+}
+
 /// Logs a failed JNI call, its pending Java exception (with its trace) cleared.
 fn describe(env: &mut JNIEnv, e: jni::errors::Error) -> String {
     if env.exception_check().unwrap_or(false) {
