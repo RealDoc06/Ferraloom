@@ -1445,6 +1445,12 @@ impl Game<'_> {
             // TeleportCommand.teleportToEntity: the destination's rotation too.
             let rotation = Some(self.target_rotation(dest));
             for &t in &targets {
+                // Ferraloom: PlayerTeleportEvent COMMAND; cancelled, they stay (game/plugins/players.rs).
+                let Some((level, pos, rotation)) =
+                    self.plugin_command_teleport(t, level, pos, rotation)
+                else {
+                    continue;
+                };
                 if !self.teleport_across(t, level, pos, rotation) {
                     self.teleport_to(t, pos, rotation);
                 }
@@ -1525,6 +1531,12 @@ impl Game<'_> {
         };
         for &t in &targets {
             let rotation = look_at(self, t).or(rotation);
+            // Ferraloom: PlayerTeleportEvent COMMAND; cancelled, they stay (game/plugins/players.rs).
+            let Some((source_level, pos, rotation)) =
+                self.plugin_command_teleport(t, source_level, pos, rotation)
+            else {
+                continue;
+            };
             if self.teleport_across(t, source_level, pos, rotation) {
                 continue;
             }

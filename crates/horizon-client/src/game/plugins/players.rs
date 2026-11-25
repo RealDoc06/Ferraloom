@@ -10,7 +10,7 @@
 use super::{DIMS, GameHost, Pending, is_plugin_command, pend, world_index};
 use crate::game::{Dim, Game, commands::Target, lan::LanHost, lan_actions::GuestCommand};
 use ferraloom_plugins::{
-    Action, Client, Death, Effect, Event, Field, Interact, Interaction, Joined, Location,
+    Action, Cause, Client, Death, Effect, Event, Field, Interact, Interaction, Joined, Location,
     LoginResult, Moved, PlayerHost, PlayerId, PlayerState, Show, Toggle, listens,
 };
 use horizon_client::{
@@ -953,6 +953,78 @@ impl Game<'_> {
         let id_of = GameMode::ALL.iter().position(|m| *m == mode).unwrap_or(0) as i32;
         in_turn(self, |h| {
             ferraloom_plugins::player_game_mode_change(h, id, id_of)
+        })
+    }
+
+    /// TeleportCommand's PlayerTeleportEvent (COMMAND) for a player it moves
+    /// to `pos` in `level`: where to, as its listeners leave it; `None` when
+    /// cancelled. Anything else than a player goes as it was.
+    pub(in crate::game) fn plugin_command_teleport(
+        &mut self,
+        t: Target,
+        level: Dim,
+        pos: [f64; 3],
+        rotation: Option<[f32; 2]>,
+    ) -> Option<(Dim, [f64; 3], Option<[f32; 2]>)> {
+        let unchanged = Some((level, pos, rotation));
+        if !listens(Event::PlayerTeleport) {
+            return unchanged;
+        }
+        let id = match t {
+            Target::Player => self.lan_acting_uuid,
+            Target::Guest(conn) => self.command_guest(conn).map(|g| g.uuid),
+            _ => None,
+        };
+        let Some(id) = id else {
+            return unchanged;
+        };
+        let mut host = GameHost::new(self, None);
+        let Some(from) = host.location(id) else {
+            return unchanged;
+        };
+        let [yaw, pitch] = rotation.unwrap_or([from.yaw, from.pitch]);
+        let to = Location {
+            world: world_index(level),
+            x: pos[0],
+            y: pos[1],
+            z: pos[2],
+            yaw,
+            pitch,
+        };
+        match ferraloom_plugins::player_teleport(&mut host, id, from, to, Cause::Command) {
+            Moved::Unchanged => unchanged,
+            Moved::Cancelled => None,
+            Moved::To(l) => Some((
+                DIMS.get(l.world).copied().unwrap_or(level),
+                [l.x, l.y, l.z],
+                Some([l.yaw, l.pitch]),
+            )),
+        }
+    }
+
+    /// ThrownEnderpearl.onHit's PlayerTeleportEvent (ENDER_PEARL) for the
+    /// player in place, before the pearl takes them to `to`: false when
+    /// cancelled (CraftBukkit keeps the endermite and the damage out too).
+    /// A destination a listener changes is not followed yet.
+    pub(in crate::game) fn plugin_pearl_allowed(&mut self, to: [f64; 3]) -> bool {
+        if !listens(Event::PlayerTeleport) {
+            return true;
+        }
+        let Some(id) = self.lan_acting_uuid else {
+            return true;
+        };
+        in_turn(self, |h| {
+            let Some(from) = h.location(id) else {
+                return true;
+            };
+            let to = Location {
+                x: to[0],
+                y: to[1],
+                z: to[2],
+                ..from
+            };
+            ferraloom_plugins::player_teleport(h, id, from, to, Cause::EnderPearl)
+                != Moved::Cancelled
         })
     }
 
