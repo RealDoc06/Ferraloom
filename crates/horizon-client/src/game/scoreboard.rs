@@ -824,6 +824,14 @@ impl Env for GameEnv<'_, '_> {
     }
 }
 
+/// `LivingEntity.getArmorValue`: the armor attribute rounded down.
+fn armor_value(p: &mut horizon_client::motion::PlayerMotion) -> i32 {
+    p.attribute("minecraft:armor")
+        .or_else(|_| p.attribute("armor"))
+        .unwrap_or(0.0)
+        .floor() as i32
+}
+
 #[cfg(test)]
 mod tab_list_tests {
     use super::*;
@@ -905,12 +913,4 @@ mod tab_list_tests {
         assert_eq!(players[1].game_mode, 1);
         assert_eq!(players[1].latency, 123);
     }
-}
-
-/// `LivingEntity.getArmorValue`: the armor attribute rounded down.
-fn armor_value(p: &mut horizon_client::motion::PlayerMotion) -> i32 {
-    p.attribute("minecraft:armor")
-        .or_else(|_| p.attribute("armor"))
-        .unwrap_or(0.0)
-        .floor() as i32
 }
