@@ -155,6 +155,19 @@ fn plain(tag: &Tag, out: &mut String) {
     }
 }
 
+/// ClientboundCommandSuggestionsPacket: the range replaced and the words.
+fn suggestions(r: &mut Reader) -> horizon_protocol::Result<(i32, i32, Vec<String>)> {
+    let (_id, start, length) = (r.varint()?, r.varint()?, r.varint()?);
+    let mut words = Vec::new();
+    for _ in 0..r.varint()? {
+        words.push(r.string(32767)?);
+        if r.bool()? {
+            r.nbt()?;
+        }
+    }
+    Ok((start, length, words))
+}
+
 fn raw(id: i32, write: impl FnOnce(&mut Writer)) -> Vec<u8> {
     let mut w = Writer::new();
     w.varint(id);
@@ -248,29 +261,8 @@ fn read(mut reader: horizon_protocol::connection::ConnReader, writer: Arc<Mutex<
                 Ok(())
             }
             cb::COMMAND_SUGGESTIONS => {
-                let mut words = Vec::new();
-                let read = (|| {
-                    let (_id, start, length) = (r.varint()?, r.varint()?, r.varint()?);
-                    for _ in 0..r.varint()? {
-                        words.push(r.string(32767)?);
-                        if r.bool()? {
-                            r.nbt()?;
-                        }
-                    }
-                    Ok::<_, horizon_protocol::Error>((start, length))
-                })();
-                if let Ok((start, length)) = read {
+                if let Ok((start, length, words)) = suggestions(&mut r) {
                     say(format!("suggestions {start} {length} {}", words.join(",")));
-                }
-                Ok(())
-            }
-            cb::BLOCK_UPDATE => {
-                if let Ok(play::Clientbound::BlockUpdate(p)) = play::Clientbound::decode(id, &body)
-                {
-                    say(format!(
-                        "block {} {} {} {}",
-                        p.pos[0], p.pos[1], p.pos[2], p.state
-                    ));
                 }
                 Ok(())
             }

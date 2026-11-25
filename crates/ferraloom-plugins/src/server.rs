@@ -63,7 +63,6 @@ pub(crate) fn load(env: &mut JNIEnv) -> jni::errors::Result<()> {
     let more: Vec<(&str, &str, *mut c_void)> =
         more.iter().map(|(n, s, f)| (*n, s.as_str(), *f)).collect();
     natives::register(env, "dev/ferraloom/bukkit/ServerNative", &more)?;
-    const S: &str = "Ljava/lang/String;";
     let entry = Entry::load(
         env,
         "dev/ferraloom/bukkit/ServerEvents",
