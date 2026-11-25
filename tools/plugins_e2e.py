@@ -463,11 +463,22 @@ def check_entities(server, bot):
     # setHealth(0) kills it at the next tick: the death event, its killer the player who last hit it.
     mark = len(log.lines)
     bot.send('command fentity kill')
-    _, line = log.wait_for(r'event: death COW exp=\d+ killer=\w+', start=mark)
+    _, line = log.wait_for(r'event: death COW exp=\d+ killer=\w+ drops=\d+', start=mark)
     mark = len(bot.out.lines)
     bot.send('command fentity mob')
     bot.out.wait_for(r'^chat mob COW .* valid=false ', start=mark)
     print(f'setHealth(0), death event ({line.split("event: ")[1]}), a dead handle: ok')
+
+    # The death's loot became one diamond; World.dropItem adds another; World.getEntities finds both.
+    time.sleep(1)
+    mark = len(bot.out.lines)
+    bot.send('command fentity diamonds')
+    bot.out.wait_for(r'^chat diamonds 1$', start=mark)
+    bot.send('command fentity drop')
+    bot.out.wait_for(r'^chat dropped DROPPED_ITEM DIAMOND$|^chat dropped ITEM DIAMOND$', start=mark)
+    bot.send('command fentity diamonds')
+    bot.out.wait_for(r'^chat diamonds 2$', start=mark)
+    print('death drops changed, World.dropItem, World.getEntities, Item.getItemStack: ok')
 
 
 def target_dir():

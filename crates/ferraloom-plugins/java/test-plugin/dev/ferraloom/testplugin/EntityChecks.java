@@ -4,7 +4,11 @@ import java.util.Locale;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.entity.Animals;
+import org.bukkit.entity.Item;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
@@ -77,7 +81,10 @@ final class EntityChecks implements Listener, CommandExecutor {
         if (event.getEntity().equals(cow)) {
             Player killer = event.getEntity().getKiller();
             log("event: death " + event.getEntityType() + " exp=" + event.getDroppedExp() + " killer="
-                    + (killer == null ? "none" : killer.getName()));
+                    + (killer == null ? "none" : killer.getName()) + " drops=" + event.getDrops().size());
+            // Its loot becomes one diamond.
+            event.getDrops().clear();
+            event.getDrops().add(new ItemStack(Material.DIAMOND));
         }
     }
 
@@ -117,6 +124,20 @@ final class EntityChecks implements Listener, CommandExecutor {
             }
             case "kill" -> cow.setHealth(0);
             case "targets" -> sender.sendMessage("targets " + targets);
+            case "drop" -> {
+                Location at = ((Player) sender).getLocation().add(0, 0, 3);
+                Item item = at.getWorld().dropItem(at, new ItemStack(Material.DIAMOND));
+                sender.sendMessage("dropped " + item.getType() + " " + item.getItemStack().getType());
+            }
+            case "diamonds" -> {
+                int n = 0;
+                for (Entity e : ((Player) sender).getWorld().getEntities()) {
+                    if (e instanceof Item item && item.getItemStack().getType() == Material.DIAMOND) {
+                        n += item.getItemStack().getAmount();
+                    }
+                }
+                sender.sendMessage("diamonds " + n);
+            }
             case "remove" -> cow.remove();
             case "mob" -> {
                 Entity e = cow;
