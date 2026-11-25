@@ -394,6 +394,12 @@ impl Game<'_> {
         }
         let id = mob.id;
         self.mobs.push(mob);
+        // Ferraloom: CreatureSpawnEvent as the mob is added (game/plugins/entities.rs).
+        if ferraloom_plugins::listens(ferraloom_plugins::Event::EntitySpawn)
+            && self.plugin_spawned(id, ferraloom_plugins::SpawnReason::Default)
+        {
+            return None;
+        }
         self.enchant_spawn_equipment(id);
         if !persistent && !scripted {
             self.spawn_jockeys(id, true);
@@ -778,6 +784,8 @@ impl Game<'_> {
             self.mobs.append(&mut mobs);
         }
         self.died = died;
+        // Ferraloom: plugin changes from the pass, in mob order (game/plugins/entities.rs).
+        self.plugin_after_mob_pass();
         // ... and entity event 60 goes out as it is: the poof.
         for (id, at, width, height) in gone {
             let at = [at.x, at.y, at.z];
@@ -870,6 +878,8 @@ impl Game<'_> {
     /// LivingEntity.die / dropAllDeathLoot.
     fn mob_died(&mut self, m: &Mob) {
         let killer = self.last_hurt_by_player.remove(&m.id);
+        // Ferraloom: the killer, for EntityDeathEvent (game/plugins/entities.rs).
+        super::plugins::entities::note_killer(m.id, killer.flatten());
         let by_player = killer.is_some() || m.ai.last_hurt_by_player > 0;
         let mut dying = m.clone();
         // LivingEntity.die: the death is heard, and a sculk catalyst nearby
@@ -1014,7 +1024,11 @@ impl Game<'_> {
             mob_drops: self.ui.rules.bool("mob_drops"),
             world_seed: self.level.seed,
         };
-        let (items, skulls) = drops::die(m, &death, &mut self.rand_sequences);
+        let (mut items, skulls) = drops::die(m, &death, &mut self.rand_sequences);
+        // Ferraloom: EntityDeathEvent, the loot collected and not dropped (CraftBukkit's dropAllDeathLoot).
+        if ferraloom_plugins::listens(ferraloom_plugins::Event::EntityDeath) {
+            items = self.plugin_entity_death(m, items);
+        }
         if skulls && let Some(Who::Mob(id)) = m.last_damage.and_then(|(d, _)| d.attacker) {
             // Creeper.droppedSkulls: one head per charged explosion.
             self.combat.charged_exploders.retain(|c| *c != id);

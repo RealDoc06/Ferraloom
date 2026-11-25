@@ -352,6 +352,8 @@ impl Game<'_> {
         f: impl FnOnce(&mut Self) -> R,
     ) -> Option<R> {
         let swap = self.enter_guest(host, conn)?;
+        // Ferraloom: who `Who::Player` is in mob code in this turn (game/plugins/entities.rs).
+        let _acting = super::plugins::entities::acting(self.lan_acting_uuid, self.dim);
         // Ferraloom: plugin events in the guest's turn reach the hub (game/plugins.rs).
         let result = super::plugins::lend_hub(host, || f(self));
         self.leave_guest(host, swap);
@@ -1515,6 +1517,9 @@ impl Game<'_> {
                 if self
                     .look_at_entity(host, gi, p.id, Some(p.location))
                     .is_some()
+                    // Ferraloom: PlayerInteractEntityEvent, before the interaction.
+                    && !(ferraloom_plugins::listens(ferraloom_plugins::Event::PlayerInteractEntity)
+                        && self.plugin_interact_entity(host, conn, p.id, p.hand == 1))
                 {
                     // handleInteract: the entity and that hand only; a click the
                     // entity passes comes back as UseItem.

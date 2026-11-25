@@ -13,6 +13,8 @@
 //! the packet handlers hold it and pass it in. What
 //! needs the hub in `Game::lan` (moving another player, a vanilla command)
 //! and comes while it is not waits for the start of the next tick ([`Pending`]).
+// Entities.
+pub(super) mod entities;
 mod players;
 mod server;
 mod worlds;
@@ -141,6 +143,10 @@ impl Game<'_> {
         };
         if let Err(e) = ferraloom_plugins::start(&config, &mut GameHost::new(self, None)) {
             super::dedicated::log("ERROR", &format!("No plugins loaded: {e}"));
+        }
+        // Entities: the sites inside mob code.
+        if ferraloom_plugins::running() {
+            entities::install();
         }
     }
 
