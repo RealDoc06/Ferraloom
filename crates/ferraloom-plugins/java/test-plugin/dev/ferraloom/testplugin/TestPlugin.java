@@ -12,7 +12,17 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.GameRule;
+import org.bukkit.HeightMap;
+import org.bukkit.block.Block;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.block.data.Orientable;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPhysicsEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.weather.WeatherChangeEvent;
+import org.bukkit.event.world.WorldInitEvent;
+import org.bukkit.event.world.WorldLoadEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -24,6 +34,8 @@ import org.bukkit.plugin.java.JavaPlugin;
  */
 public final class TestPlugin extends JavaPlugin implements Listener {
     private volatile boolean protect;
+    /** The next BlockPhysicsEvent is logged (then this goes false again). */
+    private boolean watchPhysics;
     private int timerRuns;
 
     @Override
@@ -109,6 +121,44 @@ public final class TestPlugin extends JavaPlugin implements Listener {
                 + " cancelled=" + event.isCancelled());
     }
 
+    @EventHandler
+    public void onPlace(BlockPlaceEvent event) {
+        event.setCancelled(protect);
+        Block b = event.getBlockPlaced();
+        getLogger().info("event: place " + b.getType() + " at " + b.getX() + " " + b.getY() + " " + b.getZ()
+                + " against " + event.getBlockAgainst().getType() + " replacing " + event.getBlockReplacedState().getType()
+                + " by " + event.getPlayer().getName() + " cancelled=" + event.isCancelled());
+    }
+
+    @EventHandler
+    public void onPhysics(BlockPhysicsEvent event) {
+        if (watchPhysics) {
+            watchPhysics = false;
+            Block b = event.getBlock();
+            getLogger().info("event: physics at " + b.getX() + " " + b.getY() + " " + b.getZ() + " changed="
+                    + event.getChangedType());
+        }
+    }
+
+    @EventHandler
+    public void onWeather(WeatherChangeEvent event) {
+        getLogger().info("event: weather " + event.getWorld().getName() + " to=" + event.toWeatherState());
+    }
+
+    @EventHandler
+    public void onWorldInit(WorldInitEvent event) {
+        getLogger().info("event: world-init " + event.getWorld().getName());
+    }
+
+    @EventHandler
+    public void onWorldLoad(WorldLoadEvent event) {
+        getLogger().info("event: world-load " + event.getWorld().getName());
+    }
+
+    private static int arg(String[] args, int i) {
+        return Integer.parseInt(args[i]);
+    }
+
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         String sub = args.length == 0 ? "" : args[0].toLowerCase(Locale.ROOT);
@@ -133,6 +183,44 @@ public final class TestPlugin extends JavaPlugin implements Listener {
                 }
             }
             case "stub" -> sender.sendMessage("health " + ((Player) sender).getHealth());
+            case "block" -> {
+                World w = Bukkit.getWorlds().get(0);
+                Block b = w.getBlockAt(arg(args, 1), arg(args, 2), arg(args, 3));
+                Block up = b.getRelative(org.bukkit.block.BlockFace.UP);
+                sender.sendMessage("block " + b.getType() + " " + b.getBlockData().getAsString() + " solid="
+                        + b.getType().isSolid() + " empty=" + b.isEmpty() + " above=" + up.getType() + " sky="
+                        + up.getLightFromSky() + " biome=" + b.getBiome().getKey());
+            }
+            case "set" -> {
+                World w = Bukkit.getWorlds().get(0);
+                BlockData data = Bukkit.createBlockData(args[4]);
+                if (data instanceof Orientable o) {
+                    o.setAxis(org.bukkit.Axis.X);
+                }
+                w.getBlockAt(arg(args, 1), arg(args, 2), arg(args, 3)).setBlockData(data);
+                sender.sendMessage("set " + w.getBlockAt(arg(args, 1), arg(args, 2), arg(args, 3)).getBlockData().getAsString());
+            }
+            case "world" -> {
+                World w = Bukkit.getWorlds().get(0);
+                Location at = sender instanceof Player p ? p.getLocation() : w.getSpawnLocation();
+                int cx = at.getBlockX() >> 4;
+                int cz = at.getBlockZ() >> 4;
+                sender.sendMessage("world sea=" + w.getSeaLevel() + " highest="
+                        + w.getHighestBlockYAt(at.getBlockX(), at.getBlockZ(), HeightMap.MOTION_BLOCKING)
+                        + " loaded=" + w.isChunkLoaded(cx, cz) + " generated=" + w.isChunkGenerated(cx, cz)
+                        + " far=" + w.isChunkLoaded(cx + 1000, cz) + " border=" + w.getWorldBorder().getSize()
+                        + " inside=" + w.getWorldBorder().isInside(at) + " keepInventory="
+                        + w.getGameRuleValue(GameRule.KEEP_INVENTORY) + " nether=" + Bukkit.getWorlds().get(1).getBlockAt(0, 0, 0).getType());
+            }
+            case "storm" -> {
+                World w = Bukkit.getWorlds().get(0);
+                w.setStorm(args.length > 1 && args[1].equals("on"));
+                sender.sendMessage("storm " + w.hasStorm());
+            }
+            case "physics" -> {
+                watchPhysics = true;
+                sender.sendMessage("watching physics");
+            }
             default -> {
                 return false;
             }
