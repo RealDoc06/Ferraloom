@@ -74,7 +74,7 @@ pub(super) fn log(level: &str, message: &str) {
 }
 
 /// A line from another of vanilla's threads (the login's User Authenticator).
-fn log_from(thread: &str, level: &str, message: &str) {
+pub(super) fn log_from(thread: &str, level: &str, message: &str) {
     let file_level = match level {
         "WARN" => ::log::Level::Warn,
         "ERROR" => ::log::Level::Error,
@@ -563,6 +563,8 @@ impl Game<'_> {
         lists.use_whitelist = props.white_list;
         lists.enforce_whitelist = props.enforce_whitelist;
         let lists = Arc::new(Mutex::new(lists));
+        // Ferraloom: plugins load (onLoad) before the level, as CraftBukkit's do.
+        self.start_plugins(&level_name, &props, port);
         log("INFO", &format!("Preparing level \"{level_name}\""));
         let folder = world_dir.to_string_lossy().into_owned();
         self.load_world(WorldRequest::new(
@@ -681,6 +683,8 @@ impl Game<'_> {
         if let Some(host) = self.lan.as_mut() {
             host.hub.spawn_protection = props.spawn_protection;
         }
+        // Ferraloom: plugins' onEnable, before "Done" as CraftBukkit's POSTWORLD.
+        self.enable_plugins();
         log(
             "INFO",
             &format!(
@@ -743,6 +747,10 @@ impl Game<'_> {
             if !paused && !admin(|a| a.autosave).unwrap_or(true) {
                 // `save-off`: the periodic save inside the tick is skipped.
                 self.ticks = self.ticks.max(1);
+            }
+            // Ferraloom: the plugins' scheduler heartbeat (tickChildren's, so not while paused).
+            if !paused {
+                state.stop |= self.tick_plugins();
             }
             // MinecraftServer.tickServer: while paused only the connections run.
             self.tick_server_timed(paused)?;
@@ -895,6 +903,10 @@ impl Game<'_> {
     /// included (game/commands/server_cmds.rs), goes to the game's dispatcher.
     fn console_command(&mut self, line: &str) {
         let line = line.strip_prefix('/').unwrap_or(line);
+        // Ferraloom: a Bukkit plugin's command (game/plugins.rs).
+        if self.plugin_console_command(line) {
+            return;
+        }
         let mut words = line.split_whitespace();
         let Some(command) = words.next() else {
             return;
@@ -1058,6 +1070,8 @@ impl Game<'_> {
 
     fn stop_dedicated(&mut self) -> Result<()> {
         log("INFO", "Stopping server");
+        // Ferraloom: plugins' onDisable, first, as CraftBukkit's stopServer.
+        self.disable_plugins();
         log("INFO", "Saving players");
         if let Some(h) = self.lan.as_mut() {
             for g in &h.hub.guests {

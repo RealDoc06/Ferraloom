@@ -36,6 +36,8 @@ use std::sync::{Arc, atomic::Ordering};
 
 /// GameEvent types (ClientboundGameEventPacket).
 pub mod chat;
+// Ferraloom: plugin commands in the tree (lan/hub/plugins.rs).
+mod plugins;
 
 pub mod game_event {
     pub const START_RAINING: u8 = 1;
@@ -275,6 +277,8 @@ pub struct Hub {
     /// Server mods' commands, a root in the commands report's format, sent
     /// after vanilla's; the key the game last set them for.
     mod_commands: (serde_json::Value, Option<u64>),
+    /// Ferraloom: Bukkit plugins' commands, sent after the server mods'.
+    plugin_commands: serde_json::Value,
 }
 
 fn string(s: &str) -> Tag {
@@ -663,6 +667,7 @@ impl Hub {
             entity_out: Vec::new(),
             entity_players: Vec::new(),
             mod_commands: (serde_json::Value::Null, None),
+            plugin_commands: serde_json::Value::Null,
             teams: Vec::new(),
         }
     }
@@ -1021,17 +1026,20 @@ impl Hub {
             ids::RECIPE_BOOK_ADD,
             self.sync.advancements.initial_recipe_book(book, &self.sync),
         ));
-        // The others hear of the newcomer before it joins the list.
-        self.broadcast_except(
-            conn,
-            &C::SystemChat(play::SystemChat {
-                content: yellow_names(
-                    "multiplayer.player.joined",
-                    vec![display_name(self.guests[i].uuid, &name)],
-                ),
-                overlay: false,
-            }),
-        );
+        // The others hear of the newcomer before it joins the list. Ferraloom:
+        // unless a plugin listens; it sends the message it chose (game/plugins.rs).
+        if !ferraloom_plugins::listens(ferraloom_plugins::Event::PlayerJoin) {
+            self.broadcast_except(
+                conn,
+                &C::SystemChat(play::SystemChat {
+                    content: yellow_names(
+                        "multiplayer.player.joined",
+                        vec![display_name(self.guests[i].uuid, &name)],
+                    ),
+                    overlay: false,
+                }),
+            );
+        }
         self.guests[i].placed = true;
         self.teleport(i, None);
         let g = &self.guests[i];
@@ -1230,7 +1238,7 @@ impl Hub {
                     g.permission,
                     dedicated,
                     &self.sync.builtin,
-                    &self.mod_commands.0,
+                    &self.extra_commands(),
                 )
             }
             None => play::Commands {
@@ -1568,10 +1576,13 @@ impl Hub {
         self.broadcast(&C::RemoveEntities(play::RemoveEntities {
             ids: vec![g.entity_id],
         }));
-        self.system_message(yellow_names(
-            "multiplayer.player.left",
-            vec![display_name(g.uuid, &g.name)],
-        ));
+        // Ferraloom: a plugin listening sends the message it chose (game/plugins.rs).
+        if !ferraloom_plugins::listens(ferraloom_plugins::Event::PlayerQuit) {
+            self.system_message(yellow_names(
+                "multiplayer.player.left",
+                vec![display_name(g.uuid, &g.name)],
+            ));
+        }
         g
     }
 

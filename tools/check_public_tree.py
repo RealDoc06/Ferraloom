@@ -32,6 +32,9 @@ def prohibited(path):
             return False
         if parsed.parent == PurePosixPath("tools/extractor") and parsed.name.startswith("Extract"):
             return False
+        # Ferraloom's own Bukkit bridge, tools and test plugins (docs/ferraloom/plugins.md).
+        if parts[:3] == ("crates", "ferraloom-plugins", "java") and "minecraft" not in parts[3:]:
+            return False
     # Original Horizon mod sources may also be tracked.
     if parsed.suffix == ".java" and path.startswith(("mods/horizon/src/", "mods/horizon-lab/src/")):
         return not ("/dev/horizonlab/" in path)
