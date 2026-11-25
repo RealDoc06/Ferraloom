@@ -456,13 +456,29 @@ impl Game<'_> {
     pub(super) fn cmd_dialog(&mut self, id: &str, ctx: &Context) -> R<i32> {
         let targets = self.entities(ctx, "targets", true)?;
         let n = targets.len() as i32;
-        if id == "dialog.show" {
+        // Ferraloom: each target player's own client is sent the dialog
+        // (ServerPlayer.openDialog) or told to close it.
+        let packet = if id == "dialog.show" {
             let Some(Arg::Resource(dialog)) = ctx.get("dialog").cloned() else {
                 return Ok(0);
             };
-            self.open_dialog(&dialog)?;
+            let packet = self.dialog_packet(&dialog);
+            if targets.iter().any(|t| self.dialog_conn(*t).is_none()) {
+                self.open_dialog(&dialog)?;
+            }
+            packet
         } else {
-            self.close_dialog();
+            if targets.iter().any(|t| self.dialog_conn(*t).is_none()) {
+                self.close_dialog();
+            }
+            Some(horizon_protocol::packets::play::Clientbound::ClearDialog(
+                horizon_protocol::packets::Empty,
+            ))
+        };
+        if let (Some(packet), Some(host)) = (packet, self.lan.as_ref()) {
+            for conn in targets.iter().filter_map(|t| self.dialog_conn(*t)) {
+                host.hub.send_to(conn, &packet);
+            }
         }
         let (single, multiple) = if id == "dialog.show" {
             (
@@ -482,6 +498,39 @@ impl Game<'_> {
         };
         self.feedback(message);
         Ok(n)
+    }
+
+    /// Ferraloom: the connection of a server player `/dialog` targets (None:
+    /// this window's own player).
+    fn dialog_conn(&self, t: Target) -> Option<u32> {
+        match t {
+            Target::Player => self.lan_acting,
+            Target::Guest(conn) => Some(conn),
+            _ => None,
+        }
+    }
+    /// Ferraloom: ClientboundShowDialogPacket for a `/dialog show` argument:
+    /// a registered dialog by its network id, else the inline value as it was
+    /// written (the client decodes it with Dialog.DIRECT_CODEC, as the
+    /// command did).
+    fn dialog_packet(&self, dialog: &str) -> Option<horizon_protocol::packets::play::Clientbound> {
+        use horizon_protocol::packets::play::{Clientbound, DialogHolder, ShowDialog};
+        let trimmed = dialog.trim();
+        let holder = if trimmed.starts_with('{') {
+            let mut reader = horizon_client::command::Reader::new(trimmed);
+            DialogHolder::Direct(
+                horizon_client::command::snbt::parse_tag_argument(&mut reader).ok()?,
+            )
+        } else {
+            let name = horizon_client::command::args::normalize(trimmed);
+            let id = self
+                .lan
+                .as_ref()?
+                .hub
+                .registry_id("minecraft:dialog", &name)?;
+            DialogHolder::Registry(id)
+        };
+        Some(Clientbound::ShowDialog(ShowDialog { dialog: holder }))
     }
 
     // ---- /posteffect ----------------------------------------------------

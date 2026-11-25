@@ -78,6 +78,9 @@ CASES = {
     'spectate-mode-change': spectating(f'cmd Bob spectate {COW}', 'ticks 5', 'cmd Alice gamemode creative Bob'),
     'riding-jump-horse': riding('horse'),
     'riding-jump-camel': riding('camel'),
+    'dialog': (CLEAR, ['cmd Alice dialog show Bob minecraft:server_links',
+                       'cmd Alice dialog show Bob {type:"minecraft:notice",title:"Hi"}', 'cmd Alice dialog clear Bob',
+                       'ticks 2'], ('dialog', 'chat')),
 }
 SETUP = ['cmd Alice gamerule spawn_mobs false', 'cmd Alice gamerule spawn_monsters false',
          'cmd Alice gamerule advance_time false', 'cmd Alice time set noon', 'ticks 20']

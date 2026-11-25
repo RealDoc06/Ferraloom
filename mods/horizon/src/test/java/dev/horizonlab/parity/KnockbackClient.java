@@ -400,6 +400,10 @@ public final class KnockbackClient {
                         net.minecraft.network.VarInt.read(b);
                         int camera = net.minecraft.network.VarInt.read(b);
                         record("camera " + seen.getOrDefault(camera, "id" + camera));
+                    } else if (p instanceof net.minecraft.network.protocol.common.ClientboundShowDialogPacket d) {
+                        record("dialog " + d.dialog().getRegisteredNameIfPresent().orElse("direct"));
+                    } else if (p instanceof net.minecraft.network.protocol.common.ClientboundClearDialogPacket) {
+                        record("dialog clear");
                     } else if (p instanceof net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket d
                         && ("horse".equals(seen.get(d.id())) || "camel".equals(seen.get(d.id())))) {
                         for (var value : d.packedItems()) {
