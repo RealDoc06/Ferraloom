@@ -2,7 +2,7 @@
 //! menus that show them; container clicks, opens and closes.
 use super::GameHost;
 use crate::game::{Game, lan::LanHost};
-use ferraloom_plugins::{Click, Drag, Holder, InventoryHost, PlayerId, Side};
+use ferraloom_plugins::{Click, Drag, Holder, InventoryHost, ItemFacts, PlayerId, Side};
 use horizon_client::{
     items::ItemStack,
     lan::{
@@ -295,6 +295,19 @@ impl InventoryHost for GameHost<'_, '_> {
             closed
         })
         .unwrap_or(false)
+    }
+
+    fn item_facts(&mut self, item: &str) -> Option<ItemFacts> {
+        let i = self.game.res.items().get(item)?;
+        Some(ItemFacts {
+            max_stack: i.max_stack,
+            max_damage: i.max_damage,
+            edible: i.food.is_some(),
+            fuel: i.fuel.is_some(),
+            record: i.jukebox_song.is_some(),
+            compostable: i.compostable.is_some(),
+            remainder: i.crafting_remainder.clone(),
+        })
     }
 
     fn resend_inventory(&mut self, player: PlayerId) {

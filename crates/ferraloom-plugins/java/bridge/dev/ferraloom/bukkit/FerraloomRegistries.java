@@ -61,6 +61,7 @@ final class FerraloomRegistries {
         // Blocks and worlds.
         // Entities.
         // Inventory.
+        FACTORIES.put(org.bukkit.inventory.ItemType.class, FerraloomItemType::new);
         // Server.
     }
 

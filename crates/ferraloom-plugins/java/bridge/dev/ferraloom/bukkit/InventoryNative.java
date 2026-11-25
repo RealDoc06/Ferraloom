@@ -44,4 +44,10 @@ final class InventoryNative {
 
     /** Sends the player's inventory and open menu again. */
     static native void resend(long most, long least);
+
+    /** An item's {max stack, max damage, edible, fuel, record, compostable}, or null for an unknown item. */
+    static native int[] itemFacts(String item);
+
+    /** The item crafting leaves of it (a bucket's bucket), or null. */
+    static native String itemRemainder(String item);
 }

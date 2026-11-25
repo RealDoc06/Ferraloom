@@ -19,7 +19,7 @@ use jni::{
     JNIEnv,
     objects::{JByteArray, JClass, JObject, JString, JValue},
     signature::{Primitive, ReturnType},
-    sys::{JNI_FALSE, jboolean, jbyteArray, jint, jlong},
+    sys::{JNI_FALSE, jboolean, jbyteArray, jint, jintArray, jlong, jstring},
 };
 use std::{ffi::c_void, sync::OnceLock};
 
@@ -137,6 +137,24 @@ pub trait InventoryHost {
     }
     /// Sends the player's whole inventory and open menu again (`Player.updateInventory`).
     fn resend_inventory(&mut self, _player: PlayerId) {}
+    /// What `ItemType` answers of an item (`minecraft:stone`); none for an unknown one.
+    fn item_facts(&mut self, _item: &str) -> Option<ItemFacts> {
+        None
+    }
+}
+
+/// An item's prototype, as `ItemType` reads it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ItemFacts {
+    pub max_stack: u32,
+    pub max_damage: u32,
+    pub edible: bool,
+    pub fuel: bool,
+    pub record: bool,
+    /// A composter takes it.
+    pub compostable: bool,
+    /// `Item.getCraftingRemainder`'s item id.
+    pub remainder: Option<String>,
 }
 
 /// An `InventoryClickEvent` about to happen: the click as CraftBukkit reads
@@ -190,6 +208,16 @@ pub(crate) fn load(env: &mut JNIEnv) -> jni::errors::Result<()> {
             ),
             ("close", "(JJ)Z", close_container as *mut c_void),
             ("resend", "(JJ)V", resend as *mut c_void),
+            (
+                "itemFacts",
+                "(Ljava/lang/String;)[I",
+                item_facts as *mut c_void,
+            ),
+            (
+                "itemRemainder",
+                "(Ljava/lang/String;)Ljava/lang/String;",
+                item_remainder as *mut c_void,
+            ),
         ],
     )?;
     let entry = Entry::load(
@@ -582,6 +610,41 @@ extern "system" fn close_container(
         let closed = with_host(|h| h.close_container(player_id(most, least)))
             .ok_or(Fail::NoHost("HumanEntity.closeInventory"))?;
         Ok(jbool(closed))
+    })
+}
+
+/// {max stack, max damage, edible, fuel, record, compostable}, or null.
+extern "system" fn item_facts(mut env: JNIEnv, _: JClass, item: JString) -> jintArray {
+    guard(&mut env, std::ptr::null_mut(), |env| {
+        let item = string(env, &item)?;
+        let facts =
+            with_host(|h| h.item_facts(&item)).ok_or(Fail::NoHost("ItemType.getMaxStackSize"))?;
+        let Some(f) = facts else {
+            return Ok(std::ptr::null_mut());
+        };
+        let values = [
+            f.max_stack as jint,
+            f.max_damage as jint,
+            jint::from(f.edible),
+            jint::from(f.fuel),
+            jint::from(f.record),
+            jint::from(f.compostable),
+        ];
+        let array = env.new_int_array(values.len() as jint)?;
+        env.set_int_array_region(&array, 0, &values)?;
+        Ok(array.into_raw())
+    })
+}
+
+extern "system" fn item_remainder(mut env: JNIEnv, _: JClass, item: JString) -> jstring {
+    guard(&mut env, std::ptr::null_mut(), |env| {
+        let item = string(env, &item)?;
+        let facts = with_host(|h| h.item_facts(&item))
+            .ok_or(Fail::NoHost("ItemType.getCraftingRemainingItem"))?;
+        match facts.and_then(|f| f.remainder) {
+            Some(r) => Ok(env.new_string(r)?.into_raw()),
+            None => Ok(std::ptr::null_mut()),
+        }
     })
 }
 
