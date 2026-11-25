@@ -195,6 +195,8 @@ def check_plugins(engine, bot_binary, built, out, scratch):
 
         # The scheduler: async off the server thread; a 40-tick delay and a 10-tick timer, counted in game ticks.
         log.wait_for(r'\[FerraloomTest\] schedule: async primary=false')
+        log.wait_for(r'\[FerraloomTest\] blocks: async primary=false air=true solid=true block=true '
+                     r'data=minecraft:oak_log\[axis=y\] parsed=minecraft:oak_stairs\[facing=east\]$')
         log.wait_for(r'\[FerraloomTest\] schedule: later after 40 ticks')
         log.wait_for(r'\[FerraloomTest\] schedule: timer ran 5 times in 41 ticks')
         print('scheduler: ok')
