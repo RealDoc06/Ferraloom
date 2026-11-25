@@ -3,12 +3,14 @@
 
     python3 crates/ferraloom-plugins/java/build.py                    # bridge, test plugins, coverage
     python3 crates/ferraloom-plugins/java/build.py --install SERVER   # and copies the bridge into SERVER/ferraloom-bukkit/
+    python3 crates/ferraloom-plugins/java/build.py --usage JARS...    # and what those plugin jars (or folders) need: usage.md
 
 1. Fetches the Spigot API jar pinned in api.lock.json (checked by SHA-256, never committed).
 2. Generates the stubs: tools/StubGen.java over the interfaces in stubs.txt.
 3. Compiles bridge/ against the API into dist/ferraloom-bukkit.jar, beside the API jar.
 4. Compiles the test plugins into test-plugins/.
 5. Prints tools/Coverage.java's table (also in coverage.md).
+6. With --usage, writes tools/Usage.java's report on the plugins given to usage.md (docs/ferraloom/plugin-usage.md).
 
 Everything goes under --out (default .local/ferraloom-plugins/ in the checkout), the API jar in --cache. JAVA_HOME's javac, jar and java
 are used when it is set, else those on PATH.
@@ -98,6 +100,7 @@ def main():
     parser.add_argument('--cache', type=Path, default=ROOT / '.local/ferraloom-plugins/cache',
                         help='where the API jar is kept between builds')
     parser.add_argument('--install', type=Path, help='a server folder: copies the bridge into its ferraloom-bukkit/')
+    parser.add_argument('--usage', type=Path, nargs='+', help='plugin jars or folders of them to report on')
     args = parser.parse_args()
     out = args.out.resolve()
     api = fetch_api(args.cache.resolve())
@@ -127,6 +130,12 @@ def main():
                             *IMPLEMENTATIONS], check=True, capture_output=True, text=True).stdout
     (out / 'coverage.md').write_text(table)
     print(table, end='')
+
+    if args.usage:
+        report = subprocess.run([tool('java'), '-cp', sep.join(map(str, [api, out / 'tools'])), 'Usage', api,
+                                 dist / 'ferraloom-bukkit.jar', *args.usage], check=True, capture_output=True, text=True).stdout
+        (out / 'usage.md').write_text(report)
+        print(f'usage report: {out / "usage.md"}')
 
     if args.install:
         target = args.install.resolve() / 'ferraloom-bukkit'
