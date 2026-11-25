@@ -17,7 +17,7 @@ players made of vanilla's protocol code, joins them both and runs one script on 
 - a zombie hits Bob, twice: the knockback reaches Bob's client once his server-side copy has
   travelled a tick (the mob's hit, then ServerPlayer's travel, then ServerEntity.sendChanges). It is night, so
   that no zombie burns (a burning mob is in its hurt cooldown);
-- `/damage` hurts Bob with no entity behind it (a fall).
+- Bob falls five blocks: a hurt with no entity behind it.
 
 In every case each player's ClientboundDamageEventPacket about a player (LivingEntity.hurtServer's
 broadcastDamageEvent, to the trackers and the hurt player: the red flash) and the player hurt sounds it hears
@@ -69,6 +69,7 @@ PROPERTIES = {
 # Cases Horizon still gets wrong, and why.
 KNOWN = {
     'pvp-mace': "a smash on a player runs none of MaceItem.hurtEnemy (the attacker's fall goes on)",
+    'pvp-shield': "a blocked hit plays no hurt sound (health.rs emits it with the damage broadcast only)",
 }
 
 A = (0.5, -60.0, 0.5)  # Alice, facing east (yaw -90)
@@ -182,8 +183,10 @@ CASES = {
     'pvp-mace': pvp_case(weapon='minecraft:mace', mace=True),
     'pvp-cooldown': pvp_case(cooldown=True),
     'zombie-hits-bob': mob_hits_case('zombie'),
-    'damage-fall': ['cmd Bob effect give @s minecraft:resistance 1000 4 true', 'cmd Alice damage Bob 2 minecraft:fall',
-                    'ticks 10'],
+    # Bob falls five blocks (Resistance V takes the damage, not the hurt).
+    'damage-fall': ['cmd Bob effect give @s minecraft:resistance 1000 4 true', *stand('Bob', V, 90),
+                    *[f'pos Bob {V[0]} {V[1] + h} {V[2]} 90 0 0' for h in (5.0, 4.0, 2.5, 1.0)],
+                    *stand('Bob', V, 90, ticks=1), 'ticks 10'],
 }
 SETUP = ['cmd Alice gamerule spawn_mobs false', 'cmd Alice gamerule spawn_monsters false',
          'cmd Alice kill @e[type=!player]', 'cmd Alice gamerule advance_time false', 'cmd Alice time set midnight',
