@@ -850,7 +850,10 @@ mod tests {
             1 => {
                 if let Some(super::super::Who::Mob(t)) = m.ai.target {
                     let e = ferraloom_plugins::EntityRef::new(t, "villager");
-                    super::super::plugin_sites::queue(e, ferraloom_plugins::EntityChange::Glowing(true));
+                    super::super::plugin_sites::queue(
+                        e,
+                        ferraloom_plugins::EntityChange::Glowing(true),
+                    );
                 }
                 m.ai.target
             }
@@ -860,12 +863,12 @@ mod tests {
 
     /// An EntityCombustEvent listener that refuses every fifth mob.
     fn plugin_combust(m: &mut Mob, ticks: i32, _: &MobWorld) -> Option<i32> {
-        (m.id < PLUGIN_MOBS || m.id % 5 != 0).then_some(ticks)
+        (m.id < PLUGIN_MOBS || !m.id.is_multiple_of(5)).then_some(ticks)
     }
 
     /// An EntityChangeBlockEvent listener that refuses every other mob.
     fn plugin_change_block(m: &mut Mob, _: [i32; 3], _: &str, _: &MobWorld) -> bool {
-        m.id >= PLUGIN_MOBS && m.id % 2 == 0
+        m.id >= PLUGIN_MOBS && m.id.is_multiple_of(2)
     }
 
     /// An EntityDamageEvent listener that cancels half and halves the rest.
@@ -873,7 +876,7 @@ mod tests {
         if m.id < PLUGIN_MOBS {
             return Some(amount);
         }
-        (m.id % 2 == 1).then_some(amount * 0.5)
+        (!m.id.is_multiple_of(2)).then_some(amount * 0.5)
     }
 
     /// Ferraloom: with plugins listening to the mob pass's events, the
@@ -903,7 +906,10 @@ mod tests {
         };
         // The four runs of each tick (serial, check's two, speculative) call
         // the listener for the same changes.
-        assert!(events > 0 && events % 4 == 0, "{events} {totals:?}");
+        assert!(
+            events > 0 && events.is_multiple_of(4),
+            "{events} {totals:?}"
+        );
         assert!(totals.reran < totals.speculated, "{totals:?}");
         eprintln!(
             "with target and damage listeners: {} of {} speculative ticks ran again in turn, {} target events",
