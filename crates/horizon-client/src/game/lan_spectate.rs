@@ -152,7 +152,8 @@ impl Game<'_> {
     }
 
     /// `ServerPlayer.setCamera` from a command, in the guest's turn (`conn`
-    /// in place, the hub in `self.lan`): the move is the turn's teleport.
+    /// in place, the hub in `self.lan`): the teleport goes out at once, before
+    /// the camera, and the body in place moves with it.
     pub(super) fn set_acting_guest_camera(&mut self, conn: u32, target: Option<Target>) {
         if self.cmds.guest_cameras.get(&conn).copied() == target {
             return;
@@ -173,16 +174,23 @@ impl Game<'_> {
         let (Some(at), Some(id)) = (at, id) else {
             return;
         };
+        let Some(gi) = self.lan.as_ref().and_then(|h| h.hub.guest_index(conn)) else {
+            return;
+        };
         match target {
             Some(t) => self.cmds.guest_cameras.insert(conn, t),
             None => self.cmds.guest_cameras.remove(&conn),
         };
         if let Some(p) = self.player.as_mut() {
             p.position = Vec3::new(at[0], at[1], at[2]);
-            p.teleported = true;
         }
-        if let Some(g) = self.command_guest(conn) {
-            g.send(&C::SetCamera(play::SetCamera { id }));
+        // The turn's own look, which the record gets back when it ends.
+        let (yaw, pitch) = (self.yaw, self.pitch);
+        if let Some(host) = self.lan.as_mut() {
+            let g = &mut host.hub.guests[gi];
+            (g.yaw, g.pitch) = (yaw, pitch);
+            host.hub.teleport(gi, Some(at));
+            host.hub.guests[gi].send(&C::SetCamera(play::SetCamera { id }));
         }
     }
 

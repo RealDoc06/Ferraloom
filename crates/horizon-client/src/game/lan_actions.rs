@@ -1030,6 +1030,11 @@ impl Game<'_> {
         if new_mode != g.game_mode {
             let conn = g.conn;
             host.hub.set_game_mode(conn, new_mode);
+            // Ferraloom: setGameModeForPlayer gives a spectator's view back
+            // (game/lan_spectate.rs).
+            if new_mode != SPECTATOR {
+                self.set_guest_camera(host, i, None);
+            }
         }
         // LivingEntity.checkTotemDeathProtection's entity event, to every
         // client around, the guest's own included; this window draws it too.
