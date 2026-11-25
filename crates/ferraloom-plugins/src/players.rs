@@ -515,7 +515,7 @@ pub(crate) fn load(env: &mut JNIEnv) -> jni::errors::Result<()> {
         (
             "pluginMessage",
             sig("(JJ$[B)Z"),
-            plugin_message as *mut c_void,
+            send_plugin_message as *mut c_void,
         ),
         ("listName", sig("(JJ$)Z"), list_name as *mut c_void),
         (
@@ -1431,7 +1431,7 @@ extern "system" fn block_change(
     })
 }
 
-extern "system" fn plugin_message(
+extern "system" fn send_plugin_message(
     mut env: JNIEnv,
     _: JClass,
     most: jlong,
