@@ -47,8 +47,8 @@ MOB = '{NoAI:1b,Rotation:[90f,0f]}'
 
 
 def reset():
-    """Alice with nothing on her, her first hotbar slot selected, Bob back to watching."""
-    return ['cmd Alice clear @s', 'cmd Alice effect clear @s', 'slot Alice 0', 'cmd Bob clear @s',
+    """No other entity, Alice with nothing on her, her first hotbar slot selected, Bob back to watching."""
+    return ['cmd Alice kill @e[type=!player]', 'cmd Alice clear @s', 'cmd Alice effect clear @s', 'slot Alice 0', 'cmd Bob clear @s',
             f'cmd Alice tp Bob {B[0]} {B[1]} {B[2]} 180 0', *stand('Alice', A, -90), *stand('Bob', B, 180), 'ticks 5']
 
 
@@ -100,16 +100,19 @@ CASES = {
                             'cmd Bob effect give @s minecraft:resistance 1000 4 true', hold('minecraft:iron_axe'),
                             'use Bob', 'ticks 30', *stand('Bob', V, 90, ticks=1), 'attack Alice Bob', 'ticks 5'],
 }
+# The flat world's slimes split when killed: three passes take the big ones' smallest children too.
 SETUP = ['cmd Alice gamerule spawn_mobs false', 'cmd Alice gamerule spawn_monsters false',
-         'cmd Alice kill @e[type=!player]', 'cmd Alice gamerule advance_time false', 'cmd Alice time set noon',
+         *['cmd Alice kill @e[type=!player]'] * 3, 'cmd Alice gamerule advance_time false', 'cmd Alice time set noon',
          f'cmd Alice tp Alice {A[0]} {A[1]} {A[2]} -90 0', f'cmd Alice tp Bob {B[0]} {B[1]} {B[2]} 180 0', 'ticks 40']
 
 DATA = re.compile(r'^chat \S+ has the following entity data: (.*)$')
 
 
 def compared(lines):
-    """Per case, what is compared: the attribute and cooldown packets each player got, and the Health read back. The
-    join (step `start`) is compared too: what each player is sent of their own attributes and of the other's."""
+    """Per case, what is compared: the players' attribute packets each player got (their own, `self`, and the
+    other's), the cooldown packets, and the Health read back. The join (step `start`) is compared too. Each
+    receiver's stream about one subject keeps its order; how streams about different entities interleave is the
+    server's to choose (vanilla's own varies with its tracker's timing), so they are compared apart."""
     cases = {}
     for line in lines:
         who, step, text = line.split(' ', 2)
@@ -117,10 +120,14 @@ def compared(lines):
         kept = cases.setdefault(step, [])
         data = DATA.match(text)
         if who == 'Alice' and data:
-            kept.append('health ' + data.group(1))
-        elif text.startswith(('attributes ', 'cooldown ', 'error', 'disconnected')):
-            kept.append(f'{who} {text}')
-    return cases
+            kept.append((who, '~health', 'health ' + data.group(1)))
+        elif text.startswith('attributes '):
+            subject = text.split(' ', 2)[1]
+            if subject in ('self', 'Alice', 'Bob'):
+                kept.append((who, subject, f'{who} {text}'))
+        elif text.startswith(('cooldown ', 'error', 'disconnected')):
+            kept.append((who, '~' + text.split(' ', 1)[0], f'{who} {text}'))
+    return {step: [line for *_, line in sorted(kept, key=lambda k: k[:2])] for step, kept in cases.items()}
 
 
 def main():
