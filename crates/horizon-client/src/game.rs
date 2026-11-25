@@ -8724,8 +8724,7 @@ impl Game<'_> {
         ((self.attack_ticks as f32 + 0.5) / delay).clamp(0.0, 1.0)
     }
     /// `Player.isSweepAttack`: a charged, grounded sword hit below the movement limit.
-    pub(super) fn sweep_attack_position(&self, scale: f32, crit: bool) -> Option<[f64; 3]> {
-        let p = self.player.as_ref()?;
+    pub(super) fn sweep_attack_position(&mut self, scale: f32, crit: bool) -> Option<[f64; 3]> {
         let sword = self.held().is_some_and(|s| {
             self.res
                 .items()
@@ -8733,7 +8732,13 @@ impl Game<'_> {
                 .get("minecraft:swords")
                 .is_some_and(|tag| tag.contains(&*s.item))
         });
-        if !p.is_sweep_attack(scale, crit, sword) {
+        // getKnownMovement and getSpeed (the movement speed attribute), not
+        // the body's velocity and `speed` field, which a server player's
+        // client-driven body leaves unset.
+        let movement = self.known_player_movement();
+        let p = self.player.as_mut()?;
+        let speed = p.attribute("minecraft:movement_speed").ok()? as f32;
+        if !p.is_sweep_attack(scale, crit, sword, movement, speed) {
             return None;
         }
         let yaw = f64::from(self.yaw.to_radians());

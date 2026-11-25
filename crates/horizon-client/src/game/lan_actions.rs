@@ -2052,6 +2052,12 @@ impl Game<'_> {
         if host.hub.guests[gi].spectator() {
             return;
         }
+        // ServerPlayer.getKnownMovement, for Player.isSweepAttack: the move
+        // their client just sent.
+        self.known_movement = host.hub.guests[gi]
+            .moves
+            .last()
+            .map_or(Vec3::ZERO, |m| Vec3::new(m.0[0], m.0[1], m.0[2]));
         if let Some(victim) = Self::pvp_victim(host, conn, id) {
             if let Some(Some(strike)) = self.as_guest(host, conn, |g| g.pvp_strike())
                 && self.pvp_land(host, victim, &strike)

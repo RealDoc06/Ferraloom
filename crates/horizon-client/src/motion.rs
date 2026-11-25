@@ -405,10 +405,18 @@ fn attribute_error(error: impl std::fmt::Debug) -> io::Error {
     io::Error::other(format!("movement attribute: {error:?}"))
 }
 impl PlayerMotion {
-    /// `Player.isSweepAttack`, using the resident player's known horizontal velocity.
-    pub fn is_sweep_attack(&self, strength: f32, critical: bool, sword: bool) -> bool {
-        let movement = self.velocity;
-        let limit = f64::from(self.speed) * 2.5;
+    /// Port of `Player#isSweepAttack`: `movement` is `getKnownMovement` (a
+    /// server player's last move from its client) and `speed` is
+    /// `Player.getSpeed`, the movement speed attribute's value.
+    pub fn is_sweep_attack(
+        &self,
+        strength: f32,
+        critical: bool,
+        sword: bool,
+        movement: Vec3,
+        speed: f32,
+    ) -> bool {
+        let limit = f64::from(speed) * 2.5;
         strength > 0.9
             && !critical
             && !self.sprinting
@@ -2638,23 +2646,27 @@ mod tests {
         let resources = MotionResources::load(&root, &assets).unwrap();
         let mut p = PlayerMotion::new(&resources, Vec3::ZERO).unwrap();
         p.ground.on_ground = true;
-        p.speed = 0.1;
-        assert!(p.is_sweep_attack(1.0, false, true));
-        assert!(!p.is_sweep_attack(0.9, false, true));
-        assert!(!p.is_sweep_attack(1.0, true, true));
-        assert!(!p.is_sweep_attack(1.0, false, false));
+        let (still, speed) = (Vec3::ZERO, 0.1);
+        assert!(p.is_sweep_attack(1.0, false, true, still, speed));
+        assert!(!p.is_sweep_attack(0.9, false, true, still, speed));
+        assert!(!p.is_sweep_attack(1.0, true, true, still, speed));
+        assert!(!p.is_sweep_attack(1.0, false, false, still, speed));
         p.sprinting = true;
-        assert!(!p.is_sweep_attack(1.0, false, true));
+        assert!(!p.is_sweep_attack(1.0, false, true, still, speed));
         p.sprinting = false;
         p.ground.on_ground = false;
-        assert!(!p.is_sweep_attack(1.0, false, true));
+        assert!(!p.is_sweep_attack(1.0, false, true, still, speed));
         p.ground.on_ground = true;
-        p.velocity = Vec3::new(0.2, 10.0, 0.0);
-        assert!(p.is_sweep_attack(1.0, false, true));
-        p.velocity.z = 0.2;
-        assert!(!p.is_sweep_attack(1.0, false, true));
-        p.velocity = Vec3::new(f64::from(p.speed) * 2.5, 0.0, 0.0);
-        assert!(!p.is_sweep_attack(1.0, false, true));
+        let mut moved = Vec3::new(0.2, 10.0, 0.0);
+        assert!(p.is_sweep_attack(1.0, false, true, moved, speed));
+        moved.z = 0.2;
+        assert!(!p.is_sweep_attack(1.0, false, true, moved, speed));
+        moved = Vec3::new(f64::from(speed) * 2.5, 0.0, 0.0);
+        assert!(!p.is_sweep_attack(1.0, false, true, moved, speed));
+        assert!(
+            !p.is_sweep_attack(1.0, false, true, still, 0.0),
+            "no speed, no sweep"
+        );
     }
 
     #[test]
