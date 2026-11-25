@@ -16,6 +16,7 @@ import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.EntityTargetEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -27,6 +28,7 @@ final class EntityChecks implements Listener, CommandExecutor {
     private boolean noPigs;
     private boolean shield;
     private boolean quadruple;
+    private int targets;
 
     EntityChecks(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -79,6 +81,12 @@ final class EntityChecks implements Listener, CommandExecutor {
         }
     }
 
+    /** Listened so the mob pass takes its serial path for target changes (FERRALOOM_CHECK_MOBS=1 compares it). */
+    @EventHandler
+    public void onTarget(EntityTargetEvent event) {
+        targets++;
+    }
+
     @EventHandler
     public void onInteract(PlayerInteractEntityEvent event) {
         event.setCancelled(true);
@@ -108,6 +116,7 @@ final class EntityChecks implements Listener, CommandExecutor {
                 sender.sendMessage("named " + cow.getCustomName());
             }
             case "kill" -> cow.setHealth(0);
+            case "targets" -> sender.sendMessage("targets " + targets);
             case "remove" -> cow.remove();
             case "mob" -> {
                 Entity e = cow;

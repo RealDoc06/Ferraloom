@@ -876,14 +876,15 @@ mod tests {
         let Some(totals) = listened else {
             return;
         };
-        // Both runs of each tick call the listener for the same changes.
-        assert!(events > 0 && events % 2 == 0, "{events} {totals:?}");
+        // The four runs of each tick (serial, check's two, speculative) call
+        // the listener for the same changes.
+        assert!(events > 0 && events % 4 == 0, "{events} {totals:?}");
         assert!(totals.reran < totals.speculated, "{totals:?}");
         eprintln!(
             "with target and damage listeners: {} of {} speculative ticks ran again in turn, {} target events",
             totals.reran,
             totals.speculated,
-            events / 2
+            events / 4
         );
     }
 
@@ -1076,6 +1077,13 @@ mod tests {
             drop(super::super::plugin_sites::take_queued());
             serial.run(&cx, Mode::Serial);
             let serial_queue = super::super::plugin_sites::take_queued();
+            // The game's FERRALOOM_CHECK_MOBS=1: both ways, compared, its serial run's changes put back.
+            start.clone().run(&cx, Mode::Check);
+            let checked_queue = super::super::plugin_sites::take_queued();
+            assert_eq!(
+                checked_queue, serial_queue,
+                "tick {tick}: check mode's queued changes"
+            );
             let mut speculative = start;
             let stats = speculative.run(&cx, Mode::Speculative);
             if let Some(diff) = speculative.differs(&serial) {
