@@ -1346,6 +1346,16 @@ impl Game<'_> {
         }
         let spectator = host.hub.guests[gi].spectator();
         match packet {
+            // Ferraloom: handleBlockBreakAction's reach and height checks
+            // (game/lan_reach.rs).
+            S::PlayerAction(a)
+                if matches!(a.action, 0 | 2 | 3) && {
+                    let digging = host.play.get(&conn).is_some_and(|p| p.digging.is_some());
+                    self.reject_guest_break(host, gi, &a, digging)
+                } =>
+            {
+                host.hub.ack(conn, a.sequence);
+            }
             S::PlayerAction(a) => match a.action {
                 0 => {
                     host.hub.ack(conn, a.sequence);
@@ -1473,7 +1483,9 @@ impl Game<'_> {
             }
             S::UseItemOn(p) => {
                 host.hub.ack(conn, p.sequence);
-                if spectator {
+                // Ferraloom: handleUseItemOn's reach and hit
+                // checks (game/lan_reach.rs).
+                if spectator || !self.guest_use_on_allowed(host, gi, &p) {
                     return;
                 }
                 let face = direction(p.face);

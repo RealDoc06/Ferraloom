@@ -89,6 +89,7 @@ mod lan_mount_menu;
 mod lan_particles;
 mod lan_pvp;
 mod lan_quiet;
+mod lan_reach;
 mod lan_screen;
 mod lan_spectate;
 mod lan_stations;

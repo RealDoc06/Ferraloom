@@ -81,6 +81,11 @@ CASES = {
     'dialog': (CLEAR, ['cmd Alice dialog show Bob minecraft:server_links',
                        'cmd Alice dialog show Bob {type:"minecraft:notice",title:"Hi"}', 'cmd Alice dialog clear Bob',
                        'ticks 2'], ('dialog', 'chat')),
+    'use-near': (holding('stone'), ['useon Alice 2 -61 2 1 0.5 1 0.5', 'ticks 2', is_block(2, -60, 2, 'stone')], CLICKS),
+    'use-far': (holding('stone'), ['useon Alice 20 -61 0 1 0.5 1 0.5', 'ticks 2', is_block(20, -60, 0, 'air')], CLICKS),
+    'use-off-block': (holding('stone'), ['useon Alice 1 -61 1 1 0.5 3.0 0.5', 'ticks 2', is_block(1, -60, 1, 'air')],
+                      CLICKS),
+    'dig-far': (holding('stone'), ['dig Alice 0 20 -61 0 1', 'ticks 5', is_block(20, -61, 0, 'grass_block')], CLICKS),
 }
 SETUP = ['cmd Alice gamerule spawn_mobs false', 'cmd Alice gamerule spawn_monsters false',
          'cmd Alice gamerule advance_time false', 'cmd Alice time set noon', 'ticks 20']

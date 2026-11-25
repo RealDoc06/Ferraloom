@@ -141,6 +141,23 @@ public final class KnockbackClient {
                     case "sneak" -> players.get(w[1]).send(new net.minecraft.network.protocol.game.ServerboundPlayerInputPacket(
                         new net.minecraft.world.entity.player.Input(false, false, false, false, false, w[2].equals("on"), false)));
                     case "ridejump" -> players.get(w[1]).command(ServerboundPlayerCommandPacket.Action.START_RIDING_JUMP, Integer.parseInt(w[2]));
+                    case "useon" -> {
+                        String[] a = w[2].split(" ");
+                        net.minecraft.core.BlockPos pos = new net.minecraft.core.BlockPos(Integer.parseInt(a[0]), Integer.parseInt(a[1]), Integer.parseInt(a[2]));
+                        Vec3 at = new Vec3(pos.getX() + Double.parseDouble(a[4]), pos.getY() + Double.parseDouble(a[5]), pos.getZ() + Double.parseDouble(a[6]));
+                        Player p = players.get(w[1]);
+                        p.send(new net.minecraft.network.protocol.game.ServerboundUseItemOnPacket(InteractionHand.MAIN_HAND,
+                            new net.minecraft.world.phys.BlockHitResult(at, net.minecraft.core.Direction.from3DDataValue(Integer.parseInt(a[3])), pos, false),
+                            ++p.sequence));
+                    }
+                    case "dig" -> {
+                        String[] a = w[2].split(" ");
+                        Player p = players.get(w[1]);
+                        p.send(new net.minecraft.network.protocol.game.ServerboundPlayerActionPacket(
+                            net.minecraft.network.protocol.game.ServerboundPlayerActionPacket.Action.values()[Integer.parseInt(a[0])],
+                            new net.minecraft.core.BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3])),
+                            net.minecraft.core.Direction.from3DDataValue(Integer.parseInt(a[4])), ++p.sequence));
+                    }
                     case "sync" -> {
                         try {
                             players.get(w[1]).sync();
@@ -193,6 +210,8 @@ public final class KnockbackClient {
         /** The motion packets about this player it was sent, and how many there were at the last `mark`. */
         private int pushes;
         private int marked;
+        /** The block change sequence of the last use or dig. */
+        int sequence;
 
         Player(String name) {
             this.name = name;
@@ -404,6 +423,10 @@ public final class KnockbackClient {
                         record("dialog " + d.dialog().getRegisteredNameIfPresent().orElse("direct"));
                     } else if (p instanceof net.minecraft.network.protocol.common.ClientboundClearDialogPacket) {
                         record("dialog clear");
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket u && loaded) {
+                        net.minecraft.core.BlockPos at = u.getPos();
+                        record("block " + at.getX() + " " + at.getY() + " " + at.getZ() + " "
+                            + net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(u.getBlockState().getBlock()).getPath());
                     } else if (p instanceof net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket d
                         && ("horse".equals(seen.get(d.id())) || "camel".equals(seen.get(d.id())))) {
                         for (var value : d.packedItems()) {
