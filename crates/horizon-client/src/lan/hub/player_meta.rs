@@ -1,7 +1,7 @@
 //! Ferraloom: what vanilla syncs and checks for each player that Horizon's
 //! hub left out. Entity data the player's own client and its trackers read
-//! (`Entity.DATA_TICKS_FROZEN`, the shoulder
-//! parrots, the player's own effect swirls), the scoreboard criteria that
+//! (`Entity.DATA_TICKS_FROZEN`, the stuck arrows and stingers, the
+//! shoulder parrots, the player's own effect swirls), the scoreboard criteria that
 //! follow a player, who sees a spectator, and the connection's checks
 //! (`ServerGamePacketListenerImpl`: floating, chat and command spam, the
 //! advancements tab, the recipe book's highlights, the hat in the list).
@@ -86,12 +86,55 @@ pub struct RecordedCriteria {
     pub level: Option<i32>,
 }
 
-/// The entity data values a player's client holds of it (defaults: none
-/// frozen, empty shoulders, no swirls).
+/// The entity data a player has beside Horizon's own, defaults zero and
+/// empty: `Entity.DATA_TICKS_FROZEN` (7), `LivingEntity.DATA_ARROW_COUNT_ID`
+/// (12) and `DATA_STINGER_COUNT_ID` (13), and the shoulder parrots (19, 20).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct PlayerData {
+    pub frozen: i32,
+    pub arrows: i32,
+    pub stingers: i32,
+    pub shoulders: [Option<i32>; 2],
+}
+
+impl PlayerData {
+    /// A guest's: its body's (none before it has one) and its shoulders'.
+    pub fn of(g: &Guest) -> Self {
+        let m = g.motion.as_deref();
+        Self {
+            frozen: m.map_or(0, |m| m.ticks_frozen),
+            arrows: m.map_or(0, |m| i32::from(m.stuck.arrows)),
+            stingers: m.map_or(0, |m| i32::from(m.stuck.stingers)),
+            shoulders: g.meta.shoulders,
+        }
+    }
+
+    /// The entries that differ from `old`, in index order (packDirty's).
+    fn changes(&self, old: &Self) -> Vec<(u8, i32, Value)> {
+        let mut values = Vec::new();
+        for (index, now, was) in [
+            (7, self.frozen, old.frozen),
+            (12, self.arrows, old.arrows),
+            (13, self.stingers, old.stingers),
+        ] {
+            if now != was {
+                values.push((index, serializer::INT, Value::Int(now)));
+            }
+        }
+        for (k, index) in [19u8, 20].into_iter().enumerate() {
+            if self.shoulders[k] != old.shoulders[k] {
+                let id = self.shoulders[k].map_or(0, |v| v + 1);
+                values.push((index, serializer::OPTIONAL_UNSIGNED_INT, Value::Id(id)));
+            }
+        }
+        values
+    }
+}
+
+/// The entity data values a player's client holds of it.
 #[derive(Clone, Debug, Default, PartialEq)]
 struct SentMeta {
-    frozen: i32,
-    shoulders: [Option<i32>; 2],
+    data: PlayerData,
     particles: Vec<(u8, i32, Value)>,
 }
 
@@ -149,28 +192,19 @@ pub fn shoulders_of(saved: Option<&horizon_world::nbt::Tag>) -> [Option<i32>; 2]
         .map(|key| shoulder_variant(saved.and_then(|s| s.get(key))))
 }
 
-/// The entity data a player has beside Horizon's own (trackers' view):
-/// non-default values into `meta`, every entry's default into `defaults`.
+/// [`PlayerData`] as the trackers see it: non-default values into `meta`,
+/// every entry's default into `defaults`.
 pub fn tracked_meta(
-    ticks_frozen: i32,
-    shoulders: [Option<i32>; 2],
+    data: PlayerData,
     meta: &mut Vec<(u8, i32, Value)>,
     defaults: &mut Vec<(u8, i32, Value)>,
 ) {
-    if ticks_frozen != 0 {
-        meta.push((7, serializer::INT, Value::Int(ticks_frozen)));
-    }
-    for (index, parrot) in [(19, shoulders[0]), (20, shoulders[1])] {
-        if let Some(variant) = parrot {
-            meta.push((
-                index,
-                serializer::OPTIONAL_UNSIGNED_INT,
-                Value::Id(variant + 1),
-            ));
-        }
-    }
+    let none = PlayerData::default();
+    meta.extend(data.changes(&none));
     defaults.extend([
         (7, serializer::INT, Value::Int(0)),
+        (12, serializer::INT, Value::Int(0)),
+        (13, serializer::INT, Value::Int(0)),
         (19, serializer::OPTIONAL_UNSIGNED_INT, Value::Id(0)),
         (20, serializer::OPTIONAL_UNSIGNED_INT, Value::Id(0)),
     ]);
@@ -205,28 +239,16 @@ impl Hub {
         host.into_iter().chain(guests).collect()
     }
 
-    /// The guest's own entity data that changed since its client was told
-    /// (ServerEntity.sendDirtyEntityData to the player itself): ticks
-    /// frozen and shoulders, in index order. A new player's client
-    /// (joined, respawned) starts from the defaults; one that changed level
-    /// keeps what it had (ClientboundRespawnPacket.KEEP_ENTITY_DATA).
+    /// The guest's own [`PlayerData`] that changed since its client was told
+    /// (ServerEntity.sendDirtyEntityData to the player itself). A new
+    /// player's client (joined, respawned) starts from the defaults; one
+    /// that changed level keeps what it had
+    /// (ClientboundRespawnPacket.KEEP_ENTITY_DATA).
     pub(super) fn own_meta_changes(&mut self, i: usize) -> Vec<(u8, i32, Value)> {
         let g = &mut self.guests[i];
-        let frozen = g.motion.as_ref().map_or(0, |m| m.ticks_frozen);
-        let meta = &mut g.meta;
-        let mut values = Vec::new();
-        let base = &meta.sent;
-        if frozen != base.frozen {
-            values.push((7, serializer::INT, Value::Int(frozen)));
-        }
-        for (k, index) in [19u8, 20].into_iter().enumerate() {
-            if meta.shoulders[k] != base.shoulders[k] {
-                let id = meta.shoulders[k].map_or(0, |v| v + 1);
-                values.push((index, serializer::OPTIONAL_UNSIGNED_INT, Value::Id(id)));
-            }
-        }
-        meta.sent.frozen = frozen;
-        meta.sent.shoulders = meta.shoulders;
+        let now = PlayerData::of(g);
+        let values = now.changes(&g.meta.sent.data);
+        g.meta.sent.data = now;
         values
     }
 

@@ -1926,8 +1926,8 @@ impl Hub {
         options: (u8, i32),
         health: f32,
         effects: &[EffectInstance],
-        // Ferraloom: ticks frozen and shoulder parrots.
-        (frozen, shoulders): (i32, [Option<i32>; 2]),
+        // Ferraloom: ticks frozen, stuck arrows and stingers, shoulder parrots.
+        data: player_meta::PlayerData,
     ) {
         let (sneaking, sprinting, sleeping) = flags;
         let shared = shared_flags(sneaking, sprinting, &body);
@@ -1990,7 +1990,7 @@ impl Hub {
             (10, serializer::PARTICLES, Value::Particles(Vec::new())),
             (11, serializer::BOOLEAN, Value::Bool(false)),
         ]);
-        player_meta::tracked_meta(frozen, shoulders, &mut state.meta, &mut state.defaults);
+        player_meta::tracked_meta(data, &mut state.meta, &mut state.defaults);
         state.precise = false;
         state.needs_sync = false;
         state.leash = None;
@@ -2059,7 +2059,7 @@ impl Hub {
                 (0x7F, 1),
                 h.health,
                 &[],
-                (0, [None; 2]),
+                player_meta::PlayerData::default(),
             );
         }
         // Out of the hub while their states are made: what a state reads of
@@ -2097,7 +2097,7 @@ impl Hub {
                 (g.info.model_customisation, g.info.main_hand),
                 g.health,
                 &g.effects.list,
-                (g.motion.as_ref().map_or(0, |m| m.ticks_frozen), g.meta.shoulders),
+                player_meta::PlayerData::of(g),
             );
         }
         all.truncate(n);
@@ -2372,9 +2372,9 @@ impl Hub {
                 }));
             }
         }
-        // Ferraloom: ServerEntity.sendDirtyEntityData of the ticks frozen and
-        // shoulder parrots to the player too (the frost overlay, its own
-        // parrots).
+        // Ferraloom: ServerEntity.sendDirtyEntityData of the ticks frozen,
+        // stuck arrows and stingers and shoulder parrots to the player too
+        // (the frost overlay, its own arrows and parrots).
         let values = self.own_meta_changes(i);
         if !values.is_empty() {
             let g = &self.guests[i];
