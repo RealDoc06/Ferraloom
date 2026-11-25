@@ -148,6 +148,9 @@ pub struct NetConfig {
     /// sent in configuration when non-empty
     /// (ServerConfigurationPacketListenerImpl.startConfiguration).
     pub server_links: Vec<horizon_protocol::packets::configuration::ServerLink>,
+    /// Ferraloom: `enable-code-of-conduct`'s texts by language
+    /// (`DedicatedServer.getCodeOfConducts`); empty shows none.
+    pub code_of_conduct: std::collections::BTreeMap<String, String>,
 }
 impl NetConfig {
     /// MinecraftServer.enforceSecureProfile.
@@ -175,6 +178,7 @@ impl NetConfig {
             log: None,
             resource_pack: None,
             server_links: Vec::new(),
+            code_of_conduct: Default::default(),
         }
     }
 }

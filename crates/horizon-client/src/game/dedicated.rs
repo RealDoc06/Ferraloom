@@ -650,6 +650,18 @@ impl Game<'_> {
                 );
                 Vec::new()
             },
+            // Ferraloom: enable-code-of-conduct (DedicatedServer.readCodeOfConducts).
+            code_of_conduct: if props.code_of_conduct {
+                horizon_client::lan::conn::read_code_of_conducts(std::path::Path::new(
+                    "codeofconduct",
+                ))
+                .unwrap_or_else(|e| {
+                    log("ERROR", &e);
+                    Default::default()
+                })
+            } else {
+                Default::default()
+            },
         };
         let config = HubConfig {
             default_game_mode: game_mode,
