@@ -82,7 +82,8 @@ import net.minecraft.world.phys.Vec3;
  * sync NAME} (a round trip through the server thread; "synced NAME" on stdout when
  * it is back), {@code attack NAME TARGET} (ServerboundAttackPacket then the swing; TARGET is a
  * player's name or an entity type's path, the last one added), {@code use
- * NAME} (ServerboundUseItemPacket, main hand), and for the player handlers
+ * NAME} (ServerboundUseItemPacket, main hand), {@code slot NAME N}
+ * (ServerboundSetCarriedItemPacket), and for the player handlers
  * (tools/test_server_player_handlers_parity.py) {@code spectate NAME TARGET}
  * (ServerboundSpectatorActionPacket), {@code sneak NAME on|off}
  * (ServerboundPlayerInputPacket), {@code ridejump NAME DATA}
@@ -97,8 +98,11 @@ import net.minecraft.world.phys.Vec3;
  * ClientboundDamageEventPacket about a player (the hurt player and the damage
  * type), the sounds it is sent of {@link #SOUNDS}, its camera
  * (ClientboundSetCameraPacket), dialogs, tag query answers (their top-level
- * keys), block updates, and a horse's or camel's flags and dash (entity data
- * 18 and 19).
+ * keys), block updates, a horse's or camel's flags and dash (entity data 18
+ * and 19), and for tools/test_server_combat_parity.py the
+ * ClientboundUpdateAttributesPacket (instances sorted by attribute, as
+ * vanilla's set has no order; modifiers in the packet's order) and
+ * ClientboundCooldownPacket it receives.
  */
 public final class KnockbackClient {
     private static volatile String step = "start";
@@ -137,6 +141,7 @@ public final class KnockbackClient {
                     case "attack" -> players.get(w[1]).attack(w[2]);
                     case "use" -> players.get(w[1]).send(new ServerboundUseItemPacket(InteractionHand.MAIN_HAND, 0, 0, 0));
                     case "punch" -> players.get(w[1]).send(net.minecraft.network.protocol.game.ServerboundPunchPacket.INSTANCE);
+                    case "slot" -> players.get(w[1]).send(new net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket(Integer.parseInt(w[2])));
                     case "spectate" -> players.get(w[1]).spectate(w[2]);
                     case "sneak" -> players.get(w[1]).send(new net.minecraft.network.protocol.game.ServerboundPlayerInputPacket(
                         new net.minecraft.world.entity.player.Input(false, false, false, false, false, w[2].equals("on"), false)));
@@ -457,6 +462,20 @@ public final class KnockbackClient {
                         for (var value : d.packedItems()) {
                             if (value.id() == 0) record("sprinting " + ((((Byte) value.value()) & 8) != 0));
                         }
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundUpdateAttributesPacket a) {
+                        List<String> instances = new ArrayList<>();
+                        for (var v : a.getValues()) {
+                            StringBuilder b = new StringBuilder(v.attribute().unwrapKey().orElseThrow().identifier().getPath());
+                            b.append('=').append(v.base());
+                            for (var m : v.modifiers()) {
+                                b.append(' ').append(m.id()).append(':').append(m.amount()).append(':').append(m.operation().id());
+                            }
+                            instances.add(b.toString());
+                        }
+                        java.util.Collections.sort(instances);
+                        record("attributes " + seen.getOrDefault(a.getEntityId(), "id" + a.getEntityId()) + " " + String.join(" | ", instances));
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundCooldownPacket c) {
+                        record("cooldown " + c.cooldownGroup() + " " + c.duration());
                     } else if (p instanceof ClientboundSystemChatPacket c
                         && c.content().getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents t
                         && t.getKey().equals("commands.time.query.gametime")) {

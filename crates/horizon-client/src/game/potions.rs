@@ -309,7 +309,6 @@ impl Game<'_> {
 pub(super) struct BodyPotions {
     applied: Vec<(&'static str, &'static str, f64, &'static str)>,
     protection_for: Option<Vec<Option<ItemStack>>>,
-    enchant_modifiers: Vec<(String, String, f64, String)>,
 }
 /// Effects, thrown potions and the attribute modifiers last applied.
 #[derive(Default)]
@@ -321,9 +320,6 @@ pub(super) struct PotionState {
     applied: Vec<(&'static str, &'static str, f64, &'static str)>,
     /// Armor the protection table was computed for.
     protection_for: Option<Vec<Option<ItemStack>>>,
-
-    /// Enchantment attribute modifiers on the player: (attribute, id, amount, operation).
-    pub(super) enchant_modifiers: Vec<(String, String, f64, String)>,
 }
 
 impl PotionState {
@@ -333,7 +329,6 @@ impl PotionState {
         std::mem::swap(&mut self.effects, effects);
         std::mem::swap(&mut self.applied, &mut body.applied);
         std::mem::swap(&mut self.protection_for, &mut body.protection_for);
-        std::mem::swap(&mut self.enchant_modifiers, &mut body.enchant_modifiers);
     }
     /// Thrown potions in flight as (entity type, position, motion), for the
     /// dispenser parity fixture.
