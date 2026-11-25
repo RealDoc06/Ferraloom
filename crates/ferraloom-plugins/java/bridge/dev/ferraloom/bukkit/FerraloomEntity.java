@@ -299,6 +299,28 @@ final class FerraloomEntity extends StubEntity {
         return getPassengers().isEmpty();
     }
 
+    // Metadata: the shared store, keyed by the entity's UUID (EntityMetadataStore).
+
+    @Override
+    public void setMetadata(String key, org.bukkit.metadata.MetadataValue value) {
+        FerraloomMetadataStore.STORE.setMetadata(FerraloomMetadataStore.entity(getUniqueId()), key, value);
+    }
+
+    @Override
+    public List<org.bukkit.metadata.MetadataValue> getMetadata(String key) {
+        return FerraloomMetadataStore.STORE.getMetadata(FerraloomMetadataStore.entity(getUniqueId()), key);
+    }
+
+    @Override
+    public boolean hasMetadata(String key) {
+        return FerraloomMetadataStore.STORE.hasMetadata(FerraloomMetadataStore.entity(getUniqueId()), key);
+    }
+
+    @Override
+    public void removeMetadata(String key, org.bukkit.plugin.Plugin plugin) {
+        FerraloomMetadataStore.STORE.removeMetadata(FerraloomMetadataStore.entity(getUniqueId()), key, plugin);
+    }
+
     /** CraftEntity: an entity is no command target; what it is sent goes nowhere. */
     @Override
     public void sendMessage(String message) {

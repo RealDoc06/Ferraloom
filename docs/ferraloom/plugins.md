@@ -214,6 +214,10 @@ through the JVM's handler instead of Rust's message. Only with plugins.
 | A command line | A lookup in a label set before any JNI; vanilla commands never reach the JVM. | |
 | An event with listeners | One JNI call with its arguments (a few strings), the listeners' own time. | |
 | Join/quit with plugins | One JNI call each, listener or not (the player objects). | |
+| Logins with plugins | `AsyncPlayerPreLoginEvent` on the login's thread, then `PlayerLoginEvent` handed to the server thread (the login waits for it; served each loop, paused or not): two JNI calls per login, listener or not. Without plugins one `OnceLock` check. | |
+| `PlayerMoveEvent` and the toggles, no listener | One test of a constant mask (`listens_any`) per level pass per tick, in `game/lan.rs`; packet handling is untouched. | |
+| `PlayerMoveEvent` with a listener | Each tick, per guest of the level: a walk over its queued packets (a few) before the hub handles them; per move, a squared distance and an angle against its last event (a thread-local map). Past CraftBukkit's thresholds (1/256 of a block squared, 10 degrees), which a walking player passes every tick: one JNI call with fifteen primitive arguments (no Rust allocation), in Java a `PlayerMoveEvent`, two `Location`s and a `UUID`; null answers an unchanged move. About a microsecond plus the listeners per moving player. | |
+| A player getter (`getHealth`...) | One JNI call answering the whole state as a `double[41]`. Off the server thread the tick's snapshot answers: the first such read turns on storing one per player at each tick's start (one struct per player), never before. | |
 | A container click, drag, open or close with a listener | One JNI call with ints and three short strings; no item is converted unless a plugin asks the event for one. | |
 | A hopper transfer with an `InventoryMoveItemEvent` listener | One JNI call, the one item's NBT to Java and back, two inventory objects and the event. Without a listener: the flag test. | |
 | An item stack sent to a client | One emptiness check of `StackData::other` more than before (`lan/item_extras.rs`); a stack with unmodelled components clones each one sent. | |
@@ -270,6 +274,37 @@ the baseline is the coordinator's next step; budget: no measurable MSPT differen
 
 Blocks and worlds (registries, `BlockData`, blocks and worlds in every dimension, block and world events,
 hook costs): [plugins-blocks-worlds.md](plugins-blocks-worlds.md).
+
+**Players** (`src/players.rs`, `game/plugins/players.rs`): `Player`, `HumanEntity` (but its inventory) and
+`OfflinePlayer` for online players: health, maximum health, absorption, food, saturation, exhaustion,
+experience and levels (`giveExp`, `giveExpLevels`), game mode, flying (when allowed), walk and
+fly speed (read), allow-flight (set too; a game mode change ends it, as `updatePlayerAbilities` does), sneaking, sprinting, swimming, gliding, sleeping, dead, in a vehicle, velocity (read and
+set), fire, air, fall distance, freeze ticks, pose, facing, eyes, size and bounding box, respawn point,
+effects (`PotionEffect` add, read, remove), ping, locale, address, client view distance, `hasPlayedBefore`,
+first and last played (the player file's times), display name, player list name, tab list header and
+footer, titles, the action bar (`spigot().sendMessage(ACTION_BAR, ...)`), sounds (by name or `Sound`, any
+category) and `stopSound`, particles without data, `sendBlockChange`, plugin messages both ways (the
+client's `minecraft:register`, the server's supported channels at join), `kickPlayer`, `chat`,
+`performCommand` (plugin commands, then vanilla at the player's level), `updateCommands`, metadata. Events:
+`AsyncPlayerPreLoginEvent`, `PlayerLoginEvent` (the same player object as the join's), `PlayerKickEvent`
+(from `kickPlayer`, `/kick` and idling), `PlayerMoveEvent` (cancel, a changed destination as a `PLUGIN`
+teleport), `PlayerTeleportEvent` (`PLUGIN`, `COMMAND`, `ENDER_PEARL`), `PlayerInteractEvent` (both
+clicks on blocks and in the air; `useInteractedBlock` and `useItemInHand` act separately),
+`PlayerCommandPreprocessEvent` (rewrite, cancel), `PlayerRespawnEvent` (the place), `PlayerDeathEvent`
+(message, dropped experience, keepInventory), `PlayerGameModeChangeEvent`, `PlayerToggleSneakEvent`,
+`PlayerToggleSprintEvent`, `PlayerToggleFlightEvent`, `PlayerChangedWorldEvent`, `PlayerItemHeldEvent`.
+`FerraloomMetadataStore` is the one store behind every `Metadatable` (`player(name)`, `entity(uuid)`,
+`block(world, x, y, z)` name subjects).
+
+Players' differences from CraftBukkit: `PlayerInteractEvent.getItem` and `PlayerDeathEvent.getDrops` throw
+until the bridge's `ItemStack` arrives (`getMaterial` answers), `getDamageSource` until the entities area's;
+`PlayerDeathEvent`'s keepLevel and new experience are not applied; a `PlayerRespawnEvent` place is reached
+as a teleport at the next tick's start; `PlayerMoveEvent` sees the position from the tick's start (the
+packets of one tick are checked before the hub handles any); `PlayerTeleportEvent` from a pearl cannot
+change where it lands, and portal, spectate and gateway teleports fire none yet; the player list name is
+not sent to players who join later; `setWalkSpeed`, `setFlySpeed`, `hidePlayer` and
+`showPlayer` (`canSee` answers true), `setPlayerTime`/`Weather` (their getters answer the world's) and
+health scaling are not bridged; `PlayerLoginEvent.getHostname` is the address, not the handshake's host.
 
 Known differences from CraftBukkit, each for its area to remove: join/quit messages are sent as plain
 translations (no hover); `BlockBreakEvent.setDropItems`/`setExpToDrop` are ignored and the block entity is

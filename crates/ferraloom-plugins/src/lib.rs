@@ -40,13 +40,19 @@ pub use entities::{
     SpawnReason, Targeted, creature_spawn, entity_change_block, entity_combust, entity_damage,
     entity_death, entity_explode, entity_target, flags as entity_flags, interact_entity,
 };
-pub use events::{Event, Mask, latch_for_tests, listens, listens_any};
+pub use events::{Event, latch_for_tests, listens, listens_any};
 pub use inventory::{
     Click, Drag, Holder, InventoryHost, ItemFacts, Side, Swap, inventory_click, inventory_close,
     inventory_drag, inventory_move_item, inventory_open, player_item_consume, player_swap_hands,
 };
 pub use lent::{borrow_lent, lend};
-pub use players::{Joined, PlayerHost, chat, player_command, player_join, player_quit};
+pub use players::{
+    Action, Cause, Client, Death, Effect, Field, Interact, Interaction, Joined, LoginResult, Moved,
+    PlayerHost, PlayerState, Show, Toggle, chat, command_preprocess, login, player_changed_world,
+    player_command, player_death, player_game_mode_change, player_interact, player_item_held,
+    player_join, player_kick, player_move, player_quit, player_respawn, player_teleport,
+    player_toggle, plugin_message, serve_logins, snapshots_wanted, store_snapshots,
+};
 pub use server::ServerHost;
 pub use worlds::{Border, Change, Query, Sound, WorldHost, chunk_event, save_event, weather_event};
 

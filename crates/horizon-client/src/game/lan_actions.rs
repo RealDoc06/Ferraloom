@@ -433,6 +433,8 @@ impl Game<'_> {
         // FireworkRocketItem.use boosts only a gliding player.
         motion.fall_flying = g.fall_flying;
         motion.invulnerable = motion.may_fly;
+        // Ferraloom: a plugin's allow-flight (Player.setAllowFlight).
+        motion.may_fly |= g.allow_flight;
         // LivingEntity.setHealth clamps to the maximum and stores what
         // differs: the body holding the record's health already, at most the
         // maximum and above zero, is left as it is.
@@ -1339,6 +1341,12 @@ impl Game<'_> {
                         self.spawn_protection_message(host, conn, a.pos);
                         return;
                     }
+                    // Ferraloom: PlayerInteractEvent LEFT_CLICK_BLOCK; denied, no dig starts (game/plugins/players.rs).
+                    if ferraloom_plugins::listens(ferraloom_plugins::Event::PlayerInteract)
+                        && self.plugin_left_click_block(host, conn, a.pos, a.direction)
+                    {
+                        return;
+                    }
                     let face = direction(i32::from(a.direction));
                     let play = host.play.entry(conn).or_default();
                     play.digging = Some((a.pos, face));
@@ -1441,6 +1449,13 @@ impl Game<'_> {
                 _ => {}
             },
             S::SetCarriedItem(p) => {
+                // Ferraloom: PlayerItemHeldEvent; cancelled, the old slot stays (game/plugins/players.rs).
+                if ferraloom_plugins::listens(ferraloom_plugins::Event::PlayerItemHeld)
+                    && (0..9).contains(&p.slot)
+                    && self.plugin_item_held(host, conn, i32::from(p.slot))
+                {
+                    return;
+                }
                 if (0..9).contains(&p.slot) {
                     host.hub.guests[gi].selected = p.slot as usize;
                     if let Some(play) = host.play.get_mut(&conn) {
@@ -1454,6 +1469,10 @@ impl Game<'_> {
             // strength starts again.
             S::Punch(_) => {
                 self.as_guest(host, conn, |g| {
+                    // Ferraloom: PlayerInteractEvent LEFT_CLICK_AIR (game/plugins/players.rs).
+                    if ferraloom_plugins::listens(ferraloom_plugins::Event::PlayerInteract) {
+                        g.plugin_left_click_air();
+                    }
                     g.swing_hand(Hand::Main, SwingAnimation::DEFAULT);
                     g.reset_attack_strength();
                 });
@@ -1479,6 +1498,18 @@ impl Game<'_> {
                 if self.under_spawn_protection(host, gi, p.pos) {
                     self.spawn_protection_message(host, conn, p.pos);
                 } else {
+                    // Ferraloom: PlayerInteractEvent RIGHT_CLICK_BLOCK; use_hand leaves out
+                    // what it denies, until plugin_interacted (game/plugins/players.rs).
+                    if ferraloom_plugins::listens(ferraloom_plugins::Event::PlayerInteract) {
+                        self.plugin_right_click_block(
+                            host,
+                            conn,
+                            p.pos,
+                            p.face,
+                            p.cursor,
+                            p.hand == 1,
+                        );
+                    }
                     let logged = self.world.block_log.as_ref().map_or(0, Vec::len);
                     let heard = self.audio.capture.as_ref().map_or(0, Vec::len);
                     let swung = self.as_guest(host, conn, |g| {
@@ -1492,6 +1523,8 @@ impl Game<'_> {
                     });
                     self.lan_swing_back(host, conn, swung);
                     self.guest_use_sounds(host, conn, logged, heard);
+                    // Ferraloom: the click's PlayerInteractEvent is over.
+                    self.plugin_interacted();
                 }
                 // The client predicted a result: correct it with what really is.
                 for pos in [
@@ -1514,6 +1547,12 @@ impl Game<'_> {
                 let hand = if p.hand == 1 { Hand::Off } else { Hand::Main };
                 let g = &mut host.hub.guests[gi];
                 (g.yaw, g.pitch) = (p.yaw, p.pitch);
+                // Ferraloom: PlayerInteractEvent RIGHT_CLICK_AIR; the item denied, nothing is used.
+                if ferraloom_plugins::listens(ferraloom_plugins::Event::PlayerInteract)
+                    && self.plugin_right_click_air(host, conn, p.hand == 1)
+                {
+                    return;
+                }
                 let swung = self.as_guest(host, conn, |g| {
                     g.guest_use = Some(GuestUse::Item(hand));
                     let swings = g.swings_started;
@@ -1693,6 +1732,8 @@ impl Game<'_> {
                 self.guest_quiet_commands(host, conn, &p.data)
             }
             S::ChatCommandSigned(p) => self.guest_signed_command(host, conn, p),
+            // Ferraloom: a plugin channel's message (game/plugins/players.rs).
+            S::CustomPayload(p) => self.plugin_message(host, conn, &p),
             S::ChangeDifficulty(p) if host.hub.guests[gi].permission >= 2 => {
                 if !self.level.difficulty_locked && (0..=3).contains(&p.difficulty) {
                     self.ui.difficulty = if self.level.hardcore {
@@ -2154,11 +2195,19 @@ impl Game<'_> {
         command: &str,
         signed: Option<Vec<(String, horizon_client::lan::hub::chat::ChatMessage)>>,
     ) {
+        // Ferraloom: PlayerCommandPreprocessEvent, then a Bukkit plugin's command; a
+        // line a listener changed runs unsigned (game/plugins/players.rs).
+        let changed;
+        let (command, signed) =
+            match self.plugin_guest_command(host, conn, command.trim_start_matches('/')) {
+                None => return,
+                Some(None) => (command, signed),
+                Some(Some(line)) => {
+                    changed = line;
+                    (changed.as_str(), None)
+                }
+            };
         if self.guest_message_command(host, conn, command, signed.as_ref()) {
-            return;
-        }
-        // Ferraloom: a Bukkit plugin's command (game/plugins.rs).
-        if self.plugin_guest_command(host, conn, command.trim_start_matches('/')) {
             return;
         }
         // ListPlayersCommand needs no permission and lists every player.
@@ -2473,6 +2522,10 @@ impl Game<'_> {
         if away && let Err(e) = self.enter_level(Some(host), back) {
             log::error!("could not reopen {}: {e}", back.id());
         }
+        // Ferraloom: PlayerRespawnEvent; a place a listener chose wins (game/plugins/players.rs).
+        if ferraloom_plugins::listens(ferraloom_plugins::Event::PlayerRespawn) {
+            self.plugin_respawn(host, conn);
+        }
     }
 
     /// Per tick, for every guest: dig, use items, pick up drops, die.
@@ -2659,6 +2712,9 @@ impl Game<'_> {
             let drops =
                 (g.game_mode != SPECTATOR).then(|| [at[0], at[1] + g.eye_height() - 0.3, at[2]]);
             let cause = host.play.get_mut(&conn).and_then(|p| p.death_cause.take());
+            // Ferraloom: PlayerDeathEvent, before anything is said or dropped (game/plugins/players.rs).
+            let death = ferraloom_plugins::listens(ferraloom_plugins::Event::PlayerDeath)
+                .then(|| self.plugin_death(host, conn, cause.as_deref(), at, reward));
             // ServerPlayer.die: with showDeathMessages, the message goes to
             // the dying player's death screen and to everyone the team lets
             // see it; without it, the death screen gets an empty one.
@@ -2671,9 +2727,13 @@ impl Game<'_> {
                     }
                     None => self.guest_death_message(conn, me),
                 };
+                // Ferraloom: the message PlayerDeathEvent left; an empty one is not sent.
+                let text = Self::plugin_death_text(death.as_ref(), text);
                 let message = horizon_client::lan::data::component_nbt(&text.component());
                 let team = self.score.board.players_team(&name);
-                if horizon_client::scoreboard::own_death_message_shown(team) {
+                if horizon_client::scoreboard::own_death_message_shown(team)
+                    && !text.plain().is_empty()
+                {
                     host.hub.system_message(message.clone());
                     if self.options.dedicated.is_some() {
                         super::dedicated::log("INFO", &format!("System chat: {}", text.plain()));
@@ -2691,10 +2751,17 @@ impl Game<'_> {
             );
             // LivingEntity.die: the death animation, the dying player included.
             host.hub.entity_event(id, 3, at);
-            if let Some(eyes) = drops {
+            // Ferraloom: PlayerDeathEvent's keepInventory and dropped experience.
+            if let Some(eyes) = drops.filter(|_| !death.as_ref().is_some_and(|d| d.keep_inventory))
+            {
                 self.as_guest(host, conn, |game| game.drop_inventory(eyes));
             }
-            self.spawn_orbs(at, reward);
+            self.spawn_orbs(
+                at,
+                death
+                    .as_ref()
+                    .map_or(reward, |d| d.dropped_exp.max(0) as u32),
+            );
         }
     }
 

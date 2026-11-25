@@ -3152,7 +3152,11 @@ impl Game<'_> {
                 {
                     m.damage(0.0, source);
                 }
-                if p.owner == Some(Who::Player) && self.player.is_some() {
+                if p.owner == Some(Who::Player)
+                    && self.player.is_some()
+                    // Ferraloom: PlayerTeleportEvent ENDER_PEARL; cancelled, the pearl only breaks.
+                    && self.plugin_pearl_allowed([p.previous.x, p.previous.y, p.previous.z])
+                {
                     // ThrownEnderpearl: 5% endermite where the player was
                     // (when monsters spawn), teleport, 5 damage.
                     if self.world.random.next_float() < 0.05

@@ -1679,6 +1679,27 @@ impl Game<'_> {
                 } else {
                     Vec::new()
                 };
+                // Ferraloom: PlayerMoveEvent and the sneak, sprint and flight toggles of
+                // this tick's packets, before the hub handles them. Their listeners reach
+                // the whole game, so the context is made again (game/plugins/players.rs).
+                if ferraloom_plugins::listens_any(super::plugins::INBOX_EVENTS) {
+                    self.plugin_inbox(&mut host);
+                    ctx = TickCtx {
+                        world: &mut self.world,
+                        host: state.as_ref(),
+                        entities,
+                        next_entity: &mut self.next_entity,
+                        spawn,
+                        difficulty: i32::from(self.ui.difficulty),
+                        difficulty_locked: self.level.difficulty_locked,
+                        clock_rate,
+                        tick_rate: self.clock.rate(),
+                        tick_frozen: self.clock.frozen(),
+                        tick_steps: self.clock.step_state(),
+                        collision: Some(self.collision),
+                        border: &self.border,
+                    };
+                }
                 events.extend(horizon_client::spans::time("lan_tick_level", || {
                     host.hub.tick_level(&mut ctx)
                 }));

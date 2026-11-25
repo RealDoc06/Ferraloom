@@ -8,7 +8,7 @@ description: The plugin the bridge's end-to-end test (tools/plugins_e2e.py) load
 commands:
   ftest:
     description: Ferraloom's plugin bridge test
-    usage: /ftest <ping|protect on|protect off|where|tp x y z|block x y z|set x y z data|world|storm on|storm off|physics|sign x y z>
+    usage: /ftest <ping|protect on/off|where|tp x y z|block x y z|set x y z data|world|storm on/off|physics|sign x y z|stub|state|level n|mode m|show|freeze on/off|run|kickme>
     aliases: [ft]
   fentity:
     description: The entities area's checks
