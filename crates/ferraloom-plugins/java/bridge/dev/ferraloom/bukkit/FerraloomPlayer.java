@@ -830,6 +830,12 @@ final class FerraloomPlayer extends StubPlayer {
         return flag(PlayerNative.ALLOW_FLIGHT);
     }
 
+    /** CraftPlayer.setAllowFlight: without it the player stops flying; a game mode change resets it. */
+    @Override
+    public void setAllowFlight(boolean flight) {
+        set(PlayerNative.SET_ALLOW_FLIGHT, flight ? 1 : 0);
+    }
+
     @Override
     public float getWalkSpeed() {
         return (float) get(PlayerNative.WALK_SPEED);

@@ -197,7 +197,7 @@ the baseline is the coordinator's next step; budget: no measurable MSPT differen
 **Players** (`src/players.rs`, `game/plugins/players.rs`): `Player`, `HumanEntity` (but its inventory) and
 `OfflinePlayer` for online players: health, maximum health, absorption, food, saturation, exhaustion,
 experience and levels (`giveExp`, `giveExpLevels`), game mode, flying (when allowed), allow-flight, walk and
-fly speed (read), sneaking, sprinting, swimming, gliding, sleeping, dead, in a vehicle, velocity (read and
+fly speed (read), allow-flight (set too; a game mode change ends it, as `updatePlayerAbilities` does), sneaking, sprinting, swimming, gliding, sleeping, dead, in a vehicle, velocity (read and
 set), fire, air, fall distance, freeze ticks, pose, facing, eyes, size and bounding box, respawn point,
 effects (`PotionEffect` add, read, remove), ping, locale, address, client view distance, `hasPlayedBefore`,
 first and last played (the player file's times), display name, player list name, tab list header and
@@ -221,7 +221,7 @@ until the bridge's `ItemStack` arrives (`getMaterial` answers), `getDamageSource
 as a teleport at the next tick's start; `PlayerMoveEvent` sees the position from the tick's start (the
 packets of one tick are checked before the hub handles any); `PlayerTeleportEvent` from a pearl cannot
 change where it lands, and portal, spectate and gateway teleports fire none yet; the player list name is
-not sent to players who join later; `setAllowFlight`, `setWalkSpeed`, `setFlySpeed`, `hidePlayer` and
+not sent to players who join later; `setWalkSpeed`, `setFlySpeed`, `hidePlayer` and
 `showPlayer` (`canSee` answers true), `setPlayerTime`/`Weather` (their getters answer the world's) and
 health scaling are not bridged; `PlayerLoginEvent.getHostname` is the address, not the handshake's host.
 

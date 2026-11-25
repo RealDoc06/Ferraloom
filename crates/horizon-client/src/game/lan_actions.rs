@@ -431,6 +431,8 @@ impl Game<'_> {
         // FireworkRocketItem.use boosts only a gliding player.
         motion.fall_flying = g.fall_flying;
         motion.invulnerable = motion.may_fly;
+        // Ferraloom: a plugin's allow-flight (Player.setAllowFlight).
+        motion.may_fly |= g.allow_flight;
         // LivingEntity.setHealth clamps to the maximum and stores what
         // differs: the body holding the record's health already, at most the
         // maximum and above zero, is left as it is.

@@ -97,7 +97,7 @@ fn record_state(g: &mut Guest) -> PlayerState {
         total_exp: g.xp_total,
         game_mode: g.game_mode,
         flying: g.flying,
-        allow_flight: g.creative() || g.spectator(),
+        allow_flight: g.creative() || g.spectator() || g.allow_flight,
         // The abilities the hub sends (0.1 and 0.05), as Bukkit counts them.
         walk_speed: 0.2,
         fly_speed: 0.1,
@@ -200,8 +200,8 @@ impl GameHost<'_, '_> {
         self.guest(id).map(|g| g.send(packet)).is_some()
     }
 
-    /// Sneaking, sprinting and flying, which the hub's record keeps (and the
-    /// body of a turn in progress too).
+    /// Sneaking, sprinting, flying and allow-flight, which the hub's record
+    /// keeps (and the body of a turn in progress too).
     fn set_flag(&mut self, id: PlayerId, field: Field, on: bool) -> bool {
         if self.acting(id) {
             if field == Field::Sneaking {
@@ -211,10 +211,15 @@ impl GameHost<'_, '_> {
                     self.game.keys.remove(&KeyCode::ShiftLeft);
                 }
             }
+            let mode_flies = self.game.creative || self.game.spectator();
             if let Some(p) = self.game.player.as_deref_mut() {
                 match field {
                     Field::Flying if on && !p.may_fly => return false,
                     Field::Flying => p.flying = on,
+                    Field::AllowFlight => {
+                        p.may_fly = on || mode_flies;
+                        p.flying &= p.may_fly;
+                    }
                     Field::Sprinting => {
                         let _ = p.set_sprinting(on);
                     }
@@ -226,11 +231,16 @@ impl GameHost<'_, '_> {
             return false;
         };
         match field {
-            Field::Flying => {
-                if on && !(g.creative() || g.spectator()) {
+            Field::Flying | Field::AllowFlight => {
+                if field == Field::AllowFlight {
+                    // CraftPlayer.setAllowFlight: no flight, no flying.
+                    g.allow_flight = on;
+                    g.flying &= on || g.creative() || g.spectator();
+                } else if on && !(g.creative() || g.spectator() || g.allow_flight) {
                     return false;
+                } else {
+                    g.flying = on;
                 }
-                g.flying = on;
                 g.send(&C::PlayerAbilities(play::PlayerAbilities {
                     flags: g.ability_flags(),
                     flying_speed: 0.05,
@@ -436,7 +446,7 @@ impl PlayerHost for GameHost<'_, '_> {
 
     fn set(&mut self, player: PlayerId, field: Field, value: f64) -> bool {
         match field {
-            Field::Flying | Field::Sneaking | Field::Sprinting => {
+            Field::Flying | Field::AllowFlight | Field::Sneaking | Field::Sprinting => {
                 self.set_flag(player, field, value != 0.0)
             }
             _ if self.acting(player) => self.set_in_turn(field, value),

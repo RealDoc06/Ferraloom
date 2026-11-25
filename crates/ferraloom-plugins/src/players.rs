@@ -244,10 +244,12 @@ pub enum Field {
     Sprinting,
     HeldSlot,
     Absorption,
+    /// `Player.setAllowFlight`: flight beyond the game mode's.
+    AllowFlight,
 }
 
 impl Field {
-    const ALL: [Field; 18] = [
+    const ALL: [Field; 19] = [
         Field::Health,
         Field::Food,
         Field::Saturation,
@@ -266,6 +268,7 @@ impl Field {
         Field::Sprinting,
         Field::HeldSlot,
         Field::Absorption,
+        Field::AllowFlight,
     ];
 }
 

@@ -21,7 +21,7 @@ final class PlayerNative {
     static final int SET_HEALTH = 0, SET_FOOD = 1, SET_SATURATION = 2, SET_EXHAUSTION = 3, SET_LEVEL = 4, SET_EXP = 5,
             SET_TOTAL_EXP = 6, GIVE_EXP = 7, GIVE_LEVELS = 8, SET_GAME_MODE = 9, SET_FLYING = 10, SET_FIRE_TICKS = 11,
             SET_AIR = 12, SET_FALL_DISTANCE = 13, SET_SNEAKING = 14, SET_SPRINTING = 15, SET_HELD_SLOT = 16,
-            SET_ABSORPTION = 17;
+            SET_ABSORPTION = 17, SET_ALLOW_FLIGHT = 18;
 
     /** A chat line (legacy {@code §} codes) to one online player; from any thread. */
     static native void sendMessage(long most, long least, String message);

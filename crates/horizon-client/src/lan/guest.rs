@@ -110,6 +110,9 @@ pub struct Guest {
     pub sprinting: bool,
     pub fall_flying: bool,
     pub flying: bool,
+    /// Ferraloom: `Player.setAllowFlight`, flight a plugin allows beyond the
+    /// game mode's (`Abilities.mayfly`); a game mode change ends it.
+    pub allow_flight: bool,
     pub sleeping: bool,
     /// `LivingEntity.DATA_LIVING_ENTITY_FLAGS`: 1 while using an item, 2 if
     /// it is in the off hand.
@@ -305,6 +308,7 @@ impl Guest {
             sprinting: false,
             fall_flying: false,
             flying: false,
+            allow_flight: false,
             sleeping: false,
             living_flags: 0,
             bed: None,
@@ -413,7 +417,8 @@ impl Guest {
         if self.flying || self.spectator() {
             f |= 2;
         }
-        if self.creative() || self.spectator() {
+        // Ferraloom: a plugin's allow-flight too.
+        if self.creative() || self.spectator() || self.allow_flight {
             f |= 4;
         }
         if self.creative() {
