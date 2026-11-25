@@ -38,6 +38,11 @@ final class FerraloomCommandMap extends SimpleCommandMap {
         return ((long) generation << 32) | knownCommands.size();
     }
 
+    /** Label to command, fallback-prefixed labels and aliases included. */
+    java.util.Map<String, Command> known() {
+        return knownCommands;
+    }
+
     /** Every label the map answers to, fallback-prefixed ones and aliases included. */
     String[] labels() {
         return knownCommands.keySet().toArray(new String[0]);

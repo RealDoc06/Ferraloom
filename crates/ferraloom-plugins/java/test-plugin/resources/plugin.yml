@@ -10,3 +10,9 @@ commands:
     description: Ferraloom's plugin bridge test
     usage: /ftest <ping|protect on/off|where|tp x y z|block x y z|set x y z data|world|storm on/off|physics|sign x y z|stub|state|level n|mode m|show|freeze on/off|run|kickme>
     aliases: [ft]
+  fadmin:
+    description: Only for those with ferraloomtest.admin (operators)
+    permission: ferraloomtest.admin
+permissions:
+  ferraloomtest.admin:
+    default: op

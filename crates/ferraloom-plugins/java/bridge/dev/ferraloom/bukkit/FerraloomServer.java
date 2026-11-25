@@ -6,9 +6,11 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -17,6 +19,7 @@ import java.util.logging.Logger;
 import net.md_5.bungee.api.chat.BaseComponent;
 import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.ChatColor;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.UnsafeValues;
 import org.bukkit.Warning.WarningState;
 import org.bukkit.World;
@@ -65,6 +68,12 @@ final class FerraloomServer extends StubServer {
     final Messenger messenger = new StandardMessenger();
     final FerraloomConsole console = new FerraloomConsole(this);
     final FerraloomUnsafe unsafe = new FerraloomUnsafe();
+    final FerraloomProfileBans profileBans = new FerraloomProfileBans(this);
+    final FerraloomIpBans ipBans = new FerraloomIpBans();
+    final FerraloomProperties properties;
+    final FerraloomHelpMap helpMap = new FerraloomHelpMap();
+    /** spigot.yml as plugins read it: Ferraloom has none, so every setting is its default (no BungeeCord). */
+    private final org.bukkit.configuration.file.YamlConfiguration spigotConfig = new org.bukkit.configuration.file.YamlConfiguration();
     final Thread primaryThread = Thread.currentThread();
     /** Online players in join order, and by UUID. Changed on the server thread only. */
     private final List<FerraloomPlayer> online = new CopyOnWriteArrayList<>();
@@ -78,6 +87,11 @@ final class FerraloomServer extends StubServer {
         @Override
         public void broadcast(BaseComponent... components) {
             broadcastMessage(TextComponent.toLegacyText(components));
+        }
+
+        @Override
+        public org.bukkit.configuration.file.YamlConfiguration getConfig() {
+            return spigotConfig;
         }
     };
 
@@ -99,6 +113,7 @@ final class FerraloomServer extends StubServer {
         this.commandMap = new FerraloomCommandMap(this);
         this.pluginManager = new SimplePluginManager(this, commandMap);
         this.scheduler = new FerraloomScheduler();
+        this.properties = new FerraloomProperties(directory);
     }
 
     /** The API jar's own version (CraftServer reads the same file): {@code 26.3-R0.1-SNAPSHOT}. */
@@ -117,7 +132,7 @@ final class FerraloomServer extends StubServer {
 
     // Startup and shutdown, in CraftServer's order.
 
-    /** CraftServer.loadPlugins: every jar in plugins/ that needs no server internals, then their onLoad. */
+    /** CraftServer.loadPlugins: every jar in plugins/ (a warning for those naming server internals), then their onLoad. */
     void loadPlugins() {
         pluginManager.registerInterface(JavaPluginLoader.class);
         File folder = new File(directory, "plugins");
@@ -126,17 +141,15 @@ final class FerraloomServer extends StubServer {
             return;
         }
         java.util.Arrays.sort(jars);
-        List<File> loadable = new ArrayList<>();
         for (File jar : jars) {
-            String internal = Internals.find(jar);
-            if (internal == null) {
-                loadable.add(jar);
-            } else {
-                logger.severe("Could not load 'plugins/" + jar.getName() + "': it uses " + internal
-                        + ", a Minecraft server internal (NMS or CraftBukkit) that Ferraloom does not provide");
+            Internals.Found internal = Internals.find(jar);
+            if (internal != null) {
+                logger.warning("'plugins/" + jar.getName() + "' names " + internal.describe()
+                        + ", Minecraft server internals (NMS or CraftBukkit) that Ferraloom does not provide;"
+                        + " it is disabled if it reaches one");
             }
         }
-        for (Plugin plugin : pluginManager.loadPlugins(loadable.toArray(new File[0]))) {
+        for (Plugin plugin : pluginManager.loadPlugins(jars)) {
             try {
                 plugin.getLogger().info(String.format("Loading %s", plugin.getDescription().getFullName()));
                 plugin.onLoad();
@@ -160,6 +173,7 @@ final class FerraloomServer extends StubServer {
             }
         }
         DefaultPermissions.registerCorePermissions();
+        helpMap.initializeCommands(commandMap);
     }
 
     /** CraftServer.enablePlugin: its plugin.yml permissions, then the plugin manager's enable. */
@@ -192,9 +206,12 @@ final class FerraloomServer extends StubServer {
     void join(FerraloomPlayer player) {
         online.add(player);
         byId.put(player.id, player);
+        // Their first command tree went out before they joined: again, filtered by their permissions.
+        ServerNative.updateCommands(player.id.getMostSignificantBits(), player.id.getLeastSignificantBits());
     }
 
     void leave(FerraloomPlayer player) {
+        FerraloomBossBar.left(player);
         player.online = false;
         online.remove(player);
         byId.remove(player.id, player);
@@ -386,7 +403,7 @@ final class FerraloomServer extends StubServer {
         return command instanceof PluginCommand pc ? pc : null;
     }
 
-    /** CraftServer.dispatchCommand: a plugin's command, else vanilla's (run as the console). */
+    /** CraftServer.dispatchCommand: a plugin's command, else vanilla's as the sender (the console or a player). */
     @Override
     public boolean dispatchCommand(CommandSender sender, String commandLine) {
         if (!isPrimaryThread()) {
@@ -397,6 +414,10 @@ final class FerraloomServer extends StubServer {
         }
         if (sender instanceof ConsoleCommandSender) {
             return ServerNative.dispatchVanilla(commandLine);
+        }
+        if (sender instanceof FerraloomPlayer player) {
+            // A vanilla command as the player, as their own chat command runs (PlayerNative.command).
+            return player.performCommand(commandLine);
         }
         throw new UnsupportedOperationException(
                 "Ferraloom does not implement Server.dispatchCommand(CommandSender, String) yet for vanilla commands run by players");
@@ -463,5 +484,297 @@ final class FerraloomServer extends StubServer {
     @Override
     public Spigot spigot() {
         return spigot;
+    }
+
+    // Server area: players by name, the player lists, server.properties, help.
+
+    /** CraftServer.matchPlayer: the exact name alone, else every online name containing it. */
+    @Override
+    public List<Player> matchPlayer(String partial) {
+        List<Player> matched = new ArrayList<>();
+        String lower = partial.toLowerCase(Locale.ROOT);
+        for (FerraloomPlayer p : online) {
+            if (p.name.equalsIgnoreCase(partial)) {
+                matched.clear();
+                matched.add(p);
+                break;
+            }
+            if (p.name.toLowerCase(Locale.ROOT).contains(lower)) {
+                matched.add(p);
+            }
+        }
+        return matched;
+    }
+
+    /** CraftServer.getOfflinePlayer(String): online, else (online mode) the user cache or profile service, else offline. */
+    @Override
+    public OfflinePlayer getOfflinePlayer(String name) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("name cannot be null or empty");
+        }
+        Player online = getPlayerExact(name);
+        if (online != null) {
+            return online;
+        }
+        FerraloomLists.Profile p = FerraloomLists.byName(name, onlineMode);
+        return getOfflinePlayer(p.id(), p.name());
+    }
+
+    @Override
+    public OfflinePlayer getOfflinePlayer(UUID id) {
+        if (id == null) {
+            throw new IllegalArgumentException("UUID cannot be null");
+        }
+        return getOfflinePlayer(id, "");
+    }
+
+    private OfflinePlayer getOfflinePlayer(UUID id, String name) {
+        Player online = getPlayer(id);
+        return online != null ? online : new FerraloomOfflinePlayer(this, id, name);
+    }
+
+    /** CraftServer.getOfflinePlayers: everyone with a player file. */
+    @Override
+    public OfflinePlayer[] getOfflinePlayers() {
+        return FerraloomLists.seen(this).stream().map(this::getOfflinePlayer).toArray(OfflinePlayer[]::new);
+    }
+
+    private Set<OfflinePlayer> listed(int list) {
+        Set<OfflinePlayer> out = new LinkedHashSet<>();
+        for (FerraloomLists.Profile p : FerraloomLists.listed(list)) {
+            out.add(getOfflinePlayer(p.id(), p.name()));
+        }
+        return out;
+    }
+
+    @Override
+    public Set<OfflinePlayer> getOperators() {
+        return listed(FerraloomLists.OPS);
+    }
+
+    @Override
+    public Set<OfflinePlayer> getWhitelistedPlayers() {
+        return listed(FerraloomLists.WHITELIST);
+    }
+
+    @Override
+    public Set<OfflinePlayer> getBannedPlayers() {
+        return listed(FerraloomLists.BANNED);
+    }
+
+    @Override
+    public boolean hasWhitelist() {
+        return ServerNative.whitelistFlag(0);
+    }
+
+    @Override
+    public void setWhitelist(boolean on) {
+        ServerNative.setWhitelistFlag(0, on);
+    }
+
+    @Override
+    public boolean isWhitelistEnforced() {
+        return ServerNative.whitelistFlag(1);
+    }
+
+    @Override
+    public void setWhitelistEnforced(boolean on) {
+        ServerNative.setWhitelistFlag(1, on);
+    }
+
+    @Override
+    public void reloadWhitelist() {
+        ServerNative.reloadWhitelist();
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public <T extends org.bukkit.BanList<?>> T getBanList(org.bukkit.BanList.Type type) {
+        return (T) (type == org.bukkit.BanList.Type.IP ? ipBans : profileBans);
+    }
+
+    @Override
+    public Set<String> getIPBans() {
+        Set<String> out = new LinkedHashSet<>();
+        for (org.bukkit.BanEntry<?> e : ipBans.getEntries()) {
+            out.add(e.getTarget());
+        }
+        return out;
+    }
+
+    @Override
+    public void banIP(String address) {
+        ipBans.addBan(address, null, (java.util.Date) null, null);
+    }
+
+    @Override
+    public void unbanIP(String address) {
+        ipBans.pardon(address);
+    }
+
+    @Override
+    public void banIP(java.net.InetAddress address) {
+        ipBans.addBan(address, null, (java.util.Date) null, null);
+    }
+
+    @Override
+    public void unbanIP(java.net.InetAddress address) {
+        ipBans.pardon(address);
+    }
+
+    @Override
+    public org.bukkit.profile.PlayerProfile createPlayerProfile(UUID id, String name) {
+        return new FerraloomProfile(id, name);
+    }
+
+    @Override
+    public org.bukkit.profile.PlayerProfile createPlayerProfile(UUID id) {
+        return new FerraloomProfile(id, null);
+    }
+
+    @Override
+    public org.bukkit.profile.PlayerProfile createPlayerProfile(String name) {
+        return new FerraloomProfile(null, name);
+    }
+
+    @Override
+    public org.bukkit.GameMode getDefaultGameMode() {
+        String mode = properties.string("gamemode", "survival").trim().toUpperCase(Locale.ROOT);
+        for (org.bukkit.GameMode m : org.bukkit.GameMode.values()) {
+            if (m.name().equals(mode) || String.valueOf(m.getValue()).equals(mode)) {
+                return m;
+            }
+        }
+        return org.bukkit.GameMode.SURVIVAL;
+    }
+
+    @Override
+    public int getViewDistance() {
+        return Math.clamp(properties.integer("view-distance", 10), 2, 32);
+    }
+
+    @Override
+    public int getSimulationDistance() {
+        return Math.clamp(properties.integer("simulation-distance", 10), 2, 32);
+    }
+
+    @Override
+    public boolean getAllowFlight() {
+        return properties.bool("allow-flight", false);
+    }
+
+    @Override
+    public boolean getAllowNether() {
+        return properties.bool("allow-nether", true);
+    }
+
+    /** bukkit.yml's settings.allow-end: Ferraloom has no bukkit.yml, so its default. */
+    @Override
+    public boolean getAllowEnd() {
+        return true;
+    }
+
+    @Override
+    public boolean getGenerateStructures() {
+        return properties.bool("generate-structures", true);
+    }
+
+    @Override
+    public String getWorldType() {
+        return properties.string("level-type", "minecraft:normal");
+    }
+
+    @Override
+    public int getSpawnRadius() {
+        return properties.integer("spawn-protection", 16);
+    }
+
+    @Override
+    public int getMaxWorldSize() {
+        return Math.clamp(properties.integer("max-world-size", 29999984), 1, 29999984);
+    }
+
+    @Override
+    public int getIdleTimeout() {
+        return properties.integer("player-idle-timeout", 0);
+    }
+
+    @Override
+    public boolean isLoggingIPs() {
+        return properties.bool("log-ips", true);
+    }
+
+    @Override
+    public boolean isEnforcingSecureProfiles() {
+        return onlineMode && properties.bool("enforce-secure-profile", true);
+    }
+
+    @Override
+    public boolean getHideOnlinePlayers() {
+        return properties.bool("hide-online-players", false);
+    }
+
+    @Override
+    public boolean isHardcore() {
+        return properties.bool("hardcore", false);
+    }
+
+    /** bukkit.yml's spawn-limits defaults, which are vanilla's mob caps (MobCategory's max instances per chunk). */
+    @Override
+    public int getSpawnLimit(org.bukkit.entity.SpawnCategory category) {
+        return switch (category) {
+            case MONSTER -> 70;
+            case ANIMAL -> 10;
+            case WATER_ANIMAL, WATER_UNDERGROUND_CREATURE, AXOLOTL -> 5;
+            case WATER_AMBIENT -> 20;
+            case AMBIENT -> 15;
+            case MISC -> throw new IllegalArgumentException("SpawnCategory." + category + " does not have a spawn limit");
+        };
+    }
+
+    /** bukkit.yml's ticks-per defaults, vanilla's: persistent animals every 400 ticks, the rest every tick. */
+    @Override
+    public int getTicksPerSpawns(org.bukkit.entity.SpawnCategory category) {
+        return switch (category) {
+            case ANIMAL -> 400;
+            case MISC -> throw new IllegalArgumentException("SpawnCategory." + category + " does not have ticks per spawn");
+            default -> 1;
+        };
+    }
+
+    @Override public int getMonsterSpawnLimit() { return getSpawnLimit(org.bukkit.entity.SpawnCategory.MONSTER); }
+    @Override public int getAnimalSpawnLimit() { return getSpawnLimit(org.bukkit.entity.SpawnCategory.ANIMAL); }
+    @Override public int getWaterAnimalSpawnLimit() { return getSpawnLimit(org.bukkit.entity.SpawnCategory.WATER_ANIMAL); }
+    @Override public int getWaterAmbientSpawnLimit() { return getSpawnLimit(org.bukkit.entity.SpawnCategory.WATER_AMBIENT); }
+    @Override public int getWaterUndergroundCreatureSpawnLimit() { return getSpawnLimit(org.bukkit.entity.SpawnCategory.WATER_UNDERGROUND_CREATURE); }
+    @Override public int getAmbientSpawnLimit() { return getSpawnLimit(org.bukkit.entity.SpawnCategory.AMBIENT); }
+    @Override public int getTicksPerAnimalSpawns() { return getTicksPerSpawns(org.bukkit.entity.SpawnCategory.ANIMAL); }
+    @Override public int getTicksPerMonsterSpawns() { return getTicksPerSpawns(org.bukkit.entity.SpawnCategory.MONSTER); }
+    @Override public int getTicksPerWaterSpawns() { return getTicksPerSpawns(org.bukkit.entity.SpawnCategory.WATER_ANIMAL); }
+    @Override public int getTicksPerWaterAmbientSpawns() { return getTicksPerSpawns(org.bukkit.entity.SpawnCategory.WATER_AMBIENT); }
+    @Override public int getTicksPerWaterUndergroundCreatureSpawns() { return getTicksPerSpawns(org.bukkit.entity.SpawnCategory.WATER_UNDERGROUND_CREATURE); }
+    @Override public int getTicksPerAmbientSpawns() { return getTicksPerSpawns(org.bukkit.entity.SpawnCategory.AMBIENT); }
+
+    /** bukkit.yml's settings.connection-throttle default. */
+    @Override
+    public long getConnectionThrottle() {
+        return 4000;
+    }
+
+    /** bukkit.yml's settings.shutdown-message default. */
+    @Override
+    public String getShutdownMessage() {
+        return "Server closed";
+    }
+
+    @Override
+    public org.bukkit.help.HelpMap getHelpMap() {
+        return helpMap;
+    }
+
+    @Override
+    public org.bukkit.boss.BossBar createBossBar(String title, org.bukkit.boss.BarColor color, org.bukkit.boss.BarStyle style,
+            org.bukkit.boss.BarFlag... flags) {
+        return new FerraloomBossBar(title, color, style, flags);
     }
 }

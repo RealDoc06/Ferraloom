@@ -521,6 +521,20 @@ impl Game<'_> {
                 scope: Scope::Global,
             });
         }
+        // Ferraloom: plugins' boss bars (Server.createBossBar), as custom ones; without any, one load.
+        ferraloom_plugins::boss_bars_for(viewer.uuid, |b| {
+            out.push(Offer {
+                id: b.id,
+                name: json_to_tag(&Text::legacy(&b.title).component()),
+                progress: b.progress,
+                color: b.color,
+                overlay: b.overlay,
+                darken: b.darken,
+                music: b.music,
+                fog: b.fog,
+                scope: Scope::Global,
+            })
+        });
         if viewer.here
             && let Some(progress) = self.dragon_boss_progress(viewer.at, viewer.alive)
         {

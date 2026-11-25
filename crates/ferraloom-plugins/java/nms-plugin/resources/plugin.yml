@@ -2,3 +2,7 @@ name: FerraloomNms
 version: '1.0'
 main: dev.ferraloom.nmsplugin.NmsPlugin
 api-version: '26.3'
+description: Names server internals in an adapter; tools/plugins_e2e.py checks it loads, then is disabled when it reaches one.
+commands:
+  fnms:
+    description: Reaches the plugin's NMS adapter

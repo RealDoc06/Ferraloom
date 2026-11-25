@@ -1346,12 +1346,30 @@ final class FerraloomPlayer extends StubPlayer {
         FerraloomMetadataStore.remove(metadata, key, plugin);
     }
 
-    // Permissions: Bukkit's PermissibleBase over the server's operator list (read at login).
+    // Permissions: Bukkit's PermissibleBase over the server's operator list.
 
+    /** CraftPlayer.isOp: the operator list now (server area, FerraloomLists), as `/op` and plugins change it. */
     @Override
     public boolean isOp() {
-        return op;
+        return FerraloomLists.isOp(id);
     }
+
+    /** CraftPlayer.setOp: the operator list, then the permissions recalculated (the level and commands follow at the next tick). */
+    @Override
+    public void setOp(boolean value) {
+        if (value != isOp()) {
+            FerraloomLists.setOp(id, name, value);
+            permissions.recalculatePermissions();
+        }
+    }
+
+    // The server's lists (server area, FerraloomLists), as CraftOfflinePlayer answers them.
+    @Override public boolean isBanned() { return FerraloomLists.isBanned(id); }
+    @Override public boolean isWhitelisted() { return FerraloomLists.isWhitelisted(id); }
+    @Override public void setWhitelisted(boolean on) { FerraloomLists.setWhitelisted(id, name, on); }
+    @Override public org.bukkit.BanEntry<org.bukkit.profile.PlayerProfile> ban(String reason, java.util.Date expires, String source) { return server.profileBans.addBan(new FerraloomProfile(id, name), reason, expires, source); }
+    @Override public org.bukkit.BanEntry<org.bukkit.profile.PlayerProfile> ban(String reason, java.time.Instant expires, String source) { return server.profileBans.addBan(new FerraloomProfile(id, name), reason, expires, source); }
+    @Override public org.bukkit.BanEntry<org.bukkit.profile.PlayerProfile> ban(String reason, java.time.Duration duration, String source) { return server.profileBans.addBan(new FerraloomProfile(id, name), reason, duration, source); }
 
     @Override
     public boolean isPermissionSet(String name) {

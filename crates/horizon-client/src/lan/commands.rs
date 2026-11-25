@@ -237,7 +237,14 @@ fn fill(
                 )
             }),
             suggestions: if argument {
-                suggestions.get(path.join(" ").as_str()).copied()
+                suggestions
+                    .get(path.join(" ").as_str())
+                    .copied()
+                    .or_else(|| {
+                        // Ferraloom: plugin commands' `args` ask the server (their TabCompleter).
+                        (child["suggestions"] == "minecraft:ask_server")
+                            .then_some("minecraft:ask_server")
+                    })
             } else {
                 None
             },

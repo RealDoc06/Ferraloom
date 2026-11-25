@@ -5,7 +5,8 @@ Builds the bridge and the test plugins (crates/ferraloom-plugins/java/build.py),
 server twice on a fresh flat world:
 
 1. without a plugins folder: the server starts, and no JVM is mapped into it (/proc/<pid>/maps);
-2. with plugins/FerraloomTest.jar (and FerraloomNms.jar, which uses server internals and must be refused):
+2. with plugins/FerraloomTest.jar and FerraloomNms.jar (which names server internals in an adapter: it loads
+   with a warning, and is disabled in one line when a command reaches the adapter; FerraloomTest runs on):
    one scripted player (crates/ferraloom-plugins/examples/plugin_bot.rs) joins, and the checks read the
    server's log and what the player is sent: lifecycle order, config and data folder, Bukkit.getServer()'s
    basics, the scheduler's ticks (a 40-tick delay, a 10-tick timer, an async task), the join and quit
@@ -21,7 +22,10 @@ server twice on a fresh flat world:
    game rules, another dimension) and a storm with its WeatherChangeEvent; a chest GUI a command opens
    (its title, its items' names, lore and plugin data) with a cancelled click leaving both sides as they
    were and an uncancelled one taking the item, its close event, and a held item written through as
-   CraftItemStack's mirror is.
+   CraftItemStack's mirror is; the server area: a command hidden from a player without its permission, tab
+   completion (a TabCompleter, Bukkit's player-name default, TabCompleteEvent), a boss bar shown and removed,
+   an offline player's op, whitelist and ban round trip (the ban seen by vanilla's /banlist), and the
+   watchdog naming a plugin that stalls the server thread.
 
     python3 tools/plugins_e2e.py --engine target/release/horizon-client --bot target/release/examples/plugin_bot
 
@@ -179,7 +183,7 @@ def check_plugins(engine, bot_binary, built, out, scratch):
     log = server.out
     bot = None
     try:
-        # Lifecycle: onLoad before the level, onEnable before Done; the NMS plugin refused in one line.
+        # Lifecycle: onLoad before the level, onEnable before Done; the NMS plugin loads with a warning.
         loaded, _ = log.wait_for(r'\[FerraloomTest\] lifecycle: onLoad', timeout=300)
         level, _ = log.wait_for(r'Preparing level')
         enabled, _ = log.wait_for(r'\[FerraloomTest\] lifecycle: onEnable')
@@ -191,14 +195,15 @@ def check_plugins(engine, bot_binary, built, out, scratch):
         world_load, _ = log.wait_for(r'\[FerraloomTest\] event: world-load world_the_end$')
         if not enabled < init < world_load < done:
             raise Failed(f'world events out of order: onEnable {enabled}, init {init}, load {world_load}, Done {done}')
-        log.wait_for(r"Could not load 'plugins/FerraloomNms\.jar': it uses net\.minecraft\.server\.MinecraftServer")
-        log.absent(r'NmsPlugin enabled')
+        log.wait_for(r"'plugins/FerraloomNms\.jar' names net\.minecraft\.server\.MinecraftServer "
+                     r"\(from dev\.ferraloom\.nmsplugin\.Adapter\).*it is disabled if it reaches one")
+        log.wait_for(r'\[FerraloomNms\] probe: no internals, enabled')
         log.wait_for(r'\[FerraloomTest\] config: greeting=hello from config\.yml folder=true')
         log.wait_for(r'\[FerraloomTest\] server: name=Ferraloom bukkit=26\.3-R0\.1-SNAPSHOT online=0 '
                      r'worlds=world/NORMAL,world_nether/NETHER,world_the_end/THE_END primary=true')
         if sys.platform.startswith('linux') and 'libjvm' not in server.maps():
             raise Failed('plugins: no libjvm mapped')
-        print('lifecycle, config, server basics, NMS refusal: ok')
+        print('lifecycle, config, server basics, NMS plugin loaded: ok')
 
         # The scheduler: async off the server thread; a 40-tick delay and a 10-tick timer, counted in game ticks.
         log.wait_for(r'\[FerraloomTest\] schedule: async primary=false')
@@ -221,8 +226,8 @@ def check_plugins(engine, bot_binary, built, out, scratch):
         bot.out.wait_for(rf'^chat .*FerraloomTest welcomes {PLAYER}')
         bot.out.wait_for(rf'^chat .*{PLAYER} joined through FerraloomTest')
         log.wait_for(rf'System chat: {PLAYER} joined through FerraloomTest')
-        bot.out.wait_for(r'^commands ftest=true$')
-        print('join event and message, command tree: ok')
+        bot.out.wait_for(r'^commands ftest=true fadmin=false$')
+        print('join event and message, command tree without a command the player may not use: ok')
 
         # Commands, from the player and the console; a stubbed method's exception.
         bot.send('command ftest ping')
@@ -233,6 +238,45 @@ def check_plugins(engine, bot_binary, built, out, scratch):
         bot.out.wait_for(r'^chat .*An internal error occurred while attempting to perform this command')
         log.wait_for(r'Ferraloom does not implement Player\.getShoulderEntityLeft\(\) yet')
         print('commands, stub exception: ok')
+
+        # The NMS plugin's adapter reached: one line, no trace, the plugin disabled, the others unaffected.
+        mark, bot_mark = len(log.lines), len(bot.out.lines)
+        bot.send('command fnms')
+        bot.out.wait_for(r'^chat .*An internal error occurred while attempting to perform this command', start=bot_mark)
+        log.wait_for(r'Disabling FerraloomNms v1\.0: it reached net\.minecraft\.server\.MinecraftServer '
+                     r'\(from dev\.ferraloom\.nmsplugin\.Adapter\.server\)', start=mark)
+        log.wait_for(r'\[FerraloomNms\] Disabling FerraloomNms v1\.0', start=mark)
+        log.absent(r'NoClassDefFoundError', mark)
+        bot.send('command ftest ping')
+        bot.out.wait_for(rf'^chat pong {PLAYER}$', start=bot_mark)
+        print('NMS adapter reached: plugin disabled in one line, others run: ok')
+
+        # Tab completion: the plugin's TabCompleter for the first word, Bukkit's player names after it.
+        mark = len(bot.out.lines)
+        bot.send('suggest ftest pr')
+        bot.out.wait_for(r'^suggestions 7 2 protect$', start=mark)
+        log.wait_for(r'\[FerraloomTest\] event: tab /ftest pr -> \[protect\]')
+        bot.send(f'suggest ftest ping {PLAYER[:2]}')
+        bot.out.wait_for(rf'^suggestions 12 2 {PLAYER}$', start=mark)
+        print('tab completion, TabCompleteEvent: ok')
+
+        # A plugin's boss bar, shown to the player and taken off.
+        mark = len(bot.out.lines)
+        bot.send('command ftest bar')
+        bot.out.wait_for(r'^boss add Ferraloom bar 0\.5$', start=mark)
+        bot.send('command ftest bar off')
+        bot.out.wait_for(r'^boss remove$', start=mark)
+        print('boss bar: ok')
+
+        # An offline player through the server's lists: op, whitelist, a ban vanilla's /banlist shows, a pardon.
+        mark = len(log.lines)
+        server.console('ftest lists Offliner')
+        log.wait_for(r'lists: offline=true op=true,false whitelist=true,false banned=true', start=mark)
+        server.console('banlist players')
+        log.wait_for(r'Offliner was banned by FerraloomTest: testing bans', start=mark)
+        server.console('ftest pardon Offliner')
+        log.wait_for(r'pardon: banned=false', start=mark)
+        print('offline player, ops, whitelist, bans: ok')
 
         # The player's state, read and set; metadata.
         bot.send('command ftest state')
@@ -472,6 +516,14 @@ def check_plugins(engine, bot_binary, built, out, scratch):
         log.wait_for(rf'\[FerraloomTest\] event: quit {PLAYER} online=true', start=mark)
         log.absent(rf'System chat: {PLAYER} left the game', mark)
         print('quit event, message removed: ok')
+
+        # A plugin stalling the server thread: the watchdog names it, with its stack, and the server goes on.
+        mark = len(log.lines)
+        server.console('ftest stall 13')
+        log.wait_for(r'The server thread has been stuck in FerraloomTest v1\.0 for 1\d s', start=mark, timeout=40)
+        log.wait_for(r'at dev\.ferraloom\.testplugin\.TestPlugin\.onCommand', start=mark)
+        log.wait_for(r'stalled', start=mark, timeout=20)
+        print('watchdog: ok')
     finally:
         if bot is not None and bot.process.poll() is None:
             bot.process.kill()

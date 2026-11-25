@@ -47,7 +47,10 @@ pub use players::{
     player_join, player_kick, player_move, player_quit, player_respawn, player_teleport,
     player_toggle, plugin_message, serve_logins, snapshots_wanted, store_snapshots,
 };
-pub use server::ServerHost;
+pub use server::{
+    Ban, BanTarget, List, PluginBossBar, Profile, ServerHost, ServerLists, WhitelistFlag,
+    boss_bars_for, hidden_commands, ops_changed, set_lists, tab_complete, take_command_updates,
+};
 pub use worlds::{Border, Change, Query, Sound, WorldHost, chunk_event, save_event, weather_event};
 
 /// A player as the bridge names them: their UUID.

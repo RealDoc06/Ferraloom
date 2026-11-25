@@ -12,7 +12,7 @@ the API out in parallel. The foundation (a vertical slice, below) is in place.
 | Where Java runs | In the server process: a JVM started through the JNI invocation API. `libjvm` is found and `dlopen`ed at run time, only when `plugins/` holds a jar. No link-time Java dependency: without plugins no JVM, no thread, no mapping (`/proc/<pid>/maps` has no `libjvm`; the e2e test checks it). |
 | Why not a separate process | A cancellable event is a synchronous question; out of process every listener call is an IPC round trip on the tick thread. |
 | What plugins see | The real `org.bukkit.*` interfaces, implemented by Ferraloom's Java bridge (`crates/ferraloom-plugins/java/bridge/`), whose methods call into Rust. Bukkit's own machinery from the API jar does the rest: `JavaPluginLoader`, `SimplePluginManager`, `PluginDescriptionFile`, `SimpleCommandMap`, `PermissibleBase`, `SimpleServicesManager`, `StandardMessenger`, the configuration classes. |
-| NMS / CraftBukkit | Not provided. A jar whose classes name `net/minecraft/` or `org/bukkit/craftbukkit/` is refused at load with one line: `Could not load 'plugins/X.jar': it uses net.minecraft.server.MinecraftServer (from com.example.Foo), a Minecraft server internal (NMS or CraftBukkit) that Ferraloom does not provide`. |
+| NMS / CraftBukkit | Not provided. Multi-version plugins carry adapters for them that they pick by version string and may never run (no plugin in the usage corpus, `plugin-usage.md`, reaches them from its main path), so a jar whose classes name `net/minecraft/` or `org/bukkit/craftbukkit/` loads with one warning: `'plugins/X.jar' names net.minecraft.server.MinecraftServer (from com.example.v1_21.Adapter and 3 more classes), Minecraft server internals (NMS or CraftBukkit) that Ferraloom does not provide; it is disabled if it reaches one`. If its code reaches a missing internal class and the error escapes to Bukkit (a listener, task, command or `onEnable`), the log handler prints one line instead of the trace, `Disabling X v1.0: it reached net.minecraft.server.MinecraftServer (from com.example.v1_21.Adapter.server), ...`, and the plugin is disabled at the next tick's start; a plugin that probes (`Class.forName`) and handles the failure is left alone. No cost on any path that logs no throwable. |
 | Unimplemented API | Generated stubs throw `UnsupportedOperationException("Ferraloom does not implement Player.getHealth() yet")`. |
 | API artifact | `org.spigotmc:spigot-api:26.3-R0.1-SNAPSHOT`, classifier `shaded`, pinned to build `20261123.204233-11` by SHA-256 in `java/api.lock.json`. Spigot publishes 26.3 only as snapshots (hub.spigotmc.org snapshots repository; no release). The shaded jar carries the API's runtime libraries (Guava 33.6, Gson 2.14, SnakeYAML 2.7, BungeeCord chat 1.21-R0.4, JOML 1.10.9). Not in it, as CraftBukkit provides them: commons-lang3 and the Maven resolver, so `libraries:` in `plugin.yml` does not work yet (the loader logs "Could not initialize LibraryLoader"). The jar is fetched by `build.py`, never committed. |
 
@@ -21,7 +21,7 @@ the API out in parallel. The foundation (a vertical slice, below) is in place.
 | Path | What |
 |---|---|
 | `crates/ferraloom-plugins/src/` | The Rust side, no `horizon-client` dependency. `lib.rs` (public API, `PluginHost`), `events.rs` (listener bits), `jvm.rs` (find/load/create the JVM), `bridge.rs` (runtime, lifecycle, the `Entry` and `call` helpers), `natives.rs` (host lending, deferral, the exception wall), one module per API area: `players.rs`, `worlds.rs`, `server.rs` (host trait, natives, event calls), `commands.rs` (command tree JSON). |
-| `crates/ferraloom-plugins/java/` | The Java side, built with the JDK alone by `build.py`. `bridge/dev/ferraloom/bukkit/`: `Bridge` (lifecycle), `PlayerEvents`/`BlockEvents` (event entry points), `ServerNative`/`PlayerNative`/`WorldNative` (natives), `Ferraloom*` (the implementations), `FerraloomScheduler`, `FerraloomCommandMap`, `Internals` (the NMS check), `NativeLog`. `tools/StubGen.java`, `tools/Coverage.java`, `stubs.txt`, `api.lock.json`, `test-plugin/`, `nms-plugin/`. |
+| `crates/ferraloom-plugins/java/` | The Java side, built with the JDK alone by `build.py`. `bridge/dev/ferraloom/bukkit/`: `Bridge` (lifecycle), `PlayerEvents`/`BlockEvents` (event entry points), `ServerNative`/`PlayerNative`/`WorldNative` (natives), `Ferraloom*` (the implementations), `FerraloomScheduler`, `FerraloomCommandMap`, `Internals` (server internals: the load warning, disabling a plugin that reaches one), `NativeLog`. `tools/StubGen.java`, `tools/Coverage.java`, `stubs.txt`, `api.lock.json`, `test-plugin/`, `nms-plugin/`. |
 | `crates/horizon-client/src/game/plugins.rs`, `game/plugins/{players,worlds,server}.rs` | The game's side: `GameHost` (the host over `Game`), lifecycle, event glue per area. |
 | `crates/horizon-client/src/lan/hub/plugins.rs` | Plugin commands in the hub's command tree. |
 | `tools/plugins_e2e.py`, `crates/ferraloom-plugins/examples/plugin_bot.rs` | The end-to-end test and its scripted player. |
@@ -134,8 +134,8 @@ an id plus a generation the host checks, so a stale handle answers as removed, n
 | Anything else escapes a bridge entry point | Each `Bridge`/`*Events` method catches `Throwable`, logs it and answers the default (event not cancelled, vanilla message). |
 | A Java exception crosses JNI anyway | `bridge::call` logs it with its trace and clears it. |
 | A Rust panic in a native | Caught (`natives::guard`) and thrown into Java as `RuntimeException`; never unwinds into the JVM. |
-| A plugin with server internals | Refused at load, one line. |
-| A plugin loops or deadlocks on the main thread | The tick stalls, as on Spigot. Not isolated; a watchdog that logs the main thread's Java stack is future work. |
+| A plugin with server internals | Loads with one warning; reaching a missing internal disables it with one line at the next tick, the others run on. |
+| A plugin loops or deadlocks on the main thread | The tick stalls, as on Spigot. Not isolated. The watchdog (`Watchdog.java`, Spigot's as a warning) logs `The server thread has been stuck in X v1.0 for 10 s (tick N):` and the thread's Java stack once the server thread has sat in one call into Java for 10 s with no tick starting, then every 5 s; a stall in the server's own code (no Java stack) is not reported. |
 | The JVM crashes (a plugin's native library, OOM) | The process goes down with it: the price of in-process. `-Xmx` through `FERRALOOM_JVM_OPTIONS` bounds the heap. |
 
 Java's own `SIGSEGV` handling replaces the process's once the JVM starts; a Rust stack overflow then crashes
@@ -151,6 +151,12 @@ through the JVM's handler instead of Rust's message. Only with plugins.
 | A command line | A lookup in a label set before any JNI; vanilla commands never reach the JVM. | |
 | An event with listeners | One JNI call with its arguments (a few strings), the listeners' own time. | |
 | Join/quit with plugins | One JNI call each, listener or not (the player objects). | |
+| Plugin boss bars | None shown: one relaxed load per viewer in the tick's boss bar update. With bars: a lock and a scan per viewer, the titles converted per viewer as custom bars' are. | `boss_bars_for` |
+| A command tree sent, plugins with commands | One JNI call (the labels the player may not use, `Command.testPermissionSilent`); none without plugin commands. | `Hub::extra_commands_for` |
+| A completion request | Vanilla commands: one `OnceLock` check. A plugin command's arguments: one JNI call, the TabCompleter's time. | `plugin_suggestions` |
+| Player lists, offline players | No tick cost: answered when asked, on any thread, under the lists' locks. `getOfflinePlayer(name)` in online mode may block on the profile service for a name the user cache lacks, as CraftBukkit's does. | |
+| Watchdog | Plugins only: a volatile write per tick, a wake-up per second; the stack is read only when no tick started since the last wake-up. | |
+| A log record with a throwable | One cause-chain walk for a missing server internal (`Internals.reached`); records without a throwable, none. | |
 | Logins with plugins | `AsyncPlayerPreLoginEvent` on the login's thread, then `PlayerLoginEvent` handed to the server thread (the login waits for it; served each loop, paused or not): two JNI calls per login, listener or not. Without plugins one `OnceLock` check. | |
 | `PlayerMoveEvent` and the toggles, no listener | One test of a constant mask (`listens_any`) per level pass per tick, in `game/lan.rs`; packet handling is untouched. | |
 | `PlayerMoveEvent` with a listener | Each tick, per guest of the level: a walk over its queued packets (a few) before the hub handles them; per move, a squared distance and an angle against its last event (a thread-local map). Past CraftBukkit's thresholds (1/256 of a block squared, 10 degrees), which a walking player passes every tick: one JNI call with fifteen primitive arguments (no Rust allocation), in Java a `PlayerMoveEvent`, two `Location`s and a `UUID`; null answers an unchanged move. About a microsecond plus the listeners per moving player. | |
@@ -196,6 +202,21 @@ the baseline is the coordinator's next step; budget: no measurable MSPT differen
   `getUniqueId`, `getLocation`, `getWorld`, `teleport` (across worlds too), `isOnline`, `isOp`, permissions.
 - `World`: name, UID, environment, key, heights, game time and time of day, players, `getBlockAt`.
   `Block`: position, world, location, type (the loaded level in place).
+- The server area: `getOfflinePlayer(String/UUID)` (online, else in online mode the user cache or profile
+  service, else the offline UUID, CraftServer's order), `getOfflinePlayers` (the player files), `OfflinePlayer`
+  (op, whitelist, ban, played before, first and last played from the player file), `getOperators`, the
+  whitelist (`hasWhitelist`, enforced, `getWhitelistedPlayers`, `reloadWhitelist`), `getBanList` (profile and
+  IP, `BanEntry` save and remove), `banIP`, `PlayerProfile` (no textures), `matchPlayer`, boss bars
+  (`createBossBar`; keyed ones not yet), the help map (a topic per command), the command tree filtered by each
+  player's permissions, tab completion of plugin commands (`TabCompleter`, `TabCompleteEvent`), server.properties
+  getters (view distance, allow flight, world type, idle timeout...), spawn limits, `spigot().getConfig()`
+  (defaults), `UnsafeValues.getDataVersion`. List changes are saved at once; an operator's new level and
+  commands reach them at the next tick; `/op` and `/deop` recalculate online players' Bukkit permissions first,
+  as CraftBukkit's sendPlayerPermissionLevel does. `Player`'s op, ban and whitelist methods answer from the
+  same lists (`FerraloomLists`). `dispatchCommand` runs a vanilla command as a player too. A full server is
+  decided with the bans and the whitelist (PlayerList.canPlayerLogin's order), so `PlayerLoginEvent` sees
+  `KICK_FULL` and a plugin may let the player in, as on CraftBukkit.
+
 - Items (inventory area): `ItemStack` to and from the server as one `byte[]` (`ItemStack.CODEC` in network NBT;
   `src/inventory.rs` `to_java`/`from_java`, Java `Items.read`/`write`). The meta is the item's component patch
   itself, so what neither side models survives a round trip; names and lore as CraftChatMessage converts them,
@@ -246,8 +267,8 @@ health scaling are not bridged; `PlayerLoginEvent.getHostname` is the address, n
 Known differences from CraftBukkit, each for its area to remove: join/quit messages are sent as plain
 translations (no hover); `BlockBreakEvent.setDropItems`/`setExpToDrop` are ignored and the block entity is
 not resent; `Block.getType` reads only the level in place; `AsyncPlayerChatEvent`'s lines go out unsigned;
-`PlayerChatEvent` (the deprecated sync one) is not fired; the command tree shows every plugin command to
-everyone (no permission filter, no tab completion); legacy plugins (no `api-version`) load without
+`PlayerChatEvent` (the deprecated sync one) is not fired; a player's command tree follows their permissions
+when it is sent (join, op changes), and `Player.updateCommands` does not resend it yet; legacy plugins (no `api-version`) load without
 legacy-material support; plugins run on the dedicated server only, not in single player or LAN worlds.
 
 ## Fan-out

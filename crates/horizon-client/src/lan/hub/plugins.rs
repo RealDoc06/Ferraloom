@@ -20,6 +20,42 @@ impl Hub {
         }
     }
 
+    /// One player's command tree again, as their plugin permissions now
+    /// filter it (they joined; `Player.updateCommands`).
+    pub fn resend_plugin_commands(&self, player: u128) {
+        if let Some(i) = self
+            .guests
+            .iter()
+            .position(|g| g.uuid == player && g.placed)
+        {
+            self.send_commands(i);
+        }
+    }
+
+    /// [`Self::extra_commands`] for one player: without the plugin commands
+    /// they may not use (CraftBukkit's nodes require `testPermissionSilent`).
+    /// Asks the plugins once per command tree sent, only while they have commands.
+    pub(super) fn extra_commands_for(&self, player: u128) -> Cow<'_, Value> {
+        let extra = self.extra_commands();
+        if self.plugin_commands.is_null() {
+            return extra;
+        }
+        let hidden = ferraloom_plugins::hidden_commands(player);
+        if hidden.is_empty() {
+            return extra;
+        }
+        let mut tree = extra.into_owned();
+        if let Some(children) = tree["children"].as_object_mut() {
+            for label in &hidden {
+                // A server mod's command of the same name stays.
+                if self.mod_commands.0["children"].get(label).is_none() {
+                    children.remove(label);
+                }
+            }
+        }
+        Cow::Owned(tree)
+    }
+
     /// The roots after vanilla's: the server mods', then the plugins' commands
     /// a server mod does not already have.
     pub(super) fn extra_commands(&self) -> Cow<'_, Value> {

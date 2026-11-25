@@ -12,17 +12,21 @@
 //! payload; `minecraft:register` registers a channel), `place <x> <y>
 //! <z>` (stone in the first hotbar slot, used on that block's top face),
 //! `click <window> <slot> <button> <mode>` (a container click, claiming what a
-//! vanilla client predicts for a left pickup), `close <window>`, `quit`.
+//! vanilla client predicts for a left pickup), `close <window>`, `suggest <text>`
+//! (the chat box asking for completions of `/<text>`), `quit`.
 //! Output lines: `joined`, `pos <x> <y> <z>` for each teleport, `chat <text>`
 //! for each system message (its plain text), `actionbar <text>` for an overlay
 //! one, `title <text>`, `subtitle <text>`, `tablist <header> | <footer>`,
 //! `sound <id> <name>` (`-` for none), `payload <channel> <text>`,
 //! `gamemode <id>`, `experience <level>`, `block <x> <y> <z> <state>`,
-//! `commands ftest=<bool>` for each command tree (whether it names `ftest`),
+//! `commands ftest=<bool> fadmin=<bool>` for each command tree (whether it
+//! names those),
 //! `open <window> <title>`, `content <window> <slot>=<item>...` (the
 //! non-empty slots), `slot <window> <slot> <item>`, `cursor <item>`, `close
 //! <window>` (an item is `<id>x<count>`, with `name=<text>` and `lore=<lines>`
-//! when it has them, or `empty`), `disconnected <why>`.
+//! when it has them, or `empty`), `boss add <title> <progress>` / `boss progress
+//! <progress>` / `boss remove` for boss bars, `suggestions <start> <length>
+//! <a,b,...>`, `disconnected <why>`.
 use horizon_protocol::{
     PROTOCOL_VERSION,
     buf::{Reader, Writer},
@@ -163,6 +167,19 @@ fn plain(tag: &Tag, out: &mut String) {
         }
         _ => {}
     }
+}
+
+/// ClientboundCommandSuggestionsPacket: the range replaced and the words.
+fn suggestions(r: &mut Reader) -> horizon_protocol::Result<(i32, i32, Vec<String>)> {
+    let (_id, start, length) = (r.varint()?, r.varint()?, r.varint()?);
+    let mut words = Vec::new();
+    for _ in 0..r.varint()? {
+        words.push(r.string(32767)?);
+        if r.bool()? {
+            r.nbt()?;
+        }
+    }
+    Ok((start, length, words))
 }
 
 /// The open windows' slots and state ids, and the cursor, as the server told them.
@@ -317,17 +334,34 @@ fn read(
                 Ok(())
             }
             cb::COMMANDS => {
-                let has = body.windows(b"ftest".len()).any(|w| w == b"ftest");
-                say(format!("commands ftest={has}"));
+                let has = |name: &[u8]| body.windows(name.len()).any(|w| w == name);
+                say(format!(
+                    "commands ftest={} fadmin={}",
+                    has(b"ftest"),
+                    has(b"fadmin")
+                ));
                 Ok(())
             }
-            cb::BLOCK_UPDATE => {
-                if let Ok(play::Clientbound::BlockUpdate(p)) = play::Clientbound::decode(id, &body)
-                {
-                    say(format!(
-                        "block {} {} {} {}",
-                        p.pos[0], p.pos[1], p.pos[2], p.state
-                    ));
+            cb::BOSS_EVENT => {
+                if let Ok(play::Clientbound::BossEvent(e)) = play::Clientbound::decode(id, &body) {
+                    match e.action {
+                        play::BossAction::Add { name, progress, .. } => {
+                            let mut text = String::new();
+                            plain(&name, &mut text);
+                            say(format!("boss add {text} {progress}"));
+                        }
+                        play::BossAction::UpdateProgress { progress } => {
+                            say(format!("boss progress {progress}"))
+                        }
+                        play::BossAction::Remove => say("boss remove".into()),
+                        _ => {}
+                    }
+                }
+                Ok(())
+            }
+            cb::COMMAND_SUGGESTIONS => {
+                if let Ok((start, length, words)) = suggestions(&mut r) {
+                    say(format!("suggestions {start} {length} {}", words.join(",")));
                 }
                 Ok(())
             }
@@ -457,6 +491,16 @@ fn main() {
                     direction: 1,
                     sequence,
                 })
+            }
+            "suggest" => {
+                let body = raw(ids::play::serverbound::COMMAND_SUGGESTION, |w| {
+                    w.varint(1);
+                    w.string(&format!("/{rest}"));
+                });
+                if writer.lock().unwrap().send(&body).is_err() {
+                    break;
+                }
+                continue;
             }
             "use" => {
                 let pos: Vec<i32> = rest.split(' ').filter_map(|v| v.parse().ok()).collect();

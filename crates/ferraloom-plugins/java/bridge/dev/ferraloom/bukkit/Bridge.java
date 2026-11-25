@@ -95,6 +95,7 @@ public final class Bridge {
             server = new FerraloomServer(NativeLog.install(), new File(directory), version, worlds, environments,
                     maxPlayers, port, motd, onlineMode);
             Bukkit.setServer(server);
+            Watchdog.start(Thread.currentThread());
             server.loadPlugins();
         } catch (Throwable ex) {
             log(ex, "starting the plugins");
@@ -113,6 +114,7 @@ public final class Bridge {
 
     /** Every plugin's onDisable, in reverse load order, then the scheduler and the chat thread stop. */
     public static void disable() {
+        Watchdog.ticked(-1);
         try {
             server.disablePlugins();
             PlayerEvents.stop();
@@ -123,7 +125,9 @@ public final class Bridge {
 
     /** The scheduler's heartbeat for this tick; answers which events have listeners now, a word per 64. */
     public static long[] tick(long tick) {
+        Watchdog.ticked(tick);
         try {
+            Internals.disableReached();
             server.scheduler.heartbeat(tick);
         } catch (Throwable ex) {
             log(ex, "running scheduled tasks");

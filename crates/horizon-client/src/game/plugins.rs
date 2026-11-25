@@ -20,6 +20,8 @@ pub(super) use players::{INBOX_EVENTS, login};
 mod server;
 mod worlds;
 
+pub(super) use server::register_lists;
+
 use super::{Dim, Game, lan::LanHost};
 use ferraloom_plugins::{Location, PlayerHost, PlayerId, WorldSpec};
 use std::{
@@ -199,6 +201,7 @@ impl Game<'_> {
                 }
             }
         }
+        server::apply_list_changes(self);
         self.plugin_snapshots();
         let tick = self.ticks as i64;
         if let Some(labels) = ferraloom_plugins::tick(&mut GameHost::new(self, None), tick) {

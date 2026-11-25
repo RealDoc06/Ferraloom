@@ -4,9 +4,10 @@ use serde_json::{Value, json};
 
 /// The commands report's form (`horizon-client/src/lan/commands.rs` reads
 /// it) of plugin command labels: each a literal that runs alone or with a
-/// greedy string argument `args`, as CraftBukkit's `BukkitCommandWrapper`
-/// sends them, so a client's chat box accepts any arguments after it.
-/// `Value::Null` when there are none.
+/// greedy string argument `args` whose completions the client asks the
+/// server for (the plugin's `TabCompleter`), as CraftBukkit's
+/// `BukkitCommandWrapper` sends them, so a client's chat box accepts any
+/// arguments after it. `Value::Null` when there are none.
 pub fn command_tree<S: AsRef<str>>(labels: &[S]) -> Value {
     let mut children = serde_json::Map::new();
     for label in labels {
@@ -24,6 +25,7 @@ pub fn command_tree<S: AsRef<str>>(labels: &[S]) -> Value {
                         "type": "argument",
                         "parser": "brigadier:string",
                         "properties": {"type": "greedy"},
+                        "suggestions": "minecraft:ask_server",
                         "executable": true,
                     }
                 }
@@ -49,6 +51,10 @@ mod tests {
         assert_eq!(ftest["executable"], true);
         assert_eq!(ftest["children"]["args"]["parser"], "brigadier:string");
         assert_eq!(ftest["children"]["args"]["properties"]["type"], "greedy");
+        assert_eq!(
+            ftest["children"]["args"]["suggestions"],
+            "minecraft:ask_server"
+        );
         assert_eq!(command_tree::<&str>(&[]), Value::Null);
     }
 }

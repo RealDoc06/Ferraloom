@@ -8,7 +8,9 @@ percentage. Regenerate after bridge changes:
 python3 crates/ferraloom-plugins/java/build.py --usage <folder of plugin jars>   # writes .local/ferraloom-plugins/usage.md
 ```
 
-then replace everything below "Generated" with it. The jars are never committed.
+then replace everything below "Generated" with it. The jars are never committed. The report below is
+against the foundation (9d2a8f0fc) plus the shared registries (e710f0c48), before the five areas' work:
+regenerate it on the integrated branch to see what is left.
 
 **How a reference is classed.** Every `org.bukkit` method, field and event a plugin's classes (and the jars
 nested in them) name. A method's status is what the call meets at run time, from the bridge's and the API's
