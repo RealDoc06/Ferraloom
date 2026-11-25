@@ -8,14 +8,36 @@ use super::{
     },
 };
 use horizon_client::{
-    command::{Arg, Context},
-    datapack::{self, DataPack, DataStore, Function},
+    command::{Arg, Context, Registries, vanilla},
+    datapack::{self, DataPack, DataStore, Function, FunctionLine},
     save,
     scoreboard::bracketed,
     text::{self, Text},
 };
 use horizon_world::nbt::Tag;
 use std::collections::BTreeSet;
+use std::sync::atomic::{AtomicU8, Ordering};
+
+/// `MinecraftServer#getFunctionCompilationPermissions`: the level functions are
+/// compiled at. An integrated server (single player, LAN) uses GAMEMASTER; a
+/// dedicated server sets its `function-permission-level` once at startup.
+static COMPILATION_LEVEL: AtomicU8 = AtomicU8::new(2);
+
+/// `DedicatedServer#getFunctionCompilationPermissions`: `function-permission-level`
+/// (already clamped to 0..=4 by `ServerProperties`).
+pub(super) fn set_compilation_level(level: i32) {
+    COMPILATION_LEVEL.store(level.clamp(0, 4) as u8, Ordering::Relaxed);
+}
+
+/// `CommandFunction.parseCommand` with the registries' permission level:
+/// the error is `CommandSyntaxException.getMessage`.
+fn compile(reg: &Registries, line: &str) -> Result<(), String> {
+    let parse = vanilla::game_dispatcher().parse(line, reg);
+    parse
+        .executable()
+        .map(|_| ())
+        .map_err(|e| e.with_context().plain())
+}
 
 /// A `TimerQueue` event.
 #[derive(Clone, Debug, PartialEq)]
@@ -36,6 +58,9 @@ pub(super) struct FnState {
     load_pending: bool,
     pub schedule: Vec<Scheduled>,
     next_seq: u64,
+    /// The level the loaded functions were compiled at; their commands parse
+    /// at it when they run (`Commands.createCompilationContext`).
+    permission: u8,
 }
 /// What a function reported through `return`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -106,12 +131,38 @@ impl Game<'_> {
                     .filter_map(|id| self.fns.packs.iter().find(|p| &p.id == id)),
             )
             .collect();
-        let store = DataStore::load(&packs);
+        // ServerFunctionLibrary.reload: every function compiled once, here.
+        let permission = COMPILATION_LEVEL.load(Ordering::Relaxed);
+        let level = std::mem::replace(&mut self.ui.registries.permission, permission);
+        let reg = &self.ui.registries;
+        let store = DataStore::load(&packs, &|line| compile(reg, line));
+        self.ui.registries.permission = level;
+        // Vanilla's first load runs on ServerMain, a reload on the server thread.
+        let thread = if self.fns.loaded {
+            "Server thread"
+        } else {
+            "ServerMain"
+        };
         for (id, e) in &store.errors {
-            log::warn!("Horizon: failed to load function {id}: {e}");
+            self.log_load_error(thread, &format!("Failed to load function {id}\n{e}"));
         }
+        for (id, missing) in &store.tag_errors {
+            self.log_load_error(
+                thread,
+                &format!("Couldn't load tag {id} as it is missing following references: {missing}"),
+            );
+        }
+        self.fns.permission = permission;
         self.fns.store = store;
         self.sync_function_registries();
+    }
+    /// A data pack loading error: the console's line on a dedicated server.
+    fn log_load_error(&self, thread: &str, message: &str) {
+        if self.options.dedicated.is_some() {
+            super::dedicated::log_from(thread, "ERROR", message);
+        } else {
+            log::error!("{message}");
+        }
     }
     fn save_datapack_settings(&self) {
         let disabled: Vec<&String> = self
@@ -270,13 +321,33 @@ impl Game<'_> {
                 a.iter().map(|s| s as &dyn std::fmt::Display).collect();
             err(
                 "commands.function.instantiationFailure",
-                &[&f.id, &horizon_client::text::Text::tr(&key, &args).plain()],
+                &[&f.id, &Text::tr(&key, &args).plain()],
             )
         })?;
+        let permission = self.fns.permission;
+        // MacroFunction.substituteAndParse: every macro line compiles before any runs.
+        if f.is_macro() {
+            let level = std::mem::replace(&mut self.ui.registries.permission, permission);
+            let failure = lines
+                .iter()
+                .zip(&f.lines)
+                .filter(|(_, l)| matches!(l, FunctionLine::Macro(_)))
+                .find_map(|(line, _)| Some((line, compile(&self.ui.registries, line).err()?)));
+            self.ui.registries.permission = level;
+            if let Some((line, e)) = failure {
+                let cause = Text::tr("commands.function.error.parse", &[&f.id, line, &e]).plain();
+                return Err(err(
+                    "commands.function.instantiationFailure",
+                    &[&f.id, &cause],
+                ));
+            }
+        }
         if self.exec.function_depth >= 128 {
             return Ok(Outcome::NoReturn);
         }
         self.exec.function_depth += 1;
+        // The lines parse as they were compiled, whatever the caller's level.
+        let caller_level = std::mem::replace(&mut self.ui.registries.permission, permission);
         let outer = self.exec.returned.take();
         let inner = Source {
             silent: true,
@@ -292,6 +363,7 @@ impl Game<'_> {
                 break;
             }
         }
+        self.ui.registries.permission = caller_level;
         let returned = std::mem::replace(&mut self.exec.returned, outer);
         self.exec.function_depth -= 1;
         Ok(match returned {
