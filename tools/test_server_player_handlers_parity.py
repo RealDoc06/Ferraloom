@@ -76,6 +76,8 @@ CASES = {
     'spectate-command': spectating(f'cmd Bob spectate {COW}', 'ticks 5', 'cmd Bob spectate'),
     'spectate-other-dies': spectating(f'cmd Alice spectate {COW} Bob', 'ticks 5', f'cmd Alice kill {COW}'),
     'spectate-mode-change': spectating(f'cmd Bob spectate {COW}', 'ticks 5', 'cmd Alice gamemode creative Bob'),
+    'riding-jump-horse': riding('horse'),
+    'riding-jump-camel': riding('camel'),
 }
 SETUP = ['cmd Alice gamerule spawn_mobs false', 'cmd Alice gamerule spawn_monsters false',
          'cmd Alice gamerule advance_time false', 'cmd Alice time set noon', 'ticks 20']

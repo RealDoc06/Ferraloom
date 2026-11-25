@@ -1625,6 +1625,8 @@ impl Game<'_> {
                 });
             }
             S::PlayerCommand(p) if p.action == 6 => self.lan_start_gliding(host, conn),
+            // Ferraloom: START_RIDING_JUMP, forwarded by the hub (game/mounts.rs).
+            S::PlayerCommand(p) if p.action == 3 => self.guest_riding_jump(&host.hub, gi, p.data),
             S::ContainerButtonClick(p) => {
                 self.lan_station_button(host, conn, p.container, p.button);
             }

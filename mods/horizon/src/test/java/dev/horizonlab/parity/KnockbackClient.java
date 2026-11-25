@@ -102,6 +102,8 @@ import net.minecraft.world.phys.Vec3;
  */
 public final class KnockbackClient {
     private static volatile String step = "start";
+    /** The sound paths recorded, by prefix. */
+    private static final List<String> SOUNDS = List.of("entity.player.hurt", "entity.horse.jump", "entity.camel.dash");
     private static final Map<UUID, String> NAMES = new LinkedHashMap<>();
 
     public static void main(String[] args) throws Exception {
@@ -138,6 +140,7 @@ public final class KnockbackClient {
                     case "spectate" -> players.get(w[1]).spectate(w[2]);
                     case "sneak" -> players.get(w[1]).send(new net.minecraft.network.protocol.game.ServerboundPlayerInputPacket(
                         new net.minecraft.world.entity.player.Input(false, false, false, false, false, w[2].equals("on"), false)));
+                    case "ridejump" -> players.get(w[1]).command(ServerboundPlayerCommandPacket.Action.START_RIDING_JUMP, Integer.parseInt(w[2]));
                     case "sync" -> {
                         try {
                             players.get(w[1]).sync();
@@ -266,11 +269,15 @@ public final class KnockbackClient {
         }
 
         void sprint(boolean on) throws Exception {
+            command(on ? ServerboundPlayerCommandPacket.Action.START_SPRINTING : ServerboundPlayerCommandPacket.Action.STOP_SPRINTING, 0);
+        }
+
+        void command(ServerboundPlayerCommandPacket.Action action, int data) throws Exception {
             // ServerboundPlayerCommandPacket's only public constructors take an Entity: read it from its bytes.
             FriendlyByteBuf b = new FriendlyByteBuf(Unpooled.buffer());
             b.writeVarInt(id);
-            b.writeVarInt((on ? ServerboundPlayerCommandPacket.Action.START_SPRINTING : ServerboundPlayerCommandPacket.Action.STOP_SPRINTING).ordinal());
-            b.writeVarInt(0);
+            b.writeVarInt(action.ordinal());
+            b.writeVarInt(data);
             send(ServerboundPlayerCommandPacket.STREAM_CODEC.decode(b));
         }
 
@@ -385,7 +392,7 @@ public final class KnockbackClient {
                         // The causing and direct entities are left out: Ferraloom doesn't attribute a player's hurt yet.
                         record("damage " + seen.get(d.entityId()) + " " + d.sourceType().getRegisteredName());
                     } else if (p instanceof net.minecraft.network.protocol.game.ClientboundSoundPacket s
-                        && s.getSound().value().location().getPath().startsWith("entity.player.hurt")) {
+                        && SOUNDS.stream().anyMatch(s.getSound().value().location().getPath()::startsWith)) {
                         record("sound " + s.getSound().value().location().getPath());
                     } else if (p instanceof net.minecraft.network.protocol.game.ClientboundSetCameraPacket) {
                         // Its camera id is private: the varint after the packet id.
@@ -393,6 +400,11 @@ public final class KnockbackClient {
                         net.minecraft.network.VarInt.read(b);
                         int camera = net.minecraft.network.VarInt.read(b);
                         record("camera " + seen.getOrDefault(camera, "id" + camera));
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket d
+                        && ("horse".equals(seen.get(d.id())) || "camel".equals(seen.get(d.id())))) {
+                        for (var value : d.packedItems()) {
+                            if (value.id() == 18 || value.id() == 19) record("data " + seen.get(d.id()) + " " + value.id() + " " + value.value());
+                        }
                     } else if (p instanceof net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket d && d.id() == id) {
                         for (var value : d.packedItems()) {
                             if (value.id() == 0) record("sprinting " + ((((Byte) value.value()) & 8) != 0));
