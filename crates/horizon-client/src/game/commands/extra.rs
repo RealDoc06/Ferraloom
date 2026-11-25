@@ -30,6 +30,9 @@ impl Default for WaypointIcon {
 pub(in crate::game) struct CommandExtras {
     /// ServerPlayer.camera: the entity `/spectate` attached the view to.
     pub camera: Option<Target>,
+    /// Ferraloom: ServerPlayer.camera of the server's players, by connection
+    /// (game/lan_spectate.rs). Empty unless someone spectates through an entity.
+    pub guest_cameras: HashMap<u32, Target>,
     /// ServerPlayer.postEffects, in insertion order.
     pub post_effects: Vec<String>,
     /// MinecraftServer's tick profiler (`/debug start`): when it started and
@@ -127,7 +130,14 @@ impl Game<'_> {
         if target == Some(player) {
             return Err(err("commands.spectate.self", &[]));
         }
-        if !self.spectator() {
+        // Ferraloom: `player`'s own game mode and camera, who need not be the
+        // player in place; the one in place is a guest by connection to them.
+        let in_place = self.lan_acting.filter(|_| player != Target::Player);
+        let target = target.map(|t| match (t, in_place) {
+            (Target::Player, Some(conn)) => Target::Guest(conn),
+            _ => t,
+        });
+        if !self.for_player(player, |g| g.spectator()).unwrap_or(false) {
             return Err(tr_error(
                 "commands.spectate.not_spectator",
                 &[self.target_name(player)],
@@ -142,7 +152,7 @@ impl Game<'_> {
                 &[self.target_name(t)],
             ));
         }
-        self.set_camera(target);
+        self.for_player(player, |g| g.set_camera(target));
         match target {
             Some(t) => {
                 let name = self.target_name(t);
@@ -158,6 +168,11 @@ impl Game<'_> {
     /// `ServerPlayer.setCamera`: a new camera moves the player to it.
     pub(in crate::game) fn set_camera(&mut self, target: Option<Target>) {
         let target = target.filter(|t| *t != Target::Player);
+        // Ferraloom: a server player's camera is their own.
+        if let Some(conn) = self.lan_acting {
+            self.set_acting_guest_camera(conn, target);
+            return;
+        }
         if self.cmds.camera == target {
             return;
         }
@@ -206,6 +221,21 @@ impl Game<'_> {
             }
             _ => self.set_camera(None),
         }
+    }
+    /// Ferraloom: where a camera entity is and looks, while it is alive
+    /// (`Entity.isAlive`): what `ServerPlayer.tick` snaps a spectator to.
+    pub(in crate::game) fn spectator_view(&self, t: Target) -> Option<([f64; 3], [f32; 2])> {
+        if let Target::Mob(id) = t
+            && !self.mobs.iter().any(|m| m.id == id && m.alive())
+        {
+            return None;
+        }
+        if let Target::Guest(conn) = t
+            && self.command_guest(conn).is_none_or(|g| g.dead)
+        {
+            return None;
+        }
+        Some((self.target_position(t)?, self.target_rotation(t)))
     }
     /// The eye height the camera follows (`Camera.tick`'s entity).
     pub(in crate::game) fn camera_eye_height(&self) -> Option<f32> {
@@ -426,13 +456,29 @@ impl Game<'_> {
     pub(super) fn cmd_dialog(&mut self, id: &str, ctx: &Context) -> R<i32> {
         let targets = self.entities(ctx, "targets", true)?;
         let n = targets.len() as i32;
-        if id == "dialog.show" {
+        // Ferraloom: each target player's own client is sent the dialog
+        // (ServerPlayer.openDialog) or told to close it.
+        let packet = if id == "dialog.show" {
             let Some(Arg::Resource(dialog)) = ctx.get("dialog").cloned() else {
                 return Ok(0);
             };
-            self.open_dialog(&dialog)?;
+            let packet = self.dialog_packet(&dialog);
+            if targets.iter().any(|t| self.dialog_conn(*t).is_none()) {
+                self.open_dialog(&dialog)?;
+            }
+            packet
         } else {
-            self.close_dialog();
+            if targets.iter().any(|t| self.dialog_conn(*t).is_none()) {
+                self.close_dialog();
+            }
+            Some(horizon_protocol::packets::play::Clientbound::ClearDialog(
+                horizon_protocol::packets::Empty,
+            ))
+        };
+        if let (Some(packet), Some(host)) = (packet, self.lan.as_ref()) {
+            for conn in targets.iter().filter_map(|t| self.dialog_conn(*t)) {
+                host.hub.send_to(conn, &packet);
+            }
         }
         let (single, multiple) = if id == "dialog.show" {
             (
@@ -452,6 +498,39 @@ impl Game<'_> {
         };
         self.feedback(message);
         Ok(n)
+    }
+
+    /// Ferraloom: the connection of a server player `/dialog` targets (None:
+    /// this window's own player).
+    fn dialog_conn(&self, t: Target) -> Option<u32> {
+        match t {
+            Target::Player => self.lan_acting,
+            Target::Guest(conn) => Some(conn),
+            _ => None,
+        }
+    }
+    /// Ferraloom: ClientboundShowDialogPacket for a `/dialog show` argument:
+    /// a registered dialog by its network id, else the inline value as it was
+    /// written (the client decodes it with Dialog.DIRECT_CODEC, as the
+    /// command did).
+    fn dialog_packet(&self, dialog: &str) -> Option<horizon_protocol::packets::play::Clientbound> {
+        use horizon_protocol::packets::play::{Clientbound, DialogHolder, ShowDialog};
+        let trimmed = dialog.trim();
+        let holder = if trimmed.starts_with('{') {
+            let mut reader = horizon_client::command::Reader::new(trimmed);
+            DialogHolder::Direct(
+                horizon_client::command::snbt::parse_tag_argument(&mut reader).ok()?,
+            )
+        } else {
+            let name = horizon_client::command::args::normalize(trimmed);
+            let id = self
+                .lan
+                .as_ref()?
+                .hub
+                .registry_id("minecraft:dialog", &name)?;
+            DialogHolder::Registry(id)
+        };
+        Some(Clientbound::ShowDialog(ShowDialog { dialog: holder }))
     }
 
     // ---- /posteffect ----------------------------------------------------

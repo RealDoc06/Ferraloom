@@ -84,10 +84,24 @@ import net.minecraft.world.phys.Vec3;
  * player's name or an entity type's path, the last one added), {@code interact
  * NAME TARGET} (ServerboundInteractPacket, main hand, on such a target), {@code use
  * NAME} (ServerboundUseItemPacket, main hand), {@code slot NAME N}
- * (ServerboundSetCarriedItemPacket) and {@code end}. Each player records the
- * ClientboundSetEntityMotionPacket it receives, its own sprint flag as the
- * server sets it, teleports, the system chat (command feedback), and for
- * tools/test_server_combat_parity.py the ClientboundUpdateAttributesPacket
+ * (ServerboundSetCarriedItemPacket), and for the player handlers
+ * (tools/test_server_player_handlers_parity.py) {@code spectate NAME TARGET}
+ * (ServerboundSpectatorActionPacket), {@code sneak NAME on|off}
+ * (ServerboundPlayerInputPacket), {@code ridejump NAME DATA}
+ * (START_RIDING_JUMP), {@code useon NAME X Y Z FACE CX CY CZ}
+ * (ServerboundUseItemOnPacket, main hand, the click at the block corner plus
+ * C), {@code dig NAME ACTION X Y Z FACE} (ServerboundPlayerActionPacket),
+ * {@code tagentity NAME ID TARGET} and {@code tagblock NAME ID X Y Z} (the tag
+ * queries); then {@code end}. Each player
+ * records the ClientboundSetEntityMotionPacket it receives, its own sprint
+ * flag as the server sets it, teleports, the system chat (command
+ * feedback; an overlay line as {@code overlay}), the
+ * ClientboundDamageEventPacket about a player (the hurt player and the damage
+ * type), the sounds it is sent of {@link #SOUNDS}, its camera
+ * (ClientboundSetCameraPacket), dialogs, tag query answers (their top-level
+ * keys), block updates, a horse's or camel's flags and dash (entity data 18
+ * and 19), and for tools/test_server_combat_parity.py the
+ * ClientboundUpdateAttributesPacket
  * (instances sorted by attribute, as vanilla's set has no order; modifiers in
  * the packet's order) and ClientboundCooldownPacket it receives; for
  * tools/test_server_entity_data_parity.py every entity's arrow and stinger
@@ -99,6 +113,8 @@ import net.minecraft.world.phys.Vec3;
  */
 public final class KnockbackClient {
     private static volatile String step = "start";
+    /** The sound paths recorded, by prefix. */
+    private static final List<String> SOUNDS = List.of("entity.player.hurt", "entity.horse.jump", "entity.camel.dash");
     private static final Map<UUID, String> NAMES = new LinkedHashMap<>();
 
     public static void main(String[] args) throws Exception {
@@ -134,6 +150,36 @@ public final class KnockbackClient {
                     case "use" -> players.get(w[1]).send(new ServerboundUseItemPacket(InteractionHand.MAIN_HAND, 0, 0, 0));
                     case "punch" -> players.get(w[1]).send(net.minecraft.network.protocol.game.ServerboundPunchPacket.INSTANCE);
                     case "slot" -> players.get(w[1]).send(new net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket(Integer.parseInt(w[2])));
+                    case "spectate" -> players.get(w[1]).spectate(w[2]);
+                    case "sneak" -> players.get(w[1]).send(new net.minecraft.network.protocol.game.ServerboundPlayerInputPacket(
+                        new net.minecraft.world.entity.player.Input(false, false, false, false, false, w[2].equals("on"), false)));
+                    case "ridejump" -> players.get(w[1]).command(ServerboundPlayerCommandPacket.Action.START_RIDING_JUMP, Integer.parseInt(w[2]));
+                    case "useon" -> {
+                        String[] a = w[2].split(" ");
+                        net.minecraft.core.BlockPos pos = new net.minecraft.core.BlockPos(Integer.parseInt(a[0]), Integer.parseInt(a[1]), Integer.parseInt(a[2]));
+                        Vec3 at = new Vec3(pos.getX() + Double.parseDouble(a[4]), pos.getY() + Double.parseDouble(a[5]), pos.getZ() + Double.parseDouble(a[6]));
+                        Player p = players.get(w[1]);
+                        p.send(new net.minecraft.network.protocol.game.ServerboundUseItemOnPacket(InteractionHand.MAIN_HAND,
+                            new net.minecraft.world.phys.BlockHitResult(at, net.minecraft.core.Direction.from3DDataValue(Integer.parseInt(a[3])), pos, false),
+                            ++p.sequence));
+                    }
+                    case "dig" -> {
+                        String[] a = w[2].split(" ");
+                        Player p = players.get(w[1]);
+                        p.send(new net.minecraft.network.protocol.game.ServerboundPlayerActionPacket(
+                            net.minecraft.network.protocol.game.ServerboundPlayerActionPacket.Action.values()[Integer.parseInt(a[0])],
+                            new net.minecraft.core.BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3])),
+                            net.minecraft.core.Direction.from3DDataValue(Integer.parseInt(a[4])), ++p.sequence));
+                    }
+                    case "tagentity" -> {
+                        String[] a = w[2].split(" ");
+                        players.get(w[1]).tagEntity(Integer.parseInt(a[0]), a[1]);
+                    }
+                    case "tagblock" -> {
+                        String[] a = w[2].split(" ");
+                        players.get(w[1]).send(new net.minecraft.network.protocol.game.ServerboundBlockEntityTagQueryPacket(Integer.parseInt(a[0]),
+                            new net.minecraft.core.BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3]))));
+                    }
                     case "sync" -> {
                         try {
                             players.get(w[1]).sync();
@@ -188,6 +234,8 @@ public final class KnockbackClient {
         /** The motion packets about this player it was sent, and how many there were at the last `mark`. */
         private int pushes;
         private int marked;
+        /** The block change sequence of the last use or dig. */
+        int sequence;
 
         Player(String name) {
             this.name = name;
@@ -264,12 +312,34 @@ public final class KnockbackClient {
         }
 
         void sprint(boolean on) throws Exception {
+            command(on ? ServerboundPlayerCommandPacket.Action.START_SPRINTING : ServerboundPlayerCommandPacket.Action.STOP_SPRINTING, 0);
+        }
+
+        void command(ServerboundPlayerCommandPacket.Action action, int data) throws Exception {
             // ServerboundPlayerCommandPacket's only public constructors take an Entity: read it from its bytes.
             FriendlyByteBuf b = new FriendlyByteBuf(Unpooled.buffer());
             b.writeVarInt(id);
-            b.writeVarInt((on ? ServerboundPlayerCommandPacket.Action.START_SPRINTING : ServerboundPlayerCommandPacket.Action.STOP_SPRINTING).ordinal());
-            b.writeVarInt(0);
+            b.writeVarInt(action.ordinal());
+            b.writeVarInt(data);
             send(ServerboundPlayerCommandPacket.STREAM_CODEC.decode(b));
+        }
+
+        void spectate(String target) throws Exception {
+            Integer entity = last.get(target);
+            if (entity == null) {
+                record("error no " + target + " to spectate");
+                return;
+            }
+            send(new net.minecraft.network.protocol.game.ServerboundSpectatorActionPacket(java.util.OptionalInt.of(entity)));
+        }
+
+        void tagEntity(int transaction, String target) throws Exception {
+            Integer entity = last.get(target);
+            if (entity == null) {
+                record("error no " + target + " to query");
+                return;
+            }
+            send(new net.minecraft.network.protocol.game.ServerboundEntityTagQueryPacket(transaction, entity));
         }
 
         void attack(String target) throws Exception {
@@ -380,10 +450,38 @@ public final class KnockbackClient {
                                 replyLock.notifyAll();
                             }
                         }
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundDamageEventPacket d
+                        && (d.entityId() == id || NAMES.containsValue(seen.get(d.entityId())))) {
+                        // The causing and direct entities are left out: Ferraloom doesn't attribute a player's hurt yet.
+                        record("damage " + seen.get(d.entityId()) + " " + d.sourceType().getRegisteredName());
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundSoundPacket s
+                        && SOUNDS.stream().anyMatch(s.getSound().value().location().getPath()::startsWith)) {
+                        record("sound " + s.getSound().value().location().getPath());
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundSetCameraPacket) {
+                        // Its camera id is private: the varint after the packet id.
+                        ByteBuf b = Unpooled.wrappedBuffer(r.payload);
+                        net.minecraft.network.VarInt.read(b);
+                        int camera = net.minecraft.network.VarInt.read(b);
+                        record("camera " + seen.getOrDefault(camera, "id" + camera));
+                    } else if (p instanceof net.minecraft.network.protocol.common.ClientboundShowDialogPacket d) {
+                        record("dialog " + d.dialog().getRegisteredNameIfPresent().orElse("direct"));
+                    } else if (p instanceof net.minecraft.network.protocol.common.ClientboundClearDialogPacket) {
+                        record("dialog clear");
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundTagQueryPacket t) {
+                        record("tag " + t.getTransactionId() + " "
+                            + (t.getTag() == null ? "none" : String.join(",", new java.util.TreeSet<>(t.getTag().keySet()))));
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket u && loaded) {
+                        net.minecraft.core.BlockPos at = u.getPos();
+                        record("block " + at.getX() + " " + at.getY() + " " + at.getZ() + " "
+                            + net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(u.getBlockState().getBlock()).getPath());
                     } else if (p instanceof net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket d) {
                         String who = seen.getOrDefault(d.id(), "id" + d.id());
                         for (var value : d.packedItems()) {
                             if (d.id() == id && value.id() == 0) record("sprinting " + ((((Byte) value.value()) & 8) != 0));
+                            // AbstractHorse.DATA_ID_FLAGS and Camel.DASH.
+                            if ((who.equals("horse") || who.equals("camel")) && (value.id() == 18 || value.id() == 19)) {
+                                record("data " + who + " " + value.id() + " " + value.value());
+                            }
                             // Entity.DATA_SHARED_FLAGS_ID's on-fire bit, as it changes.
                             if (value.id() == 0) {
                                 boolean burning = (((Byte) value.value()) & 1) != 0;
@@ -450,6 +548,8 @@ public final class KnockbackClient {
                             syncs++;
                             replyLock.notifyAll();
                         }
+                    } else if (p instanceof ClientboundSystemChatPacket c && c.overlay()) {
+                        record("overlay " + c.content().getString());
                     } else if (p instanceof ClientboundSystemChatPacket c) {
                         record("chat " + c.content().getString());
                         synchronized (replyLock) {

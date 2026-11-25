@@ -326,6 +326,7 @@ fn needs_host(event: &MotionEvent) -> bool {
     matches!(
         event,
         MotionEvent::HurtSound(_)
+            | MotionEvent::Health(horizon_client::health::HealthEvent::DamageBroadcast { .. })
             | MotionEvent::Fall(_)
             | MotionEvent::Drown
             | MotionEvent::HoneySlide { .. }
@@ -1032,6 +1033,11 @@ impl Game<'_> {
         if new_mode != g.game_mode {
             let conn = g.conn;
             host.hub.set_game_mode(conn, new_mode);
+            // Ferraloom: setGameModeForPlayer gives a spectator's view back
+            // (game/lan_spectate.rs).
+            if new_mode != SPECTATOR {
+                self.set_guest_camera(host, i, None);
+            }
         }
         // LivingEntity.checkTotemDeathProtection's entity event, to every
         // client around, the guest's own included; this window draws it too.
@@ -1327,6 +1333,16 @@ impl Game<'_> {
         }
         let spectator = host.hub.guests[gi].spectator();
         match packet {
+            // Ferraloom: handleBlockBreakAction's reach and height checks
+            // (game/lan_reach.rs).
+            S::PlayerAction(a)
+                if matches!(a.action, 0 | 2 | 3) && {
+                    let digging = host.play.get(&conn).is_some_and(|p| p.digging.is_some());
+                    self.reject_guest_break(host, gi, &a, digging)
+                } =>
+            {
+                host.hub.ack(conn, a.sequence);
+            }
             S::PlayerAction(a) => match a.action {
                 0 => {
                     host.hub.ack(conn, a.sequence);
@@ -1477,7 +1493,9 @@ impl Game<'_> {
             }
             S::UseItemOn(p) => {
                 host.hub.ack(conn, p.sequence);
-                if spectator {
+                // Ferraloom: handleUseItemOn's reach, hit and build-limit
+                // checks (game/lan_reach.rs).
+                if spectator || !self.guest_use_on_allowed(host, gi, &p) {
                     return;
                 }
                 let face = direction(p.face);
@@ -1520,6 +1538,9 @@ impl Game<'_> {
                         g.swings_started != swings
                     });
                     self.lan_swing_back(host, conn, swung);
+                    // Ferraloom: a placement that didn't happen at a build limit.
+                    let placed = self.world.block_log.as_ref().map_or(0, Vec::len) > logged;
+                    self.guest_use_on_limit(host, gi, &p, swung.unwrap_or(false) || placed);
                     self.guest_use_sounds(host, conn, logged, heard);
                     // Ferraloom: the click's PlayerInteractEvent is over.
                     self.plugin_interacted();
@@ -1657,6 +1678,8 @@ impl Game<'_> {
                 });
             }
             S::PlayerCommand(p) if p.action == 6 => self.lan_start_gliding(host, conn),
+            // Ferraloom: START_RIDING_JUMP, forwarded by the hub (game/mounts.rs).
+            S::PlayerCommand(p) if p.action == 3 => self.guest_riding_jump(&host.hub, gi, p.data),
             S::ContainerButtonClick(p) => {
                 self.lan_station_button(host, conn, p.container, p.button);
             }
@@ -1796,6 +1819,11 @@ impl Game<'_> {
             // handleTeleportToEntityPacket: a spectator goes to the player,
             // in whichever level they are.
             S::TeleportToEntity(p) if spectator => self.guest_spectate_teleport(host, gi, p.uuid),
+            // Ferraloom: handleSpectatorAction (game/lan_spectate.rs).
+            S::SpectatorAction(p) => self.guest_spectator_action(host, gi, p.target),
+            // Ferraloom: F3+I (game/lan_editors.rs).
+            S::EntityTagQuery(p) => self.guest_entity_tag_query(host, gi, p.transaction, p.id),
+            S::BlockEntityTagQuery(p) => self.guest_block_tag_query(host, gi, p.transaction, p.pos),
             S::ChangeGameMode(p) if host.hub.guests[gi].permission >= 2 => {
                 if let Some(mode) = usize::try_from(p.mode)
                     .ok()
@@ -1949,6 +1977,8 @@ impl Game<'_> {
         let Some((at, yaw, pitch, dim)) = target else {
             return;
         };
+        // Ferraloom: teleportTo(..., resetCamera = true).
+        self.set_guest_camera(host, gi, None);
         if Dim::from_id(&host.hub.guests[gi].dimension) != dim {
             // Only a dedicated server keeps its players in different levels.
             if self.options.dedicated.is_some() {
@@ -2532,6 +2562,8 @@ impl Game<'_> {
         self.lan_containers_tick(host);
         self.tick_lan_mount_menus(host);
         self.announce_guest_advancements(host);
+        // Ferraloom: the spectators watching through an entity follow it.
+        self.tick_guest_cameras(host);
         let conns: Vec<u32> = host
             .hub
             .guests
@@ -3121,7 +3153,26 @@ impl Game<'_> {
         }
         for event in events {
             match event {
-                MotionEvent::HurtSound(sound) => self.player_hurt_sound(sound, at),
+                // Ferraloom: Player.playSound leaves the hurt guest out; its
+                // own client plays the sound from the damage event below.
+                MotionEvent::HurtSound(sound) => {
+                    let source = horizon_client::settings::sound_source(sound) as i32;
+                    self.audio.play_unshared(sound, Some(at), 1.0, 1.0);
+                    host.hub.sound(sound, at, 1.0, 1.0, source, Some(conn));
+                }
+                // Ferraloom: LivingEntity.hurtServer's broadcastDamageEvent, to
+                // the guest and the players around (the red flash, the walk
+                // animation's kick). The causing entities aren't known here.
+                MotionEvent::Health(horizon_client::health::HealthEvent::DamageBroadcast {
+                    source,
+                }) => {
+                    if let (Some(d), Some(g)) = (
+                        self.motion.health.damage.definition(source),
+                        host.hub.guest(conn),
+                    ) {
+                        host.hub.damage_event(g.entity_id, &d.name, None, None, at);
+                    }
+                }
                 // LivingEntity.checkFallDamage: the crumbs reach every player.
                 MotionEvent::Fall(horizon_client::landing::FallEvent::Particles {
                     state,

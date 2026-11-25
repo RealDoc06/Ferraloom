@@ -11,6 +11,11 @@ use horizon_client::{
 };
 use horizon_core::{geometry::Vec3, random::RandomSource};
 
+/// `LivingEntity.getVoicePitch`, from the mob's own random.
+fn voice_pitch(m: &mut horizon_client::mobs::Mob) -> f32 {
+    let base = if m.is_baby() { 1.5 } else { 1.0 };
+    (m.random.next_float() - m.random.next_float()) * 0.2 + base
+}
 /// `passengerAttachments` minus the player's 0.6 vehicle attachment.
 fn seat(s: Species) -> f64 {
     let attach = match s {
@@ -481,6 +486,65 @@ impl Game<'_> {
             }
             _ => {}
         }
+    }
+    /// Ferraloom: port of ServerGamePacketListenerImpl#handlePlayerCommand
+    /// START_RIDING_JUMP for guest `gi`, whose client drives the jump itself:
+    /// the server's `PlayerRideableJumping.handleStartJump` of the mount they
+    /// control, when it `canJump` and the jump has strength (`data`, 1..100).
+    /// STOP_RIDING_JUMP needs no port: every `handleStopJump` is empty.
+    pub(super) fn guest_riding_jump(
+        &mut self,
+        host: &horizon_client::lan::hub::Hub,
+        gi: usize,
+        data: i32,
+    ) {
+        let g = &host.guests[gi];
+        let Some(vehicle) = g.vehicle.filter(|_| g.loaded && data > 0) else {
+            return;
+        };
+        let Some(m) = self.mobs.iter_mut().find(|m| m.id == vehicle) else {
+            return;
+        };
+        // getControlledVehicle and canJump: a saddled one (llamas never are).
+        let species = m.species();
+        if !m.extra.saddled || !Self::jumps(species) {
+            return;
+        }
+        let at = [m.position.x, m.position.y, m.position.z];
+        let (sound, volume, pitch) = if horizon_client::mobs::camel::is_camel(species) {
+            // Camel.handleStartJump, once it is neither sitting nor standing up:
+            // makeSound(getDashingSound()) and setDashing(true).
+            if horizon_client::mobs::camel::refuse_to_move(m) {
+                return;
+            }
+            horizon_client::mobs::camel::set_dashing(m, true);
+            let sound = horizon_client::mobs::camel::voice(m, 3);
+            (sound, 1.0, voice_pitch(m))
+        } else if horizon_client::mobs::nautilus::is_nautilus(species) {
+            // AbstractNautilus.handleStartJump: setDashing(true) (its
+            // onSyncedDataUpdated starts the cooldown); its own next tick
+            // plays the dash sound, as for the host's dash.
+            if m.extra.anim_ticks == 0 {
+                m.extra.anim_ticks = 40;
+            }
+            m.extra.flag2 = true;
+            m.extra.scratch[1] = 1;
+            return;
+        } else {
+            // AbstractHorse.handleStartJump: standIfPossible (all but llamas,
+            // setStanding(20)) and playJumpSound.
+            m.extra.counter = 20;
+            m.extra.flag = false;
+            let sound = match species {
+                Species::Donkey => "entity.donkey.jump",
+                Species::Mule => "entity.mule.jump",
+                Species::SkeletonHorse if m.fluids.in_water => "entity.skeleton_horse.jump_water",
+                _ => "entity.horse.jump",
+            };
+            (sound, 0.4, 1.0)
+        };
+        self.audio
+            .play(&format!("minecraft:{sound}"), Some(at), volume, pitch);
     }
     /// `PlayerRideableJumping`: horses, camels and nautili (the dash).
     fn jumps(species: Species) -> bool {

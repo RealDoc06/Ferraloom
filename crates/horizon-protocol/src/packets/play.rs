@@ -1923,7 +1923,19 @@ packet_enum!(Clientbound, crate::ids::play::clientbound {
     TrackedWaypoint(TrackedWaypoint) = WAYPOINT,
     ClearDialog(Empty) = CLEAR_DIALOG,
     ShowDialog(ShowDialog) = SHOW_DIALOG,
+    SetCamera(SetCamera) = SET_CAMERA,
+    TagQuery(TagQuery) = TAG_QUERY,
 });
+packet!(
+    /// ClientboundTagQueryPacket: the answer to a tag query, `Tag::End` for
+    /// no block entity (Ferraloom).
+    TagQuery { transaction: i32 => VarInt, tag: Tag => Nbt }
+);
+packet!(
+    /// ClientboundSetCameraPacket: the entity the client's camera follows
+    /// (its own player to stop; Ferraloom).
+    SetCamera { id: i32 => VarInt }
+);
 packet!(
     /// ClientboundClearTitlesPacket: whether to also reset the timings.
     Bool1 { value: bool => Bool }
@@ -2046,7 +2058,20 @@ impl Codec<TrackedWaypoint> for TrackedWaypoint {
 
 packet!(AcceptTeleportation { id: i32 => VarInt, x: f64 => Double, y: f64 => Double, z: f64 => Double, yaw: f32 => Float, pitch: f32 => Float });
 packet!(Attack { id: i32 => VarInt });
+packet!(
+    /// ServerboundBlockEntityTagQueryPacket: F3+I on a block (Ferraloom).
+    BlockEntityTagQuery { transaction: i32 => VarInt, pos: [i32; 3] => Pos }
+);
+packet!(
+    /// ServerboundEntityTagQueryPacket: F3+I on an entity (Ferraloom).
+    EntityTagQuery { transaction: i32 => VarInt, id: i32 => VarInt }
+);
 packet!(TeleportToEntity { uuid: u128 => Uuid });
+packet!(
+    /// ServerboundSpectatorActionPacket: the entity a spectator clicked to
+    /// watch through (Ferraloom).
+    SpectatorAction { target: Option<i32> => OptVarInt }
+);
 packet!(
     /// GameType ids: 0 survival, 1 creative, 2 adventure, 3 spectator.
     ChangeGameMode { mode: i32 => VarInt }
@@ -2294,6 +2319,8 @@ packet_enum!(Serverbound, crate::ids::play::serverbound {
     SetGameRule(SetGameRule) = SET_GAME_RULE,
     AcceptTeleportation(AcceptTeleportation) = ACCEPT_TELEPORTATION,
     Attack(Attack) = ATTACK,
+    BlockEntityTagQuery(BlockEntityTagQuery) = BLOCK_ENTITY_TAG_QUERY,
+    EntityTagQuery(EntityTagQuery) = ENTITY_TAG_QUERY,
     TeleportToEntity(TeleportToEntity) = TELEPORT_TO_ENTITY,
     ChangeGameMode(ChangeGameMode) = CHANGE_GAME_MODE,
     Chat(Chat) = CHAT,
@@ -2343,6 +2370,7 @@ packet_enum!(Serverbound, crate::ids::play::serverbound {
     SetCommandBlock(SetCommandBlock) = SET_COMMAND_BLOCK,
     SetCreativeModeSlot(SetCreativeModeSlot) = SET_CREATIVE_MODE_SLOT,
     SignUpdate(SignUpdate) = SIGN_UPDATE,
+    SpectatorAction(SpectatorAction) = SPECTATOR_ACTION,
     UseItem(UseItem) = USE_ITEM,
     UseItemOn(UseItemOn) = USE_ITEM_ON,
 });
