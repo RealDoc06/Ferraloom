@@ -12,6 +12,7 @@ mod place;
 mod players;
 pub(super) mod pregen;
 mod raid;
+pub(super) mod server_cmds;
 mod terrain_cmds;
 mod text_commands;
 mod world_cmds;
@@ -151,7 +152,10 @@ impl Game<'_> {
             .rev()
             .find(|&i| input.is_char_boundary(i))
             .unwrap_or(0);
-        context.push(&input[start..cursor]);
+        // Ferraloom: MutableComponent.append(String) skips an empty string.
+        if start < cursor {
+            context.push(&input[start..cursor]);
+        }
         if cursor < input.len() {
             context.push(
                 Text::literal(&input[cursor..])
@@ -187,7 +191,9 @@ impl Game<'_> {
             self.command_block_success(block, message);
             return;
         }
-        if self.ui.rules.bool("send_command_feedback") {
+        // Ferraloom: the console always accepts success
+        // (MinecraftServer.acceptsSuccess); a player follows the rule.
+        if self.console_broadcast.is_some() || self.ui.rules.bool("send_command_feedback") {
             self.system_message(message.clone());
         }
         self.broadcast_to_admins(message);
@@ -896,6 +902,8 @@ impl Game<'_> {
             "spreadplayers" => self.cmd_spreadplayers(ctx),
             id if id.starts_with("forceload.") => self.cmd_forceload(id, ctx),
             id if id.starts_with("pregen.") => self.cmd_pregen(id, ctx),
+            // Ferraloom: the dedicated server's own commands (server_cmds.rs).
+            id if id.starts_with("server.") => self.cmd_server(id, ctx),
             "fillbiome" => self.cmd_fillbiome(ctx),
             id if id.starts_with("worldborder.") => self.cmd_worldborder(id, ctx),
             id if id.starts_with("loot.") => self.cmd_loot(id, ctx),
@@ -1245,7 +1253,7 @@ impl Game<'_> {
         self.feedback(message);
         Ok(targets.len() as i32)
     }
-    fn teleport_to(&mut self, t: Target, pos: [f64; 3], rotation: Option<[f32; 2]>) {
+    pub(super) fn teleport_to(&mut self, t: Target, pos: [f64; 3], rotation: Option<[f32; 2]>) {
         // An entity in another level is teleported in the level that holds it.
         let _ = self.in_target_level(t, |g| g.teleport_to_in_level(t, pos, rotation));
     }
@@ -1359,6 +1367,8 @@ impl Game<'_> {
             // Wall-mounted entities do not move.
             Target::Frame(_) | Target::Painting(_) => {}
         }
+        // Ferraloom: the riders' and trackers' ClientboundTeleportEntityPacket.
+        self.lan_teleport_entity(t, pos, rotation);
     }
     /// Teleport the local player into the command source's dimension. Unlike
     /// portal travel, `/tp` keeps the coordinates given by the command.
@@ -1400,7 +1410,7 @@ impl Game<'_> {
     /// A server's player teleported into another level than theirs
     /// (ServerPlayer.teleport): queued to move after the command. False
     /// when `t` is not a player in another level.
-    fn teleport_across(
+    pub(super) fn teleport_across(
         &mut self,
         t: Target,
         level: super::Dim,

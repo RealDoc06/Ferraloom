@@ -1,0 +1,8 @@
+{
+  "comment": "The Spigot API the bridge compiles against and runs with; build.py fetches it, it is never committed. Spigot publishes 26.3 only as a snapshot: this pins one build of it.",
+  "artifact": "org.spigotmc:spigot-api:26.3-R0.1-SNAPSHOT",
+  "classifier": "shaded",
+  "file": "spigot-api-26.3-R0.1-20261123.204233-11-shaded.jar",
+  "url": "https://hub.spigotmc.org/nexus/content/repositories/snapshots/org/spigotmc/spigot-api/26.3-R0.1-SNAPSHOT/spigot-api-26.3-R0.1-20261123.204233-11-shaded.jar",
+  "sha256": "fb22cd524bc4eccb4b60f738c0731f4598a9d235d7723a59957d0cb209174b85"
+}

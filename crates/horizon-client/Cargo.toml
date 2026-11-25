@@ -10,6 +10,8 @@ description = "Horizon native development client"
 [dependencies]
 pprof = { version = "0.15", optional = true, features = ["flamegraph"] }
 ferraloom-core = { path = "../ferraloom-core" }
+# Ferraloom: Bukkit plugins (game/plugins.rs); loads no JVM without a plugin jar.
+ferraloom-plugins = { path = "../ferraloom-plugins" }
 horizon-assets = { path = "../horizon-assets" }
 horizon-client-core = { path = "../horizon-client-core" }
 horizon-client-input = { path = "../horizon-client-input" }

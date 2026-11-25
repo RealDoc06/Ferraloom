@@ -561,6 +561,12 @@ impl Game<'_> {
                 let swap = self.world.random.next_int_bound(i as i32).unwrap_or(0) as usize;
                 targets.swap(i - 1, swap);
             }
+            // Ferraloom: BlockExplodeEvent, before blocks are destroyed (game/plugins/blocks.rs).
+            if ferraloom_plugins::listens(ferraloom_plugins::Event::BlockExplode)
+                && self.plugin_block_explode(center, radius, &mut targets)
+            {
+                return Ok(());
+            }
             let mut stacks: Vec<([i32; 3], ItemStack)> = Vec::new();
             for &pos in &targets {
                 self.explosion_hit_block(pos, radius, interaction, &mut stacks)?;

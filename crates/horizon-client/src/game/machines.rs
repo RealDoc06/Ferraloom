@@ -677,9 +677,18 @@ impl Game<'_> {
             return false;
         }
         for slot in 0..hopper.len() {
-            let Some(one) = self.take_one(hopper, slot) else {
+            let Some(mut one) = self.take_one(hopper, slot) else {
                 continue;
             };
+            // Ferraloom: InventoryMoveItemEvent; cancelled, the item goes back (game/plugins/inventory.rs).
+            let to = target.parts[0].0;
+            if ferraloom_plugins::listens(ferraloom_plugins::Event::InventoryMoveItem)
+                && !self.plugin_move_item(pos, to, true, &mut one)
+            {
+                self.put_back(hopper, slot, one);
+                self.hoppers.entry(pos).or_default().cooldown = 8;
+                return false;
+            }
             match self.add_item(Some(pos), target, one, Some(face)) {
                 None => {
                     self.view_changed(target);
@@ -777,9 +786,20 @@ impl Game<'_> {
             if !c.can_take(source, slot, stack, Direction::Down) {
                 continue;
             }
-            let Some(one) = self.take_one(source, slot) else {
+            let Some(mut one) = self.take_one(source, slot) else {
                 continue;
             };
+            // Ferraloom: InventoryMoveItemEvent; cancelled, the item goes back (game/plugins/inventory.rs).
+            let (from, to) = (source.parts[0].0, hopper.parts[0].0);
+            if ferraloom_plugins::listens(ferraloom_plugins::Event::InventoryMoveItem)
+                && !self.plugin_move_item(from, to, false, &mut one)
+            {
+                self.put_back(source, slot, one);
+                if hopper.kind == Kind::Hopper {
+                    self.hoppers.entry(to).or_default().cooldown = 8;
+                }
+                return false;
+            }
             match self.add_item(source_hopper, hopper, one, None) {
                 None => {
                     self.view_changed(source);

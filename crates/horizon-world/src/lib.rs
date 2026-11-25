@@ -100,6 +100,8 @@ pub mod player_food;
 pub mod player_health;
 pub mod player_hurt;
 pub mod player_travel;
+// Ferraloom: plugin events from block behaviour (docs/ferraloom/plugins.md).
+pub mod plugin_hooks;
 pub mod powder_snow_collision;
 pub mod region;
 pub mod registry;

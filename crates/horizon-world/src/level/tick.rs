@@ -6,7 +6,11 @@ use super::{
     data::state_flags,
     update::{HORIZONTAL, above, below, rel},
 };
-use crate::{fluid::FluidKind, registry::BlockStateId};
+use crate::{
+    fluid::FluidKind,
+    plugin_hooks::{self, Hook, IgniteCause, PluginEvent},
+    registry::BlockStateId,
+};
 use horizon_core::{
     geometry::Direction,
     position::{BlockPos, ChunkPos},
@@ -312,7 +316,12 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                     }
                 }
                 Class::Leaves => {
-                    if !b.table.bool(state, p.persistent) && b.table.int(state, p.distance) == 7 {
+                    if !b.table.bool(state, p.persistent)
+                        && b.table.int(state, p.distance) == 7
+                        // Ferraloom: LeavesDecayEvent, before the leaves drop and go.
+                        && !(plugin_hooks::listens(Hook::LeavesDecay)
+                            && self.plugin_cancels(PluginEvent::LeavesDecay { pos }))
+                    {
                         self.drop_resources(state, pos);
                         self.remove_block(pos, false);
                     }
@@ -555,7 +564,12 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             && self.fire_near_rain(pos)
             && self.random().next_float() < 0.2 + age as f32 * 0.03
         {
-            self.remove_block(pos, false);
+            // Ferraloom: BlockFadeEvent, before the rain puts the fire out.
+            if !(plugin_hooks::listens(Hook::Fade)
+                && self.plugin_cancels(PluginEvent::Fade { pos, to: b.air() }))
+            {
+                self.remove_block(pos, false);
+            }
             return;
         }
         let new_age = 15.min(age + self.rand_int(3) / 2);
@@ -587,7 +601,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             (Direction::North, 300),
             (Direction::South, 300),
         ] {
-            self.fire_check_burn_out(rel(pos, direction), chance + extra, age);
+            self.fire_check_burn_out(rel(pos, direction), chance + extra, age, pos);
         }
         for xx in -1..=1 {
             for zz in -1..=1 {
@@ -612,6 +626,22 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                         {
                             let spread_age = 15.min(age + self.rand_int(5) / 4);
                             let next = self.fire_state_with_age(test, spread_age);
+                            // Ferraloom: BlockIgniteEvent (spread) and BlockSpreadEvent, before the fire spreads.
+                            if (plugin_hooks::listens(Hook::Ignite)
+                                && self.plugin_cancels(PluginEvent::Ignite {
+                                    pos: test,
+                                    cause: IgniteCause::Spread,
+                                    source: Some(pos),
+                                }))
+                                || (plugin_hooks::listens(Hook::Spread)
+                                    && self.plugin_cancels(PluginEvent::Spread {
+                                        pos: test,
+                                        source: pos,
+                                        to: next,
+                                    }))
+                            {
+                                continue;
+                            }
                             self.set_block_and_update(test, next);
                         }
                     }
@@ -637,10 +667,16 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             || self.level.is_raining_at(rel(pos, Direction::North))
             || self.level.is_raining_at(rel(pos, Direction::South))
     }
-    fn fire_check_burn_out(&mut self, pos: BlockPos, chance: i32, age: i32) {
+    fn fire_check_burn_out(&mut self, pos: BlockPos, chance: i32, age: i32, fire: BlockPos) {
         let b = self.b;
         let odds = self.burn_odds(self.state(pos));
         if self.rand_int(chance) < odds {
+            // Ferraloom: BlockBurnEvent, before the fire takes the block.
+            if plugin_hooks::listens(Hook::Burn)
+                && self.plugin_cancels(PluginEvent::Burn { pos, fire })
+            {
+                return;
+            }
             let old = self.state(pos);
             if self.rand_int(age + 10) < 5 && !self.level.is_raining_at(pos) {
                 let new_age = (age + self.rand_int(5) / 4).min(15);
@@ -765,6 +801,12 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             let speed = self.crop_growth_speed(b.block(state), pos);
             if self.rand_int((25.0 / speed) as i32 + 1) == 0 {
                 let next = self.crop_state_for_age(state, age + 1);
+                // Ferraloom: BlockGrowEvent, before the crop grows.
+                if plugin_hooks::listens(Hook::Grow)
+                    && self.plugin_cancels(PluginEvent::Grow { pos, to: next })
+                {
+                    return;
+                }
                 self.set_block(pos, next, 2);
             }
         }
@@ -1002,7 +1044,15 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         let b = self.b;
         let base = b.data(state).link.unwrap_or(b.named.dirt);
         if !self.snowy_can_stay_alive(state, pos) {
-            self.set_block_and_update(pos, b.default_of(base));
+            // Ferraloom: BlockFadeEvent, before grass dies to dirt.
+            if !(plugin_hooks::listens(Hook::Fade)
+                && self.plugin_cancels(PluginEvent::Fade {
+                    pos,
+                    to: b.default_of(base),
+                }))
+            {
+                self.set_block_and_update(pos, b.default_of(base));
+            }
             return;
         }
         if self.max_local_raw_brightness(above(pos)) < 9 {
@@ -1019,7 +1069,18 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                 && !b.is_water_fluid(self.fluid_at(above(test)).kind())
             {
                 let snowy = b.in_set(self.above_state(test), &b.tags.snow);
-                self.set_block_and_update(test, b.table.set_bool(default, b.props.snowy, snowy));
+                let to = b.table.set_bool(default, b.props.snowy, snowy);
+                // Ferraloom: BlockSpreadEvent, before grass spreads.
+                if plugin_hooks::listens(Hook::Spread)
+                    && self.plugin_cancels(PluginEvent::Spread {
+                        pos: test,
+                        source: pos,
+                        to,
+                    })
+                {
+                    continue;
+                }
+                self.set_block_and_update(test, to);
             }
         }
     }
@@ -1387,7 +1448,12 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         let p = b.props;
         let top = info.top;
         let below_pos = below(top);
-        if info.freezes_below {
+        // Ferraloom: BlockFormEvent before ice and snow form (handleBlockFormEvent).
+        let forms = |sim: &mut Self, pos, to| {
+            !(plugin_hooks::listens(Hook::Form)
+                && sim.plugin_cancels(PluginEvent::Form { pos, to }))
+        };
+        if info.freezes_below && forms(self, below_pos, b.default_of(b.named.ice)) {
             self.set_block_and_update(below_pos, b.default_of(b.named.ice));
         }
         if !self.level.is_raining() {
@@ -1399,9 +1465,12 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             if b.is_block(state, b.named.snow) {
                 let layers = b.table.int(state, p.layers);
                 if layers < max_height.min(8) {
-                    self.set_block_and_update(top, b.table.set_int(state, p.layers, layers + 1));
+                    let more = b.table.set_int(state, p.layers, layers + 1);
+                    if forms(self, top, more) {
+                        self.set_block_and_update(top, more);
+                    }
                 }
-            } else {
+            } else if forms(self, top, b.default_of(b.named.snow)) {
                 self.set_block_and_update(top, b.default_of(b.named.snow));
             }
         }

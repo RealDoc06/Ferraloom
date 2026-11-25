@@ -731,6 +731,8 @@ fn network_stack(
             horizon_protocol::item::Component::Text(name.clone()),
         ));
     }
+    // Ferraloom: what Horizon does not model (lore, custom data, a styled name...).
+    super::item_extras::add(&mut stack, s);
     Some(stack)
 }
 
