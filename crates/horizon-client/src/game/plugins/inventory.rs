@@ -2,7 +2,7 @@
 //! menus that show them; container clicks, opens and closes.
 use super::GameHost;
 use crate::game::{Game, lan::LanHost};
-use ferraloom_plugins::{Click, Drag, Holder, InventoryHost, ItemFacts, PlayerId, Side};
+use ferraloom_plugins::{Click, Drag, Holder, InventoryHost, ItemFacts, PlayerId, Side, Swap};
 use horizon_client::{
     items::ItemStack,
     lan::{
@@ -788,5 +788,56 @@ impl Game<'_> {
             }
             None => false,
         }
+    }
+
+    /// handlePlayerAction's PlayerSwapHandItemsEvent, before the hands swap:
+    /// true when a plugin cancelled it (nothing swaps) or gave the hands other
+    /// items (they get them here); false to swap as vanilla does.
+    pub(in crate::game) fn plugin_swap_hands(&mut self, host: &mut LanHost, conn: u32) -> bool {
+        let Some(g) = host.hub.guest(conn) else {
+            return false;
+        };
+        let (id, slot) = (g.uuid, g.selected);
+        // What each hand holds after the swap.
+        let (main, off) = (g.offhand.clone(), g.inventory[slot].clone());
+        let mut gh = GameHost::new(self, Some(host));
+        let (main, off) =
+            match ferraloom_plugins::player_swap_hands(&mut gh, id, main.as_ref(), off.as_ref()) {
+                Swap::Unchanged => return false,
+                Swap::Cancelled => return true,
+                Swap::Changed(main, off) => (main, off),
+            };
+        let Some(g) = host.hub.guests.iter_mut().find(|g| g.conn == conn) else {
+            return true;
+        };
+        let old_main = std::mem::replace(&mut g.inventory[slot], main.clone());
+        let old_off = std::mem::replace(&mut g.offhand, off.clone());
+        // setItemInHand: the off hand, then the main hand; the item in use stops.
+        self.as_guest(host, conn, |g| {
+            g.using = None;
+            g.player_on_equip("offhand", old_off.as_ref(), off.as_ref());
+            g.player_on_equip("mainhand", old_main.as_ref(), main.as_ref());
+        });
+        true
+    }
+
+    /// LivingEntity.completeUsingItem's PlayerItemConsumeEvent for the guest
+    /// whose turn it is, before `stack` (held in `slot`) has any effect: true
+    /// when a plugin cancelled it. Their client, which consumed it already,
+    /// gets its inventory again (`updateInventory`), as CraftBukkit sends it.
+    pub(in crate::game) fn plugin_consume(&mut self, slot: usize, stack: &ItemStack) -> bool {
+        let Some(id) = self.lan_acting_uuid else {
+            return false;
+        };
+        let off_hand = slot == crate::game::shield::OFFHAND_SLOT;
+        let in_place = self.lan.is_some();
+        ferraloom_plugins::borrow_lent(|lent: Option<&mut LanHost>| {
+            let mut host = GameHost::new(self, lent.filter(|_| !in_place));
+            let cancelled = ferraloom_plugins::player_item_consume(&mut host, id, stack, off_hand);
+            if cancelled {
+                host.resend_inventory(id);
+            }
+            cancelled
+        })
     }
 }

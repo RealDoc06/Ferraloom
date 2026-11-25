@@ -182,8 +182,10 @@ const OPENED: usize = 1;
 const CLOSED: usize = 2;
 const MOVE_ITEM: usize = 3;
 const DRAG: usize = 4;
+const CONSUME: usize = 5;
+const SWAP_HANDS: usize = 6;
 
-static EVENTS: OnceLock<Entry<5>> = OnceLock::new();
+static EVENTS: OnceLock<Entry<7>> = OnceLock::new();
 
 /// At start: `InventoryNative`'s methods bound, `InventoryEvents`' looked up.
 pub(crate) fn load(env: &mut JNIEnv) -> jni::errors::Result<()> {
@@ -229,6 +231,8 @@ pub(crate) fn load(env: &mut JNIEnv) -> jni::errors::Result<()> {
             ("closed", format!("(JJIJJ{S})V")),
             ("moveItem", format!("(IJ{S}J{S}Z[B)[B")),
             ("drag", format!("(JJIJJ{S}[I[[B[B[BZ)Z")),
+            ("consume", "(JJ[BZ)Z".to_owned()),
+            ("swapHands", "(JJ[B[B)[[B".to_owned()),
         ],
     )?;
     let _ = EVENTS.set(entry);
@@ -379,6 +383,86 @@ pub fn inventory_drag(host: &mut dyn crate::PluginHost, d: &Drag) -> bool {
         unsafe { events.invoke(env, DRAG, boolean, &args) }?.z()
     })
     .unwrap_or(false)
+}
+
+/// `PlayerItemConsumeEvent` as a player finishes eating or drinking `item`
+/// (`LivingEntity.completeUsingItem`), before it has any effect: true when
+/// a plugin cancelled it, and nothing is consumed.
+pub fn player_item_consume(
+    host: &mut dyn crate::PluginHost,
+    player: PlayerId,
+    item: &ItemStack,
+    off_hand: bool,
+) -> bool {
+    let Some(events) = EVENTS.get() else {
+        return false;
+    };
+    let (most, least) = natives::halves(player);
+    bridge::call(host, |env| {
+        let bytes = to_java(env, Some(item))?;
+        let args = [
+            JValue::Long(most).as_jni(),
+            JValue::Long(least).as_jni(),
+            obj(&bytes),
+            JValue::Bool(off_hand.into()).as_jni(),
+        ];
+        let boolean = ReturnType::Primitive(Primitive::Boolean);
+        // SAFETY: `consume`'s signature in `load`.
+        unsafe { events.invoke(env, CONSUME, boolean, &args) }?.z()
+    })
+    .unwrap_or(false)
+}
+
+/// What `PlayerSwapHandItemsEvent` decided.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Swap {
+    /// Nothing swaps.
+    Cancelled,
+    /// The hands swap as vanilla swaps them.
+    Unchanged,
+    /// The hands get these: (main hand, off hand).
+    Changed(Option<ItemStack>, Option<ItemStack>),
+}
+
+/// `PlayerSwapHandItemsEvent` before a player's hands swap: `main` and
+/// `off` are what each hand would then hold.
+pub fn player_swap_hands(
+    host: &mut dyn crate::PluginHost,
+    player: PlayerId,
+    main: Option<&ItemStack>,
+    off: Option<&ItemStack>,
+) -> Swap {
+    let Some(events) = EVENTS.get() else {
+        return Swap::Unchanged;
+    };
+    let (most, least) = natives::halves(player);
+    bridge::call(host, |env| {
+        let (main, off) = (to_java(env, main)?, to_java(env, off)?);
+        let args = [
+            JValue::Long(most).as_jni(),
+            JValue::Long(least).as_jni(),
+            obj(&main),
+            obj(&off),
+        ];
+        // SAFETY: `swapHands`'s signature in `load`.
+        let out = unsafe { events.invoke(env, SWAP_HANDS, ReturnType::Array, &args) }?.l()?;
+        if out.is_null() {
+            return Ok(Swap::Cancelled);
+        }
+        let out = jni::objects::JObjectArray::from(out);
+        if env.get_array_length(&out)? < 2 {
+            return Ok(Swap::Unchanged);
+        }
+        let hand = |env: &mut JNIEnv, i| -> jni::errors::Result<Option<ItemStack>> {
+            let bytes = JByteArray::from(env.get_object_array_element(&out, i)?);
+            if bytes.is_null() {
+                return Ok(None);
+            }
+            Ok(decode(&env.convert_byte_array(&bytes)?))
+        };
+        Ok(Swap::Changed(hand(env, 0)?, hand(env, 1)?))
+    })
+    .unwrap_or(Swap::Unchanged)
 }
 
 /// A block container's side of an `InventoryMoveItemEvent`: where it is

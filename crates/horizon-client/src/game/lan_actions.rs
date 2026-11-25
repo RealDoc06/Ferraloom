@@ -1412,6 +1412,12 @@ impl Game<'_> {
                         });
                     });
                 }
+                // Ferraloom: PlayerSwapHandItemsEvent; cancelled, or with a plugin's items, the swap is done.
+                7 if !spectator
+                    && ferraloom_plugins::listens(
+                        ferraloom_plugins::Event::PlayerSwapHandItems,
+                    )
+                    && self.plugin_swap_hands(host, conn) => {}
                 // SWAP_ITEM_WITH_OFFHAND: the hands swap and the item in use stops
                 // (ServerGamePacketListenerImpl.handlePlayerAction), not for spectators.
                 7 if !spectator => {

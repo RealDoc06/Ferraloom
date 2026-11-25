@@ -31,8 +31,8 @@ pub use bridge::{Config, WorldSpec, console_command, disable, enable, running, s
 pub use commands::command_tree;
 pub use events::{Event, listens};
 pub use inventory::{
-    Click, Drag, Holder, InventoryHost, ItemFacts, Side, inventory_click, inventory_close,
-    inventory_drag, inventory_move_item, inventory_open,
+    Click, Drag, Holder, InventoryHost, ItemFacts, Side, Swap, inventory_click, inventory_close,
+    inventory_drag, inventory_move_item, inventory_open, player_item_consume, player_swap_hands,
 };
 pub use lent::{borrow_lent, lend};
 pub use players::{Joined, PlayerHost, chat, player_command, player_join, player_quit};

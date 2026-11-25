@@ -30,10 +30,12 @@ pub enum Event {
     InventoryOpen = 50,
     InventoryClose = 51,
     InventoryMoveItem = 52,
+    PlayerItemConsume = 54,
+    PlayerSwapHandItems = 55,
 }
 
 impl Event {
-    pub const ALL: [Event; 9] = [
+    pub const ALL: [Event; 11] = [
         Event::PlayerJoin,
         Event::PlayerQuit,
         Event::AsyncPlayerChat,
@@ -44,6 +46,8 @@ impl Event {
         Event::InventoryOpen,
         Event::InventoryClose,
         Event::InventoryMoveItem,
+        Event::PlayerItemConsume,
+        Event::PlayerSwapHandItems,
     ];
 
     /// The word of [`FLAGS`] holding the event's bit.

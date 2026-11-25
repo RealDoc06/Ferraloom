@@ -11,6 +11,9 @@ import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.inventory.InventoryType.SlotType;
+import org.bukkit.event.player.PlayerItemConsumeEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 
 /**
@@ -120,6 +123,50 @@ public final class InventoryEvents {
         } catch (Throwable ex) {
             Bridge.log(ex, "an item moving between inventories");
             return item;
+        }
+    }
+
+    /** LivingEntity.completeUsingItem's PlayerItemConsumeEvent, before the item has any effect: true when cancelled. */
+    public static boolean consume(long most, long least, byte[] item, boolean offHand) {
+        FerraloomPlayer player = Bridge.server.online(new UUID(most, least));
+        if (player == null) {
+            return false;
+        }
+        try {
+            PlayerItemConsumeEvent event = new PlayerItemConsumeEvent(player, Items.orAir(Items.read(item)),
+                    offHand ? EquipmentSlot.OFF_HAND : EquipmentSlot.HAND);
+            Bridge.server.pluginManager.callEvent(event);
+            return event.isCancelled();
+        } catch (Throwable ex) {
+            Bridge.log(ex, "an item being consumed");
+            return false;
+        }
+    }
+
+    /**
+     * handlePlayerAction's PlayerSwapHandItemsEvent, {@code main} and {@code off} what each hand
+     * would hold: null when cancelled, nothing when the plugin left the items, else {main, off}.
+     */
+    public static byte[][] swapHands(long most, long least, byte[] main, byte[] off) {
+        FerraloomPlayer player = Bridge.server.online(new UUID(most, least));
+        if (player == null) {
+            return new byte[0][];
+        }
+        try {
+            ItemStack mainHand = Items.orAir(Items.read(main));
+            ItemStack offHand = Items.orAir(Items.read(off));
+            PlayerSwapHandItemsEvent event = new PlayerSwapHandItemsEvent(player, mainHand.clone(), offHand.clone());
+            Bridge.server.pluginManager.callEvent(event);
+            if (event.isCancelled()) {
+                return null;
+            }
+            if (mainHand.equals(event.getMainHandItem()) && offHand.equals(event.getOffHandItem())) {
+                return new byte[0][];
+            }
+            return new byte[][] {Items.write(event.getMainHandItem()), Items.write(event.getOffHandItem())};
+        } catch (Throwable ex) {
+            Bridge.log(ex, "a player swapping hands");
+            return new byte[0][];
         }
     }
 }
