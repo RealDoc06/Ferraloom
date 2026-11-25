@@ -8,9 +8,10 @@
 1. Fetches the Spigot API jar pinned in api.lock.json (checked by SHA-256, never committed).
 2. Generates the stubs: tools/StubGen.java over the interfaces in stubs.txt.
 3. Compiles bridge/ against the API into dist/ferraloom-bukkit.jar, beside the API jar.
-4. Compiles the test plugins into test-plugins/.
-5. Prints tools/Coverage.java's table (also in coverage.md).
-6. With --usage, writes tools/Usage.java's report on the plugins given to usage.md (docs/ferraloom/plugin-usage.md).
+4. Runs the bridge's own checks (tests/, TESTS below).
+5. Compiles the test plugins into test-plugins/.
+6. Prints tools/Coverage.java's table (also in coverage.md).
+7. With --usage, writes tools/Usage.java's report on the plugins given to usage.md (docs/ferraloom/plugin-usage.md).
 
 Everything goes under --out (default .local/ferraloom-plugins/ in the checkout), the API jar in --cache. JAVA_HOME's javac, jar and java
 are used when it is set, else those on PATH.
@@ -48,6 +49,15 @@ IMPLEMENTATIONS = [
     'dev.ferraloom.bukkit.FerraloomChunk',
     'dev.ferraloom.bukkit.FerraloomWorldBorder',
     'dev.ferraloom.bukkit.FerraloomBlockState',
+    # Inventory.
+    'dev.ferraloom.bukkit.FerraloomItemFactory',
+    'dev.ferraloom.bukkit.FerraloomItemMeta',
+    'dev.ferraloom.bukkit.FerraloomInventory',
+]
+# The bridge's own checks in tests/ (a main that throws on failure), run after the bridge compiles.
+TESTS = [
+    # Inventory.
+    'dev.ferraloom.bukkit.ItemsTest',
 ]
 TEST_PLUGINS = {'FerraloomTest': HERE / 'test-plugin', 'FerraloomNms': HERE / 'nms-plugin'}
 # Classes a test plugin compiles against but the server lacks, written at build time and kept out of its jar
@@ -138,6 +148,11 @@ def main():
     shutil.rmtree(dist, ignore_errors=True)
     make_jar(dist / 'ferraloom-bukkit.jar', out / 'classes')
     shutil.copy2(api, dist / api.name)
+
+    # The bridge's checks.
+    compile_java(f'{api}{sep}{out / "classes"}', out / 'test-classes', HERE / 'tests')
+    for test in TESTS:
+        run(tool('java'), '-cp', sep.join(map(str, [api, out / 'classes', out / 'test-classes'])), test)
 
     # The test plugins.
     for name, folder in TEST_PLUGINS.items():

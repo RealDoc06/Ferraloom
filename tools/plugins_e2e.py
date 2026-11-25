@@ -15,10 +15,13 @@ server twice on a fresh flat world:
    a cancelled block break leaving the block (and resending it) and an uncancelled one breaking it,
    getLocation and teleport; the world load events, block reads (type, data, light, biome) and writes,
    BlockPhysicsEvent, a cancelled and an uncancelled block place, world reads (heights, chunks, border,
-   game rules, another dimension) and a storm with its WeatherChangeEvent; the server area: a command hidden
-   from a player without its permission, tab completion (a TabCompleter, Bukkit's player-name default,
-   TabCompleteEvent), a boss bar shown and removed, an offline player's op, whitelist and ban round trip (the
-   ban seen by vanilla's /banlist), and the watchdog naming a plugin that stalls the server thread.
+   game rules, another dimension) and a storm with its WeatherChangeEvent; a chest GUI a command opens
+   (its title, its items' names, lore and plugin data) with a cancelled click leaving both sides as they
+   were and an uncancelled one taking the item, its close event, and a held item written through as
+   CraftItemStack's mirror is; the server area: a command hidden from a player without its permission, tab
+   completion (a TabCompleter, Bukkit's player-name default, TabCompleteEvent), a boss bar shown and removed,
+   an offline player's op, whitelist and ban round trip (the ban seen by vanilla's /banlist), and the
+   watchdog naming a plugin that stalls the server thread.
 
     python3 tools/plugins_e2e.py --engine target/release/horizon-client --bot target/release/examples/plugin_bot
 
@@ -200,6 +203,8 @@ def check_plugins(engine, bot_binary, built, out, scratch):
 
         # The scheduler: async off the server thread; a 40-tick delay and a 10-tick timer, counted in game ticks.
         log.wait_for(r'\[FerraloomTest\] schedule: async primary=false')
+        log.wait_for(r'\[FerraloomTest\] blocks: async primary=false air=true solid=true block=true '
+                     r'data=minecraft:oak_log\[axis=y\] parsed=minecraft:oak_stairs\[facing=east\]$')
         log.wait_for(r'\[FerraloomTest\] schedule: later after 40 ticks')
         log.wait_for(r'\[FerraloomTest\] schedule: timer ran 5 times in 41 ticks')
         print('scheduler: ok')
@@ -287,7 +292,10 @@ def check_plugins(engine, bot_binary, built, out, scratch):
         bot.out.wait_for(r'^chat watching physics$', start=mark)
         bot.send(f'command ftest set {bx + 2} {by + 1} {bz + 1} minecraft:stone')
         log.wait_for(r'\[FerraloomTest\] event: physics at -?\d+ -?\d+ -?\d+ changed=\w+', start=log_mark)
-        print('block reads and writes, BlockPhysicsEvent: ok')
+        # A sign's state: its text, written by update() and read back.
+        bot.send(f'command ftest sign {bx - 2} {by + 1} {bz}')
+        bot.out.wait_for(r'^chat sign hello$', start=mark)
+        print('block reads and writes, BlockPhysicsEvent, sign text: ok')
 
         # World reads: heights, chunks, the border, a game rule, another dimension's (unloaded) block.
         bot.send('command ftest world')
@@ -374,6 +382,38 @@ def check_plugins(engine, bot_binary, built, out, scratch):
         bot.send('command ftest where')
         bot.out.wait_for(r'^chat at world 10\.5 -50\.0 10\.5$', start=mark)
         print('getLocation, teleport: ok')
+
+        # A chest GUI a command opens: its title and its items' names and lore reach the client.
+        mark, log_mark = len(bot.out.lines), len(log.lines)
+        bot.send('command ftest gui')
+        _, opened = bot.out.wait_for(r'^open (\d+) Ferraloom GUI$', start=mark)
+        window = opened.split()[1]
+        log.wait_for(r'\[FerraloomTest\] event: open \S*Ferraloom GUI gui=true', start=log_mark)
+        _, content = bot.out.wait_for(rf'^content {window} ', start=mark)
+        emerald = re.search(r'\b13=(\d+)x1 name=Buy lore=1\b', content)
+        if not emerald or not re.search(r'\b0=\d+x2\b', content):
+            raise Failed(f'GUI content: {content}')
+        # A cancelled click on the priced emerald: the plugin sees it, nothing moves, the client is corrected.
+        mark, log_mark = len(bot.out.lines), len(log.lines)
+        bot.send(f'click {window} 13 0 0')
+        log.wait_for(r'event: click gui raw=13 LEFT PICKUP_ALL CONTAINER current=EMERALD price=5 '
+                     r'title=\S*Ferraloom GUI cancelled=true', start=log_mark)
+        bot.out.wait_for(rf'^slot {window} 13 {emerald.group(1)}x1 name=Buy lore=1$', start=mark)
+        bot.out.wait_for(r'^cursor empty$', start=mark)
+        # An uncancelled click takes the diamonds onto the cursor.
+        log_mark = len(log.lines)
+        bot.send(f'click {window} 0 0 0')
+        log.wait_for(r'event: click gui raw=0 LEFT PICKUP_ALL CONTAINER current=DIAMOND price=null '
+                     r'title=\S*Ferraloom GUI cancelled=false', start=log_mark)
+        mark = len(bot.out.lines)
+        bot.send('command ftest cursor')
+        bot.out.wait_for(r'^chat cursor DIAMOND 2$', start=mark)
+        bot.send(f'close {window}')
+        log.wait_for(r'event: close \S*Ferraloom GUI gui=true', start=log_mark)
+        # The held item a plugin reads is the slot's: taking two of five leaves three.
+        bot.send('command ftest hand')
+        bot.out.wait_for(r'^chat hand 3 true$', start=mark)
+        print('chest GUI: open, names and lore, cancelled and uncancelled clicks, close; held item mirror: ok')
 
         # The player leaves.
         mark = len(log.lines)

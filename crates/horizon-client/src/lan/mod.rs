@@ -20,8 +20,10 @@ pub mod guest;
 pub mod hub;
 #[cfg(target_os = "linux")]
 mod io_pool;
+pub mod item_extras;
 pub mod menu;
 pub mod playerdata;
+pub mod plugin_containers;
 mod recipes;
 pub mod scoreboard;
 pub mod tracking;

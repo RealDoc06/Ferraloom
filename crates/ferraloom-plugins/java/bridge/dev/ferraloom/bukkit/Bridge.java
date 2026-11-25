@@ -18,11 +18,14 @@ import org.bukkit.event.player.PlayerQuitEvent;
  */
 public final class Bridge {
     /**
-     * Bit {@code i} of {@link #tick}'s answer: {@code EVENTS[i]} has
-     * listeners. The bits are {@code Event}'s in src/events.rs; each area
-     * keeps its own range (docs/ferraloom/plugins.md, "Fan-out").
+     * Bit {@code i % 64} of word {@code i / 64} of {@link #tick}'s answer:
+     * {@code EVENTS[i]} has listeners. The bits are {@code Event}'s in
+     * src/events.rs; each area keeps its own range (docs/ferraloom/plugins.md,
+     * "Fan-out") and a word of its own past the first: inventory 64-127,
+     * players 128-191, blocks 192-255, entities 256-319, server 320-383,
+     * worlds 384-447. Index 63 is not an event: {@link #COMMANDS_CHANGED}.
      */
-    private static final HandlerList[] EVENTS = new HandlerList[63];
+    private static final HandlerList[] EVENTS = new HandlerList[7 * 64];
 
     static {
         // Players: 0-15.
@@ -52,6 +55,14 @@ public final class Bridge {
         EVENTS[34] = org.bukkit.event.weather.WeatherChangeEvent.getHandlerList();
         EVENTS[35] = org.bukkit.event.weather.ThunderChangeEvent.getHandlerList();
         EVENTS[36] = org.bukkit.event.world.WorldSaveEvent.getHandlerList();
+        // Inventory: 48-55.
+        EVENTS[48] = org.bukkit.event.inventory.InventoryClickEvent.getHandlerList();
+        EVENTS[49] = org.bukkit.event.inventory.InventoryDragEvent.getHandlerList();
+        EVENTS[50] = org.bukkit.event.inventory.InventoryOpenEvent.getHandlerList();
+        EVENTS[51] = org.bukkit.event.inventory.InventoryCloseEvent.getHandlerList();
+        EVENTS[52] = org.bukkit.event.inventory.InventoryMoveItemEvent.getHandlerList();
+        EVENTS[54] = org.bukkit.event.player.PlayerItemConsumeEvent.getHandlerList();
+        EVENTS[55] = org.bukkit.event.player.PlayerSwapHandItemsEvent.getHandlerList();
     }
 
     /** {@link #tick}'s bit for "the command labels changed: ask {@link #commands} again". */
@@ -78,7 +89,7 @@ public final class Bridge {
     }
 
     /** Every plugin's onEnable, once the worlds are loaded; answers as {@link #tick} does. */
-    public static long enable() {
+    public static long[] enable() {
         try {
             server.enablePlugins();
         } catch (Throwable ex) {
@@ -98,8 +109,8 @@ public final class Bridge {
         }
     }
 
-    /** The scheduler's heartbeat for this tick; answers which events have listeners now. */
-    public static long tick(long tick) {
+    /** The scheduler's heartbeat for this tick; answers which events have listeners now, a word per 64. */
+    public static long[] tick(long tick) {
         Watchdog.ticked(tick);
         try {
             Internals.disableReached();
@@ -110,15 +121,15 @@ public final class Bridge {
         return flags();
     }
 
-    private static long flags() {
-        long flags = 0;
+    private static long[] flags() {
+        long[] flags = new long[EVENTS.length / 64];
         for (int i = 0; i < EVENTS.length; i++) {
             if (EVENTS[i] != null && EVENTS[i].getRegisteredListeners().length > 0) {
-                flags |= 1L << i;
+                flags[i / 64] |= 1L << (i % 64);
             }
         }
         if (server.commandMap.version() != sentCommands) {
-            flags |= COMMANDS_CHANGED;
+            flags[0] |= COMMANDS_CHANGED;
         }
         return flags;
     }

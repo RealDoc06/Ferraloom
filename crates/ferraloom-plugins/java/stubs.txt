@@ -25,3 +25,7 @@ org.bukkit.boss.BossBar
 org.bukkit.Chunk
 org.bukkit.WorldBorder
 org.bukkit.block.BlockState
+# Inventory.
+org.bukkit.inventory.ItemFactory
+org.bukkit.inventory.meta.ItemMeta
+org.bukkit.inventory.Inventory

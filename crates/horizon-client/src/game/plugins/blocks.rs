@@ -8,6 +8,7 @@ use ferraloom_plugins::{
     BlockHost, BreakOutcome, Event, Location, Placing, PlayerHost, PlayerId, ServerHost, Simple,
     WorldHost, listens,
 };
+use horizon_client::containers::BlockEntity;
 use horizon_core::geometry::Direction;
 use horizon_protocol::packets::play::{self, Clientbound as C};
 use horizon_world::{
@@ -205,6 +206,53 @@ impl BlockHost for GameHost<'_, '_> {
         let broke = self.in_level(dim, |g| g.destroy_block_dropping(pos).is_ok());
         broke == Some(true)
     }
+
+    fn sign_lines(
+        &mut self,
+        world: usize,
+        [x, y, z]: [i32; 3],
+        front: bool,
+    ) -> Option<Vec<String>> {
+        let w = self.game.level_world(*DIMS.get(world)?)?;
+        let Some(BlockEntity::Sign(sign)) = w.block_entities.get(&(x, y, z)) else {
+            return None;
+        };
+        let side = if front { &sign.front } else { &sign.back };
+        Some(side.lines.to_vec())
+    }
+
+    fn set_sign_lines(
+        &mut self,
+        world: usize,
+        pos: [i32; 3],
+        front: bool,
+        lines: &[String],
+    ) -> bool {
+        let Some(&dim) = DIMS.get(world) else {
+            return false;
+        };
+        let key = (pos[0], pos[1], pos[2]);
+        let set = self.in_level(dim, |g| {
+            let Some(BlockEntity::Sign(sign)) = g.world.block_entities.get_mut(&key) else {
+                return false;
+            };
+            let side = if front {
+                &mut sign.front
+            } else {
+                &mut sign.back
+            };
+            for (line, new) in side
+                .lines
+                .iter_mut()
+                .zip(lines.iter().chain(std::iter::repeat(&String::new())))
+            {
+                line.clone_from(new);
+            }
+            g.mark_block_entity_updated(key);
+            true
+        });
+        set == Some(true)
+    }
 }
 
 thread_local! {
@@ -296,6 +344,52 @@ impl Game<'_> {
     fn resend_block(&mut self, pos: [i32; 3]) {
         if let Some(log) = self.world.block_log.as_mut() {
             log.push((pos[0], pos[1], pos[2]));
+        }
+    }
+
+    /// SignBlockEntity.updateSignText's SignChangeEvent, for the lines a
+    /// guest just wrote (`old` the ones before): the event's lines stay,
+    /// or the old ones come back when it is cancelled.
+    pub(in crate::game) fn plugin_sign_change(
+        &mut self,
+        host: &mut LanHost,
+        conn: u32,
+        key: (i32, i32, i32),
+        front: bool,
+        old: [String; 4],
+    ) {
+        let Some(id) = host.hub.guest(conn).map(|g| g.uuid) else {
+            return;
+        };
+        let Some(BlockEntity::Sign(sign)) = self.world.block_entities.get(&key) else {
+            return;
+        };
+        let lines = if front { &sign.front } else { &sign.back }.lines.to_vec();
+        let world = world_index(self.dim);
+        let pos = [key.0, key.1, key.2];
+        let kept = ferraloom_plugins::sign_change(
+            &mut GameHost::new(self, Some(host)),
+            id,
+            world,
+            pos,
+            front,
+            &lines,
+        );
+        let Some(BlockEntity::Sign(sign)) = self.world.block_entities.get_mut(&key) else {
+            return;
+        };
+        let side = if front {
+            &mut sign.front
+        } else {
+            &mut sign.back
+        };
+        match kept {
+            None => side.lines = old,
+            Some(kept) => {
+                for (line, new) in side.lines.iter_mut().zip(kept) {
+                    *line = new;
+                }
+            }
         }
     }
 
@@ -552,6 +646,10 @@ impl PlayerHost for LevelHost<'_, '_> {
         true
     }
 }
+
+// Inventory area: no inventory is reached from inside a level's tick; every
+// InventoryHost method answers its default (nothing there).
+impl ferraloom_plugins::InventoryHost for LevelHost<'_, '_> {}
 
 impl ServerHost for LevelHost<'_, '_> {
     fn console_message(&mut self, message: &str) {

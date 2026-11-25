@@ -1223,6 +1223,13 @@ impl Game<'_> {
                 MobEvent::DamagePlayer { amount, from, kind } => {
                     self.mob_hits_player(amount, from, kind);
                 }
+                MobEvent::Sting {
+                    target,
+                    bee,
+                    amount,
+                    from,
+                    poison,
+                } => self.bee_sting(target, bee, amount, from, poison),
                 MobEvent::ElderCurse { at } => self.elder_curse(at),
                 MobEvent::Push { target, velocity } => {
                     let v = Vec3::new(velocity[0], velocity[1], velocity[2]);
@@ -2720,6 +2727,49 @@ impl Game<'_> {
             tnt_explodes: self.ui.rules.bool("tnt_explodes"),
         }
     }
+    /// The arrows and stingers stuck in the player or a mob.
+    fn stuck_counts(&mut self, who: Who) -> Option<&mut horizon_client::arrows::StuckCounts> {
+        match who {
+            Who::Player => self.player.as_mut().map(|p| &mut p.stuck),
+            Who::Mob(id) => self
+                .mobs
+                .iter_mut()
+                .find(|m| m.id == id)
+                .map(|m| &mut m.stuck),
+        }
+    }
+    /// Port of Bee#doHurtTarget's hit: a sting that hurt leaves a stinger
+    /// and, on normal and hard, poison.
+    fn bee_sting(&mut self, target: Who, bee: u32, amount: f32, from: [f64; 3], poison: i32) {
+        let hurt = match target {
+            Who::Player => self.mob_hits_player(amount, from, "minecraft:sting"),
+            Who::Mob(id) => self.mob_hits_mob(
+                id,
+                amount,
+                Damage {
+                    kind: DamageKind::Sting,
+                    attacker: Some(Who::Mob(bee)),
+                    from: Some(from),
+                },
+            ),
+        };
+        if !hurt {
+            return;
+        }
+        if let Some(c) = self.stuck_counts(target) {
+            c.add_stinger();
+        }
+        if poison > 0 {
+            match target {
+                Who::Player => self.give_player_effect("minecraft:poison", poison, 0),
+                Who::Mob(id) => {
+                    if let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
+                        m.add_effect("minecraft:poison", poison, 0);
+                    }
+                }
+            }
+        }
+    }
     /// The rest of the tick of an arrow that hit an entity
     /// (`arrows::finish_entity_hit`): its sounds and drop, and back among the
     /// projectiles if it flies on.
@@ -2972,6 +3022,14 @@ impl Game<'_> {
                         hurt
                     }
                 };
+                // AbstractArrow.onHitEntity: a hurt leaves the arrow stuck in
+                // the target, but for a piercing one's (Ferraloom).
+                if hurt
+                    && p.arrow.as_ref().is_some_and(|a| a.pierce == 0)
+                    && let Some(c) = self.stuck_counts(who)
+                {
+                    c.add_arrow();
+                }
                 // doKnockback: Punch pushes along the flight, less the target's
                 // knockback resistance.
                 let flight = (p.velocity.x * p.velocity.x + p.velocity.z * p.velocity.z).sqrt();

@@ -4968,6 +4968,12 @@ impl Game<'_> {
         if ticks >= duration {
             self.using = None;
             self.send_use_item_complete();
+            // Ferraloom: PlayerItemConsumeEvent; cancelled, nothing is consumed (game/plugins/inventory.rs).
+            if ferraloom_plugins::listens(ferraloom_plugins::Event::PlayerItemConsume)
+                && self.plugin_consume(slot, &stack)
+            {
+                return;
+            }
             // ItemStack.finishUsingItem's applyAfterUseComponentSideEffects.
             self.apply_use_cooldown(&stack);
             self.finish_consuming(&info, consumable, &stack);

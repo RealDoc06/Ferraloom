@@ -1367,6 +1367,8 @@ impl Game<'_> {
             // Wall-mounted entities do not move.
             Target::Frame(_) | Target::Painting(_) => {}
         }
+        // Ferraloom: the riders' and trackers' ClientboundTeleportEntityPacket.
+        self.lan_teleport_entity(t, pos, rotation);
     }
     /// Teleport the local player into the command source's dimension. Unlike
     /// portal travel, `/tp` keeps the coordinates given by the command.
