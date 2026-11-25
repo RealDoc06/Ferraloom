@@ -2531,6 +2531,8 @@ impl Hub {
                 | S::ChunkBatchReceived(_)
                 | S::ClientInformation(_)
                 | S::RecipeBookChangeSettings(_)
+                | S::RecipeBookSeenRecipe(_)
+                | S::SeenAdvancements(_)
                 | S::ClientTickEnd(_)
                 | S::KeepAlive(_) => false,
                 S::MovePlayerPos(p) => self.moved_far(i, [p.x, p.y, p.z]),
@@ -2615,6 +2617,9 @@ impl Hub {
                     g.center = None;
                     self.client_information_changed(i, old_parts);
                 }
+                // Ferraloom: handleRecipeBookSeenRecipePacket, handleSeenAdvancements.
+                S::RecipeBookSeenRecipe(p) => self.recipe_seen(i, p),
+                S::SeenAdvancements(p) => self.seen_advancements(i, p),
                 S::PlayerInput(p) => {
                     self.guests[i].input = p.flags;
                     self.guests[i].sneaking = p.flags & 32 != 0;

@@ -109,6 +109,8 @@ pub struct PlayerMeta {
     above_ground_ticks: i32,
     chat_spam: Throttle,
     command_spam: Throttle,
+    /// `PlayerAdvancements.lastSelectedTab`.
+    selected_tab: Option<String>,
 }
 
 impl PlayerMeta {
@@ -355,6 +357,38 @@ impl Hub {
     /// `detectCommandRateSpam`, after a command.
     pub(super) fn detect_command_spam(&mut self, i: usize) {
         self.detect_spam(i, true);
+    }
+
+    /// handleSeenAdvancements → `PlayerAdvancements.setSelectedTab`: a root
+    /// advancement with a display becomes the selected tab (anything else
+    /// clears it), and a change goes back as ClientboundSelectAdvancementsTabPacket.
+    pub(super) fn seen_advancements(&mut self, i: usize, p: play::SeenAdvancements) {
+        let Some(tab) = p.tab else {
+            return;
+        };
+        if !self.sync.advancements.exists(&tab) {
+            return;
+        }
+        let selected = self.sync.advancements.is_tab(&tab).then_some(tab);
+        let g = &mut self.guests[i];
+        if g.meta.selected_tab == selected {
+            return;
+        }
+        let mut w = horizon_protocol::buf::Writer::new();
+        w.bool(selected.is_some());
+        if let Some(tab) = &selected {
+            w.string(tab);
+        }
+        g.meta.selected_tab = selected;
+        g.send(&super::raw(super::ids::SELECT_ADVANCEMENTS_TAB, w.data));
+    }
+
+    /// handleRecipeBookSeenRecipePacket: the display's recipe is no longer
+    /// highlighted (`ServerRecipeBook.removeHighlight`).
+    pub(super) fn recipe_seen(&mut self, i: usize, p: play::RecipeBookSeenRecipe) {
+        if let Some(id) = self.sync.advancements.recipe_of_display(p.display) {
+            self.guests[i].recipe_book.remove_highlight(id);
+        }
     }
 
     /// handleClientInformation's `UPDATE_HAT`: everyone hears when the
