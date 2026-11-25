@@ -12,6 +12,7 @@ mod place;
 mod players;
 pub(super) mod pregen;
 mod raid;
+pub(super) mod server_cmds;
 mod terrain_cmds;
 mod text_commands;
 mod world_cmds;
@@ -187,7 +188,9 @@ impl Game<'_> {
             self.command_block_success(block, message);
             return;
         }
-        if self.ui.rules.bool("send_command_feedback") {
+        // Ferraloom: the console always accepts success
+        // (MinecraftServer.acceptsSuccess); a player follows the rule.
+        if self.console_broadcast.is_some() || self.ui.rules.bool("send_command_feedback") {
             self.system_message(message.clone());
         }
         self.broadcast_to_admins(message);
@@ -896,6 +899,8 @@ impl Game<'_> {
             "spreadplayers" => self.cmd_spreadplayers(ctx),
             id if id.starts_with("forceload.") => self.cmd_forceload(id, ctx),
             id if id.starts_with("pregen.") => self.cmd_pregen(id, ctx),
+            // Ferraloom: the dedicated server's own commands (server_cmds.rs).
+            id if id.starts_with("server.") => self.cmd_server(id, ctx),
             "fillbiome" => self.cmd_fillbiome(ctx),
             id if id.starts_with("worldborder.") => self.cmd_worldborder(id, ctx),
             id if id.starts_with("loot.") => self.cmd_loot(id, ctx),

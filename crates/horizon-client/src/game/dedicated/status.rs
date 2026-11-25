@@ -43,7 +43,7 @@ impl Game<'_> {
                 _ if request.line.trim() == "server-status" => self.server_status(state),
                 Some(("console", line)) => {
                     // Command feedback is logged as system chat; the reply carries the text alone.
-                    let output: Vec<String> = capture_log(|| self.console_command(state, line))
+                    let output: Vec<String> = capture_log(|| self.console_command(line))
                         .into_iter()
                         .map(|l| {
                             l.strip_prefix("System chat: ")
