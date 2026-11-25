@@ -15,3 +15,6 @@ org.bukkit.MusicInstrument
 org.bukkit.potion.PotionEffectType
 org.bukkit.generator.structure.Structure
 org.bukkit.generator.structure.StructureType
+# Inventory.
+org.bukkit.inventory.ItemFactory
+org.bukkit.inventory.meta.ItemMeta

@@ -19,6 +19,7 @@
 mod bridge;
 mod commands;
 mod events;
+mod inventory;
 mod jvm;
 mod lent;
 mod natives;
