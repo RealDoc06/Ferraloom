@@ -2277,6 +2277,39 @@ packet!(UseItemOn {
     world_border: bool => Bool,
     sequence: i32 => VarInt,
 });
+packet!(
+    /// ServerboundRecipeBookSeenRecipePacket: the display the client has
+    /// seen (RecipeDisplayId), whose highlight goes.
+    RecipeBookSeenRecipe { display: i32 => VarInt }
+);
+/// ServerboundSeenAdvancementsPacket: OPENED_TAB (0) with the tab's root
+/// advancement, or CLOSED_SCREEN (1, `tab` None).
+#[derive(Clone, Debug, PartialEq)]
+pub struct SeenAdvancements {
+    pub tab: Option<String>,
+}
+impl Codec<SeenAdvancements> for SeenAdvancements {
+    fn read(r: &mut Reader) -> Result<SeenAdvancements> {
+        Ok(SeenAdvancements {
+            tab: match r.varint()? {
+                0 => Some(r.string(32767)?),
+                1 => None,
+                action => {
+                    return Err(Error::new(format!("bad seen advancements action {action}")));
+                }
+            },
+        })
+    }
+    fn write(v: &SeenAdvancements, w: &mut Writer) {
+        match &v.tab {
+            Some(tab) => {
+                w.varint(0);
+                w.string(tab);
+            }
+            None => w.varint(1),
+        }
+    }
+}
 /// The click location relative to the block (three floats).
 pub struct Cursor;
 impl Codec<[f32; 3]> for Cursor {
@@ -2303,6 +2336,8 @@ packet_enum!(Serverbound, crate::ids::play::serverbound {
     ChatSessionUpdate(ChatSessionUpdate) = CHAT_SESSION_UPDATE,
     PlaceRecipe(super::recipes::PlaceRecipe) = PLACE_RECIPE,
     RecipeBookChangeSettings(super::recipes::RecipeBookChangeSettings) = RECIPE_BOOK_CHANGE_SETTINGS,
+    RecipeBookSeenRecipe(RecipeBookSeenRecipe) = RECIPE_BOOK_SEEN_RECIPE,
+    SeenAdvancements(SeenAdvancements) = SEEN_ADVANCEMENTS,
     ChunkBatchReceived(ChunkBatchReceived) = CHUNK_BATCH_RECEIVED,
     ClientCommand(ClientCommand) = CLIENT_COMMAND,
     ClientInformation(ClientInformation) = CLIENT_INFORMATION,
@@ -2877,6 +2912,11 @@ mod tests {
     fn serverbound_round_trips() {
         let packets = vec![
             Serverbound::PingRequest(crate::packets::status::Ping { time: -7 }),
+            Serverbound::RecipeBookSeenRecipe(RecipeBookSeenRecipe { display: 300 }),
+            Serverbound::SeenAdvancements(SeenAdvancements {
+                tab: Some("minecraft:story/root".into()),
+            }),
+            Serverbound::SeenAdvancements(SeenAdvancements { tab: None }),
             Serverbound::AcceptTeleportation(AcceptTeleportation {
                 id: 1,
                 x: 0.5,
