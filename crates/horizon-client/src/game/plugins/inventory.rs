@@ -2,7 +2,7 @@
 //! menus that show them; container clicks, opens and closes.
 use super::GameHost;
 use crate::game::{Game, lan::LanHost};
-use ferraloom_plugins::{Click, Holder, InventoryHost, PlayerId};
+use ferraloom_plugins::{Click, Drag, Holder, InventoryHost, PlayerId, Side};
 use horizon_client::{
     items::ItemStack,
     lan::{
@@ -364,6 +364,26 @@ fn top(game: &Game, g: &Guest, window: i32) -> Option<(Holder, &'static str, usi
 }
 
 impl Game<'_> {
+    /// What raw slot `slot` of the guest's menu `window` (its container `size` slots) holds.
+    fn plugin_slot_item(
+        &self,
+        g: &Guest,
+        window: i32,
+        size: usize,
+        slot: usize,
+    ) -> Option<ItemStack> {
+        if window == 0 {
+            return g.menu_slot(slot);
+        }
+        let m = g.menu.as_ref()?;
+        if slot < size {
+            return m.slots.get(&self.world, g, slot);
+        }
+        let n = slot - size;
+        let index = if n < 27 { 9 + n } else { n - 27 };
+        g.inventory.get(index).cloned().flatten()
+    }
+
     fn plugin_max_stack(&self, item: &ItemStack) -> u32 {
         self.res.items().get(&item.item).map_or(64, |i| i.max_stack)
     }
@@ -399,19 +419,7 @@ impl Game<'_> {
     ) -> (&'static str, &'static str) {
         let window = p.container;
         let (slot, button) = (i32::from(p.slot), i32::from(p.button));
-        let item = |slot: i32| -> Option<ItemStack> {
-            let slot = usize::try_from(slot).ok()?;
-            if window == 0 {
-                return g.menu_slot(slot);
-            }
-            let m = g.menu.as_ref()?;
-            if slot < size {
-                return m.slots.get(&self.world, g, slot);
-            }
-            let n = slot - size;
-            let index = if n < 27 { 9 + n } else { n - 27 };
-            g.inventory.get(index).cloned().flatten()
-        };
+        let item = |slot: i32| self.plugin_slot_item(g, window, size, usize::try_from(slot).ok()?);
         let in_inventory = |slot: i32| {
             if window == 0 {
                 slot >= 5
@@ -599,6 +607,100 @@ impl Game<'_> {
         cancelled
     }
 
+    /// CraftBukkit's InventoryDragEvent in `AbstractContainerMenu.doClick`, as
+    /// a drag's last packet arrives and before anything lands: true when a
+    /// plugin denied it, and the drag ends with nothing moved and the client
+    /// corrected. The slots get what the drag would give them (an even split,
+    /// one each, or a full stack), as the event reports them.
+    pub(in crate::game) fn plugin_drag(
+        &mut self,
+        host: &mut LanHost,
+        conn: u32,
+        p: &play::ContainerClick,
+    ) -> bool {
+        if p.input != input::QUICK_CRAFT || p.button & 3 != 2 {
+            return false;
+        }
+        let Some(g) = host.hub.guest(conn).filter(|g| g.placed && !g.spectator()) else {
+            return false;
+        };
+        let Some((top, top_type, size)) = top(self, g, p.container) else {
+            return false;
+        };
+        let drag = if p.container == 0 {
+            g.drag.as_ref()
+        } else {
+            g.menu.as_ref().and_then(|m| m.drag.as_ref())
+        };
+        let (Some((kind, slots)), Some(carried)) = (drag, g.carried.as_ref()) else {
+            return false;
+        };
+        let n = slots.len() as u32;
+        if n == 0 || (*kind != 2 && carried.count < n) {
+            return false;
+        }
+        let each = match kind {
+            0 => carried.count / n,
+            1 => 1,
+            _ => self.plugin_max_stack(carried),
+        };
+        let mut left = carried.count;
+        let mut placed = Vec::new();
+        for &slot in slots {
+            let existing = self
+                .plugin_slot_item(g, p.container, size, slot)
+                .map_or(0, |s| s.count);
+            let armor = p.container == 0 && (5..=8).contains(&slot);
+            let max = if armor {
+                1
+            } else {
+                self.plugin_max_stack(carried)
+            };
+            let count = (each + existing).min(max);
+            left = left.saturating_sub(count.saturating_sub(existing));
+            placed.push((
+                slot as i32,
+                ItemStack {
+                    count,
+                    ..carried.clone()
+                },
+            ));
+        }
+        if *kind == 2 && g.creative() {
+            left = carried.count;
+        }
+        let new_cursor = (left > 0).then(|| ItemStack {
+            count: left,
+            ..carried.clone()
+        });
+        let (old, id) = (carried.clone(), g.uuid);
+        let event = Drag {
+            player: id,
+            top,
+            top_type,
+            slots: &placed,
+            new_cursor: new_cursor.as_ref(),
+            old_cursor: &old,
+            right: *kind == 1,
+        };
+        let denied =
+            ferraloom_plugins::inventory_drag(&mut GameHost::new(self, Some(host)), &event);
+        if denied {
+            if let Some(g) = host.hub.guests.iter_mut().find(|g| g.conn == conn) {
+                g.drag = None;
+                if let Some(m) = g.menu.as_mut() {
+                    m.drag = None;
+                }
+            }
+            if host.hub.guest(conn).is_some_and(|g| {
+                p.container == 0 || g.menu.as_ref().is_some_and(|m| m.window == p.container)
+            }) {
+                host.hub.inventory_clicked(conn, p, &self.world, &[]);
+            }
+        }
+        denied
+    }
+
     /// InventoryOpenEvent as a guest's container is about to open
     /// (`ServerPlayer.openMenu`): true when a plugin cancelled it.
     pub(in crate::game) fn plugin_opening(
@@ -639,5 +741,39 @@ impl Game<'_> {
         let id = g.uuid;
         ferraloom_plugins::inventory_close(&mut GameHost::new(self, Some(host)), id, top, kind);
         false
+    }
+
+    /// HopperBlockEntity's InventoryMoveItemEvent for `item` (one item, taken
+    /// out already) moving between the block containers at `from` and `to`:
+    /// false when a plugin cancelled it, and the caller puts the item back.
+    /// The plugin may change the item that moves.
+    pub(in crate::game) fn plugin_move_item(
+        &mut self,
+        from: (i32, i32, i32),
+        to: (i32, i32, i32),
+        source_initiated: bool,
+        item: &mut ItemStack,
+    ) -> bool {
+        let world = super::world_index(self.dim);
+        let side = |game: &Game, p: (i32, i32, i32)| Side {
+            pos: [p.0, p.1, p.2],
+            kind: top_type(game, Slots::Block(p)),
+        };
+        let (from, to) = (side(self, from), side(self, to));
+        let mut host = GameHost::new(self, None);
+        match ferraloom_plugins::inventory_move_item(
+            &mut host,
+            world,
+            from,
+            to,
+            source_initiated,
+            item,
+        ) {
+            Some(moved) => {
+                *item = moved;
+                true
+            }
+            None => false,
+        }
     }
 }

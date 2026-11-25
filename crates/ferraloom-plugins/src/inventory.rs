@@ -162,8 +162,10 @@ const S: &str = "Ljava/lang/String;";
 const CLICK: usize = 0;
 const OPENED: usize = 1;
 const CLOSED: usize = 2;
+const MOVE_ITEM: usize = 3;
+const DRAG: usize = 4;
 
-static EVENTS: OnceLock<Entry<3>> = OnceLock::new();
+static EVENTS: OnceLock<Entry<5>> = OnceLock::new();
 
 /// At start: `InventoryNative`'s methods bound, `InventoryEvents`' looked up.
 pub(crate) fn load(env: &mut JNIEnv) -> jni::errors::Result<()> {
@@ -197,6 +199,8 @@ pub(crate) fn load(env: &mut JNIEnv) -> jni::errors::Result<()> {
             ("click", format!("(JJIJJ{S}I{S}{S}I)Z")),
             ("opened", format!("(JJIJJ{S})Z")),
             ("closed", format!("(JJIJJ{S})V")),
+            ("moveItem", format!("(IJ{S}J{S}Z[B)[B")),
+            ("drag", format!("(JJIJJ{S}[I[[B[B[BZ)Z")),
         ],
     )?;
     let _ = EVENTS.set(entry);
@@ -292,6 +296,113 @@ pub fn inventory_close(
         unsafe { events.invoke(env, CLOSED, void, &args) }?;
         Ok(())
     });
+}
+
+/// An `InventoryDragEvent` about to happen: the drag's last packet, before
+/// the items land (`AbstractContainerMenu.doClick`'s QUICK_CRAFT end).
+#[derive(Clone, Copy, Debug)]
+pub struct Drag<'a> {
+    pub player: PlayerId,
+    pub top: Holder,
+    pub top_type: &'a str,
+    /// Each raw slot dragged over, with the stack it would hold.
+    pub slots: &'a [(i32, ItemStack)],
+    /// The cursor after the drag; none when it empties.
+    pub new_cursor: Option<&'a ItemStack>,
+    pub old_cursor: &'a ItemStack,
+    /// A right-button drag (one item per slot).
+    pub right: bool,
+}
+
+/// `InventoryDragEvent`: true when a plugin denied it, and nothing may land.
+pub fn inventory_drag(host: &mut dyn crate::PluginHost, d: &Drag) -> bool {
+    let Some(events) = EVENTS.get() else {
+        return false;
+    };
+    let (most, least) = natives::halves(d.player);
+    let (kind, a, b) = d.top.to_java();
+    bridge::call(host, |env| {
+        let top_type = env.new_string(d.top_type)?;
+        let raw: Vec<jint> = d.slots.iter().map(|(s, _)| *s).collect();
+        let slots = env.new_int_array(raw.len() as jint)?;
+        env.set_int_array_region(&slots, 0, &raw)?;
+        let items = env.new_object_array(raw.len() as jint, "[B", JObject::null())?;
+        for (i, (_, item)) in d.slots.iter().enumerate() {
+            let bytes = to_java(env, Some(item))?;
+            env.set_object_array_element(&items, i as jint, bytes)?;
+        }
+        let new_cursor = to_java(env, d.new_cursor)?;
+        let old_cursor = to_java(env, Some(d.old_cursor))?;
+        let args = [
+            JValue::Long(most).as_jni(),
+            JValue::Long(least).as_jni(),
+            JValue::Int(kind).as_jni(),
+            JValue::Long(a).as_jni(),
+            JValue::Long(b).as_jni(),
+            obj(&top_type),
+            obj(&slots),
+            obj(&items),
+            obj(&new_cursor),
+            obj(&old_cursor),
+            JValue::Bool(d.right.into()).as_jni(),
+        ];
+        let boolean = ReturnType::Primitive(Primitive::Boolean);
+        // SAFETY: `drag`'s signature in `load`.
+        unsafe { events.invoke(env, DRAG, boolean, &args) }?.z()
+    })
+    .unwrap_or(false)
+}
+
+/// A block container's side of an `InventoryMoveItemEvent`: where it is
+/// and its `InventoryType` name (`HOPPER`, `CHEST`...).
+#[derive(Clone, Copy, Debug)]
+pub struct Side<'a> {
+    pub pos: [i32; 3],
+    pub kind: &'a str,
+}
+
+/// `InventoryMoveItemEvent` as a hopper moves `item` (one item) from one
+/// block container to another in `world`, before it lands: the item to move
+/// (the plugin may have changed it), or none when a plugin cancelled the
+/// move, which must then put the item back. `source_initiated`: the source
+/// pushed it (a hopper ejecting) rather than the destination pulling.
+/// Without a listener this is never called; with one, each transfer costs
+/// one JNI call, the item's NBT both ways, and the event's objects.
+pub fn inventory_move_item(
+    host: &mut dyn crate::PluginHost,
+    world: usize,
+    from: Side,
+    to: Side,
+    source_initiated: bool,
+    item: &ItemStack,
+) -> Option<ItemStack> {
+    let Some(events) = EVENTS.get() else {
+        return Some(item.clone());
+    };
+    let out = bridge::call(host, |env| {
+        let from_kind = env.new_string(from.kind)?;
+        let to_kind = env.new_string(to.kind)?;
+        let bytes = to_java(env, Some(item))?;
+        let args = [
+            JValue::Int(world as jint).as_jni(),
+            JValue::Long(pack(from.pos)).as_jni(),
+            obj(&from_kind),
+            JValue::Long(pack(to.pos)).as_jni(),
+            obj(&to_kind),
+            JValue::Bool(source_initiated.into()).as_jni(),
+            obj(&bytes),
+        ];
+        // SAFETY: `moveItem`'s signature in `load`.
+        let moved = unsafe { events.invoke(env, MOVE_ITEM, ReturnType::Array, &args) }?.l()?;
+        let moved = JByteArray::from(moved);
+        Ok(if moved.is_null() {
+            None
+        } else {
+            decode(&env.convert_byte_array(&moved)?)
+        })
+    });
+    // A bridge that failed lets the move happen, as an event no one cancelled.
+    out.unwrap_or_else(|| Some(item.clone()))
 }
 
 fn holder(kind: jint, a: jlong, b: jlong) -> Result<Holder, Fail> {

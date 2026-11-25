@@ -1593,6 +1593,10 @@ impl Game<'_> {
             S::ContainerClick(p)
                 if ferraloom_plugins::listens(ferraloom_plugins::Event::InventoryClick)
                     && self.plugin_click(host, conn, &p) => {}
+            // Ferraloom: InventoryDragEvent, before a drag's items land.
+            S::ContainerClick(p)
+                if ferraloom_plugins::listens(ferraloom_plugins::Event::InventoryDrag)
+                    && self.plugin_drag(host, conn, &p) => {}
             S::ContainerClick(p) if self.lan_merchant_click(host, conn, &p) => {}
             S::ContainerClick(p) if self.lan_inventory_click(host, conn, &p) => {}
             S::ContainerClick(p) if self.lan_crafting_click(host, conn, &p) => {}

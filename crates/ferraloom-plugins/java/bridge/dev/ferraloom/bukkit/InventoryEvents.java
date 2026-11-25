@@ -1,11 +1,17 @@
 package dev.ferraloom.bukkit;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import org.bukkit.event.Event;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.inventory.InventoryMoveItemEvent;
+import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.inventory.InventoryType.SlotType;
+import org.bukkit.inventory.ItemStack;
 
 /**
  * The inventory area's event entry points (crates/ferraloom-plugins/src/inventory.rs), on the
@@ -44,6 +50,33 @@ public final class InventoryEvents {
         }
     }
 
+    /**
+     * AbstractContainerMenu.doClick's InventoryDragEvent as a drag ends, before anything lands:
+     * true when denied. {@code slots[i]} would hold {@code items[i]}.
+     */
+    public static boolean drag(long most, long least, int kind, long a, long b, String topType, int[] slots,
+            byte[][] items, byte[] newCursor, byte[] oldCursor, boolean right) {
+        FerraloomPlayer player = Bridge.server.online(new UUID(most, least));
+        if (player == null) {
+            return false;
+        }
+        try {
+            FerraloomInventoryView view = player.inventories.view(kind, a, b, topType);
+            Map<Integer, ItemStack> placed = new HashMap<>();
+            for (int i = 0; i < slots.length; i++) {
+                placed.put(slots[i], Items.read(items[i]));
+            }
+            InventoryDragEvent event = new InventoryDragEvent(view, Items.read(newCursor),
+                    Items.orAir(Items.read(oldCursor)), right, placed);
+            Bridge.server.pluginManager.callEvent(event);
+            boolean moved = kind == 2 ? player.inventories.open() != null : player.inventories.open() != view;
+            return event.getResult() == Event.Result.DENY || moved;
+        } catch (Throwable ex) {
+            Bridge.log(ex, "an inventory drag");
+            return false;
+        }
+    }
+
     /** ServerPlayer.openMenu's InventoryOpenEvent for a menu the game opens: true when cancelled. */
     public static boolean opened(long most, long least, int kind, long a, long b, String topType) {
         FerraloomPlayer player = Bridge.server.online(new UUID(most, least));
@@ -68,6 +101,25 @@ public final class InventoryEvents {
             player.inventories.closed(kind, a, b, topType);
         } catch (Throwable ex) {
             Bridge.log(ex, "an inventory closing");
+        }
+    }
+
+    /**
+     * HopperBlockEntity's InventoryMoveItemEvent, for one item moving between two block containers
+     * of {@code world} (positions as BlockPos.asLong): the item to move, or null when cancelled.
+     */
+    public static byte[] moveItem(int world, long from, String fromType, long to, String toType, boolean sourceInitiated,
+            byte[] item) {
+        try {
+            FerraloomInventory source = new FerraloomInventory(4, world, from, InventoryType.valueOf(fromType), -1, null, null);
+            FerraloomInventory destination = new FerraloomInventory(4, world, to, InventoryType.valueOf(toType), -1, null, null);
+            ItemStack stack = Items.read(item);
+            InventoryMoveItemEvent event = new InventoryMoveItemEvent(source, stack, destination, sourceInitiated);
+            Bridge.server.pluginManager.callEvent(event);
+            return event.isCancelled() ? null : Items.write(event.getItem());
+        } catch (Throwable ex) {
+            Bridge.log(ex, "an item moving between inventories");
+            return item;
         }
     }
 }
