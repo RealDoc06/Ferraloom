@@ -13,10 +13,12 @@ server twice on a fresh flat world:
    events and messages, the command tree, a command's reply from a player and from the console, a stub's
    UnsupportedOperationException, chat format and cancel with listener priorities and ignoreCancelled,
    a cancelled block break leaving the block (and resending it) and an uncancelled one breaking it,
-   getLocation and teleport; the server area: a command hidden from a player without its permission,
-   tab completion (a TabCompleter, Bukkit's player-name default, TabCompleteEvent), a boss bar shown and
-   removed, an offline player's op, whitelist and ban round trip (the ban seen by vanilla's /banlist), and
-   the watchdog naming a plugin that stalls the server thread.
+   getLocation and teleport; the world load events, block reads (type, data, light, biome) and writes,
+   BlockPhysicsEvent, a cancelled and an uncancelled block place, world reads (heights, chunks, border,
+   game rules, another dimension) and a storm with its WeatherChangeEvent; the server area: a command hidden
+   from a player without its permission, tab completion (a TabCompleter, Bukkit's player-name default,
+   TabCompleteEvent), a boss bar shown and removed, an offline player's op, whitelist and ban round trip (the
+   ban seen by vanilla's /banlist), and the watchdog naming a plugin that stalls the server thread.
 
     python3 tools/plugins_e2e.py --engine target/release/horizon-client --bot target/release/examples/plugin_bot
 
@@ -181,6 +183,11 @@ def check_plugins(engine, bot_binary, built, out, scratch):
         done, _ = log.wait_for(r'Done \(')
         if not loaded < level < enabled < done:
             raise Failed(f'lifecycle out of order: onLoad {loaded}, level {level}, onEnable {enabled}, Done {done}')
+        # A STARTUP plugin sees every world's WorldInitEvent, then their WorldLoadEvent.
+        init, _ = log.wait_for(r'\[FerraloomTest\] event: world-init world$')
+        world_load, _ = log.wait_for(r'\[FerraloomTest\] event: world-load world_the_end$')
+        if not enabled < init < world_load < done:
+            raise Failed(f'world events out of order: onEnable {enabled}, init {init}, load {world_load}, Done {done}')
         log.wait_for(r"'plugins/FerraloomNms\.jar' names net\.minecraft\.server\.MinecraftServer "
                      r"\(from dev\.ferraloom\.nmsplugin\.Adapter\).*it is disabled if it reaches one")
         log.wait_for(r'\[FerraloomNms\] probe: no internals, enabled')
@@ -264,6 +271,58 @@ def check_plugins(engine, bot_binary, built, out, scratch):
         _, where = bot.out.wait_for(r'^chat at world (-?[\d.]+) (-?[\d.]+) (-?[\d.]+)$', start=mark)
         x, y, z = (float(v) for v in where.split()[3:6])
         below = (int(x // 1), int(y // 1) - 1, int(z // 1))
+        bx, by, bz = below
+
+        # Block reads, then a write with physics: BlockPhysicsEvent for its neighbours.
+        mark = len(bot.out.lines)
+        bot.send(f'command ftest block {bx} {by} {bz}')
+        bot.out.wait_for(r'^chat block GRASS_BLOCK minecraft:grass_block\[snowy=false\] solid=true empty=false '
+                         r'above=AIR sky=15 biome=minecraft:plains$', start=mark)
+        bot.send(f'command ftest set {bx + 2} {by + 1} {bz} minecraft:oak_log')
+        bot.out.wait_for(r'^chat set minecraft:oak_log\[axis=x\]$', start=mark)
+        log_mark = len(log.lines)
+        server.console(f'execute if block {bx + 2} {by + 1} {bz} minecraft:oak_log[axis=x] run say log set')
+        log.wait_for(r'\[Server\] log set', start=log_mark)
+        bot.send('command ftest physics')
+        bot.out.wait_for(r'^chat watching physics$', start=mark)
+        bot.send(f'command ftest set {bx + 2} {by + 1} {bz + 1} minecraft:stone')
+        log.wait_for(r'\[FerraloomTest\] event: physics at -?\d+ -?\d+ -?\d+ changed=\w+', start=log_mark)
+        print('block reads and writes, BlockPhysicsEvent: ok')
+
+        # World reads: heights, chunks, the border, a game rule, another dimension's (unloaded) block.
+        bot.send('command ftest world')
+        bot.out.wait_for(rf'^chat world sea=-?\d+ highest={by} loaded=true generated=true far=false '
+                         r'border=5\.99999\d*E7 inside=true keepInventory=false nether=AIR$', start=mark)
+        print('world reads: ok')
+
+        # A cancelled place leaves the air; an uncancelled one places stone.
+        target = (bx + 3, by + 1, bz)
+        bot.send('command ftest protect on')
+        bot.out.wait_for(r'^chat protect true$', start=mark)
+        log_mark = len(log.lines)
+        bot.send(f'place {bx + 3} {by} {bz}')
+        log.wait_for(r'\[FerraloomTest\] event: place STONE at {} {} {} against GRASS_BLOCK replacing AIR by {} '
+                     r'cancelled=true'.format(*target, PLAYER), start=log_mark)
+        server.console('execute if block {} {} {} minecraft:air run say not placed'.format(*target))
+        log.wait_for(r'\[Server\] not placed', start=log_mark)
+        bot.send('command ftest protect off')
+        bot.out.wait_for(r'^chat protect false$', start=mark)
+        time.sleep(0.5)
+        log_mark = len(log.lines)
+        bot.send(f'place {bx + 3} {by} {bz}')
+        log.wait_for(r'event: place STONE at {} {} {} .* cancelled=false'.format(*target), start=log_mark)
+        server.console('execute if block {} {} {} minecraft:stone run say placed'.format(*target))
+        log.wait_for(r'\[Server\] placed', start=log_mark)
+        print('block place: cancelled kept air, uncancelled placed: ok')
+
+        # A storm from a plugin, with its WeatherChangeEvent.
+        log_mark = len(log.lines)
+        bot.send('command ftest storm on')
+        log.wait_for(r'\[FerraloomTest\] event: weather world to=true', start=log_mark)
+        bot.out.wait_for(r'^chat storm true$', start=mark)
+        bot.send('command ftest storm off')
+        bot.out.wait_for(r'^chat storm false$', start=mark)
+        print('storm and WeatherChangeEvent: ok')
 
         # A cancelled break leaves the block and resends it; an uncancelled one breaks it.
         bot.send('command ftest protect on')
@@ -340,6 +399,8 @@ def check_plugins(engine, bot_binary, built, out, scratch):
     disabled, _ = log.wait_for(r'\[FerraloomTest\] lifecycle: onDisable', start=mark, timeout=10)
     if disabled < stopping:
         raise Failed('onDisable before "Stopping server"')
+    # The plugin loader's chunk ticket cleanup at disable reaches every world.
+    log.absent(r'removing chunk tickets', mark)
     print('onDisable at stop: ok')
 
 

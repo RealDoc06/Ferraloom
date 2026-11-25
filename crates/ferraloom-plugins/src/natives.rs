@@ -203,10 +203,8 @@ mod tests {
         fn world_time(&mut self, _: usize, _: bool) -> i64 {
             0
         }
-        fn block_at(&mut self, _: usize, _: [i32; 3]) -> Option<String> {
-            None
-        }
     }
+    impl crate::BlockHost for Host {}
     impl ServerHost for Host {
         fn console_message(&mut self, message: &str) {
             self.said.push(format!("console: {message}"));

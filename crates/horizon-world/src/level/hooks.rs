@@ -6,7 +6,10 @@ use super::{
     states::BlockId,
     update::{below, rel},
 };
-use crate::registry::BlockStateId;
+use crate::{
+    plugin_hooks::{self, Hook, PluginEvent},
+    registry::BlockStateId,
+};
 use horizon_core::{geometry::Direction, position::BlockPos, random::RandomSource};
 
 impl<L: LevelAccess + ?Sized> Sim<'_, L> {
@@ -593,6 +596,17 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     /// `IceBlock.melt`.
     pub(crate) fn ice_melt(&mut self, pos: BlockPos, state: BlockStateId) {
         let b = self.b;
+        // Ferraloom: BlockFadeEvent, before the ice melts.
+        if plugin_hooks::listens(Hook::Fade) {
+            let to = if self.level.dimension() == super::Dimension::Nether {
+                b.air()
+            } else {
+                b.default_of(b.named.water)
+            };
+            if self.plugin_cancels(PluginEvent::Fade { pos, to }) {
+                return;
+            }
+        }
         if self.level.dimension() == super::Dimension::Nether {
             self.remove_block(pos, false);
         } else {

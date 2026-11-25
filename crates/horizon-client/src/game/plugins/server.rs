@@ -1,7 +1,11 @@
 //! The server area: the console, vanilla commands, shutdown, and the
 //! dedicated server's player lists.
 use super::{GameHost, Pending, STOP, is_plugin_command, pend};
-use crate::game::{Game, dedicated::Lists, lan::LanHost};
+use crate::game::{
+    Game,
+    dedicated::{self, Lists},
+    lan::LanHost,
+};
 use ferraloom_plugins::{
     Ban, BanTarget, List, PlayerId, Profile, ServerHost, ServerLists, WhitelistFlag,
 };
@@ -16,13 +20,13 @@ use horizon_client::{
     text::Text,
 };
 use std::sync::{
-    Arc, Mutex, OnceLock,
+    Arc, Mutex,
     atomic::{AtomicBool, Ordering},
 };
 
 impl ServerHost for GameHost<'_, '_> {
     fn console_message(&mut self, message: &str) {
-        crate::game::dedicated::log("INFO", &Text::legacy(message).plain());
+        dedicated::log("INFO", &Text::legacy(message).plain());
     }
 
     /// The console's line through the game's dispatcher, as the dedicated
@@ -45,7 +49,7 @@ pub(super) fn run_vanilla(game: &mut Game, line: &str) -> bool {
     game.chat_capture = Some(Vec::new());
     let ran = game.as_console(|g| g.run_command(line));
     for text in game.chat_capture.take().unwrap_or_default() {
-        crate::game::dedicated::log("INFO", &format!("System chat: {}", text.plain()));
+        dedicated::log("INFO", &format!("System chat: {}", text.plain()));
     }
     ran
 }
@@ -111,17 +115,17 @@ impl Game<'_> {
 /// Operators changed through a plugin: the hub's permission levels and
 /// command trees follow at the next tick's start.
 static OPS_CHANGED: AtomicBool = AtomicBool::new(false);
-/// The dedicated server's lists, for [`apply_list_changes`].
-static GAME_LISTS: OnceLock<Arc<Mutex<Lists>>> = OnceLock::new();
 
 /// The dedicated server's lists and user cache as plugins see them
 /// (`Server.getOfflinePlayer`, `getBanList`, `OfflinePlayer.setOp`...),
 /// answered on any thread under the lists' own locks. Changes follow
 /// CraftBukkit's: saved at once, no kicks, an operator's new level sent at
-/// the next tick.
+/// the next tick. `lists` is the dedicated server's `Admin::lists` (the same
+/// `Arc`, given before `Admin` exists, since plugins load first).
 struct GameLists {
     lists: Arc<Mutex<Lists>>,
     cache: &'static Mutex<Option<UserCache>>,
+    /// `op-permission-level`, until `Admin` holds it.
     op_level: i32,
 }
 
@@ -145,10 +149,7 @@ impl ServerLists for GameLists {
         let found = cache.as_mut()?.get_by_name(name, |lower| {
             let found = profiles::find_by_name(&profiles::discovery_url(), lower);
             if found.is_none() {
-                crate::game::dedicated::log(
-                    "WARN",
-                    &format!("Couldn't find profile with name: {lower}"),
-                );
+                dedicated::log("WARN", &format!("Couldn't find profile with name: {lower}"));
             }
             found
         });
@@ -191,6 +192,8 @@ impl ServerLists for GameLists {
     /// PlayerList.op and deop, and the whitelist's add and remove.
     fn set_listed(&self, list: List, who: &Profile, on: bool) {
         let user = name_and_id(who);
+        // Read before the lists' lock: never hold it while taking `Admin`'s.
+        let level = dedicated::admin(|a| a.op_level).unwrap_or(self.op_level);
         let mut l = self.lists.lock().unwrap();
         match (list, on) {
             (List::Ops, true) => {
@@ -201,7 +204,7 @@ impl ServerLists for GameLists {
                     .any(|e| e.user.id == who.id && e.bypasses_player_limit);
                 l.ops.add(OpEntry {
                     user,
-                    level: self.op_level,
+                    level,
                     bypasses_player_limit,
                 });
                 OPS_CHANGED.store(true, Ordering::Relaxed);
@@ -324,13 +327,13 @@ impl ServerLists for GameLists {
     }
 }
 
-/// The dedicated server's lists, before the plugins start (one allocation, plugins or not).
+/// The dedicated server's lists (`Admin::lists`), before the plugins start:
+/// one allocation, plugins or not.
 pub(in crate::game) fn register_lists(
     lists: &Arc<Mutex<Lists>>,
     cache: &'static Mutex<Option<UserCache>>,
     op_level: i32,
 ) {
-    let _ = GAME_LISTS.set(lists.clone());
     ferraloom_plugins::set_lists(Box::new(GameLists {
         lists: lists.clone(),
         cache,
@@ -338,21 +341,11 @@ pub(in crate::game) fn register_lists(
     }));
 }
 
-/// At a tick's start: operators a plugin changed reach the hub (PlayerList.sendPlayerPermissionLevel).
+/// At a tick's start: operators a plugin changed reach the hub, as `/op`'s do.
 pub(super) fn apply_list_changes(game: &mut Game) {
-    if !OPS_CHANGED.swap(false, Ordering::Relaxed) {
-        return;
+    if OPS_CHANGED.swap(false, Ordering::Relaxed)
+        && let Some(lists) = dedicated::admin(|a| a.lists.clone())
+    {
+        game.sync_ops(&lists);
     }
-    let (Some(lists), Some(host)) = (GAME_LISTS.get(), game.lan.as_mut()) else {
-        return;
-    };
-    host.hub.ops = lists
-        .lock()
-        .unwrap()
-        .ops
-        .entries()
-        .iter()
-        .map(|e| (e.user.id, e.level as u8))
-        .collect();
-    host.hub.resend_commands();
 }

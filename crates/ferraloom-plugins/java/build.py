@@ -44,6 +44,10 @@ IMPLEMENTATIONS = [
     'dev.ferraloom.bukkit.FerraloomIpBans',
     'dev.ferraloom.bukkit.FerraloomHelpMap',
     'dev.ferraloom.bukkit.FerraloomBossBar',
+    # Blocks and worlds.
+    'dev.ferraloom.bukkit.FerraloomChunk',
+    'dev.ferraloom.bukkit.FerraloomWorldBorder',
+    'dev.ferraloom.bukkit.FerraloomBlockState',
 ]
 TEST_PLUGINS = {'FerraloomTest': HERE / 'test-plugin', 'FerraloomNms': HERE / 'nms-plugin'}
 # Classes a test plugin compiles against but the server lacks, written at build time and kept out of its jar

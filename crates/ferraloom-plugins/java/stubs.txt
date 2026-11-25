@@ -22,3 +22,6 @@ org.bukkit.ban.ProfileBanList
 org.bukkit.ban.IpBanList
 org.bukkit.help.HelpMap
 org.bukkit.boss.BossBar
+org.bukkit.Chunk
+org.bukkit.WorldBorder
+org.bukkit.block.BlockState
