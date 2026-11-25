@@ -342,6 +342,16 @@ fn read(
                 ));
                 Ok(())
             }
+            cb::BLOCK_UPDATE => {
+                if let Ok(play::Clientbound::BlockUpdate(p)) = play::Clientbound::decode(id, &body)
+                {
+                    say(format!(
+                        "block {} {} {} {}",
+                        p.pos[0], p.pos[1], p.pos[2], p.state
+                    ));
+                }
+                Ok(())
+            }
             cb::BOSS_EVENT => {
                 if let Ok(play::Clientbound::BossEvent(e)) = play::Clientbound::decode(id, &body) {
                     match e.action {
