@@ -82,11 +82,23 @@ import net.minecraft.world.phys.Vec3;
  * sync NAME} (a round trip through the server thread; "synced NAME" on stdout when
  * it is back), {@code attack NAME TARGET} (ServerboundAttackPacket then the swing; TARGET is a
  * player's name or an entity type's path, the last one added), {@code use
- * NAME} (ServerboundUseItemPacket, main hand) and {@code end}. Each player
+ * NAME} (ServerboundUseItemPacket, main hand), and for the player handlers
+ * (tools/test_server_player_handlers_parity.py) {@code spectate NAME TARGET}
+ * (ServerboundSpectatorActionPacket), {@code sneak NAME on|off}
+ * (ServerboundPlayerInputPacket), {@code ridejump NAME DATA}
+ * (START_RIDING_JUMP), {@code useon NAME X Y Z FACE CX CY CZ}
+ * (ServerboundUseItemOnPacket, main hand, the click at the block corner plus
+ * C), {@code dig NAME ACTION X Y Z FACE} (ServerboundPlayerActionPacket),
+ * {@code tagentity NAME ID TARGET} and {@code tagblock NAME ID X Y Z} (the tag
+ * queries); then {@code end}. Each player
  * records the ClientboundSetEntityMotionPacket it receives, its own sprint
  * flag as the server sets it, teleports, the system chat (command
- * feedback), the ClientboundDamageEventPacket about a player (the hurt
- * player and the damage type) and the player hurt sounds it is sent.
+ * feedback; an overlay line as {@code overlay}), the
+ * ClientboundDamageEventPacket about a player (the hurt player and the damage
+ * type), the sounds it is sent of {@link #SOUNDS}, its camera
+ * (ClientboundSetCameraPacket), dialogs, tag query answers (their top-level
+ * keys), block updates, and a horse's or camel's flags and dash (entity data
+ * 18 and 19).
  */
 public final class KnockbackClient {
     private static volatile String step = "start";
@@ -123,6 +135,9 @@ public final class KnockbackClient {
                     case "attack" -> players.get(w[1]).attack(w[2]);
                     case "use" -> players.get(w[1]).send(new ServerboundUseItemPacket(InteractionHand.MAIN_HAND, 0, 0, 0));
                     case "punch" -> players.get(w[1]).send(net.minecraft.network.protocol.game.ServerboundPunchPacket.INSTANCE);
+                    case "spectate" -> players.get(w[1]).spectate(w[2]);
+                    case "sneak" -> players.get(w[1]).send(new net.minecraft.network.protocol.game.ServerboundPlayerInputPacket(
+                        new net.minecraft.world.entity.player.Input(false, false, false, false, false, w[2].equals("on"), false)));
                     case "sync" -> {
                         try {
                             players.get(w[1]).sync();
@@ -259,6 +274,15 @@ public final class KnockbackClient {
             send(ServerboundPlayerCommandPacket.STREAM_CODEC.decode(b));
         }
 
+        void spectate(String target) throws Exception {
+            Integer entity = last.get(target);
+            if (entity == null) {
+                record("error no " + target + " to spectate");
+                return;
+            }
+            send(new net.minecraft.network.protocol.game.ServerboundSpectatorActionPacket(java.util.OptionalInt.of(entity)));
+        }
+
         void attack(String target) throws Exception {
             Integer entity = last.get(target);
             if (entity == null) {
@@ -363,6 +387,12 @@ public final class KnockbackClient {
                     } else if (p instanceof net.minecraft.network.protocol.game.ClientboundSoundPacket s
                         && s.getSound().value().location().getPath().startsWith("entity.player.hurt")) {
                         record("sound " + s.getSound().value().location().getPath());
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundSetCameraPacket) {
+                        // Its camera id is private: the varint after the packet id.
+                        ByteBuf b = Unpooled.wrappedBuffer(r.payload);
+                        net.minecraft.network.VarInt.read(b);
+                        int camera = net.minecraft.network.VarInt.read(b);
+                        record("camera " + seen.getOrDefault(camera, "id" + camera));
                     } else if (p instanceof net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket d && d.id() == id) {
                         for (var value : d.packedItems()) {
                             if (value.id() == 0) record("sprinting " + ((((Byte) value.value()) & 8) != 0));

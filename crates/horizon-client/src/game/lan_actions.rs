@@ -1758,6 +1758,8 @@ impl Game<'_> {
             // handleTeleportToEntityPacket: a spectator goes to the player,
             // in whichever level they are.
             S::TeleportToEntity(p) if spectator => self.guest_spectate_teleport(host, gi, p.uuid),
+            // Ferraloom: handleSpectatorAction (game/lan_spectate.rs).
+            S::SpectatorAction(p) => self.guest_spectator_action(host, gi, p.target),
             S::ChangeGameMode(p) if host.hub.guests[gi].permission >= 2 => {
                 if let Some(mode) = usize::try_from(p.mode)
                     .ok()
@@ -1911,6 +1913,8 @@ impl Game<'_> {
         let Some((at, yaw, pitch, dim)) = target else {
             return;
         };
+        // Ferraloom: teleportTo(..., resetCamera = true).
+        self.set_guest_camera(host, gi, None);
         if Dim::from_id(&host.hub.guests[gi].dimension) != dim {
             // Only a dedicated server keeps its players in different levels.
             if self.options.dedicated.is_some() {
@@ -2472,6 +2476,8 @@ impl Game<'_> {
         self.lan_containers_tick(host);
         self.tick_lan_mount_menus(host);
         self.announce_guest_advancements(host);
+        // Ferraloom: the spectators watching through an entity follow it.
+        self.tick_guest_cameras(host);
         let conns: Vec<u32> = host
             .hub
             .guests

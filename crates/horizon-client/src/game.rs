@@ -90,6 +90,7 @@ mod lan_particles;
 mod lan_pvp;
 mod lan_quiet;
 mod lan_screen;
+mod lan_spectate;
 mod lan_stations;
 mod lan_trading;
 mod lan_vehicles;

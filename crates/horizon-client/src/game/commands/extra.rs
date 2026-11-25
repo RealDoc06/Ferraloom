@@ -30,6 +30,9 @@ impl Default for WaypointIcon {
 pub(in crate::game) struct CommandExtras {
     /// ServerPlayer.camera: the entity `/spectate` attached the view to.
     pub camera: Option<Target>,
+    /// Ferraloom: ServerPlayer.camera of the server's players, by connection
+    /// (game/lan_spectate.rs). Empty unless someone spectates through an entity.
+    pub guest_cameras: HashMap<u32, Target>,
     /// ServerPlayer.postEffects, in insertion order.
     pub post_effects: Vec<String>,
     /// MinecraftServer's tick profiler (`/debug start`): when it started and
@@ -127,7 +130,14 @@ impl Game<'_> {
         if target == Some(player) {
             return Err(err("commands.spectate.self", &[]));
         }
-        if !self.spectator() {
+        // Ferraloom: `player`'s own game mode and camera, who need not be the
+        // player in place; the one in place is a guest by connection to them.
+        let in_place = self.lan_acting.filter(|_| player != Target::Player);
+        let target = target.map(|t| match (t, in_place) {
+            (Target::Player, Some(conn)) => Target::Guest(conn),
+            _ => t,
+        });
+        if !self.for_player(player, |g| g.spectator()).unwrap_or(false) {
             return Err(tr_error(
                 "commands.spectate.not_spectator",
                 &[self.target_name(player)],
@@ -142,7 +152,7 @@ impl Game<'_> {
                 &[self.target_name(t)],
             ));
         }
-        self.set_camera(target);
+        self.for_player(player, |g| g.set_camera(target));
         match target {
             Some(t) => {
                 let name = self.target_name(t);
@@ -158,6 +168,11 @@ impl Game<'_> {
     /// `ServerPlayer.setCamera`: a new camera moves the player to it.
     pub(in crate::game) fn set_camera(&mut self, target: Option<Target>) {
         let target = target.filter(|t| *t != Target::Player);
+        // Ferraloom: a server player's camera is their own.
+        if let Some(conn) = self.lan_acting {
+            self.set_acting_guest_camera(conn, target);
+            return;
+        }
         if self.cmds.camera == target {
             return;
         }
@@ -206,6 +221,21 @@ impl Game<'_> {
             }
             _ => self.set_camera(None),
         }
+    }
+    /// Ferraloom: where a camera entity is and looks, while it is alive
+    /// (`Entity.isAlive`): what `ServerPlayer.tick` snaps a spectator to.
+    pub(in crate::game) fn spectator_view(&self, t: Target) -> Option<([f64; 3], [f32; 2])> {
+        if let Target::Mob(id) = t
+            && !self.mobs.iter().any(|m| m.id == id && m.alive())
+        {
+            return None;
+        }
+        if let Target::Guest(conn) = t
+            && self.command_guest(conn).is_none_or(|g| g.dead)
+        {
+            return None;
+        }
+        Some((self.target_position(t)?, self.target_rotation(t)))
     }
     /// The eye height the camera follows (`Camera.tick`'s entity).
     pub(in crate::game) fn camera_eye_height(&self) -> Option<f32> {

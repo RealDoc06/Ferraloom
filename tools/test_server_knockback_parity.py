@@ -218,7 +218,10 @@ def server_dir(directory, world):
     return port
 
 
-def run_side(label, server_command, client_command, build, world):
+def run_side(label, server_command, client_command, build, world, cases=None, setup=None):
+    """One server's transcript of `cases` after `setup` (this harness's own by default)."""
+    cases = CASES if cases is None else cases
+    setup = SETUP if setup is None else setup
     directory = build / label
     port = server_dir(directory, world)
     out = build / f'{label}.txt'
@@ -285,9 +288,9 @@ def run_side(label, server_command, client_command, build, world):
                     send(f'join {name}')
                     server.wait_for(rf'{name} joined the game', timeout=120)
                     wait_ticks(server, 40)
-                for line in SETUP:
+                for line in setup:
                     send(line)
-                for case, lines in CASES.items():
+                for case, lines in cases.items():
                     send(f'step {case}')
                     for line in lines:
                         send(line)
