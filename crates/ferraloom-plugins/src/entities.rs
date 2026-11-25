@@ -119,6 +119,8 @@ pub mod flags {
     pub const TAMED: u32 = 1 << 10;
     pub const BABY: u32 = 1 << 11;
     pub const INVISIBLE: u32 = 1 << 12;
+    /// A charged creeper.
+    pub const POWERED: u32 = 1 << 13;
 }
 
 /// An entity as one read gives it. A restricted host may know less; what it
@@ -187,6 +189,7 @@ pub enum Change {
     Invulnerable(bool),
     Tamed(bool),
     Baby(bool),
+    Powered(bool),
 }
 
 /// `CreatureSpawnEvent.SpawnReason`'s names the game spawns with.
@@ -739,6 +742,7 @@ fn decode(what: jint, v: &[f64], text: Option<String>) -> Option<Change> {
         12 => Change::Invulnerable(on),
         13 => Change::Tamed(on),
         14 => Change::Baby(on),
+        15 => Change::Powered(on),
         _ => return None,
     })
 }

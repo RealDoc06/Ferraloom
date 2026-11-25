@@ -42,6 +42,7 @@ final class EntityNative {
     static final int TAMED = 1 << 10;
     static final int BABY = 1 << 11;
     static final int INVISIBLE = 1 << 12;
+    static final int POWERED = 1 << 13;
 
     // change()'s what (src/entities.rs, decode).
     static final int SET_VELOCITY = 0;
@@ -59,6 +60,7 @@ final class EntityNative {
     static final int SET_INVULNERABLE = 12;
     static final int SET_TAMED = 13;
     static final int SET_BABY = 14;
+    static final int SET_POWERED = 15;
 
     // related()'s which.
     static final int TARGET = 0;

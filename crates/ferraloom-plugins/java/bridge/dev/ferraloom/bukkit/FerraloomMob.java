@@ -68,4 +68,24 @@ final class FerraloomMob extends StubMob {
     public void setAdult() {
         core.change(EntityNative.SET_BABY, 0);
     }
+
+    // Zombie, Piglin, Zoglin: the baby flag of their own.
+
+    public boolean isBaby() {
+        return core.flag(EntityNative.BABY);
+    }
+
+    public void setBaby(boolean baby) {
+        core.change(EntityNative.SET_BABY, baby ? 1 : 0);
+    }
+
+    // Creeper.
+
+    public boolean isPowered() {
+        return core.flag(EntityNative.POWERED);
+    }
+
+    public void setPowered(boolean powered) {
+        core.change(EntityNative.SET_POWERED, powered ? 1 : 0);
+    }
 }

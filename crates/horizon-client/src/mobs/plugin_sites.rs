@@ -201,6 +201,7 @@ pub fn state(m: &Mob, world: usize, who: impl Fn(Who) -> Option<Named>) -> Entit
         (m.extra.tame, f::TAMED),
         (m.is_baby(), f::BABY),
         (m.invisible, f::INVISIBLE),
+        (m.extra.charged, f::POWERED),
     ];
     s.flags = bits
         .iter()
@@ -292,6 +293,7 @@ pub fn apply(m: &mut Mob, world: usize, change: Change) -> bool {
         Change::Invulnerable(on) => m.invulnerable_flag = on,
         Change::Tamed(on) => m.extra.tame = on,
         Change::Baby(on) => finalize::set_baby(m, on),
+        Change::Powered(on) => m.extra.charged = on,
     }
     true
 }
