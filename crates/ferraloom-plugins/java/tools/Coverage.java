@@ -44,7 +44,8 @@ public final class Coverage {
                     }
                 }
             }
-            String iface = stub.getInterfaces()[0].getCanonicalName();
+            Class<?> api = stub.getInterfaces().length > 0 ? stub.getInterfaces()[0] : stub.getSuperclass();
+            String iface = api.getCanonicalName();
             System.out.printf("| `%s` | %d | %d | %.1f |%n", iface, done, methods.size(), 100.0 * done / methods.size());
             allMethods += methods.size();
             allDone += done;

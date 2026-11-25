@@ -5,6 +5,7 @@ use super::{
     classes::{Class, Interface},
     update::{HORIZONTAL, above, below, rel},
 };
+use crate::plugin_hooks::{self, Hook, PluginEvent};
 use crate::{
     fluid::{FluidKind, FluidState},
     registry::BlockStateId,
@@ -527,7 +528,14 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             && b.is_water_fluid(self.fluid_at(pos).kind())
         {
             if b.instance_of(state, Class::Liquid) {
-                self.set_block_and_update(pos, b.default_of(b.named.stone));
+                let stone = b.default_of(b.named.stone);
+                // Ferraloom: BlockFormEvent, before lava over water turns to stone.
+                if plugin_hooks::listens(Hook::Form)
+                    && self.plugin_cancels(PluginEvent::Form { pos, to: stone })
+                {
+                    return;
+                }
+                self.set_block_and_update(pos, stone);
             }
             self.level_event(1501, pos, 0);
             return;
@@ -560,6 +568,16 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         if neighbour > 0 {
             for (direction, new_fluid) in self.spread_targets(kind, pos, state) {
                 let neighbour_pos = rel(pos, direction);
+                // Ferraloom: BlockFromToEvent, before the fluid flows to a side.
+                if plugin_hooks::listens(Hook::FromTo)
+                    && self.plugin_cancels(PluginEvent::FromTo {
+                        from: pos,
+                        to: neighbour_pos,
+                        face: direction,
+                    })
+                {
+                    continue;
+                }
                 let neighbour_state = self.state(neighbour_pos);
                 self.spread_to(kind, neighbour_pos, neighbour_state, direction, new_fluid);
             }
@@ -578,6 +596,16 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             if self.can_be_replaced_with(below_fluid, below_pos, new_below.kind(), Direction::Down)
                 && self.can_hold_specific_fluid(below_state, new_below.kind())
             {
+                // Ferraloom: BlockFromToEvent, before the fluid flows down.
+                if plugin_hooks::listens(Hook::FromTo)
+                    && self.plugin_cancels(PluginEvent::FromTo {
+                        from: pos,
+                        to: below_pos,
+                        face: Direction::Down,
+                    })
+                {
+                    return;
+                }
                 self.spread_to(kind, below_pos, below_state, Direction::Down, new_below);
                 if self.source_neighbour_count(kind, pos) >= 3 {
                     self.spread_to_sides(kind, pos, fluid, state);

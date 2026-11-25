@@ -113,6 +113,8 @@ mod hooks;
 mod interact;
 pub mod pistons;
 mod place;
+// Ferraloom: plugin event sites (crate::plugin_hooks).
+mod plugin_sites;
 mod portal;
 pub mod portal_travel;
 mod query;
@@ -302,6 +304,16 @@ pub trait LevelAccess {
     /// server, a host or the test harness).
     fn is_client_side(&self) -> bool {
         false
+    }
+    /// Ferraloom: a plugin event fired by block behaviour
+    /// ([`crate::plugin_hooks`]), called only while a plugin listens to it.
+    /// Its answer: 1 when cancelled (`Redstone`: the power to use). The
+    /// game's server level answers; any other level lets it pass.
+    fn plugin_event(&mut self, event: crate::plugin_hooks::PluginEvent) -> i32 {
+        match event {
+            crate::plugin_hooks::PluginEvent::Redstone { new, .. } => new,
+            _ => 0,
+        }
     }
     /// `getBlockState`. Unloaded or out-of-bounds positions read as air.
     fn block_state(&self, pos: BlockPos) -> BlockStateId;
