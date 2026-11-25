@@ -2187,6 +2187,15 @@ impl Game<'_> {
         // DamageSource.scalesWithDifficulty: a mob (or its projectile's
         // owner) caused the hit, not a player.
         let living_cause = attacker.or(owner).is_some();
+        // Ferraloom: EntityDamageEvent for the player (game/plugins/entities.rs).
+        let amount = if ferraloom_plugins::listens(ferraloom_plugins::Event::EntityDamage) {
+            match self.plugin_player_damage(amount, damage_type, attacker.or(owner)) {
+                Some(amount) => amount,
+                None => return false,
+            }
+        } else {
+            amount
+        };
         let mut outcome = horizon_client::health::BlockOutcome::default();
         if let Some(player) = self.player.as_mut()
             && let Some(id) = self.motion.health.damage.id(damage_type)
@@ -2303,6 +2312,15 @@ impl Game<'_> {
         if self.creative {
             return;
         }
+        // Ferraloom: EntityDamageEvent for the player (game/plugins/entities.rs).
+        let amount = if ferraloom_plugins::listens(ferraloom_plugins::Event::EntityDamage) {
+            match self.plugin_player_damage(amount, damage_type, None) {
+                Some(amount) => amount,
+                None => return,
+            }
+        } else {
+            amount
+        };
         if let Some(player) = self.player.as_mut()
             && let Some(id) = self.motion.health.damage.id(damage_type)
         {

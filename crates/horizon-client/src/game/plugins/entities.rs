@@ -39,6 +39,8 @@ thread_local! {
     static KINDS: RefCell<FxHashMap<u32, &'static str>> = RefCell::new(FxHashMap::default());
     /// The mob dying now and the guest who killed it, for `EntityDeathEvent`.
     static KILLER: Cell<Option<(u32, Option<u32>)>> = const { Cell::new(None) };
+    /// The guest whose melee hit on another player lands now (`pvp_land`).
+    static PVP: Cell<Option<u32>> = const { Cell::new(None) };
     /// The reason the next `spawn_mob_for` spawns with, when not its default.
     static REASON: Cell<Option<SpawnReason>> = const { Cell::new(None) };
 }
@@ -67,6 +69,62 @@ pub(in crate::game) fn acting(uuid: Option<PlayerId>, dim: Dim) -> impl Drop {
         return Restore(None, false);
     }
     Restore(ACTING.replace(uuid.map(|u| (u, world_index(dim)))), true)
+}
+
+/// Guest `conn`'s hit on another player lands, until the guard drops
+/// (`pvp_land`). Without plugins, one check.
+pub(in crate::game) fn pvp_attacker(conn: Option<u32>) -> impl Drop {
+    struct Restore(Option<u32>, bool);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            if self.1 {
+                PVP.set(self.0);
+            }
+        }
+    }
+    if !ferraloom_plugins::running() {
+        return Restore(None, false);
+    }
+    Restore(PVP.replace(conn), true)
+}
+
+/// `EntityDamageEvent.DamageCause` for a damage type's key, as CraftBukkit maps them.
+fn cause_of_type(key: &str) -> &'static str {
+    match key.strip_prefix("minecraft:").unwrap_or(key) {
+        "player_attack"
+        | "mob_attack"
+        | "mob_attack_no_aggro"
+        | "sting"
+        | "spear"
+        | "mace_smash" => "ENTITY_ATTACK",
+        "arrow" | "trident" | "thrown" | "fireball" | "wither_skull" | "mob_projectile"
+        | "wind_charge" => "PROJECTILE",
+        "explosion" | "player_explosion" => "ENTITY_EXPLOSION",
+        "bad_respawn_point" => "BLOCK_EXPLOSION",
+        "fall" | "ender_pearl" => "FALL",
+        "falling_block" | "falling_anvil" | "falling_stalactite" => "FALLING_BLOCK",
+        "on_fire" => "FIRE_TICK",
+        "in_fire" | "campfire" => "FIRE",
+        "lava" => "LAVA",
+        "hot_floor" => "HOT_FLOOR",
+        "drown" => "DROWNING",
+        "starve" => "STARVATION",
+        "magic" | "indirect_magic" => "MAGIC",
+        "wither" => "WITHER",
+        "dragon_breath" => "DRAGON_BREATH",
+        "cactus" | "sweet_berry_bush" => "CONTACT",
+        "in_wall" => "SUFFOCATION",
+        "cramming" => "CRAMMING",
+        "fly_into_wall" => "FLY_INTO_WALL",
+        "thorns" => "THORNS",
+        "sonic_boom" => "SONIC_BOOM",
+        "freeze" => "FREEZE",
+        "lightning_bolt" => "LIGHTNING",
+        "out_of_world" => "VOID",
+        "dry_out" => "DRYOUT",
+        "generic_kill" => "KILL",
+        _ => "CUSTOM",
+    }
 }
 
 /// Mob `id` dies now (`mob_died`), killed by the guest on `conn`: for its
@@ -684,6 +742,46 @@ impl Game<'_> {
         let yield_ = 1.0 / radius.max(f32::MIN_POSITIVE);
         self.with_site_host(|h| ferraloom_plugins::entity_explode(h, Some(by), at, yield_, &blocks))
             .unwrap_or_default()
+    }
+
+    /// `EntityDamageEvent` (by the attacking player or mob, when there is
+    /// one) for the guest whose turn it is, before they are hurt: the damage
+    /// to deal, none when cancelled. Fired before the hurt cooldown, which is
+    /// the health's own; armor crosses as nothing (it is applied after).
+    pub(in crate::game) fn plugin_player_damage(
+        &mut self,
+        amount: f32,
+        damage_type: &str,
+        attacker: Option<u32>,
+    ) -> Option<f32> {
+        let Some(victim) = self.lan_acting_uuid.map(Named::player) else {
+            return Some(amount);
+        };
+        let pvp = PVP.get();
+        let attacker_mob = attacker.and_then(|id| {
+            self.mobs
+                .iter()
+                .find(|m| m.id == id)
+                .map(plugin_sites::named)
+        });
+        self.with_site_host(|h| {
+            let damager = pvp
+                .and_then(|conn| h.guest_uuid(conn))
+                .map(Named::player)
+                .or(attacker_mob);
+            let dealt = f64::from(amount);
+            let d = ferraloom_plugins::Damage {
+                victim,
+                damager,
+                cause: cause_of_type(damage_type),
+                damage_type,
+                base: dealt,
+                armor: 0.0,
+                magic: 0.0,
+                dealt,
+            };
+            ferraloom_plugins::entity_damage(h, &d).map(|d| d as f32)
+        })
     }
 
     /// `PlayerInteractEntityEvent` for guest `conn` using entity `id`,
