@@ -151,6 +151,9 @@ through the JVM's handler instead of Rust's message. Only with plugins.
 | A command line | A lookup in a label set before any JNI; vanilla commands never reach the JVM. | |
 | An event with listeners | One JNI call with its arguments (a few strings), the listeners' own time. | |
 | Join/quit with plugins | One JNI call each, listener or not (the player objects). | |
+| A container click, drag, open or close with a listener | One JNI call with ints and three short strings; no item is converted unless a plugin asks the event for one. | |
+| A hopper transfer with an `InventoryMoveItemEvent` listener | One JNI call, the one item's NBT to Java and back, two inventory objects and the event. Without a listener: the flag test. | |
+| An item stack sent to a client | One emptiness check of `StackData::other` more than before (`lan/item_extras.rs`); a stack with unmodelled components clones each one sent. | |
 
 The event bit is a plain static and `listens` is `#[inline(always)]` over `FLAGS.load(Relaxed) & bit != 0`,
 so the site compiles to the bit test and nothing else. `break_block_as_player` in the release build
@@ -189,6 +192,18 @@ the baseline is the coordinator's next step; budget: no measurable MSPT differen
   `getUniqueId`, `getLocation`, `getWorld`, `teleport` (across worlds too), `isOnline`, `isOp`, permissions.
 - `World`: name, UID, environment, key, heights, game time and time of day, players, `getBlockAt`.
   `Block`: position, world, location, type (the loaded level in place).
+- Items (inventory area): `ItemStack` to and from the server as one `byte[]` (`ItemStack.CODEC` in network NBT;
+  `src/inventory.rs` `to_java`/`from_java`, Java `Items.read`/`write`). The meta is the item's component patch
+  itself, so what neither side models survives a round trip; names and lore as CraftChatMessage converts them,
+  plugin data in `custom_data`'s `PublicBukkitValues`, item flags as `tooltip_display`; skull, potion, leather,
+  book and enchanted book metas; `ItemType` from the server's item table. Inventories: `PlayerInventory`,
+  ender chests, block containers, `Server.createInventory` (a plugin's container lives in the server as
+  `Slots::Custom`), `openInventory`, `closeInventory`, `updateInventory`, the cursor and held slot; a slot's
+  item writes through to the slot as CraftItemStack's mirror does. Events: `InventoryClickEvent` (CraftBukkit's
+  click types and actions; a cancelled click is corrected on the client), `InventoryDragEvent`,
+  `InventoryOpenEvent`, `InventoryCloseEvent`, `InventoryMoveItemEvent` (hoppers), `PlayerItemConsumeEvent`,
+  `PlayerSwapHandItemsEvent`. Menus the game runs itself (crafting table, anvil, trading, stations) fire no
+  click events yet.
 
 Known differences from CraftBukkit, each for its area to remove: join/quit messages are sent as plain
 translations (no hover); `BlockBreakEvent.setDropItems`/`setExpToDrop` are ignored and the block entity is
