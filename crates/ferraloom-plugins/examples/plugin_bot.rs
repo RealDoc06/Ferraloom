@@ -6,9 +6,15 @@
 //!   plugin_bot --server 127.0.0.1:25565 --name Tester
 //!
 //! Input lines: `command <line>` (no slash), `chat <text>`, `dig <x> <y> <z>`
-//! (a creative player's START_DESTROY_BLOCK on the top face), `quit`.
+//! (a creative player's START_DESTROY_BLOCK on the top face), `use <x> <y> <z>`
+//! (the main hand on the top face), `move <x> <y> <z>` (a move on the ground,
+//! then the tick's end), `sneak <on|off>`, `payload <channel> <text>` (a custom
+//! payload; `minecraft:register` registers a channel), `quit`.
 //! Output lines: `joined`, `pos <x> <y> <z>` for each teleport, `chat <text>`
-//! for each system message (its plain text), `block <x> <y> <z> <state>`,
+//! for each system message (its plain text), `actionbar <text>` for an overlay
+//! one, `title <text>`, `subtitle <text>`, `tablist <header> | <footer>`,
+//! `sound <id> <name>` (`-` for none), `payload <channel> <text>`,
+//! `gamemode <id>`, `experience <level>`, `block <x> <y> <z> <state>`,
 //! `commands ftest=<bool>` for each command tree (whether it names `ftest`),
 //! `disconnected <why>`.
 use horizon_protocol::{
@@ -213,7 +219,65 @@ fn read(mut reader: horizon_protocol::connection::ConnReader, writer: Arc<Mutex<
                 if let Ok(play::Clientbound::SystemChat(p)) = play::Clientbound::decode(id, &body) {
                     let mut text = String::new();
                     plain(&p.content, &mut text);
-                    say(format!("chat {text}"));
+                    let kind = if p.overlay { "actionbar" } else { "chat" };
+                    say(format!("{kind} {text}"));
+                }
+                Ok(())
+            }
+            cb::SET_TITLE_TEXT | cb::SET_SUBTITLE_TEXT => {
+                if let Ok(
+                    play::Clientbound::SetTitleText(t) | play::Clientbound::SetSubtitleText(t),
+                ) = play::Clientbound::decode(id, &body)
+                {
+                    let mut text = String::new();
+                    plain(&t.text, &mut text);
+                    let kind = if id == cb::SET_TITLE_TEXT {
+                        "title"
+                    } else {
+                        "subtitle"
+                    };
+                    say(format!("{kind} {text}"));
+                }
+                Ok(())
+            }
+            cb::TAB_LIST => {
+                if let Ok(play::Clientbound::TabList(t)) = play::Clientbound::decode(id, &body) {
+                    let (mut header, mut footer) = (String::new(), String::new());
+                    plain(&t.header, &mut header);
+                    plain(&t.footer, &mut footer);
+                    say(format!("tablist {header} | {footer}"));
+                }
+                Ok(())
+            }
+            cb::SOUND => {
+                if let Ok(play::Clientbound::Sound(p)) = play::Clientbound::decode(id, &body) {
+                    let name = p.sound.1.map_or_else(|| "-".to_owned(), |(name, _)| name);
+                    say(format!("sound {} {name}", p.sound.0));
+                }
+                Ok(())
+            }
+            cb::CUSTOM_PAYLOAD => {
+                if let Ok(play::Clientbound::CustomPayload(p)) =
+                    play::Clientbound::decode(id, &body)
+                {
+                    let text = String::from_utf8_lossy(&p.data).replace('\0', " ");
+                    say(format!("payload {} {}", p.channel, text.trim_end()));
+                }
+                Ok(())
+            }
+            cb::GAME_EVENT => {
+                if let Ok(play::Clientbound::GameEvent(p)) = play::Clientbound::decode(id, &body)
+                    && p.event == 3
+                {
+                    say(format!("gamemode {}", p.param));
+                }
+                Ok(())
+            }
+            cb::SET_EXPERIENCE => {
+                if let Ok(play::Clientbound::SetExperience(p)) =
+                    play::Clientbound::decode(id, &body)
+                {
+                    say(format!("experience {}", p.level));
                 }
                 Ok(())
             }
@@ -306,6 +370,47 @@ fn main() {
                     pos: [x, y, z],
                     direction: 1,
                     sequence,
+                })
+            }
+            "use" => {
+                let pos: Vec<i32> = rest.split(' ').filter_map(|v| v.parse().ok()).collect();
+                let [x, y, z] = pos[..] else {
+                    eprintln!("plugin_bot: use <x> <y> <z>");
+                    continue;
+                };
+                sequence += 1;
+                play::Serverbound::UseItemOn(play::UseItemOn {
+                    hand: 0,
+                    pos: [x, y, z],
+                    face: 1,
+                    cursor: [0.5, 1.0, 0.5],
+                    inside: false,
+                    world_border: false,
+                    sequence,
+                })
+            }
+            "move" => {
+                let pos: Vec<f64> = rest.split(' ').filter_map(|v| v.parse().ok()).collect();
+                let [x, y, z] = pos[..] else {
+                    eprintln!("plugin_bot: move <x> <y> <z>");
+                    continue;
+                };
+                let step =
+                    play::Serverbound::MovePlayerPos(play::MovePlayerPos { x, y, z, flags: 1 });
+                if writer.lock().unwrap().send(&step.encode()).is_err() {
+                    break;
+                }
+                // One position a tick: the tick's end lets the next one through.
+                play::Serverbound::ClientTickEnd(Empty)
+            }
+            "sneak" => play::Serverbound::PlayerInput(play::PlayerInput {
+                flags: if rest == "on" { 32 } else { 0 },
+            }),
+            "payload" => {
+                let (channel, text) = rest.split_once(' ').unwrap_or((rest, ""));
+                play::Serverbound::CustomPayload(configuration::CustomPayload {
+                    channel: channel.into(),
+                    data: text.as_bytes().to_vec(),
                 })
             }
             "quit" => break,
