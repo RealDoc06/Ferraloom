@@ -137,6 +137,8 @@ pub struct EntityState {
     pub health: f64,
     pub max_health: f64,
     pub no_damage_ticks: i32,
+    /// `LivingEntity.getArrowsInBody`.
+    pub arrows: i32,
     pub custom_name: Option<String>,
     pub target: Option<Named>,
     /// `LivingEntity.getKiller`: the player who last hurt it, while that counts.
@@ -160,6 +162,7 @@ impl EntityState {
             health: 0.0,
             max_health: 0.0,
             no_damage_ticks: 0,
+            arrows: 0,
             custom_name: None,
             target: None,
             killer: None,
@@ -190,6 +193,7 @@ pub enum Change {
     Tamed(bool),
     Baby(bool),
     Powered(bool),
+    Arrows(i32),
 }
 
 /// `CreatureSpawnEvent.SpawnReason`'s names the game spawns with.
@@ -596,7 +600,7 @@ pub fn entity_combust(
 }
 
 /// `EntityNative.state`'s layout, mirrored in `EntityNative.java`.
-pub(crate) const STATE_LEN: usize = 16;
+pub(crate) const STATE_LEN: usize = 17;
 
 fn state_values(s: &EntityState) -> [f64; STATE_LEN] {
     [
@@ -616,6 +620,7 @@ fn state_values(s: &EntityState) -> [f64; STATE_LEN] {
         s.health,
         s.max_health,
         f64::from(s.no_damage_ticks),
+        f64::from(s.arrows),
     ]
 }
 
@@ -755,6 +760,7 @@ fn decode(what: jint, v: &[f64], text: Option<String>) -> Option<Change> {
         13 => Change::Tamed(on),
         14 => Change::Baby(on),
         15 => Change::Powered(on),
+        16 => Change::Arrows(at(0) as i32),
         _ => return None,
     })
 }

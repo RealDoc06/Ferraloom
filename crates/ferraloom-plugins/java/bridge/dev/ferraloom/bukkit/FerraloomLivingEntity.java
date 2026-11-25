@@ -68,6 +68,20 @@ final class FerraloomLivingEntity extends StubLivingEntity {
     }
 
     @Override
+    public int getArrowsInBody() {
+        return (int) read(EntityNative.ARROWS);
+    }
+
+    /** CraftLivingEntity: at least 0. */
+    @Override
+    public void setArrowsInBody(int count) {
+        if (count < 0) {
+            throw new IllegalArgumentException("New arrow amount must be >= 0");
+        }
+        core.change(EntityNative.SET_ARROWS, count);
+    }
+
+    @Override
     public boolean isInvisible() {
         return core.flag(EntityNative.INVISIBLE);
     }

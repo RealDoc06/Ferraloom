@@ -27,6 +27,7 @@ final class EntityNative {
     static final int HEALTH = 13;
     static final int MAX_HEALTH = 14;
     static final int NO_DAMAGE = 15;
+    static final int ARROWS = 16;
 
     // FLAGS' bits (src/entities.rs, flags).
     static final int ON_GROUND = 1;
@@ -61,6 +62,7 @@ final class EntityNative {
     static final int SET_TAMED = 13;
     static final int SET_BABY = 14;
     static final int SET_POWERED = 15;
+    static final int SET_ARROWS = 16;
 
     // related()'s which.
     static final int TARGET = 0;

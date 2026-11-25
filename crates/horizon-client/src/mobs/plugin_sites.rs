@@ -213,6 +213,7 @@ pub fn state(m: &Mob, world: usize, who: impl Fn(Who) -> Option<Named>) -> Entit
     s.health = f64::from(m.health);
     s.max_health = f64::from(finalize::max_health(m));
     s.no_damage_ticks = m.invulnerable;
+    s.arrows = i32::from(m.stuck.arrows);
     s.custom_name = m.custom_name.clone();
     s.target = m.ai.target.and_then(&who);
     s.owner = m.extra.owner.map(uuid);
@@ -294,6 +295,7 @@ pub fn apply(m: &mut Mob, world: usize, change: Change) -> bool {
         Change::Tamed(on) => m.extra.tame = on,
         Change::Baby(on) => finalize::set_baby(m, on),
         Change::Powered(on) => m.extra.charged = on,
+        Change::Arrows(n) => m.stuck.arrows = n.clamp(0, i32::from(u16::MAX)) as u16,
     }
     true
 }
