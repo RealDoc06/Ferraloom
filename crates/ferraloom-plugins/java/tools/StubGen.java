@@ -17,10 +17,10 @@ import java.util.Map;
 import java.util.StringJoiner;
 
 /**
- * Writes the bridge's stubs from the API jar: for each interface named, a
- * class {@code dev.ferraloom.bukkit.stub.Stub<Name>} that implements every
- * abstract method by throwing {@code UnsupportedOperationException} naming the
- * method. The bridge's classes extend these and override what they implement,
+ * Writes the bridge's stubs from the API jar: for each interface (or abstract
+ * class) named, a class {@code dev.ferraloom.bukkit.stub.Stub<Name>} that
+ * implements every abstract method by throwing
+ * {@code UnsupportedOperationException} naming the method. The bridge's classes extend these and override what they implement,
  * so a method Ferraloom lacks fails loudly, and a new API method compiles
  * without anyone writing it by hand.
  *
@@ -34,8 +34,8 @@ public final class StubGen {
         Files.createDirectories(out);
         for (int i = 1; i < args.length; i++) {
             Class<?> type = Class.forName(args[i], false, StubGen.class.getClassLoader());
-            if (!type.isInterface()) {
-                throw new IllegalArgumentException(args[i] + " is not an interface");
+            if (!type.isInterface() && !Modifier.isAbstract(type.getModifiers())) {
+                throw new IllegalArgumentException(args[i] + " is not an interface or an abstract class");
             }
             Files.writeString(out.resolve(stubName(type) + ".java"), stub(type));
         }
@@ -56,7 +56,8 @@ public final class StubGen {
         s.append("/** Every abstract method of {@link ").append(type.getCanonicalName())
                 .append("}, unsupported until Ferraloom overrides it. */\n");
         s.append("@SuppressWarnings({\"deprecation\", \"removal\", \"unchecked\", \"rawtypes\"})\n");
-        s.append("public class ").append(stubName(type)).append(" implements ").append(type.getCanonicalName()).append(" {\n");
+        s.append("public class ").append(stubName(type)).append(type.isInterface() ? " implements " : " extends ")
+                .append(type.getCanonicalName()).append(" {\n");
         for (Method m : methods(type)) {
             s.append(method(type, m, bindings));
         }
@@ -105,6 +106,10 @@ public final class StubGen {
         List<Method> chosen = new ArrayList<>();
         for (List<Method> group : bySignature.values()) {
             if (group.stream().noneMatch(m -> Modifier.isAbstract(m.getModifiers()))) {
+                continue;
+            }
+            // An abstract class's own method implements its interfaces' one.
+            if (group.stream().anyMatch(m -> !m.getDeclaringClass().isInterface() && !Modifier.isAbstract(m.getModifiers()))) {
                 continue;
             }
             if (group.stream().anyMatch(m -> m.isDefault() && overridesAll(m, group))) {
