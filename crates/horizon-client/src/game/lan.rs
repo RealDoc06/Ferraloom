@@ -356,6 +356,19 @@ impl MobLook {
     }
 }
 
+/// An entity `lan_teleport_entity` tells the players about.
+struct Moved {
+    id: u32,
+    position: [f64; 3],
+    rotation: [f32; 2],
+    on_ground: bool,
+    /// Its trackers get the packet too (no update interval, or simulated
+    /// on both sides).
+    tracked: bool,
+    /// Its first passenger controls it (`getControllingPassenger`).
+    controlled: bool,
+}
+
 /// Dropped items per piece of `lan_entities`' pass on the pool.
 const ITEM_STATE_GRAIN: usize = 256;
 
@@ -432,6 +445,14 @@ fn mob_meta(
     );
     defaults.push((10, serializer::PARTICLES, Value::Particles(Vec::new())));
     defaults.push((11, serializer::BOOLEAN, Value::Bool(false)));
+    // LivingEntity.DATA_ARROW_COUNT_ID and DATA_STINGER_COUNT_ID: what the
+    // client draws stuck in it (Ferraloom).
+    for (index, count) in [(12, m.stuck.arrows), (13, m.stuck.stingers)] {
+        if count > 0 {
+            meta.push((index, serializer::INT, Value::Int(i32::from(count))));
+        }
+        defaults.push((index, serializer::INT, Value::Int(0)));
+    }
     // Mob.DATA_MOB_FLAGS_ID: no AI 1, left-handed 2, aggressive 4 (what
     // draws a vindicator's axe, a skeleton's drawn bow, a piglin's raised
     // weapon).
@@ -2370,6 +2391,122 @@ impl Game<'_> {
     }
 
     /// A chat line the host typed, for the guests.
+    /// Port of Entity#sendTeleportTransitionToPlayers for entity `t` just
+    /// moved by a command to `pos`: ClientboundTeleportEntityPacket to each
+    /// player riding it (its controller gets the move as the command gave it)
+    /// and, for the types vanilla leaves out of the tracker's interval
+    /// (items, orbs, projectiles, End crystals and area effect clouds), to
+    /// the players tracking it. `rotation` None: kept (/tp's relative
+    /// rotation). Taken as an absolute /tp: one by relative coordinates
+    /// reaches the controller as absolute, and without the kept delta.
+    pub(super) fn lan_teleport_entity(
+        &mut self,
+        t: super::commands::Target,
+        pos: [f64; 3],
+        rotation: Option<[f32; 2]>,
+    ) {
+        use super::commands::Target as T;
+        if self.lan.is_none() {
+            return;
+        }
+        // The entity as it stands now, whether its trackers are told and
+        // whether its first passenger controls it.
+        let at = |id: u32, p: Vec3, rotation: [f32; 2], on_ground: bool| Moved {
+            id,
+            position: [p.x, p.y, p.z],
+            rotation,
+            on_ground,
+            tracked: true,
+            controlled: false,
+        };
+        let moved = match t {
+            T::Item(id) => (self.dropped.iter().find(|e| e.id == id))
+                .map(|e| at(id, e.position, [0.0; 2], e.on_ground)),
+            T::Orb(id) => (self.orbs.iter().find(|e| e.id == id))
+                .map(|e| at(id, e.position, [0.0; 2], e.on_ground)),
+            T::Projectile(id) => (self.creatures.projectiles.iter().find(|e| e.id == id))
+                .map(|e| at(id, e.position, [e.yaw, e.pitch], false)),
+            T::Crystal(id) => (self.crystals.iter().find(|e| e.id == id))
+                .map(|e| at(id, e.position, [0.0; 2], false)),
+            T::Other(id) => (self.others.iter().find(|e| e.id == id)).map(|e| Moved {
+                tracked: e.kind == "minecraft:area_effect_cloud",
+                ..at(id, e.position, [e.yaw, e.pitch], false)
+            }),
+            T::Boat(id) => (self.boats.iter().find(|e| e.id == id)).map(|e| Moved {
+                tracked: false,
+                controlled: true,
+                ..at(id, e.position, [e.yaw, 0.0], e.on_ground)
+            }),
+            T::Cart(id) => (self.carts.iter().find(|e| e.id == id)).map(|e| Moved {
+                tracked: false,
+                ..at(id, e.position, [e.yaw, 0.0], e.on_ground)
+            }),
+            T::Mob(id) => (self.mobs.iter().find(|e| e.id == id)).map(|m| Moved {
+                tracked: false,
+                controlled: horizon_client::mobs::equine::controlled(m),
+                ..at(id, m.position, [m.yaw, m.head_pitch], m.on_ground)
+            }),
+            _ => None,
+        };
+        let (Some(moved), Some(host)) = (moved, self.lan.as_mut()) else {
+            return;
+        };
+        let Moved {
+            id,
+            position,
+            rotation: [yaw, pitch],
+            on_ground,
+            tracked,
+            controlled,
+        } = moved;
+        let id = id as i32;
+        // An absolute /tp leaves no delta (teleportSetPosition without the
+        // Relative.DELTA flags).
+        let current = play::TeleportEntity {
+            id,
+            position,
+            delta: [0.0; 3],
+            yaw,
+            pitch,
+            relatives: 0,
+            on_ground,
+        };
+        // getIndirectPassengersStream: the players among them, in order.
+        let mut riders = Vec::new();
+        let mut open = vec![id];
+        while let Some(vehicle) = open.pop() {
+            for &p in host.hub.riding.passengers(vehicle) {
+                open.push(p);
+                if host.hub.guests.iter().any(|g| g.entity_id == p) {
+                    // The controller gets the transition: the position as
+                    // given, and the rotation /tp kept as relative (Relative.Y_ROT | X_ROT).
+                    let controller = controlled
+                        && vehicle == id
+                        && host.hub.riding.passengers(id).first() == Some(&p);
+                    let packet = if controller {
+                        let [yaw, pitch] = rotation.unwrap_or([0.0; 2]);
+                        play::TeleportEntity {
+                            position: pos,
+                            yaw,
+                            pitch,
+                            relatives: if rotation.is_some() {
+                                0
+                            } else {
+                                1 << 3 | 1 << 4
+                            },
+                            ..current.clone()
+                        }
+                    } else {
+                        current.clone()
+                    };
+                    riders.push((p, packet));
+                }
+            }
+        }
+        host.hub
+            .teleport_entity(id, &riders, tracked.then_some(current));
+    }
+
     pub(super) fn lan_host_chat(&mut self, message: &str) {
         if let Some(host) = &self.lan {
             host.hub.chat(&host.host_name, message);

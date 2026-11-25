@@ -367,6 +367,9 @@ pub struct PlayerMotion {
     pub was_in_powder_snow: bool,
     /// `Entity.DATA_TICKS_FROZEN`.
     pub ticks_frozen: i32,
+    /// Ferraloom: the arrows and stingers stuck in the player (entity data
+    /// 12 and 13), counted down by the server's tick of its body.
+    pub stuck: crate::arrows::StuckCounts,
     /// Leather boots on the feet (`PowderSnowBlock.canEntityWalkOnPowderSnow`).
     pub leather_boots: bool,
     /// An armor piece in `#freeze_immune_wearables` (`LivingEntity.canFreeze`).
@@ -561,6 +564,7 @@ impl PlayerMotion {
             in_powder_snow: false,
             was_in_powder_snow: false,
             ticks_frozen: 0,
+            stuck: Default::default(),
             leather_boots: false,
             freeze_immune: false,
             burn_from_stepping_immune: false,
