@@ -341,6 +341,7 @@ fn needs_host(event: &MotionEvent) -> bool {
     matches!(
         event,
         MotionEvent::HurtSound(_)
+            | MotionEvent::Health(horizon_client::health::HealthEvent::DamageBroadcast { .. })
             | MotionEvent::Fall(_)
             | MotionEvent::Drown
             | MotionEvent::HoneySlide { .. }
@@ -3044,7 +3045,26 @@ impl Game<'_> {
         }
         for event in events {
             match event {
-                MotionEvent::HurtSound(sound) => self.player_hurt_sound(sound, at),
+                // Ferraloom: Player.playSound leaves the hurt guest out; its
+                // own client plays the sound from the damage event below.
+                MotionEvent::HurtSound(sound) => {
+                    let source = horizon_client::settings::sound_source(sound) as i32;
+                    self.audio.play_unshared(sound, Some(at), 1.0, 1.0);
+                    host.hub.sound(sound, at, 1.0, 1.0, source, Some(conn));
+                }
+                // Ferraloom: LivingEntity.hurtServer's broadcastDamageEvent, to
+                // the guest and the players around (the red flash, the walk
+                // animation's kick). The causing entities aren't known here.
+                MotionEvent::Health(horizon_client::health::HealthEvent::DamageBroadcast {
+                    source,
+                }) => {
+                    if let (Some(d), Some(g)) = (
+                        self.motion.health.damage.definition(source),
+                        host.hub.guest(conn),
+                    ) {
+                        host.hub.damage_event(g.entity_id, &d.name, None, None, at);
+                    }
+                }
                 // LivingEntity.checkFallDamage: the crumbs reach every player.
                 MotionEvent::Fall(horizon_client::landing::FallEvent::Particles {
                     state,

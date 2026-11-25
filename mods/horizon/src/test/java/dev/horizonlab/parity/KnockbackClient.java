@@ -84,8 +84,9 @@ import net.minecraft.world.phys.Vec3;
  * player's name or an entity type's path, the last one added), {@code use
  * NAME} (ServerboundUseItemPacket, main hand) and {@code end}. Each player
  * records the ClientboundSetEntityMotionPacket it receives, its own sprint
- * flag as the server sets it, teleports, and the system chat (command
- * feedback).
+ * flag as the server sets it, teleports, the system chat (command
+ * feedback), the ClientboundDamageEventPacket about a player (the hurt
+ * player and the damage type) and the player hurt sounds it is sent.
  */
 public final class KnockbackClient {
     private static volatile String step = "start";
@@ -355,6 +356,13 @@ public final class KnockbackClient {
                                 replyLock.notifyAll();
                             }
                         }
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundDamageEventPacket d
+                        && (d.entityId() == id || NAMES.containsValue(seen.get(d.entityId())))) {
+                        // The causing and direct entities are left out: Ferraloom doesn't attribute a player's hurt yet.
+                        record("damage " + seen.get(d.entityId()) + " " + d.sourceType().getRegisteredName());
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundSoundPacket s
+                        && s.getSound().value().location().getPath().startsWith("entity.player.hurt")) {
+                        record("sound " + s.getSound().value().location().getPath());
                     } else if (p instanceof net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket d && d.id() == id) {
                         for (var value : d.packedItems()) {
                             if (value.id() == 0) record("sprinting " + ((((Byte) value.value()) & 8) != 0));
