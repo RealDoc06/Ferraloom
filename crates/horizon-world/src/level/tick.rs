@@ -1448,7 +1448,12 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         let p = b.props;
         let top = info.top;
         let below_pos = below(top);
-        if info.freezes_below {
+        // Ferraloom: BlockFormEvent before ice and snow form (handleBlockFormEvent).
+        let forms = |sim: &mut Self, pos, to| {
+            !(plugin_hooks::listens(Hook::Form)
+                && sim.plugin_cancels(PluginEvent::Form { pos, to }))
+        };
+        if info.freezes_below && forms(self, below_pos, b.default_of(b.named.ice)) {
             self.set_block_and_update(below_pos, b.default_of(b.named.ice));
         }
         if !self.level.is_raining() {
@@ -1460,9 +1465,12 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             if b.is_block(state, b.named.snow) {
                 let layers = b.table.int(state, p.layers);
                 if layers < max_height.min(8) {
-                    self.set_block_and_update(top, b.table.set_int(state, p.layers, layers + 1));
+                    let more = b.table.set_int(state, p.layers, layers + 1);
+                    if forms(self, top, more) {
+                        self.set_block_and_update(top, more);
+                    }
                 }
-            } else {
+            } else if forms(self, top, b.default_of(b.named.snow)) {
                 self.set_block_and_update(top, b.default_of(b.named.snow));
             }
         }

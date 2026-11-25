@@ -271,10 +271,16 @@ impl Game<'_> {
         } else {
             &mut sign.back
         };
+        // Ferraloom: SignChangeEvent decides the lines (game/plugins/blocks.rs).
+        let old = ferraloom_plugins::listens(ferraloom_plugins::Event::SignChange)
+            .then(|| side.lines.clone());
         for (line, new) in side.lines.iter_mut().zip(&p.lines) {
             *line = horizon_client::clipboard::strip_formatting(new);
         }
         play.sign_editing = None;
+        if let Some(old) = old {
+            self.plugin_sign_change(host, conn, key, p.front, old);
+        }
         self.mark_block_entity_updated(key);
     }
     /// `ClientPacketListener.handleOpenSignEditor`: the editor on a sign this

@@ -25,4 +25,10 @@ final class BlockNative {
 
     /** Level.destroyBlock(pos, true): false when there was nothing to break. */
     static native boolean breakNaturally(int world, int x, int y, int z);
+
+    /** A sign's four lines on one side, or null where there is no sign. */
+    static native String[] signLines(int world, int x, int y, int z, boolean front);
+
+    /** Writes a sign's lines on one side: false where there is no sign. */
+    static native boolean setSignLines(int world, int x, int y, int z, boolean front, String[] lines);
 }

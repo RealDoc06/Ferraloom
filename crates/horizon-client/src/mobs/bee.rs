@@ -331,37 +331,20 @@ pub fn hurt(m: &mut Mob) {
 pub fn sting(m: &mut Mob, who: Who, cx: &mut Cx) {
     let from = [m.position.x, m.position.y, m.position.z];
     let amount = (m.attrs.attack_damage as i32) as f32;
-    match who {
-        Who::Player => {
-            // Bee.doHurtTarget: the poison only when the sting hurt, and
-            // only on normal (10 s) and hard (18 s).
-            let seconds = match cx.w.difficulty.id {
-                2 => 10,
-                3 => 18,
-                _ => 0,
-            };
-            if seconds > 0 {
-                cx.events.push(MobEvent::AttackPlayerWithEffect {
-                    amount,
-                    from,
-                    effect: "minecraft:poison",
-                    ticks: seconds * 20,
-                    amplifier: 0,
-                });
-            } else {
-                cx.events.push(MobEvent::AttackPlayer(amount, from));
-            }
-        }
-        Who::Mob(id) => cx.events.push(MobEvent::AttackMob {
-            target: id,
-            amount,
-            source: Damage {
-                kind: DamageKind::Sting,
-                attacker: Some(Who::Mob(m.id)),
-                from: Some(from),
-            },
-        }),
-    }
+    // The poison only when the sting hurt, and only on normal (10 s) and
+    // hard (18 s); the stinger count goes up with it (Ferraloom).
+    let seconds = match cx.w.difficulty.id {
+        2 => 10,
+        3 => 18,
+        _ => 0,
+    };
+    cx.events.push(MobEvent::Sting {
+        target: who,
+        bee: m.id,
+        amount,
+        from,
+        poison: seconds * 20,
+    });
     set_has_stung(m, true);
     stop_being_angry(m);
     if !m.silent {

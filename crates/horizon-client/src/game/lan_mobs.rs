@@ -195,6 +195,10 @@ pub(super) fn acts_on_player(e: &MobEvent) -> bool {
         MobEvent::AttackPlayer(..)
             | MobEvent::AttackPlayerWithEffect { .. }
             | MobEvent::DamagePlayer { .. }
+            | MobEvent::Sting {
+                target: Who::Player,
+                ..
+            }
             | MobEvent::SonicBoom {
                 target: Who::Player,
                 ..

@@ -36,6 +36,53 @@ const WIDTH: f32 = 0.5;
 const HEIGHT: f32 = 0.5;
 const EYE_HEIGHT: f32 = 0.13;
 
+/// The arrows and bee stingers stuck in a living entity
+/// (`LivingEntity.DATA_ARROW_COUNT_ID` and `DATA_STINGER_COUNT_ID`, entity
+/// data 12 and 13) and the timers that let them go one by one. Mobs and
+/// players carry one; the trackers send the counts when they change.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct StuckCounts {
+    pub arrows: u16,
+    pub stingers: u16,
+    /// `removeArrowTime` and `removeStingerTime`, kept at 0 where vanilla's
+    /// go below it: both start again at the next tick either way.
+    remove_arrow_time: u16,
+    remove_stinger_time: u16,
+}
+impl StuckCounts {
+    /// `AbstractArrow.onHitEntity`: a hurt from a non-piercing arrow.
+    pub fn add_arrow(&mut self) {
+        self.arrows = self.arrows.saturating_add(1);
+    }
+    /// `Bee.doHurtTarget`: a sting that hurt.
+    pub fn add_stinger(&mut self) {
+        self.stingers = self.stingers.saturating_add(1);
+    }
+    /// Port of LivingEntity#tick's count-down on a server: each stuck arrow
+    /// (stinger) falls out after 20 * (30 - count) ticks.
+    pub fn tick(&mut self) {
+        if self.arrows | self.stingers == 0 {
+            return;
+        }
+        drop_one(&mut self.arrows, &mut self.remove_arrow_time);
+        drop_one(&mut self.stingers, &mut self.remove_stinger_time);
+    }
+}
+fn drop_one(count: &mut u16, timer: &mut u16) {
+    if *count == 0 {
+        return;
+    }
+    let mut time = i32::from(*timer);
+    if time <= 0 {
+        time = 20 * (30 - i32::from(*count));
+    }
+    time -= 1;
+    if time <= 0 {
+        *count -= 1;
+    }
+    *timer = time.max(0) as u16;
+}
+
 /// `AbstractArrow.Pickup`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Pickup {
@@ -1289,5 +1336,39 @@ impl WaterSplashWorld for Ticker<'_, '_, '_, '_> {
     fn splash_event(&mut self) -> Result<(), Error> {
         self.st.events.push(ArrowEvent::SplashEvent);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::StuckCounts;
+
+    /// Ticks until the arrow count first goes down.
+    fn ticks_to_drop(c: &mut StuckCounts) -> u32 {
+        let before = c.arrows;
+        (1..)
+            .find(|_| {
+                c.tick();
+                c.arrows != before
+            })
+            .unwrap()
+    }
+
+    #[test]
+    fn stuck_arrows_fall_out_as_living_entity_tick_lets_them() {
+        let mut c = StuckCounts::default();
+        c.add_arrow();
+        c.add_arrow();
+        // 20 * (30 - 2), then 20 * (30 - 1) for the one left.
+        assert_eq!(ticks_to_drop(&mut c), 560);
+        assert_eq!(ticks_to_drop(&mut c), 580);
+        assert_eq!(c.arrows, 0);
+        // From 30 up, one goes every tick until 29 are left.
+        for _ in 0..31 {
+            c.add_arrow();
+        }
+        assert_eq!(ticks_to_drop(&mut c), 1);
+        assert_eq!(ticks_to_drop(&mut c), 1);
+        assert_eq!(ticks_to_drop(&mut c), 20);
     }
 }

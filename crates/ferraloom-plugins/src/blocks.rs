@@ -60,6 +60,21 @@ pub trait BlockHost {
     fn break_naturally(&mut self, _world: usize, _pos: [i32; 3]) -> bool {
         false
     }
+    /// A sign's lines on one side (`front` or back); none where there is no sign.
+    fn sign_lines(&mut self, _world: usize, _pos: [i32; 3], _front: bool) -> Option<Vec<String>> {
+        None
+    }
+    /// Writes a sign's lines on one side, as its players see them; false
+    /// where there is no sign.
+    fn set_sign_lines(
+        &mut self,
+        _world: usize,
+        _pos: [i32; 3],
+        _front: bool,
+        _lines: &[String],
+    ) -> bool {
+        false
+    }
 }
 
 /// One line of [`BlockHost::block_table`]: `name base count default flags
@@ -150,6 +165,16 @@ pub(crate) fn load(env: &mut JNIEnv) -> jni::errors::Result<()> {
             ("light", "(IIII)I", light as *mut c_void),
             ("biome", "(IIII)Ljava/lang/String;", biome as *mut c_void),
             ("breakNaturally", "(IIII)Z", break_naturally as *mut c_void),
+            (
+                "signLines",
+                &format!("(IIIIZ)[{S}"),
+                sign_lines as *mut c_void,
+            ),
+            (
+                "setSignLines",
+                &format!("(IIIIZ[{S})Z"),
+                set_sign_lines as *mut c_void,
+            ),
         ],
     )?;
     let entry = Entry::load(
@@ -555,6 +580,58 @@ extern "system" fn break_naturally(
         let broke = with_host(|h| h.break_naturally(index(world), [x, y, z]))
             .ok_or(Fail::NoHost("Block.breakNaturally"))?;
         Ok(jbool(broke))
+    })
+}
+
+extern "system" fn sign_lines(
+    mut env: JNIEnv,
+    _: JClass,
+    world: jint,
+    x: jint,
+    y: jint,
+    z: jint,
+    front: jboolean,
+) -> jni::sys::jobjectArray {
+    guard(&mut env, std::ptr::null_mut(), |env| {
+        let lines = with_host(|h| h.sign_lines(index(world), [x, y, z], front != 0))
+            .ok_or(Fail::NoHost("Sign.getLine"))?;
+        let Some(lines) = lines else {
+            return Ok(std::ptr::null_mut());
+        };
+        let null = jni::objects::JObject::null();
+        let array = env.new_object_array(lines.len() as i32, "java/lang/String", null)?;
+        for (i, line) in lines.iter().enumerate() {
+            let s = env.new_string(line)?;
+            env.set_object_array_element(&array, i as i32, s)?;
+        }
+        Ok(array.into_raw())
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+extern "system" fn set_sign_lines(
+    mut env: JNIEnv,
+    _: JClass,
+    world: jint,
+    x: jint,
+    y: jint,
+    z: jint,
+    front: jboolean,
+    lines: jni::objects::JObjectArray,
+) -> jboolean {
+    guard(&mut env, JNI_FALSE, |env| {
+        let mut text = Vec::new();
+        for i in 0..env.get_array_length(&lines)? {
+            let line = env.get_object_array_element(&lines, i)?;
+            text.push(if line.is_null() {
+                String::new()
+            } else {
+                env.get_string(&jni::objects::JString::from(line))?.into()
+            });
+        }
+        let set = with_host(|h| h.set_sign_lines(index(world), [x, y, z], front != 0, &text))
+            .ok_or(Fail::NoHost("Sign.update"))?;
+        Ok(jbool(set))
     })
 }
 

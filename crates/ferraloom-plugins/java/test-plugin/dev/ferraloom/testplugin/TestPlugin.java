@@ -77,6 +77,12 @@ public final class TestPlugin extends JavaPlugin implements Listener {
         });
         getServer().getScheduler().runTaskAsynchronously(this,
                 () -> getLogger().info("schedule: async primary=" + Bukkit.isPrimaryThread()));
+        // Block data is static: readable off the server thread, as on CraftBukkit.
+        getServer().getScheduler().runTaskAsynchronously(this, () -> getLogger().info("blocks: async primary="
+                + Bukkit.isPrimaryThread() + " air=" + org.bukkit.Material.AIR.isAir() + " solid="
+                + org.bukkit.Material.STONE.isSolid() + " block=" + org.bukkit.Material.OAK_LOG.isBlock() + " data="
+                + org.bukkit.Material.OAK_LOG.createBlockData().getAsString() + " parsed="
+                + Bukkit.createBlockData("minecraft:oak_stairs[facing=east]").getAsString(true)));
     }
 
     @Override
@@ -220,6 +226,16 @@ public final class TestPlugin extends JavaPlugin implements Listener {
                 World w = Bukkit.getWorlds().get(0);
                 w.setStorm(args.length > 1 && args[1].equals("on"));
                 sender.sendMessage("storm " + w.hasStorm());
+            }
+            case "sign" -> {
+                Block b = Bukkit.getWorlds().get(0).getBlockAt(arg(args, 1), arg(args, 2), arg(args, 3));
+                b.setType(org.bukkit.Material.OAK_SIGN);
+                if (b.getState() instanceof org.bukkit.block.Sign sign) {
+                    sign.setLine(0, "hello");
+                    sign.update();
+                }
+                String line = b.getState() instanceof org.bukkit.block.Sign again ? again.getLine(0) : "no sign";
+                sender.sendMessage("sign " + line);
             }
             case "physics" -> {
                 watchPhysics = true;
