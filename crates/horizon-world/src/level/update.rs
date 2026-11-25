@@ -1,7 +1,11 @@
 //! `Level.setBlock`, `LevelChunk.setBlockState` and the
 //! `CollectingNeighborUpdater` that orders neighbour and shape updates.
 use super::{LevelAccess, LevelEvent, Sim, classes::Class, flags, states::BlockId};
-use crate::{fluid::FluidState, registry::BlockStateId};
+use crate::{
+    fluid::FluidState,
+    plugin_hooks::{self, Hook, PluginEvent},
+    registry::BlockStateId,
+};
 use horizon_core::{
     geometry::Direction,
     position::BlockPos,
@@ -573,6 +577,16 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                 moved,
             } => {
                 let state = state.unwrap_or_else(|| self.state(pos));
+                // Ferraloom: BlockPhysicsEvent, before neighborChanged (CraftBukkit's executeUpdate).
+                if plugin_hooks::listens(Hook::Physics)
+                    && self.plugin_cancels(PluginEvent::Physics {
+                        pos,
+                        state,
+                        source: pos,
+                    })
+                {
+                    return;
+                }
                 self.neighbor_changed(state, pos, block, moved);
             }
         }

@@ -59,6 +59,8 @@ final class FerraloomRegistries {
         FACTORIES.put(Structure.class, Structures::new);
         FACTORIES.put(StructureType.class, StructureTypes::new);
         // Blocks and worlds.
+        FACTORIES.put(org.bukkit.block.BlockType.class, FerraloomBlockType::new);
+        FACTORIES.put(org.bukkit.GameRule.class, FerraloomGameRule::new);
         // Entities.
         // Inventory.
         // Server.

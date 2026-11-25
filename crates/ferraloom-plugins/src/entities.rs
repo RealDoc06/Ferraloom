@@ -457,7 +457,7 @@ pub fn entity_target(
         // SAFETY: `target`'s signature in `load`.
         let out = unsafe { events.invoke(env, TARGET, ReturnType::Array, &args) }?.l()?;
         let mut v = [0; 3];
-        env.get_long_array_region(&jni::objects::JLongArray::from(out), 0, &mut v)?;
+        env.get_long_array_region(jni::objects::JLongArray::from(out), 0, &mut v)?;
         Ok(match v[0] {
             1 => Targeted::Cancelled,
             2 => Targeted::Changed(None),
@@ -748,7 +748,7 @@ fn decode(what: jint, v: &[f64], text: Option<String>) -> Option<Change> {
 }
 
 fn apply(env: &mut JNIEnv, e: EntityRef, change: Change) -> Result<jboolean, Fail> {
-    match with_host(|h| h.change(e, change)).ok_or(Fail::NoHost("Entity's setters"))? {
+    match with_host(|h| EntityHost::change(h, e, change)).ok_or(Fail::NoHost("Entity's setters"))? {
         Reach::Here(done) => Ok(jbool(done)),
         Reach::Gone => Ok(JNI_FALSE),
         Reach::Elsewhere => Err(unreachable_here(env, "Changing another entity")),

@@ -126,6 +126,33 @@ impl Levels {
     pub(super) fn parked_dims(&self) -> Vec<Dim> {
         self.parked.keys().copied().collect()
     }
+    /// Ferraloom: a parked level's world, its forced chunks and its save
+    /// folder (Bukkit's `World` reaches every dimension, game/plugins/).
+    pub(super) fn parked_world(&self, dim: Dim) -> Option<&World> {
+        self.parked.get(&dim).map(|p| &p.world)
+    }
+    pub(super) fn parked_forced(
+        &mut self,
+        dim: Dim,
+    ) -> Option<&mut std::collections::HashSet<(i32, i32)>> {
+        self.parked.get_mut(&dim).map(|p| &mut p.streaming.forced)
+    }
+    pub(super) fn parked_save_root(&self, dim: Dim) -> Option<std::path::PathBuf> {
+        self.parked.get(&dim).map(|p| p.save.root.clone())
+    }
+}
+
+impl Game<'_> {
+    /// Ferraloom: `dim`'s world wherever its level is, in place or parked,
+    /// to read without swapping it in (Bukkit's `World` reaches every
+    /// dimension); none when the level is not loaded. Writes that need the
+    /// level's ticks and updates go through `enter_command_level`.
+    pub(super) fn level_world(&mut self, dim: Dim) -> Option<&mut World> {
+        if dim == self.dim {
+            return Some(&mut self.world);
+        }
+        self.levels.parked.get_mut(&dim).map(|p| &mut p.world)
+    }
 }
 
 impl Game<'_> {

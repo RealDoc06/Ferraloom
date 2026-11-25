@@ -14,7 +14,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
  * names and signatures). Every call comes on the server thread, which is
  * Bukkit's main thread. Each is a wall: what a plugin throws through it is
  * logged here and answered with the default. The event entry points are per
- * area: {@link PlayerEvents}, {@link BlockEvents}.
+ * area: {@link PlayerEvents}, {@link BlockEvents}, {@link WorldEvents}.
  */
 public final class Bridge {
     /**
@@ -31,6 +31,27 @@ public final class Bridge {
         EVENTS[2] = AsyncPlayerChatEvent.getHandlerList();
         // Blocks: 16-31.
         EVENTS[16] = BlockBreakEvent.getHandlerList();
+        EVENTS[17] = org.bukkit.event.block.BlockPlaceEvent.getHandlerList();
+        EVENTS[18] = org.bukkit.event.block.BlockPhysicsEvent.getHandlerList();
+        EVENTS[19] = org.bukkit.event.block.BlockFromToEvent.getHandlerList();
+        EVENTS[20] = org.bukkit.event.block.BlockBurnEvent.getHandlerList();
+        EVENTS[21] = org.bukkit.event.block.BlockIgniteEvent.getHandlerList();
+        EVENTS[22] = org.bukkit.event.block.BlockGrowEvent.getHandlerList();
+        EVENTS[23] = org.bukkit.event.block.BlockFadeEvent.getHandlerList();
+        EVENTS[24] = org.bukkit.event.block.BlockFormEvent.getHandlerList();
+        EVENTS[25] = org.bukkit.event.block.BlockSpreadEvent.getHandlerList();
+        EVENTS[26] = org.bukkit.event.block.LeavesDecayEvent.getHandlerList();
+        EVENTS[27] = org.bukkit.event.block.BlockPistonExtendEvent.getHandlerList();
+        EVENTS[28] = org.bukkit.event.block.BlockPistonRetractEvent.getHandlerList();
+        EVENTS[29] = org.bukkit.event.block.BlockRedstoneEvent.getHandlerList();
+        EVENTS[30] = org.bukkit.event.block.SignChangeEvent.getHandlerList();
+        EVENTS[31] = org.bukkit.event.block.BlockExplodeEvent.getHandlerList();
+        // Worlds: 32-39.
+        EVENTS[32] = org.bukkit.event.world.ChunkLoadEvent.getHandlerList();
+        EVENTS[33] = org.bukkit.event.world.ChunkUnloadEvent.getHandlerList();
+        EVENTS[34] = org.bukkit.event.weather.WeatherChangeEvent.getHandlerList();
+        EVENTS[35] = org.bukkit.event.weather.ThunderChangeEvent.getHandlerList();
+        EVENTS[36] = org.bukkit.event.world.WorldSaveEvent.getHandlerList();
         // Entities: 40-47.
         EVENTS[40] = org.bukkit.event.entity.EntityDamageEvent.getHandlerList();
         EVENTS[41] = org.bukkit.event.entity.EntityDeathEvent.getHandlerList();

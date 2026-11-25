@@ -17,8 +17,8 @@
 use super::{DIMS, GameHost, Pending, STOP, pend, world_index};
 use crate::game::{Dim, Game, Mob, lan::LanHost};
 use ferraloom_plugins::{
-    Actor, Change, EntityHost, EntityRef, EntityState, Event, Location, Named, PlayerHost,
-    PlayerId, Reach, ServerHost, SpawnReason, Targeted, WorldHost, listens,
+    Actor, BlockHost, EntityChange as Change, EntityHost, EntityRef, EntityState, Event, Location,
+    Named, PlayerHost, PlayerId, Reach, ServerHost, SpawnReason, Targeted, WorldHost, listens,
 };
 use horizon_client::{
     fast_hash::FxHashMap,
@@ -397,22 +397,14 @@ impl WorldHost for SiteHost<'_, '_> {
         };
         if full { game } else { day }
     }
+}
 
+impl BlockHost for SiteHost<'_, '_> {
     /// The pass's blocks; outside the pass, none (they read as unloaded).
-    fn block_at(&mut self, world: usize, [x, y, z]: [i32; 3]) -> Option<String> {
+    fn block_state(&mut self, world: usize, [x, y, z]: [i32; 3]) -> Option<u32> {
         let w = self.pass.filter(|_| world == self.world)?;
         w.world.chunks.get(&(x >> 4, z >> 4))?;
-        let state = w.world.block(x, y, z);
-        let s = w.registry.state(state)?;
-        if s.properties.is_empty() {
-            return Some(s.name.clone());
-        }
-        let props: Vec<String> = s
-            .properties
-            .iter()
-            .map(|(k, v)| format!("{k}={v}"))
-            .collect();
-        Some(format!("{}[{}]", s.name, props.join(",")))
+        Some(w.world.block(x, y, z).0)
     }
 }
 
@@ -638,7 +630,7 @@ impl Game<'_> {
         }
         let mut host = GameHost::new(self, None);
         for (e, change) in queued {
-            host.change(e, change);
+            EntityHost::change(&mut host, e, change);
         }
     }
 

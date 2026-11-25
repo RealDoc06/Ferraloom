@@ -37,6 +37,10 @@ IMPLEMENTATIONS = [
     'dev.ferraloom.bukkit.FerraloomConsole',
     'dev.ferraloom.bukkit.FerraloomScheduler',
     'dev.ferraloom.bukkit.FerraloomUnsafe',
+    # Blocks and worlds.
+    'dev.ferraloom.bukkit.FerraloomChunk',
+    'dev.ferraloom.bukkit.FerraloomWorldBorder',
+    'dev.ferraloom.bukkit.FerraloomBlockState',
     'dev.ferraloom.bukkit.FerraloomEntity',
     'dev.ferraloom.bukkit.FerraloomLivingEntity',
     'dev.ferraloom.bukkit.FerraloomMob',

@@ -203,10 +203,8 @@ mod tests {
         fn world_time(&mut self, _: usize, _: bool) -> i64 {
             0
         }
-        fn block_at(&mut self, _: usize, _: [i32; 3]) -> Option<String> {
-            None
-        }
     }
+    impl crate::BlockHost for Host {}
     impl ServerHost for Host {
         fn console_message(&mut self, message: &str) {
             self.said.push(format!("console: {message}"));
@@ -223,7 +221,7 @@ mod tests {
         fn entity(&mut self, _: crate::EntityRef) -> crate::Reach<crate::EntityState> {
             crate::Reach::Gone
         }
-        fn change(&mut self, _: crate::EntityRef, _: crate::Change) -> crate::Reach<bool> {
+        fn change(&mut self, _: crate::EntityRef, _: crate::EntityChange) -> crate::Reach<bool> {
             crate::Reach::Gone
         }
         fn entities(&mut self, _: usize, _: Option<[f64; 6]>) -> crate::Reach<Vec<crate::Named>> {

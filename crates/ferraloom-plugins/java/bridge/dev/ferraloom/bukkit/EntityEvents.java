@@ -168,7 +168,7 @@ public final class EntityEvents {
             }
             List<Block> list = new ArrayList<>(blocks.length / 3);
             for (int i = 0; i + 2 < blocks.length; i += 3) {
-                list.add(new FerraloomBlock(in, blocks[i], blocks[i + 1], blocks[i + 2], null));
+                list.add(new FerraloomBlock(in, blocks[i], blocks[i + 1], blocks[i + 2]));
             }
             EntityExplodeEvent event = new EntityExplodeEvent(by, new Location(in, x, y, z), list, yield,
                     ExplosionResult.DESTROY);
@@ -207,7 +207,7 @@ public final class EntityEvents {
             } catch (RuntimeException ex) {
                 data = null;
             }
-            EntityChangeBlockEvent event = new EntityChangeBlockEvent(entity, new FerraloomBlock(in, x, y, z, null), data);
+            EntityChangeBlockEvent event = new EntityChangeBlockEvent(entity, new FerraloomBlock(in, x, y, z), data);
             Bridge.server.pluginManager.callEvent(event);
             return event.isCancelled();
         } catch (Throwable ex) {

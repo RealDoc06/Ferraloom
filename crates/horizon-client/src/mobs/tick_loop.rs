@@ -850,7 +850,7 @@ mod tests {
             1 => {
                 if let Some(super::super::Who::Mob(t)) = m.ai.target {
                     let e = ferraloom_plugins::EntityRef::new(t, "villager");
-                    super::super::plugin_sites::queue(e, ferraloom_plugins::Change::Glowing(true));
+                    super::super::plugin_sites::queue(e, ferraloom_plugins::EntityChange::Glowing(true));
                 }
                 m.ai.target
             }

@@ -15,7 +15,7 @@
 //! start; without plugins they are never set.
 use super::{Damage, Mob, MobEvent, MobWorld, Seen, Who, finalize, species, tick_loop};
 use ferraloom_plugins::{
-    Actor, Change, EntityRef, EntityState, Event, Location, Named, entity_flags,
+    Actor, EntityChange as Change, EntityRef, EntityState, Event, Location, Named, entity_flags,
 };
 use horizon_core::random::LegacyRandom;
 use std::{cell::RefCell, sync::OnceLock};
