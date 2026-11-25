@@ -58,6 +58,8 @@ pub mod path;
 pub mod phantom;
 pub mod piglin;
 pub mod player_index;
+// Ferraloom: plugin events fired from mob code.
+pub mod plugin_sites;
 pub mod polar_bear;
 pub mod rabbit;
 pub mod raider;
@@ -2261,6 +2263,8 @@ impl Mob {
         {
             amount *= 5.0;
         }
+        // Ferraloom: the damage before armor, for EntityDamageEvent's BASE.
+        let base = amount;
         let (worn, worn_toughness) = self.worn_armor();
         // Shulker.setRawPeekAmount: a closed shell adds the covered armor modifier.
         let covered = if self.species() == Species::Shulker && self.extra.counter == 0 {
@@ -2283,6 +2287,16 @@ impl Mob {
         let epf = gear::protection(self, source.kind);
         if epf > 0.0 {
             amount *= 1.0 - epf / 25.0;
+        }
+        // Ferraloom: EntityDamageEvent where CraftBukkit's actuallyHurt fires it, past the
+        // cooldown check and before the health changes (mobs/plugin_sites.rs).
+        if ferraloom_plugins::listens(ferraloom_plugins::Event::EntityDamage)
+            && !(self.invulnerable as f32 > 10.0 && amount <= self.last_hurt)
+        {
+            match plugin_sites::damage(self, &source, base, amount) {
+                Some(dealt) => amount = dealt,
+                None => return false,
+            }
         }
         // Wolf.actuallyHurt: wolf armor takes the damage instead of the wolf.
         let absorbed = self.wolf_armor_absorbs(&source);
