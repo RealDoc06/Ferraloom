@@ -2327,6 +2327,8 @@ impl Game<'_> {
     /// Player.giveExperiencePoints including negative amounts.
     fn give_points(&mut self, amount: i32) {
         let e = &mut self.experience;
+        // Ferraloom: Player.increaseScore.
+        e.score = e.score.wrapping_add(amount);
         e.progress += amount as f32 / horizon_client::entities::Experience::needed(e.level) as f32;
         e.total = e.total.saturating_add(amount).clamp(0, i32::MAX);
         while e.progress < 0.0 {

@@ -465,6 +465,7 @@ impl Game<'_> {
                 level: g.xp_level,
                 progress: g.xp_progress,
                 total: g.xp_total,
+                score: g.meta.score,
             },
         );
         // The host's held keys stay theirs: the guest holds only sneak, and a
@@ -952,6 +953,7 @@ impl Game<'_> {
         g.xp_level = new_xp.level;
         g.xp_progress = new_xp.progress;
         g.xp_total = new_xp.total;
+        g.meta.score = new_xp.score;
         let new_mode = self.mode_id();
         self.mode = mode;
         self.creative = creative;
@@ -2386,9 +2388,11 @@ impl Game<'_> {
             level: g.xp_level,
             progress: g.xp_progress,
             total: g.xp_total,
+            score: g.meta.score,
         };
         xp.respawn(self.ui.rules.bool("keep_inventory") || g.game_mode == SPECTATOR);
         (g.xp_level, g.xp_progress, g.xp_total) = (xp.level, xp.progress, xp.total);
+        g.meta.score = xp.score;
         let clock_rate = self.network_clock_rate();
         let ctx = TickCtx {
             world: &mut self.world,
@@ -2623,6 +2627,7 @@ impl Game<'_> {
                 level: g.xp_level,
                 progress: g.xp_progress,
                 total: g.xp_total,
+                ..Default::default()
             }
             .death_reward(self.ui.rules.bool("keep_inventory") || g.game_mode == SPECTATOR);
             let (name, uuid) = (g.name.clone(), g.uuid);

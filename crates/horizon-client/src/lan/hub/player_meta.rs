@@ -1,7 +1,7 @@
 //! Ferraloom: what vanilla syncs and checks for each player that Horizon's
 //! hub left out. Entity data the player's own client and its trackers read
-//! (`Entity.DATA_TICKS_FROZEN`, the stuck arrows and stingers, the
-//! shoulder parrots, the player's own effect swirls), the scoreboard criteria that
+//! (`Entity.DATA_TICKS_FROZEN`, the stuck arrows and stingers,
+//! `Player.DATA_SCORE_ID`, the shoulder parrots, the player's own effect swirls), the scoreboard criteria that
 //! follow a player, who sees a spectator, and the connection's checks
 //! (`ServerGamePacketListenerImpl`: floating, chat and command spam, the
 //! advancements tab, the recipe book's highlights, the hat in the list).
@@ -88,12 +88,14 @@ pub struct RecordedCriteria {
 
 /// The entity data a player has beside Horizon's own, defaults zero and
 /// empty: `Entity.DATA_TICKS_FROZEN` (7), `LivingEntity.DATA_ARROW_COUNT_ID`
-/// (12) and `DATA_STINGER_COUNT_ID` (13), and the shoulder parrots (19, 20).
+/// (12) and `DATA_STINGER_COUNT_ID` (13), `Player.DATA_SCORE_ID` (18) and
+/// the shoulder parrots (19, 20).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct PlayerData {
     pub frozen: i32,
     pub arrows: i32,
     pub stingers: i32,
+    pub score: i32,
     pub shoulders: [Option<i32>; 2],
 }
 
@@ -105,6 +107,7 @@ impl PlayerData {
             frozen: m.map_or(0, |m| m.ticks_frozen),
             arrows: m.map_or(0, |m| i32::from(m.stuck.arrows)),
             stingers: m.map_or(0, |m| i32::from(m.stuck.stingers)),
+            score: g.meta.score,
             shoulders: g.meta.shoulders,
         }
     }
@@ -116,6 +119,7 @@ impl PlayerData {
             (7, self.frozen, old.frozen),
             (12, self.arrows, old.arrows),
             (13, self.stingers, old.stingers),
+            (18, self.score, old.score),
         ] {
             if now != was {
                 values.push((index, serializer::INT, Value::Int(now)));
@@ -143,6 +147,9 @@ struct SentMeta {
 pub struct PlayerMeta {
     /// What the scoreboard criteria were last set to (game/scoreboard.rs).
     pub recorded: RecordedCriteria,
+    /// `Player.DATA_SCORE_ID`: the points of experience gained since
+    /// respawning (`Player.increaseScore`), shown on the death screen.
+    pub score: i32,
     /// `Player.DATA_SHOULDER_PARROT_LEFT/RIGHT`: the parrot variant on each
     /// shoulder (`extractParrotVariant` of `ShoulderEntityLeft/Right`).
     pub shoulders: [Option<i32>; 2],
@@ -158,7 +165,7 @@ pub struct PlayerMeta {
 
 impl PlayerMeta {
     /// `PlayerList.respawn`: a new player, whose client starts from the
-    /// defaults; its shoulders are what it kept.
+    /// defaults; its shoulders and score are what it kept.
     pub fn respawned(&mut self) {
         self.recorded = RecordedCriteria::default();
         self.sent = SentMeta::default();
@@ -205,6 +212,7 @@ pub fn tracked_meta(
         (7, serializer::INT, Value::Int(0)),
         (12, serializer::INT, Value::Int(0)),
         (13, serializer::INT, Value::Int(0)),
+        (18, serializer::INT, Value::Int(0)),
         (19, serializer::OPTIONAL_UNSIGNED_INT, Value::Id(0)),
         (20, serializer::OPTIONAL_UNSIGNED_INT, Value::Id(0)),
     ]);

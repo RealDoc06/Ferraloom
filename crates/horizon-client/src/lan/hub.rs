@@ -1926,7 +1926,7 @@ impl Hub {
         options: (u8, i32),
         health: f32,
         effects: &[EffectInstance],
-        // Ferraloom: ticks frozen, stuck arrows and stingers, shoulder parrots.
+        // Ferraloom: ticks frozen, stuck arrows and stingers, score, shoulder parrots.
         data: player_meta::PlayerData,
     ) {
         let (sneaking, sprinting, sleeping) = flags;
@@ -2298,8 +2298,8 @@ impl Hub {
         // The options its login set (updateOptions) are dirty then as well,
         // and go out in the same packet, after the health.
         if self.guests[i].sent_health.is_none() {
-            // Ferraloom: so are its loaded effects' swirls and shoulder
-            // parrots (by index, as packDirty sends them).
+            // Ferraloom: so are its loaded effects' swirls, score and
+            // shoulder parrots (by index, as packDirty sends them).
             let particles = self.own_particle_changes(i);
             let own = self.own_meta_changes(i);
             let g = &mut self.guests[i];
@@ -2373,8 +2373,9 @@ impl Hub {
             }
         }
         // Ferraloom: ServerEntity.sendDirtyEntityData of the ticks frozen,
-        // stuck arrows and stingers and shoulder parrots to the player too
-        // (the frost overlay, its own arrows and parrots).
+        // stuck arrows and stingers, score and shoulder parrots to the
+        // player too (the frost overlay, its own arrows, the death screen's
+        // score, its own parrots).
         let values = self.own_meta_changes(i);
         if !values.is_empty() {
             let g = &self.guests[i];

@@ -9383,6 +9383,7 @@ impl Game<'_> {
             level: self.level.xp_level,
             progress: self.level.xp_progress,
             total: self.level.xp_total,
+            ..Default::default()
         };
         self.restore_effects();
         self.mining = None;

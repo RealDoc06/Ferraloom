@@ -93,6 +93,8 @@ pub fn apply(guest: &mut Guest, level: &Level) {
             .and_then(|t| crate::save::number(t.get(key)))
             .unwrap_or(default) as i32
     };
+    // Ferraloom: Player.readAdditionalSaveData's `Score`.
+    guest.meta.score = short("Score", 0);
     guest.loaded_body = Some(SavedBody {
         fire_ticks: short("Fire", -20),
         air: short("Air", 300),
@@ -171,6 +173,13 @@ pub fn store(guest: &Guest, level: &mut Level) {
     level.seen_credits = guest.seen_credits;
     level.last_death = guest.last_death.clone();
     level.player_extra = guest.saved.clone();
+    // Ferraloom: Player.addAdditionalSaveData's `Score`.
+    if let Some(horizon_world::nbt::Tag::Compound(map)) = level.player_extra.as_mut() {
+        map.insert(
+            "Score".into(),
+            horizon_world::nbt::Tag::Int(guest.meta.score),
+        );
+    }
     // The live body's fire, air and fall distance (Entity.saveWithoutId),
     // or what the file had while the player has no body yet.
     let body = guest
