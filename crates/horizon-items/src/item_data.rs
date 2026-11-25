@@ -16,7 +16,9 @@ pub struct StackData {
     pub stored_enchantments: Levels,
     /// `minecraft:repair_cost` (anvil prior-work penalty).
     pub repair_cost: u32,
-    /// `minecraft:custom_name` as plain text.
+    /// `minecraft:custom_name` as plain text. Set it with
+    /// [`StackData::set_custom_name`] (Ferraloom): a styled name's component
+    /// is kept in `other` beside it.
     pub custom_name: Option<String>,
     /// `minecraft:potion_contents.potion`.
     pub potion: Option<Arc<str>>,
@@ -76,6 +78,7 @@ impl PartialEq for BundleSelected {
         true
     }
 }
+const CUSTOM_NAME: &str = "minecraft:custom_name";
 /// The components `components_tag` writes from modelled fields.
 const MODELLED: &[&str] = &[
     "minecraft:banner_patterns",
@@ -107,14 +110,37 @@ impl StackData {
         self.other.iter().find(|(k, _)| k == id).map(|(_, v)| v)
     }
     /// `SetNameFunction.run`: a loot text component stored as `custom_name`
-    /// (plain text, as modelled) or as the unmodelled `item_name`.
+    /// or as the unmodelled `item_name`.
     pub fn set_loot_name(&mut self, id: &str, text: &serde_json::Value) {
         let tag = horizon_client_core::scoreboard::json_to_tag(text);
-        if id == "minecraft:custom_name" {
-            self.custom_name = read_text(&tag);
+        if id == CUSTOM_NAME {
+            self.set_custom_name_tag(&tag);
         } else {
             self.set_other(id, Some(tag));
         }
+    }
+    /// Ferraloom: names the item with plain text (none removes the name),
+    /// dropping the component a styled name kept.
+    pub fn set_custom_name(&mut self, name: Option<String>) {
+        self.custom_name = name;
+        if !self.other.is_empty() {
+            self.set_other(CUSTOM_NAME, None);
+        }
+    }
+    /// Ferraloom: names the item with a text component, kept as it is when
+    /// it is styled (`custom_name` holds its words), as `decode_components`
+    /// keeps a saved one.
+    pub fn set_custom_name_tag(&mut self, tag: &Tag) {
+        self.set_custom_name(read_text(tag));
+        if !matches!(tag, Tag::String(_)) && self.custom_name.is_some() {
+            self.set_other(CUSTOM_NAME, Some(tag.clone()));
+        }
+    }
+    /// Ferraloom: a styled name's component, while its words are still
+    /// `custom_name`'s; none for a plain name.
+    pub fn custom_name_tag(&self) -> Option<&Tag> {
+        let tag = self.other(CUSTOM_NAME)?;
+        (read_text(tag) == self.custom_name).then_some(tag)
     }
     /// Set (or with None remove) an unmodelled component.
     pub fn set_other(&mut self, id: &str, value: Option<Tag>) {
@@ -545,7 +571,12 @@ pub fn components_tag(damage: u32, data: Option<&StackData>) -> Option<Tag> {
             entries.push(("minecraft:repair_cost", Tag::Int(d.repair_cost as i32)));
         }
         if let Some(name) = &d.custom_name {
-            entries.push(("minecraft:custom_name", Tag::String(name.as_str().into())));
+            // Ferraloom: a styled name as its component.
+            let tag = d.custom_name_tag().cloned();
+            entries.push((
+                CUSTOM_NAME,
+                tag.unwrap_or_else(|| Tag::String(name.as_str().into())),
+            ));
         }
         if let Some(potion) = &d.potion {
             entries.push((
@@ -723,8 +754,11 @@ pub fn components_tag(damage: u32, data: Option<&StackData>) -> Option<Tag> {
         .collect();
     if let Some(d) = data {
         for (k, v) in &d.other {
-            out.entry(JavaString::from(k.as_str()))
-                .or_insert_with(|| v.clone());
+            // Ferraloom: a styled name goes with `custom_name` or not at all.
+            if k != CUSTOM_NAME {
+                out.entry(JavaString::from(k.as_str()))
+                    .or_insert_with(|| v.clone());
+            }
         }
     }
     (!out.is_empty()).then_some(Tag::Compound(out))
@@ -880,7 +914,9 @@ pub fn decode_components(components: Option<&Tag>) -> (u32, Option<Box<StackData
             let ominous_part = data.ominous_banner
                 && (matches!(key.as_str(), "minecraft:item_name" | "minecraft:rarity")
                     || (key == "minecraft:tooltip_display" && v == &ominous_tooltip_display()));
-            if !MODELLED.contains(&key.as_str()) && !ominous_part {
+            // Ferraloom: a styled name keeps its component beside the text.
+            let styled_name = key == CUSTOM_NAME && !matches!(v, Tag::String(_));
+            if (!MODELLED.contains(&key.as_str()) && !ominous_part) || styled_name {
                 data.other.push((key, v.clone()));
             }
         }
@@ -941,6 +977,59 @@ mod tests {
         assert_eq!(back.enchantment_level("minecraft:unbreaking"), 2);
         assert_eq!(back.repair_cost(), 3);
         assert_eq!(back.custom_name(), Some("Blade"));
+    }
+
+    fn styled_name() -> Tag {
+        Tag::compound([
+            ("text", Tag::String("".into())),
+            (
+                "extra",
+                Tag::List(vec![Tag::compound([
+                    ("text", Tag::String("Shop".into())),
+                    ("color", Tag::String("gold".into())),
+                    ("italic", Tag::Byte(0)),
+                ])]),
+            ),
+        ])
+    }
+
+    #[test]
+    fn a_styled_name_survives_decode_and_encode() {
+        let components = Tag::compound([(CUSTOM_NAME, styled_name())]);
+        let (damage, extra) = decode_components(Some(&components));
+        let stack = ItemStack {
+            damage,
+            extra,
+            ..ItemStack::new("minecraft:chest", 1)
+        };
+        assert_eq!(stack.custom_name(), Some("Shop"));
+        assert_eq!(encode_components(&stack), Some(components));
+    }
+
+    #[test]
+    fn a_plain_name_encodes_as_a_string() {
+        let mut stack = ItemStack::new("minecraft:chest", 1);
+        stack.data_mut().set_custom_name(Some("Shop".into()));
+        let components = Tag::compound([(CUSTOM_NAME, Tag::String("Shop".into()))]);
+        assert_eq!(encode_components(&stack), Some(components.clone()));
+        let (_, extra) = decode_components(Some(&components));
+        assert!(extra.unwrap().other.is_empty());
+    }
+
+    #[test]
+    fn renaming_a_styled_item_drops_its_style() {
+        let (_, extra) = decode_components(Some(&Tag::compound([(CUSTOM_NAME, styled_name())])));
+        let mut styled = ItemStack {
+            extra,
+            ..ItemStack::new("minecraft:chest", 1)
+        };
+        let mut plain = ItemStack::new("minecraft:chest", 1);
+        styled.data_mut().set_custom_name(Some("Box".into()));
+        plain.data_mut().set_custom_name(Some("Box".into()));
+        assert!(styled.same_item_same_components(&plain));
+        styled.data_mut().set_custom_name(None);
+        styled.tidy();
+        assert_eq!(styled, ItemStack::new("minecraft:chest", 1));
     }
 
     #[test]

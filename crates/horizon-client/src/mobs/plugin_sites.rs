@@ -55,7 +55,8 @@ pub fn damage(m: &mut Mob, source: &Damage, base: f32, amount: f32) -> Option<f3
 }
 
 /// The events [`tick_watched`] watches a tick for.
-pub const WATCHED: u64 = Event::mask(&[Event::EntityTarget, Event::EntityCombust]);
+pub const WATCHED: ferraloom_plugins::Mask =
+    Event::mask(&[Event::EntityTarget, Event::EntityCombust]);
 
 /// Mob `m`'s tick in the pass while a plugin listens to one of [`WATCHED`]
 /// (`tick_loop`), its events at the end of the tick that set what they

@@ -14,15 +14,25 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.GameRule;
 import org.bukkit.HeightMap;
+import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.Orientable;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPhysicsEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.weather.WeatherChangeEvent;
 import org.bukkit.event.world.WorldInitEvent;
 import org.bukkit.event.world.WorldLoadEvent;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryHolder;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -131,6 +141,57 @@ public final class TestPlugin extends JavaPlugin implements Listener {
                 + " cancelled=" + event.isCancelled());
     }
 
+    /** The chest GUI's holder, as GUI plugins mark their inventories. */
+    private static final class Gui implements InventoryHolder {
+        private Inventory inventory;
+
+        @Override
+        public Inventory getInventory() {
+            return inventory;
+        }
+    }
+
+    /** A 27-slot GUI: a priced emerald in the middle (clicks on it are cancelled) and two free diamonds. */
+    private void openGui(Player p) {
+        Gui gui = new Gui();
+        gui.inventory = Bukkit.createInventory(gui, 27, "§6Ferraloom GUI");
+        ItemStack buy = new ItemStack(Material.EMERALD);
+        ItemMeta meta = buy.getItemMeta();
+        meta.setDisplayName("§aBuy");
+        meta.setLore(List.of("§7Price: 5"));
+        meta.getPersistentDataContainer().set(new NamespacedKey(this, "price"), PersistentDataType.INTEGER, 5);
+        buy.setItemMeta(meta);
+        gui.inventory.setItem(13, buy);
+        gui.inventory.setItem(0, new ItemStack(Material.DIAMOND, 2));
+        p.openInventory(gui.inventory);
+    }
+
+    @EventHandler
+    public void onOpen(InventoryOpenEvent event) {
+        getLogger().info("event: open " + event.getView().getTitle() + " gui=" + (event.getInventory().getHolder() instanceof Gui));
+    }
+
+    @EventHandler
+    public void onClick(InventoryClickEvent event) {
+        if (!(event.getView().getTopInventory().getHolder() instanceof Gui)) {
+            getLogger().info("event: click " + event.getView().getType() + " raw=" + event.getRawSlot() + " " + event.getClick()
+                    + " " + event.getAction());
+            return;
+        }
+        ItemStack current = event.getCurrentItem();
+        Integer price = current == null || !current.hasItemMeta() ? null
+                : current.getItemMeta().getPersistentDataContainer().get(new NamespacedKey(this, "price"), PersistentDataType.INTEGER);
+        event.setCancelled(event.getRawSlot() == 13);
+        getLogger().info("event: click gui raw=" + event.getRawSlot() + " " + event.getClick() + " " + event.getAction()
+                + " " + event.getSlotType() + " current=" + (current == null ? null : current.getType())
+                + " price=" + price + " title=" + event.getView().getTitle() + " cancelled=" + event.isCancelled());
+    }
+
+    @EventHandler
+    public void onClose(InventoryCloseEvent event) {
+        getLogger().info("event: close " + event.getView().getTitle() + " gui=" + (event.getInventory().getHolder() instanceof Gui));
+    }
+
     @EventHandler
     public void onPlace(BlockPlaceEvent event) {
         event.setCancelled(protect);
@@ -193,6 +254,20 @@ public final class TestPlugin extends JavaPlugin implements Listener {
                 }
             }
             case "stub" -> sender.sendMessage("health " + ((Player) sender).getHealth());
+            case "gui" -> openGui((Player) sender);
+            case "cursor" -> {
+                ItemStack cursor = ((Player) sender).getItemOnCursor();
+                sender.sendMessage("cursor " + cursor.getType() + " " + cursor.getAmount());
+            }
+            case "hand" -> {
+                // A slot's item writes through to the slot, as CraftItemStack's mirror does.
+                Player p = (Player) sender;
+                p.getInventory().setItem(p.getInventory().getHeldItemSlot(), new ItemStack(Material.GOLD_INGOT, 5));
+                ItemStack hand = p.getInventory().getItemInMainHand();
+                hand.setAmount(hand.getAmount() - 2);
+                sender.sendMessage("hand " + p.getInventory().getItemInMainHand().getAmount() + " "
+                        + p.getInventory().contains(Material.GOLD_INGOT, 3));
+            }
             case "block" -> {
                 World w = Bukkit.getWorlds().get(0);
                 Block b = w.getBlockAt(arg(args, 1), arg(args, 2), arg(args, 3));

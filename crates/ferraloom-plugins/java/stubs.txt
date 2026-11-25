@@ -18,6 +18,10 @@ org.bukkit.generator.structure.StructureType
 org.bukkit.Chunk
 org.bukkit.WorldBorder
 org.bukkit.block.BlockState
+# Inventory.
+org.bukkit.inventory.ItemFactory
+org.bukkit.inventory.meta.ItemMeta
+org.bukkit.inventory.Inventory
 org.bukkit.entity.Entity
 org.bukkit.entity.LivingEntity
 org.bukkit.entity.Mob

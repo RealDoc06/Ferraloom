@@ -400,6 +400,9 @@ impl BlockHost for SiteHost<'_, '_> {
     }
 }
 
+/// No inventory is reached from mob code: every method answers its default.
+impl ferraloom_plugins::InventoryHost for SiteHost<'_, '_> {}
+
 impl ServerHost for SiteHost<'_, '_> {
     fn console_message(&mut self, message: &str) {
         crate::game::dedicated::log("INFO", &horizon_client::text::Text::legacy(message).plain());

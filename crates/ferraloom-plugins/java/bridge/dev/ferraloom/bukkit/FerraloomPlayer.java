@@ -283,6 +283,22 @@ final class FerraloomPlayer extends StubPlayer {
         return permissions.getEffectivePermissions();
     }
 
+    // Inventory (inventory area: FerraloomInventories, FerraloomPlayerInventory).
+
+    final FerraloomInventories.Of inventories = new FerraloomInventories.Of(this);
+
+    @Override public org.bukkit.inventory.PlayerInventory getInventory() { return inventories.inventory(); }
+    @Override public org.bukkit.inventory.Inventory getEnderChest() { return inventories.enderChest(); }
+    @Override public org.bukkit.inventory.InventoryView getOpenInventory() { return inventories.openView(); }
+    @Override public org.bukkit.inventory.InventoryView openInventory(org.bukkit.inventory.Inventory inventory) { return inventories.openInventory(inventory); }
+    @Override public void openInventory(org.bukkit.inventory.InventoryView view) { inventories.openInventory(view.getTopInventory()); }
+    @Override public void closeInventory() { inventories.closeInventory(); }
+    @Override public void updateInventory() { inventories.update(); }
+    @Override public org.bukkit.inventory.ItemStack getItemOnCursor() { return inventories.cursor(); }
+    @Override public void setItemOnCursor(org.bukkit.inventory.ItemStack item) { inventories.setCursor(item); }
+    @Override public org.bukkit.inventory.ItemStack getItemInHand() { return inventories.inventory().getItemInMainHand(); }
+    @Override public void setItemInHand(org.bukkit.inventory.ItemStack item) { inventories.inventory().setItemInMainHand(item); }
+
     // Object: CraftPlayer's identity is the UUID.
 
     @Override
