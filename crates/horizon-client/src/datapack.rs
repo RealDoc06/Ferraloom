@@ -243,9 +243,14 @@ fn macro_parameters(line: &str) -> Result<Vec<String>, String> {
     }
     Ok(out)
 }
+/// Checks one command line as `CommandFunction.parseCommand` does, with the
+/// compilation source's permissions; the error is `CommandSyntaxException.getMessage`.
+pub type Compile<'a> = &'a dyn Fn(&str) -> Result<(), String>;
+
 /// `CommandFunction.fromLines`: comments, blank lines, `\` continuation and
-/// `$` macro lines. Command syntax is checked by the caller.
-pub fn parse_function(id: &str, text: &str) -> Result<Function, String> {
+/// `$` macro lines. Plain command lines are compiled with `compile`; macro
+/// lines only when the function is instantiated (`MacroFunction.MacroEntry`).
+pub fn parse_function(id: &str, text: &str, compile: Compile<'_>) -> Result<Function, String> {
     let raw: Vec<&str> = text.lines().collect();
     let mut lines = Vec::new();
     let mut parameters: Vec<String> = Vec::new();
@@ -293,6 +298,7 @@ pub fn parse_function(id: &str, text: &str) -> Result<Function, String> {
             }
             lines.push(FunctionLine::Macro(m.to_owned()));
         } else {
+            compile(&line).map_err(|e| format!("Whilst parsing command on line {number}: {e}"))?;
             lines.push(FunctionLine::Command(line));
         }
     }
@@ -303,17 +309,30 @@ pub fn parse_function(id: &str, text: &str) -> Result<Function, String> {
     })
 }
 
+/// One entry of a function tag (`TagLoader.EntryWithSource`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct TagEntry {
+    /// `ns:f`, or `#ns:tag` for a tag.
+    pub id: String,
+    pub required: bool,
+    /// The id of the pack whose file listed it.
+    pub source: String,
+}
+
 /// The data of every enabled pack: functions, function tags, predicates.
 #[derive(Default)]
 pub struct DataStore {
     pub functions: BTreeMap<String, Function>,
-    /// Function tag id -> entries (`ns:f`, `#ns:tag`), with `required` flags.
-    pub function_tags: BTreeMap<String, Vec<(String, bool)>>,
+    /// Function tag id -> entries. Only tags whose required references all
+    /// resolved are kept (`TagLoader.build`).
+    pub function_tags: BTreeMap<String, Vec<TagEntry>>,
     pub predicates: BTreeMap<String, serde_json::Value>,
     /// `item_modifier` files, for `/item modify`.
     pub item_modifiers: BTreeMap<String, serde_json::Value>,
-    /// Functions that failed to parse (id, message), for logging.
+    /// Functions that failed to load (id, message), for logging.
     pub errors: Vec<(String, String)>,
+    /// Tags that failed to load (id, missing references as vanilla lists them).
+    pub tag_errors: Vec<(String, String)>,
 }
 /// `ns:path` for a file `data/<ns>/<kind>/<path>.<ext>`.
 fn resource_id(file: &str, kind: &str, ext: &str) -> Option<String> {
@@ -326,24 +345,31 @@ fn resource_id(file: &str, kind: &str, ext: &str) -> Option<String> {
     Some(format!("{ns}:{path}"))
 }
 impl DataStore {
-    pub fn load(packs: &[&DataPack]) -> Self {
+    /// `ServerFunctionLibrary.reload`: every pack's data, functions compiled
+    /// with `compile`, then the function tags built.
+    pub fn load(packs: &[&DataPack], compile: Compile<'_>) -> Self {
         let mut s = Self::default();
         for pack in packs {
             for f in pack.list_kinds(&["function", "item_modifier", "predicate", "tags/function"]) {
                 if let Some(id) = resource_id(&f, "function", ".mcfunction")
                     && let Some(bytes) = pack.read(&f)
                 {
-                    match parse_function(&id, &String::from_utf8_lossy(&bytes)) {
+                    // Only the highest pack's file counts, whether it loads or not.
+                    s.errors.retain(|(e, _)| *e != id);
+                    match parse_function(&id, &String::from_utf8_lossy(&bytes), compile) {
                         Ok(func) => {
                             s.functions.insert(id, func);
                         }
-                        Err(e) => s.errors.push((id, e)),
+                        Err(e) => {
+                            s.functions.remove(&id);
+                            s.errors.push((id, e));
+                        }
                     }
                 } else if let Some(id) = resource_id(&f, "tags/function", ".json")
                     && let Some(bytes) = pack.read(&f)
                     && let Ok(v) = serde_json::from_slice::<serde_json::Value>(&bytes)
                 {
-                    let entries = tag_entries(&v);
+                    let entries = tag_entries(&v, &pack.id);
                     let slot = s.function_tags.entry(id).or_default();
                     if v["replace"].as_bool() == Some(true) {
                         slot.clear();
@@ -362,7 +388,46 @@ impl DataStore {
                 }
             }
         }
+        s.build_tags();
         s
+    }
+    /// `TagLoader.build`: tags in dependency order; a tag with a required
+    /// reference that is missing (a function that failed to load, a tag that
+    /// failed or does not exist) is dropped and logged.
+    fn build_tags(&mut self) {
+        let mut pending = std::mem::take(&mut self.function_tags);
+        let ids: Vec<String> = pending.keys().cloned().collect();
+        for id in ids {
+            self.build_tag(&id, &mut pending);
+        }
+    }
+    fn build_tag(&mut self, id: &str, pending: &mut BTreeMap<String, Vec<TagEntry>>) {
+        // Taken out first: a cycle back to this tag finds it missing.
+        let Some(entries) = pending.remove(id) else {
+            return;
+        };
+        for e in &entries {
+            if let Some(dep) = e.id.strip_prefix('#') {
+                self.build_tag(dep, pending);
+            }
+        }
+        let missing: Vec<String> = entries
+            .iter()
+            .filter(|e| {
+                let found = match e.id.strip_prefix('#') {
+                    Some(tag) => self.function_tags.contains_key(tag),
+                    None => self.functions.contains_key(&e.id),
+                };
+                e.required && !found
+            })
+            // EntryWithSource.toString (a required entry has no `?`).
+            .map(|e| format!("{} (from {})", e.id, e.source))
+            .collect();
+        if missing.is_empty() {
+            self.function_tags.insert(id.to_owned(), entries);
+        } else {
+            self.tag_errors.push((id.to_owned(), missing.join(", ")));
+        }
     }
     /// `FunctionManager.getTag`: the functions a tag expands to (nested tags
     /// included, each function once).
@@ -378,12 +443,12 @@ impl DataStore {
         let Some(entries) = self.function_tags.get(id) else {
             return;
         };
-        for (e, required) in entries {
-            match e.strip_prefix('#') {
+        for e in entries {
+            match e.id.strip_prefix('#') {
                 Some(inner) => self.expand(inner, out, depth + 1),
                 None => {
-                    if (self.functions.contains_key(e) || *required) && !out.contains(e) {
-                        out.push(e.clone());
+                    if self.functions.contains_key(&e.id) && !out.contains(&e.id) {
+                        out.push(e.id.clone());
                     }
                 }
             }
@@ -397,20 +462,27 @@ fn normalize(id: &str) -> String {
         format!("minecraft:{id}")
     }
 }
-fn tag_entries(v: &serde_json::Value) -> Vec<(String, bool)> {
+fn tag_entries(v: &serde_json::Value, source: &str) -> Vec<TagEntry> {
     v["values"]
         .as_array()
         .into_iter()
         .flatten()
-        .filter_map(|e| match e {
-            serde_json::Value::String(s) => Some((hash_normalize(s), true)),
-            serde_json::Value::Object(o) => Some((
-                hash_normalize(o.get("id")?.as_str()?),
-                o.get("required")
-                    .and_then(serde_json::Value::as_bool)
-                    .unwrap_or(true),
-            )),
-            _ => None,
+        .filter_map(|e| {
+            let (id, required) = match e {
+                serde_json::Value::String(s) => (s.as_str(), true),
+                serde_json::Value::Object(o) => (
+                    o.get("id")?.as_str()?,
+                    o.get("required")
+                        .and_then(serde_json::Value::as_bool)
+                        .unwrap_or(true),
+                ),
+                _ => return None,
+            };
+            Some(TagEntry {
+                id: hash_normalize(id),
+                required,
+                source: source.to_owned(),
+            })
         })
         .collect()
 }
@@ -426,11 +498,15 @@ mod tests {
     use super::*;
     use horizon_world::nbt::parse_snbt;
 
+    /// A compilation context that accepts every command.
+    const ANY: Compile<'static> = &|_| Ok(());
+
     #[test]
     fn parses_comments_continuations_and_macros() {
         let f = parse_function(
             "a:b",
             "# a comment\n\nsay hi\n  say \\\n  there  \n$say $(who) is $(n)\n$tell $(who) $(who)\n",
+            ANY,
         )
         .unwrap();
         assert_eq!(
@@ -444,22 +520,23 @@ mod tests {
         );
         assert_eq!(f.parameters, ["who", "n"]);
         assert!(
-            parse_function("a:b", "/say hi")
+            parse_function("a:b", "/say hi", ANY)
                 .unwrap_err()
                 .contains("did you mean 'say'")
         );
         assert!(
-            parse_function("a:b", "//x")
+            parse_function("a:b", "//x", ANY)
                 .unwrap_err()
                 .contains("use '#'")
         );
-        assert!(parse_function("a:b", "say \\").is_err());
-        assert!(parse_function("a:b", "$say $(bad name)").is_err());
+        assert!(parse_function("a:b", "say \\", ANY).is_err());
+        assert!(parse_function("a:b", "$say $(bad name)", ANY).is_err());
     }
 
     #[test]
     fn macros_substitute_vanilla_text() {
-        let f = parse_function("a:b", "$say $(s) $(i) $(d) $(l) $(b) $(c)\nsay plain").unwrap();
+        let f =
+            parse_function("a:b", "$say $(s) $(i) $(d) $(l) $(b) $(c)\nsay plain", ANY).unwrap();
         let args = parse_snbt("{s:\"hi\",i:5,d:1.5d,l:7L,b:1b,c:{x:1}}")
             .unwrap()
             .0;
@@ -477,7 +554,7 @@ mod tests {
             "commands.function.error.missing_argument"
         );
         // A plain function needs no arguments.
-        let plain = parse_function("a:p", "say 1").unwrap();
+        let plain = parse_function("a:p", "say 1", ANY).unwrap();
         assert_eq!(plain.instantiate(None).unwrap(), ["say 1"]);
     }
 
@@ -516,7 +593,7 @@ mod tests {
         assert_eq!(packs.len(), 1);
         assert_eq!(packs[0].id, "file/mypack");
         assert_eq!(packs[0].description(), "Hello");
-        let store = DataStore::load(&[&packs[0]]);
+        let store = DataStore::load(&[&packs[0]], ANY);
         assert_eq!(store.functions.len(), 2);
         assert!(store.functions.contains_key("mine:sub/b"));
         assert_eq!(
@@ -524,6 +601,80 @@ mod tests {
             ["mine:a", "mine:sub/b"]
         );
         assert!(store.predicates.contains_key("mine:p"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn functions_that_do_not_compile_drop_out_with_the_tags_needing_them() {
+        let dir = std::env::temp_dir().join(format!("hz-datapack-compile-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let write = |p: &str, t: &str| {
+            let path = dir.join("datapacks").join(p);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, t).unwrap();
+        };
+        write("a/pack.mcmeta", "{}");
+        write("b/pack.mcmeta", "{}");
+        // Line 4 is where the continued `op` starts; macro lines wait for instantiation.
+        write(
+            "a/data/p/function/op.mcfunction",
+            "say hi\n# c\n\nop \\\n Bob\n",
+        );
+        write("a/data/p/function/ok.mcfunction", "say ok\n$op $(who)\n");
+        // The higher pack's file is the one compiled, valid below or not.
+        write("a/data/p/function/over.mcfunction", "say fine");
+        write("b/data/p/function/over.mcfunction", "op Bob");
+        write(
+            "a/data/minecraft/tags/function/tick.json",
+            r##"{"values":["p:ok","p:op"]}"##,
+        );
+        write(
+            "a/data/p/tags/function/nested.json",
+            r##"{"values":["#minecraft:tick"]}"##,
+        );
+        write(
+            "b/data/p/tags/function/soft.json",
+            r##"{"values":[{"id":"p:op","required":false},{"id":"#p:nested","required":false},"p:ok"]}"##,
+        );
+        let packs = discover(&dir);
+        let refs: Vec<&DataPack> = packs.iter().collect();
+        let compile: Compile = &|line| {
+            if line.starts_with("op ") {
+                Err(
+                    "Unknown or incomplete command. See below for error at position 0: <--[HERE]"
+                        .into(),
+                )
+            } else {
+                Ok(())
+            }
+        };
+        let store = DataStore::load(&refs, compile);
+        assert_eq!(store.functions.keys().collect::<Vec<_>>(), ["p:ok"]);
+        assert_eq!(
+            store.errors,
+            [
+                (
+                    "p:op".to_owned(),
+                    "Whilst parsing command on line 4: Unknown or incomplete command. See below for error at position 0: <--[HERE]".to_owned()
+                ),
+                (
+                    "p:over".to_owned(),
+                    "Whilst parsing command on line 1: Unknown or incomplete command. See below for error at position 0: <--[HERE]".to_owned()
+                ),
+            ]
+        );
+        assert_eq!(
+            store.tag_errors,
+            [
+                ("minecraft:tick".to_owned(), "p:op (from file/a)".to_owned()),
+                (
+                    "p:nested".to_owned(),
+                    "#minecraft:tick (from file/a)".to_owned()
+                ),
+            ]
+        );
+        assert_eq!(store.function_tags.keys().collect::<Vec<_>>(), ["p:soft"]);
+        assert_eq!(store.tag_functions("p:soft"), ["p:ok"]);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

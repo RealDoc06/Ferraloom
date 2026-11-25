@@ -352,7 +352,8 @@ impl Game<'_> {
         f: impl FnOnce(&mut Self) -> R,
     ) -> Option<R> {
         let swap = self.enter_guest(host, conn)?;
-        let result = f(self);
+        // Ferraloom: plugin events in the guest's turn reach the hub (game/plugins.rs).
+        let result = super::plugins::lend_hub(host, || f(self));
         self.leave_guest(host, swap);
         Some(result)
     }
@@ -2127,6 +2128,10 @@ impl Game<'_> {
         if self.guest_message_command(host, conn, command, signed.as_ref()) {
             return;
         }
+        // Ferraloom: a Bukkit plugin's command (game/plugins.rs).
+        if self.plugin_guest_command(host, conn, command.trim_start_matches('/')) {
+            return;
+        }
         // ListPlayersCommand needs no permission and lists every player.
         let words: Vec<&str> = command.trim_start_matches('/').split(' ').collect();
         if words[0] == "list" && (words.len() == 1 || words[1..] == ["uuids"]) {
@@ -2929,6 +2934,8 @@ impl Game<'_> {
             // LivingEntity.aiStep: a Riptide spin counts down on the server's
             // copy too, or it would stay in the spin pose (eye 0.4) for good.
             w.player.count_down_server_spin();
+            // Ferraloom: LivingEntity.tick lets stuck arrows and stingers go.
+            w.player.stuck.tick();
             // Player.tick ends with updatePlayerPose: a swimmer, or a player
             // crawling under a block, takes the short box its moves are checked with.
             let _ = w.update_player_pose();

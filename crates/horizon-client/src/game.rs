@@ -138,10 +138,12 @@ mod passengers;
 mod persist;
 mod perspective;
 mod pick_entity;
+// Ferraloom: Bukkit plugins (docs/ferraloom/plugins.md).
 mod pickups;
 mod piglins;
 mod piston_push;
 mod player_equip;
+mod plugins;
 mod postprocess;
 mod potions;
 mod powder_snow;
@@ -928,6 +930,10 @@ impl horizon_client::random_tick_sections::RandomTickChunks for GameLevel<'_> {
 impl LevelAccess for GameLevel<'_> {
     fn is_client_side(&self) -> bool {
         self.client_side
+    }
+    // Ferraloom: plugin events from block behaviour (game/plugins/blocks.rs).
+    fn plugin_event(&mut self, event: horizon_world::plugin_hooks::PluginEvent) -> i32 {
+        self.plugin_level_event(event)
     }
     fn world_surface(&self, x: i32, z: i32) -> i32 {
         self.world.world_surface(x, z, |s| self.facts.is_air(s))
@@ -4257,6 +4263,12 @@ impl Game<'_> {
         {
             return Ok(());
         }
+        // Ferraloom: BlockBreakEvent, before anything breaks (game/plugins.rs).
+        if ferraloom_plugins::listens(ferraloom_plugins::Event::BlockBreak)
+            && self.plugin_block_break(pos)
+        {
+            return Ok(());
+        }
         self.pad_rumble(horizon_client::gamepad::Rumble::BlockBroken);
         // ServerPlayerGameMode.destroyBlock.
         let state = self.world.block(pos[0], pos[1], pos[2]);
@@ -4303,7 +4315,8 @@ impl Game<'_> {
                     .res
                     .items()
                     .correct_for_drops(held.as_ref(), &facts.name);
-            if harvest {
+            // Ferraloom: a BlockBreakEvent may keep the drops back (game/plugins/blocks.rs).
+            if harvest && self.plugin_break_drops() {
                 // Block.playerDestroy: the mined statistic, the exhaustion and the drops.
                 self.stats.add("mined", &facts.name, 1);
                 if let Some(p) = self.player.as_mut() {
@@ -4340,7 +4353,10 @@ impl Game<'_> {
                     }
                 }
                 // SpawnerBlock.spawnAfterBreak pops its experience whatever the tool.
-                let xp = if silk && &*facts.name != "minecraft:spawner" {
+                // Ferraloom: or the experience its BlockBreakEvent decided.
+                let xp = if let Some(xp) = self.plugin_break_exp() {
+                    xp.max(0) as u32
+                } else if silk && &*facts.name != "minecraft:spawner" {
                     0
                 } else {
                     self.block_experience(&facts.name)
@@ -4706,6 +4722,12 @@ impl Game<'_> {
             item: stack.item.to_string(),
             can_use_game_master_blocks: self.can_use_game_master_blocks(),
         };
+        // Ferraloom: BlockPlaceEvent, before the block is placed (game/plugins/blocks.rs).
+        if ferraloom_plugins::listens(ferraloom_plugins::Event::BlockPlace)
+            && self.plugin_block_place(&ctx)
+        {
+            return Ok(true);
+        }
         let outcome = self.with_level(|b, level, ticks| b.place_block(level, ticks, &ctx));
         let PlaceOutcome::Placed { pos, state } = outcome else {
             self.process_level_events()?;
@@ -5328,7 +5350,14 @@ impl Game<'_> {
         if running {
             self.world.game_time += 1;
             if self.ui.rules.bool("advance_weather") {
-                self.world.weather.tick_timers(&mut self.world.random);
+                // Ferraloom: WeatherChangeEvent and ThunderChangeEvent (game/plugins/worlds.rs).
+                if ferraloom_plugins::listens(ferraloom_plugins::Event::WeatherChange)
+                    || ferraloom_plugins::listens(ferraloom_plugins::Event::ThunderChange)
+                {
+                    self.plugin_tick_weather();
+                } else {
+                    self.world.weather.tick_timers(&mut self.world.random);
+                }
             }
             self.world.weather.tick_levels();
             self.tick_weather_effects();
@@ -11691,6 +11720,10 @@ impl Game<'_> {
     }
     /// Save the level in place: its changed chunks, its entities and its raids.
     fn save_level(&mut self, wait: bool) -> Result<()> {
+        // Ferraloom: WorldSaveEvent, before the level saves (game/plugins/worlds.rs).
+        if ferraloom_plugins::listens(ferraloom_plugins::Event::WorldSave) {
+            self.plugin_world_save();
+        }
         self.save.save_forced_chunks(&self.streaming.forced)?;
         self.streaming.save(&mut self.world, wait);
         let keys: Vec<_> = self.world.modified.drain().collect();
@@ -12632,6 +12665,12 @@ impl Game<'_> {
         self.streaming
             .extra
             .extend(waiting.into_iter().map(|chunk| (chunk, 0)));
+        // Ferraloom: ChunkLoadEvent needs the chunks loaded before (game/plugins/worlds.rs).
+        let loaded_before = if ferraloom_plugins::listens(ferraloom_plugins::Event::ChunkLoad) {
+            self.plugin_loaded_before()
+        } else {
+            None
+        };
         let (uploads, unloaded) = horizon_client::spans::time("streaming", || {
             if budgeted {
                 self.streaming.update_budgeted(&mut self.world)
@@ -12639,6 +12678,14 @@ impl Game<'_> {
                 self.streaming.update(&mut self.world)
             }
         });
+        // Ferraloom: ChunkLoadEvent and ChunkUnloadEvent.
+        if let Some(before) = loaded_before {
+            self.plugin_chunks_loaded(before);
+        }
+        if ferraloom_plugins::listens(ferraloom_plugins::Event::ChunkUnload) && !unloaded.is_empty()
+        {
+            self.plugin_chunks_unloaded(&unloaded);
+        }
         self.streaming.extra.truncate(areas);
         if let Some(lod) = &mut self.lod {
             self.lod_observe

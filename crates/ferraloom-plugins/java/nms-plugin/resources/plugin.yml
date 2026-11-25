@@ -1,0 +1,4 @@
+name: FerraloomNms
+version: '1.0'
+main: dev.ferraloom.nmsplugin.NmsPlugin
+api-version: '26.3'

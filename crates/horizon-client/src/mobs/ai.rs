@@ -482,6 +482,8 @@ fn tick_entity(
     m.previous_swell = m.swell;
     m.anim.begin_tick();
     m.age += 1;
+    // LivingEntity.tick: stuck arrows and stingers fall out (Ferraloom).
+    m.stuck.tick();
     m.ai.seen_cache.clear();
     if m.ai.last_hurt_by_player > 0 {
         m.ai.last_hurt_by_player -= 1;
@@ -507,11 +509,7 @@ fn tick_entity(
         return false;
     }
     if m.no_ai {
-        // Mob.aiStep still runs without AI (only serverAiStep is skipped),
-        // so the endermite's life keeps counting.
-        if m.species() == Species::Endermite {
-            endermite_lifetime(m);
-        }
+        no_ai_step(m, w, events);
     } else {
         ai_step(m, w, level_random, events);
     }
@@ -1010,12 +1008,7 @@ fn ai_step(m: &mut Mob, w: &MobWorld, level_random: &mut LegacyRandom, events: &
     if m.ai.no_jump_delay > 0 {
         m.ai.no_jump_delay -= 1;
     }
-    let v = m.velocity;
-    m.velocity = Vec3::new(
-        if v.x.abs() < 0.003 { 0.0 } else { v.x },
-        if v.y.abs() < 0.003 { 0.0 } else { v.y },
-        if v.z.abs() < 0.003 { 0.0 } else { v.z },
-    );
+    zero_small_velocity(m);
     m.ai.xxa *= 0.98;
     m.ai.zza *= 0.98;
     // LivingEntity.isImmobile: no goals or input (a biting, stunned or
@@ -1045,6 +1038,42 @@ fn ai_step(m: &mut Mob, w: &MobWorld, level_random: &mut LegacyRandom, events: &
     if m.kind.flags.climber {
         m.climbing = m.horizontal_collision;
     }
+    ageable_ai_step(m, w, events);
+    burn_undead(m, w);
+    species_ai_step(m, w, level_random, events);
+}
+/// What `LivingEntity.aiStep` and `Mob.aiStep` still run for a mob with
+/// NoAI, which only skips what `isEffectiveAi` gates (`serverAiStep` and
+/// `travel`): the small velocity let go, the push of what it touches, its
+/// age and love (AgeableMob, Animal) and the sun's burn. The species'
+/// own aiStep overrides are not run here yet, but for the endermite's life.
+fn no_ai_step(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
+    zero_small_velocity(m);
+    push_entities(m, w, events);
+    ageable_ai_step(m, w, events);
+    burn_undead(m, w);
+    if m.species() == Species::Endermite {
+        endermite_lifetime(m);
+    }
+}
+/// `LivingEntity.aiStep`: velocity components under 0.003 go to 0.
+fn zero_small_velocity(m: &mut Mob) {
+    let v = m.velocity;
+    m.velocity = Vec3::new(
+        if v.x.abs() < 0.003 { 0.0 } else { v.x },
+        if v.y.abs() < 0.003 { 0.0 } else { v.y },
+        if v.z.abs() < 0.003 { 0.0 } else { v.z },
+    );
+}
+/// Port of Mob#burnUndead: undead burn in daylight unless their head is covered.
+fn burn_undead(m: &mut Mob, w: &MobWorld) {
+    if m.kind.flags.burns_in_day && m.alive() && sun_burn_tick(m, w) && m.extra.head.is_none() {
+        m.ignite_for_ticks(160);
+    }
+}
+/// `AgeableMob.aiStep` (a forced age-up's particles, then the age) and
+/// `Animal.aiStep` (the love and its hearts).
+fn ageable_ai_step(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
     // AgeableMob.aiStep: a forced age-up's particles (`sendParticles`, so the
     // players are sent them), then the age.
     if m.extra.forced_age_timer > 0 {
@@ -1110,11 +1139,6 @@ fn ai_step(m: &mut Mob, w: &MobWorld, level_random: &mut LegacyRandom, events: &
             }
         }
     }
-    // Mob.aiStep: undead burn in daylight.
-    if m.kind.flags.burns_in_day && m.alive() && sun_burn_tick(m, w) && m.extra.head.is_none() {
-        m.ignite_for_ticks(160);
-    }
-    species_ai_step(m, w, level_random, events);
 }
 impl Mob {
     /// LivingEntity.isPushable (and the push it takes from `Entity.push(Entity)`):
@@ -1156,8 +1180,16 @@ fn push_entities(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
     {
         targets.push((Who::Player, p.position));
     }
+    // Entity.push: never a passenger of the same vehicle (its rider, its
+    // mount), which would push a NoAI jockey for good.
+    let same_vehicle = |id: u32| m.extra.rider == Some(id) || m.extra.mount == Some(id);
     for o in w.others_near(bounds) {
-        if o.id != m.id && o.alive && o.pushable && o.bounds.intersects(bounds) {
+        if o.id != m.id
+            && !same_vehicle(o.id)
+            && o.alive
+            && o.pushable
+            && o.bounds.intersects(bounds)
+        {
             targets.push((Who::Mob(o.id), o.position));
         }
     }

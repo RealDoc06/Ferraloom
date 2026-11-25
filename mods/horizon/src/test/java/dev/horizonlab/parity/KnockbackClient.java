@@ -81,14 +81,19 @@ import net.minecraft.world.phys.Vec3;
  * at that place, on the ground or not), {@code sprint NAME on|off}, {@code
  * sync NAME} (a round trip through the server thread; "synced NAME" on stdout when
  * it is back), {@code attack NAME TARGET} (ServerboundAttackPacket then the swing; TARGET is a
- * player's name or an entity type's path, the last one added), {@code use
+ * player's name or an entity type's path, the last one added), {@code interact
+ * NAME TARGET} (ServerboundInteractPacket, main hand, on such a target), {@code use
  * NAME} (ServerboundUseItemPacket, main hand), {@code slot NAME N}
  * (ServerboundSetCarriedItemPacket) and {@code end}. Each player records the
  * ClientboundSetEntityMotionPacket it receives, its own sprint flag as the
  * server sets it, teleports, the system chat (command feedback), and for
  * tools/test_server_combat_parity.py the ClientboundUpdateAttributesPacket
  * (instances sorted by attribute, as vanilla's set has no order; modifiers in
- * the packet's order) and ClientboundCooldownPacket it receives.
+ * the packet's order) and ClientboundCooldownPacket it receives; for
+ * tools/test_server_entity_data_parity.py every entity's arrow and stinger
+ * counts (entity data 12 and 13) and on-fire bit as they change, the biomes of
+ * each ClientboundChunksBiomesPacket, ClientboundAddTransientBlockPacket and
+ * ClientboundTeleportEntityPacket.
  */
 public final class KnockbackClient {
     private static volatile String step = "start";
@@ -123,6 +128,7 @@ public final class KnockbackClient {
                     }
                     case "sprint" -> players.get(w[1]).sprint(w[2].equals("on"));
                     case "attack" -> players.get(w[1]).attack(w[2]);
+                    case "interact" -> players.get(w[1]).interact(w[2]);
                     case "use" -> players.get(w[1]).send(new ServerboundUseItemPacket(InteractionHand.MAIN_HAND, 0, 0, 0));
                     case "punch" -> players.get(w[1]).send(net.minecraft.network.protocol.game.ServerboundPunchPacket.INSTANCE);
                     case "slot" -> players.get(w[1]).send(new net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket(Integer.parseInt(w[2])));
@@ -172,6 +178,8 @@ public final class KnockbackClient {
         /** Every entity this player was sent: its id to a name (players) or type path. */
         private final Map<Integer, String> seen = new java.util.concurrent.ConcurrentHashMap<>();
         private final Map<String, Integer> last = new java.util.concurrent.ConcurrentHashMap<>();
+        /** The on-fire bit last sent for each entity. */
+        private final Map<Integer, Boolean> fire = new java.util.concurrent.ConcurrentHashMap<>();
         private final Object replyLock = new Object();
         private int replies;
         private int syncs;
@@ -272,6 +280,17 @@ public final class KnockbackClient {
             send(ServerboundPunchPacket.INSTANCE);
         }
 
+        /** ServerboundInteractPacket on the last TARGET added, main hand (a boat to board). */
+        void interact(String target) throws Exception {
+            Integer entity = last.get(target);
+            if (entity == null) {
+                record("error no " + target + " to interact with");
+                return;
+            }
+            send(new net.minecraft.network.protocol.game.ServerboundInteractPacket(entity, InteractionHand.MAIN_HAND,
+                new Vec3(0.0, 0.3, 0.0), false));
+        }
+
         void close() throws Exception {
             if (socket != null) socket.close();
         }
@@ -359,10 +378,51 @@ public final class KnockbackClient {
                                 replyLock.notifyAll();
                             }
                         }
-                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket d && d.id() == id) {
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket d) {
+                        String who = seen.getOrDefault(d.id(), "id" + d.id());
                         for (var value : d.packedItems()) {
-                            if (value.id() == 0) record("sprinting " + ((((Byte) value.value()) & 8) != 0));
+                            if (d.id() == id && value.id() == 0) record("sprinting " + ((((Byte) value.value()) & 8) != 0));
+                            // Entity.DATA_SHARED_FLAGS_ID's on-fire bit, as it changes.
+                            if (value.id() == 0) {
+                                boolean burning = (((Byte) value.value()) & 1) != 0;
+                                if (fire.getOrDefault(d.id(), false) != burning) record("fire " + who + " " + burning);
+                                fire.put(d.id(), burning);
+                            }
+                            // LivingEntity.DATA_ARROW_COUNT_ID and DATA_STINGER_COUNT_ID (other types use
+                            // these indices for their own data: the harness keeps the living ones).
+                            if (value.id() == 12 || value.id() == 13) {
+                                record((value.id() == 12 ? "arrows " : "stingers ") + who + " " + value.value());
+                            }
                         }
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundChunksBiomesPacket b) {
+                        // ClientPacketListener.handleChunksBiomes: each section's biomes read as the client does.
+                        for (var c : b.chunkBiomeData()) {
+                            FriendlyByteBuf buffer = c.getReadBuffer();
+                            List<String> sections = new ArrayList<>();
+                            for (int s = 0; buffer.isReadable(); s++) {
+                                var section = new net.minecraft.world.level.chunk.LevelChunkSection(
+                                    net.minecraft.world.level.chunk.PalettedContainerFactory.create(ParityData.access));
+                                section.readBiomes(buffer);
+                                Map<String, Integer> counts = new java.util.TreeMap<>();
+                                for (int i = 0; i < 64; i++) {
+                                    var biome = section.getNoiseBiome(i & 3, i >> 4, (i >> 2) & 3);
+                                    counts.merge(biome.unwrapKey().orElseThrow().identifier().getPath(), 1, Integer::sum);
+                                }
+                                sections.add(s + ":" + counts);
+                            }
+                            record("biomes " + c.pos().x() + "," + c.pos().z() + " " + String.join(" ", sections));
+                        }
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundTeleportEntityPacket t) {
+                        var c = t.change();
+                        List<String> relatives = new ArrayList<>();
+                        for (var relative : t.relatives()) relatives.add(relative.name());
+                        java.util.Collections.sort(relatives);
+                        record(String.format(java.util.Locale.ROOT, "tpentity %s %.3f %.3f %.3f %.5f %.5f %.5f %.2f %.2f %s %s",
+                            seen.getOrDefault(t.id(), "id" + t.id()), c.position().x, c.position().y, c.position().z,
+                            c.deltaMovement().x, c.deltaMovement().y, c.deltaMovement().z, c.yRot(), c.xRot(),
+                            String.join(",", relatives), t.onGround()));
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundAddTransientBlockPacket t) {
+                        record("transient " + t.getPos().toShortString() + " " + t.getBlockState());
                     } else if (p instanceof net.minecraft.network.protocol.game.ClientboundUpdateAttributesPacket a) {
                         List<String> instances = new ArrayList<>();
                         for (var v : a.getValues()) {
