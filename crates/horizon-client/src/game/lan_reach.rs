@@ -2,10 +2,10 @@
 //! `ServerPlayerGameMode.handleBlockBreakAction` make before a server
 //! player's click on a block runs: their reach (the
 //! `block_interaction_range` attribute, plus 1), where on the block the click
-//! landed, and a dig above the build limit. A few comparisons per packet;
-//! nothing runs per tick.
+//! landed, and the build limits with their "Height limit" message. A few
+//! comparisons per packet; nothing runs per tick.
 use super::{Game, lan::LanHost};
-use horizon_client::lan::guest::Guest;
+use horizon_client::{items::ItemStack, lan::guest::Guest};
 use horizon_protocol::packets::play::{self, Clientbound as C};
 
 /// `handleUseItemOn`: how far the click may be from the block's centre.
@@ -28,9 +28,31 @@ fn within_reach(g: &mut Guest, pos: [i32; 3], buffer: f64) -> bool {
     horizon_client::lan::guest::within_block_range(eye, range, pos)
 }
 
+/// `ServerPlayer.sendBuildLimitMessage`: the red overlay line.
+fn build_limit_message(host: &LanHost, conn: u32, too_high: bool, limit: i32) {
+    let key = if too_high {
+        "build.tooHigh"
+    } else {
+        "build.tooLow"
+    };
+    let message = horizon_client::text::Text::translate(
+        key,
+        &[horizon_client::text::Text::literal(limit.to_string())],
+    )
+    .with_color(horizon_client::text::RED);
+    host.hub.send_to(
+        conn,
+        &C::SystemChat(play::SystemChat {
+            content: horizon_client::lan::data::component_nbt(&message.component()),
+            overlay: true,
+        }),
+    );
+}
+
 impl Game<'_> {
     /// `handleUseItemOn` before the use: within reach plus 1, the click
-    /// within 1.0000001 of the block's centre on each axis. False: nothing
+    /// within 1.0000001 of the block's centre on each axis, and inside the
+    /// build limits (outside them the player is told why). False: nothing
     /// is used and no block is sent back.
     pub(super) fn guest_use_on_allowed(
         &self,
@@ -49,7 +71,60 @@ impl Game<'_> {
         {
             return false;
         }
+        let conn = g.conn;
+        let (min_y, max_y) = (self.dim.min_y(), self.dim.max_y());
+        if p.pos[1] > max_y {
+            build_limit_message(host, conn, true, max_y);
+            return false;
+        }
+        if p.pos[1] < min_y {
+            build_limit_message(host, conn, false, min_y);
+            return false;
+        }
         true
+    }
+
+    /// `handleUseItemOn` after the use: a block placement attempt
+    /// (`wasBlockPlacementAttempt`) that didn't consume the click, up from
+    /// the top layer or down from the bottom one, is told of the limit.
+    pub(super) fn guest_use_on_limit(
+        &self,
+        host: &LanHost,
+        gi: usize,
+        p: &play::UseItemOn,
+        consumed: bool,
+    ) {
+        let g = &host.hub.guests[gi];
+        let held = if p.hand == 1 {
+            g.offhand.as_ref()
+        } else {
+            g.inventory[g.selected].as_ref()
+        };
+        if consumed || !held.is_some_and(|s| self.placement_attempt(host, g.conn, s)) {
+            return;
+        }
+        let (min_y, max_y) = (self.dim.min_y(), self.dim.max_y());
+        // Direction 1 up, 0 down.
+        if p.face == 1 && p.pos[1] >= max_y {
+            build_limit_message(host, g.conn, true, max_y);
+        } else if p.face == 0 && p.pos[1] <= min_y {
+            build_limit_message(host, g.conn, false, min_y);
+        }
+    }
+
+    /// Port of ServerGamePacketListenerImpl#wasBlockPlacementAttempt: a block
+    /// item or a bucket with a fluid, off cooldown.
+    fn placement_attempt(&self, host: &LanHost, conn: u32, stack: &ItemStack) -> bool {
+        let id = &*stack.item;
+        let block = self.res.items().get(id).is_some_and(|i| i.block.is_some());
+        let bucket =
+            id.ends_with("_bucket") && id != "minecraft:bucket" && id != "minecraft:milk_bucket";
+        let group = horizon_client::cooldowns::group(stack, None);
+        let cooling = host
+            .play
+            .get(&conn)
+            .is_some_and(|p| p.cooldowns.is_on_cooldown(&group));
+        (block || bucket) && !cooling
     }
 
     /// `handleBlockBreakAction`'s checks for START (0), ABORT (2) and STOP (3):

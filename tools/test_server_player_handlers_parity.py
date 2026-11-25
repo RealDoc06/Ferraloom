@@ -86,6 +86,9 @@ CASES = {
     'use-off-block': (holding('stone'), ['useon Alice 1 -61 1 1 0.5 3.0 0.5', 'ticks 2', is_block(1, -60, 1, 'air')],
                       CLICKS),
     'dig-far': (holding('stone'), ['dig Alice 0 20 -61 0 1', 'ticks 5', is_block(20, -61, 0, 'grass_block')], CLICKS),
+    'build-too-high': ([*holding('stone'), 'cmd Alice setblock 0 319 0 minecraft:stone', 'cmd Alice tp @s 0.5 316 0.5',
+                        'pos Alice 0.5 316 0.5 0 -90 0'], ['useon Alice 0 319 0 1 0.5 1 0.5', 'ticks 2'], ('overlay',)),
+    'build-too-low': (holding('stone'), ['useon Alice 0 -65 0 0 0.5 0 0.5', 'ticks 2'], ('overlay',)),
 }
 SETUP = ['cmd Alice gamerule spawn_mobs false', 'cmd Alice gamerule spawn_monsters false',
          'cmd Alice gamerule advance_time false', 'cmd Alice time set noon', 'ticks 20']

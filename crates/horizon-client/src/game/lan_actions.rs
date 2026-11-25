@@ -1483,7 +1483,7 @@ impl Game<'_> {
             }
             S::UseItemOn(p) => {
                 host.hub.ack(conn, p.sequence);
-                // Ferraloom: handleUseItemOn's reach and hit
+                // Ferraloom: handleUseItemOn's reach, hit and build-limit
                 // checks (game/lan_reach.rs).
                 if spectator || !self.guest_use_on_allowed(host, gi, &p) {
                     return;
@@ -1516,6 +1516,9 @@ impl Game<'_> {
                         g.swings_started != swings
                     });
                     self.lan_swing_back(host, conn, swung);
+                    // Ferraloom: a placement that didn't happen at a build limit.
+                    let placed = self.world.block_log.as_ref().map_or(0, Vec::len) > logged;
+                    self.guest_use_on_limit(host, gi, &p, swung.unwrap_or(false) || placed);
                     self.guest_use_sounds(host, conn, logged, heard);
                 }
                 // The client predicted a result: correct it with what really is.

@@ -443,6 +443,8 @@ public final class KnockbackClient {
                             syncs++;
                             replyLock.notifyAll();
                         }
+                    } else if (p instanceof ClientboundSystemChatPacket c && c.overlay()) {
+                        record("overlay " + c.content().getString());
                     } else if (p instanceof ClientboundSystemChatPacket c) {
                         record("chat " + c.content().getString());
                         synchronized (replyLock) {
