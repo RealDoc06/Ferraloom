@@ -155,6 +155,9 @@ final class FerraloomServer extends StubServer {
                     enablePlugin(plugin);
                 }
             }
+            if (order == PluginLoadOrder.STARTUP) {
+                WorldEvents.loaded(this); // Ferraloom: worlds area, WorldInitEvent and WorldLoadEvent.
+            }
         }
         DefaultPermissions.registerCorePermissions();
     }
@@ -436,6 +439,11 @@ final class FerraloomServer extends StubServer {
     }
 
     @Override public <T extends org.bukkit.Keyed> org.bukkit.Registry<T> getRegistry(Class<T> type) { return FerraloomRegistries.get(type); } // Ferraloom: registries (blocks-worlds area, FerraloomRegistries)
+    // Blocks area: BlockData (Blocks).
+    @Override public org.bukkit.block.data.BlockData createBlockData(org.bukkit.Material material) { return Blocks.parse(material, null); }
+    @Override public org.bukkit.block.data.BlockData createBlockData(org.bukkit.Material material, java.util.function.Consumer<? super org.bukkit.block.data.BlockData> consumer) { org.bukkit.block.data.BlockData data = createBlockData(material); if (consumer != null) { consumer.accept(data); } return data; }
+    @Override public org.bukkit.block.data.BlockData createBlockData(String data) { return Blocks.parse(null, data); }
+    @Override public org.bukkit.block.data.BlockData createBlockData(org.bukkit.Material material, String data) { return Blocks.parse(material, data); }
 
     @Override
     public void shutdown() {
