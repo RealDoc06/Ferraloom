@@ -647,6 +647,10 @@ impl PlayerHost for LevelHost<'_, '_> {
     }
 }
 
+// Inventory area: no inventory is reached from inside a level's tick; every
+// InventoryHost method answers its default (nothing there).
+impl ferraloom_plugins::InventoryHost for LevelHost<'_, '_> {}
+
 impl ServerHost for LevelHost<'_, '_> {
     fn console_message(&mut self, message: &str) {
         crate::game::dedicated::log("INFO", &horizon_client::text::Text::legacy(message).plain());

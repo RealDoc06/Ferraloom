@@ -64,9 +64,14 @@ pub(crate) fn with_host<R>(f: impl FnOnce(&mut dyn PluginHost) -> R) -> Option<R
 /// What a plugin sent from where no host was lent, for the start of the next tick.
 #[derive(Debug, PartialEq)]
 pub(crate) enum Deferred {
-    Message { player: PlayerId, text: String },
+    Message {
+        player: PlayerId,
+        text: String,
+    },
     Console(String),
     Shutdown,
+    /// A plugin's container the collector freed (inventory area).
+    DropContainer(u32),
 }
 
 static OUTBOX: Mutex<Vec<Deferred>> = Mutex::new(Vec::new());
@@ -83,6 +88,7 @@ pub(crate) fn drain_deferred(host: &mut dyn PluginHost) {
             Deferred::Message { player, text } => host.send_message(player, &text),
             Deferred::Console(text) => host.console_message(&text),
             Deferred::Shutdown => host.shutdown(),
+            Deferred::DropContainer(id) => host.drop_container(id),
         }
     }
 }
@@ -180,7 +186,7 @@ pub(crate) fn register(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Location, PlayerHost, ServerHost, WorldHost};
+    use crate::{InventoryHost, Location, PlayerHost, ServerHost, WorldHost};
 
     /// A host that records what it is told.
     #[derive(Default)]
@@ -205,6 +211,7 @@ mod tests {
         }
     }
     impl crate::BlockHost for Host {}
+    impl InventoryHost for Host {}
     impl ServerHost for Host {
         fn console_message(&mut self, message: &str) {
             self.said.push(format!("console: {message}"));

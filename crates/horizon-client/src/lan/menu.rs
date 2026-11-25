@@ -51,6 +51,8 @@ pub enum Slots {
     Double((i32, i32, i32), (i32, i32, i32)),
     /// The player's own ender chest inventory (`PlayerEnderChestContainer`).
     Ender,
+    /// Ferraloom: a plugin's container (`lan/plugin_containers.rs`).
+    Custom(u32),
 }
 
 impl Slots {
@@ -58,12 +60,15 @@ impl Slots {
         match self {
             Slots::Block(k) => vec![k],
             Slots::Double(a, b) => vec![a, b],
-            Slots::Ender => Vec::new(),
+            Slots::Ender | Slots::Custom(_) => Vec::new(),
         }
     }
     /// Whether the block entities behind the slots are still there
     /// (`Container.stillValid`).
     pub fn valid(self, world: &World) -> bool {
+        if let Slots::Custom(id) = self {
+            return super::plugin_containers::exists(id);
+        }
         self.halves()
             .iter()
             .all(|k| world.block_entities.contains_key(k))
@@ -85,6 +90,9 @@ impl Slots {
     }
     /// Container slot `n`.
     pub fn get(self, world: &World, guest: &Guest, mut n: usize) -> Option<ItemStack> {
+        if let Slots::Custom(id) = self {
+            return super::plugin_containers::get(id, n);
+        }
         if self == Slots::Ender {
             return guest.ender_items.get(n).cloned().flatten();
         }
@@ -99,6 +107,9 @@ impl Slots {
     }
     /// Every container slot, in menu order.
     pub fn read(self, world: &World, guest: &Guest) -> Option<Vec<Option<ItemStack>>> {
+        if let Slots::Custom(id) = self {
+            return super::plugin_containers::read(id);
+        }
         if self == Slots::Ender {
             return Some(guest.ender_items.clone());
         }
@@ -110,6 +121,9 @@ impl Slots {
     }
     /// Store what `read` gave, changed.
     pub fn write(self, world: &mut World, guest: &mut Guest, items: Vec<Option<ItemStack>>) {
+        if let Slots::Custom(id) = self {
+            return super::plugin_containers::write(id, items);
+        }
         if self == Slots::Ender {
             guest.ender_items = items;
             return;

@@ -1031,6 +1031,7 @@ version = "0.1.0"
 name = "ferraloom-plugins"
 version = "0.1.0"
 dependencies = [
+ "horizon-items",
  "horizon-protocol",
  "horizon-world",
  "jni 0.21.1",

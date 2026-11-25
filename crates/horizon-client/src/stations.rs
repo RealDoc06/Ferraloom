@@ -288,14 +288,14 @@ pub fn anvil_result(
             if n != hover_name {
                 naming_cost = 1;
                 price += 1;
-                result.data_mut().custom_name = Some(n.to_owned());
+                result.data_mut().set_custom_name(Some(n.to_owned()));
             }
         }
         _ => {
             if input.custom_name().is_some() {
                 naming_cost = 1;
                 price += 1;
-                result.data_mut().custom_name = None;
+                result.data_mut().set_custom_name(None);
             }
         }
     }
