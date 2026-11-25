@@ -190,6 +190,9 @@ the baseline is the coordinator's next step; budget: no measurable MSPT differen
 - `World`: name, UID, environment, key, heights, game time and time of day, players, `getBlockAt`.
   `Block`: position, world, location, type (the loaded level in place).
 
+Blocks and worlds (registries, `BlockData`, blocks and worlds in every dimension, block and world events,
+hook costs): [plugins-blocks-worlds.md](plugins-blocks-worlds.md).
+
 Known differences from CraftBukkit, each for its area to remove: join/quit messages are sent as plain
 translations (no hover); `BlockBreakEvent.setDropItems`/`setExpToDrop` are ignored and the block entity is
 not resent; `Block.getType` reads only the level in place; `AsyncPlayerChatEvent`'s lines go out unsigned;
