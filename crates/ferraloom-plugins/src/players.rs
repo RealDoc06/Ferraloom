@@ -17,7 +17,7 @@ use jni::{
     JNIEnv,
     objects::{JByteArray, JClass, JDoubleArray, JObject, JObjectArray, JString, JValue},
     signature::{Primitive, ReturnType},
-    sys::{JNI_FALSE, jboolean, jdouble, jdoubleArray, jfloat, jint, jlong, jobjectArray},
+    sys::{JNI_FALSE, jboolean, jdouble, jdoubleArray, jfloat, jint, jlong, jobjectArray, jvalue},
 };
 use std::{
     ffi::c_void,
@@ -561,13 +561,13 @@ pub(crate) fn load(env: &mut JNIEnv) -> jni::errors::Result<()> {
 }
 
 /// A player's UUID halves as arguments.
-fn id_args(id: PlayerId) -> [jni::sys::jvalue; 2] {
+fn id_args(id: PlayerId) -> [jvalue; 2] {
     let (most, least) = natives::halves(id);
     [JValue::Long(most).as_jni(), JValue::Long(least).as_jni()]
 }
 
 /// A location's arguments, `LOC` in the signatures.
-fn location_args(l: &Location) -> [jni::sys::jvalue; 6] {
+fn location_args(l: &Location) -> [jvalue; 6] {
     [
         JValue::Int(l.world as i32).as_jni(),
         JValue::Double(l.x).as_jni(),
@@ -867,15 +867,25 @@ pub fn player_move(
     let Some(events) = EVENTS.get() else {
         return Moved::Unchanged;
     };
+    // On the stack: this is called for every moving player each tick.
+    let args = move_args(id, &from, &to, None);
     let answer = bridge::call(host, |env| {
-        let mut args = id_args(id).to_vec();
-        args.extend(location_args(&from));
-        args.extend(location_args(&to));
         // SAFETY: `move`'s signature in `load`.
-        let out = unsafe { events.invoke(env, MOVE, ReturnType::Array, &args) }?;
+        let out = unsafe { events.invoke(env, MOVE, ReturnType::Array, &args[..14]) }?;
         doubles(env, out)
     });
     moved(answer.flatten())
+}
+
+/// `move` and `teleport`'s arguments: the player, both locations, the cause (none for `move`).
+fn move_args(id: PlayerId, from: &Location, to: &Location, cause: Option<Cause>) -> [jvalue; 15] {
+    let [most, least] = id_args(id);
+    let [fw, fx, fy, fz, fyaw, fpitch] = location_args(from);
+    let [tw, tx, ty, tz, tyaw, tpitch] = location_args(to);
+    let cause = JValue::Int(cause.map_or(0, |c| c as i32)).as_jni();
+    [
+        most, least, fw, fx, fy, fz, fyaw, fpitch, tw, tx, ty, tz, tyaw, tpitch, cause,
+    ]
 }
 
 /// `PlayerTeleportEvent` for a teleport the server makes (a command, a
@@ -890,11 +900,8 @@ pub fn player_teleport(
     let Some(events) = EVENTS.get() else {
         return Moved::Unchanged;
     };
+    let args = move_args(id, &from, &to, Some(cause));
     let answer = bridge::call(host, |env| {
-        let mut args = id_args(id).to_vec();
-        args.extend(location_args(&from));
-        args.extend(location_args(&to));
-        args.push(JValue::Int(cause as i32).as_jni());
         // SAFETY: `teleport`'s signature in `load`.
         let out = unsafe { events.invoke(env, TELEPORT, ReturnType::Array, &args) }?;
         doubles(env, out)
