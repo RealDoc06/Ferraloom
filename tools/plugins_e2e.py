@@ -195,6 +195,8 @@ def check_plugins(engine, bot_binary, built, out, scratch):
 
         # The scheduler: async off the server thread; a 40-tick delay and a 10-tick timer, counted in game ticks.
         log.wait_for(r'\[FerraloomTest\] schedule: async primary=false')
+        log.wait_for(r'\[FerraloomTest\] blocks: async primary=false air=true solid=true block=true '
+                     r'data=minecraft:oak_log\[axis=y\] parsed=minecraft:oak_stairs\[facing=east\]$')
         log.wait_for(r'\[FerraloomTest\] schedule: later after 40 ticks')
         log.wait_for(r'\[FerraloomTest\] schedule: timer ran 5 times in 41 ticks')
         print('scheduler: ok')
@@ -243,7 +245,10 @@ def check_plugins(engine, bot_binary, built, out, scratch):
         bot.out.wait_for(r'^chat watching physics$', start=mark)
         bot.send(f'command ftest set {bx + 2} {by + 1} {bz + 1} minecraft:stone')
         log.wait_for(r'\[FerraloomTest\] event: physics at -?\d+ -?\d+ -?\d+ changed=\w+', start=log_mark)
-        print('block reads and writes, BlockPhysicsEvent: ok')
+        # A sign's state: its text, written by update() and read back.
+        bot.send(f'command ftest sign {bx - 2} {by + 1} {bz}')
+        bot.out.wait_for(r'^chat sign hello$', start=mark)
+        print('block reads and writes, BlockPhysicsEvent, sign text: ok')
 
         # World reads: heights, chunks, the border, a game rule, another dimension's (unloaded) block.
         bot.send('command ftest world')

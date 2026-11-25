@@ -14,7 +14,9 @@ import org.bukkit.block.data.BlockData;
 
 /**
  * The server's blocks, as the bridge knows them: every block's states (vanilla's global state ids),
- * its properties and a few facts, read once from the server ({@link BlockNative#table}, src/blocks.rs).
+ * its properties and a few facts, read once from the server at start ({@link #load}, from
+ * {@link BlockNative#table}, src/blocks.rs) and immutable after: readable from any thread, as
+ * CraftBukkit's static block data is ({@code Material.isAir()} from an async task or the chat thread).
  * {@code BlockData} is a state id here: reading a block is one native call answering an int, and changing
  * a property is arithmetic, as vanilla's StateDefinition lays the states out (properties by name, the last
  * varying fastest).
@@ -165,23 +167,25 @@ final class Blocks {
     private Blocks() {
     }
 
-    /** The table, read from the server on first use (on the server thread). */
+    /** The table; IllegalStateException before {@link #load} (no native is called after start). */
     private static Table table() {
         Table t = table;
-        if (t != null) {
-            return t;
+        if (t == null) {
+            throw new IllegalStateException("The server's block table is not loaded yet (it is read as the bridge starts)");
         }
-        synchronized (Blocks.class) {
-            if (table == null) {
-                table = read(BlockNative.table());
-            }
-            return table;
+        return t;
+    }
+
+    /** Reads the table from the server, once, at start, where the server lends itself (FerraloomWorld's constructor). */
+    static synchronized void load() {
+        if (table == null) {
+            table = read(BlockNative.table());
         }
     }
 
-    /** Reads the table at start, where the server lends itself (FerraloomWorld's constructor calls it). */
-    static void load() {
-        table();
+    /** Installs a table without the server (tests: the text is src/blocks.rs's {@code table_line} format). */
+    static synchronized void install(String text) {
+        table = read(text);
     }
 
     static Table read(String text) {

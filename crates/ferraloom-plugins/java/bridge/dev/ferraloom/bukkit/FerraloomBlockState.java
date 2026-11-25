@@ -28,6 +28,9 @@ class FerraloomBlockState extends StubBlockState {
     final int y;
     final int z;
     int state;
+    /** A sign's lines, front and back, read on first use; changed ones are written by {@link #update}. */
+    private String[][] sign;
+    private final boolean[] signChanged = new boolean[2];
 
     FerraloomBlockState(FerraloomWorld world, int x, int y, int z, int state) {
         this.world = world;
@@ -101,10 +104,19 @@ class FerraloomBlockState extends StubBlockState {
         return org.bukkit.block.TileState.class;
     }
 
-    /** A block entity's state: BlockState's methods are the snapshot's, the rest are not bridged yet. */
+    /**
+     * A block entity's state: BlockState's methods are the snapshot's, and a sign's lines are its text
+     * (CraftSign: {@code getLine} and {@code setLine} are the front's); the rest is not bridged yet.
+     */
     private record Delegate(FerraloomBlockState base, Class<?> type) implements InvocationHandler {
         @Override
         public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+            if (org.bukkit.block.Sign.class.isAssignableFrom(type)) {
+                Object answer = base.sign(proxy, method, args);
+                if (answer != NONE) {
+                    return answer;
+                }
+            }
             if (method.getDeclaringClass().isAssignableFrom(FerraloomBlockState.class)) {
                 try {
                     return method.invoke(base, args);
@@ -118,6 +130,61 @@ class FerraloomBlockState extends StubBlockState {
             throw new UnsupportedOperationException("Ferraloom does not implement " + type.getSimpleName() + "."
                     + method.getName() + "() yet");
         }
+    }
+
+    private static final Object NONE = new Object();
+
+    /** The lines of one side (0 front, 1 back). */
+    String[] lines(int side) {
+        if (sign == null) {
+            sign = new String[2][];
+            for (int s = 0; s < 2; s++) {
+                String[] read = world == null ? null : BlockNative.signLines(world.index, x, y, z, s == 0);
+                sign[s] = read != null ? read : new String[] {"", "", "", ""};
+            }
+        }
+        return sign[side];
+    }
+
+    /** Sign's and SignSide's line methods on side {@code side}; {@link #NONE} for the others. */
+    private Object lineMethod(int side, Method method, Object[] args) {
+        switch (method.getName()) {
+            case "getLines" -> {
+                return lines(side).clone();
+            }
+            case "getLine" -> {
+                return lines(side)[(Integer) args[0]];
+            }
+            case "setLine" -> {
+                String line = (String) args[1];
+                lines(side)[(Integer) args[0]] = line == null ? "" : line;
+                signChanged[side] = true;
+                return null;
+            }
+            default -> {
+                return NONE;
+            }
+        }
+    }
+
+    /** The Sign methods the snapshot answers: the front's lines, and getSide for a side's own. */
+    private Object sign(Object proxy, Method method, Object[] args) {
+        if (method.getName().equals("getSide") && args != null && args[0] instanceof org.bukkit.block.sign.Side side) {
+            int s = side == org.bukkit.block.sign.Side.FRONT ? 0 : 1;
+            return Proxy.newProxyInstance(FerraloomBlockState.class.getClassLoader(),
+                    new Class<?>[] {org.bukkit.block.sign.SignSide.class}, (p, m, a) -> {
+                        Object answer = lineMethod(s, m, a);
+                        if (answer != NONE) {
+                            return answer;
+                        }
+                        if (m.getDeclaringClass() == Object.class) {
+                            return m.getName().equals("equals") ? p == a[0]
+                                    : m.getName().equals("hashCode") ? System.identityHashCode(p) : "CraftSignSide";
+                        }
+                        throw new UnsupportedOperationException("Ferraloom does not implement SignSide." + m.getName() + "() yet");
+                    });
+        }
+        return lineMethod(0, method, args);
     }
 
     private FerraloomWorld placed() {
@@ -234,6 +301,12 @@ class FerraloomBlockState extends StubBlockState {
         }
         if (now != state) {
             BlockNative.setState(w.index, x, y, z, state, applyPhysics);
+        }
+        for (int s = 0; s < 2; s++) {
+            if (signChanged[s]) {
+                BlockNative.setSignLines(w.index, x, y, z, s == 0, sign[s]);
+                signChanged[s] = false;
+            }
         }
         return true;
     }
