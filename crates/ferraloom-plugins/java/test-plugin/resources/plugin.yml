@@ -8,3 +8,6 @@ commands:
     description: Ferraloom's plugin bridge test
     usage: /ftest <ping|protect on|protect off|where|tp x y z>
     aliases: [ft]
+  fentity:
+    description: The entities area's checks
+    usage: /fentity <pigs|shield|quadruple on|off|name N|kill|remove|mob>

@@ -308,6 +308,23 @@ fn main() {
                     sequence,
                 })
             }
+            // Entities: hit or use an entity by its id.
+            "attack" | "interact" => {
+                let Ok(id) = rest.trim().parse::<i32>() else {
+                    eprintln!("plugin_bot: {verb} <entity id>");
+                    continue;
+                };
+                if verb == "attack" {
+                    play::Serverbound::Attack(play::Attack { id })
+                } else {
+                    play::Serverbound::Interact(play::Interact {
+                        id,
+                        hand: 0,
+                        location: [0.0, 0.5, 0.0],
+                        secondary: false,
+                    })
+                }
+            }
             "quit" => break,
             _ => {
                 eprintln!("plugin_bot: unknown input {line:?}");
