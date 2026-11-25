@@ -2627,10 +2627,11 @@ impl Hub {
                     // Sprinting persists after the sprint key is released (or
                     // starts with a double tap); PlayerCommand changes it.
                 }
-                // OPEN_INVENTORY (the ridden mount's inventory) and
-                // START_FALL_FLYING (checked against the guest's chest slot
-                // and effects) are the game's.
-                S::PlayerCommand(p) if matches!(p.action, 5 | 6) => {
+                // START_RIDING_JUMP and STOP_RIDING_JUMP (the ridden mount's
+                // jump, `data` its boost), OPEN_INVENTORY (the ridden mount's
+                // inventory) and START_FALL_FLYING (checked against the
+                // guest's chest slot and effects) are the game's.
+                S::PlayerCommand(p) if matches!(p.action, 3..=6) => {
                     events.push(HostEvent::Packet(conn, Box::new(S::PlayerCommand(p))));
                 }
                 S::PlayerCommand(p) => match p.action {
