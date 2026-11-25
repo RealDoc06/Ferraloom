@@ -217,6 +217,16 @@ public final class TestPlugin extends JavaPlugin implements Listener {
                 w.setStorm(args.length > 1 && args[1].equals("on"));
                 sender.sendMessage("storm " + w.hasStorm());
             }
+            case "sign" -> {
+                Block b = Bukkit.getWorlds().get(0).getBlockAt(arg(args, 1), arg(args, 2), arg(args, 3));
+                b.setType(org.bukkit.Material.OAK_SIGN);
+                if (b.getState() instanceof org.bukkit.block.Sign sign) {
+                    sign.setLine(0, "hello");
+                    sign.update();
+                }
+                String line = b.getState() instanceof org.bukkit.block.Sign again ? again.getLine(0) : "no sign";
+                sender.sendMessage("sign " + line);
+            }
             case "physics" -> {
                 watchPhysics = true;
                 sender.sendMessage("watching physics");
