@@ -66,6 +66,10 @@ PROPERTIES = {
     'max-players': '5',
     'pause-when-empty-seconds': '-1',
 }
+# Cases compared on their damage events and hurt sounds only, and why.
+HURTS_ONLY = {
+    'damage-fall': "the motion packet of a fall's hurt differs (vanilla's carries the fall's last move, 0.42 up)",
+}
 # Cases Horizon still gets wrong, and why.
 KNOWN = {
     'pvp-mace': "a smash on a player runs none of MaceItem.hurtEnemy (the attacker's fall goes on)",
@@ -326,6 +330,8 @@ def compared(lines):
             continue
         if text.startswith('damage ') or text.startswith('sound '):
             hurts.setdefault(step, []).append(f'{who} {text}')
+            continue
+        if step in HURTS_ONLY:
             continue
         kept = cases.setdefault(step, [])
         data = DATA.match(text)
