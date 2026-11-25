@@ -37,6 +37,9 @@ IMPLEMENTATIONS = [
     'dev.ferraloom.bukkit.FerraloomConsole',
     'dev.ferraloom.bukkit.FerraloomScheduler',
     'dev.ferraloom.bukkit.FerraloomUnsafe',
+    'dev.ferraloom.bukkit.FerraloomEntity',
+    'dev.ferraloom.bukkit.FerraloomLivingEntity',
+    'dev.ferraloom.bukkit.FerraloomMob',
 ]
 TEST_PLUGINS = {'FerraloomTest': HERE / 'test-plugin', 'FerraloomNms': HERE / 'nms-plugin'}
 

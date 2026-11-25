@@ -15,3 +15,6 @@ org.bukkit.MusicInstrument
 org.bukkit.potion.PotionEffectType
 org.bukkit.generator.structure.Structure
 org.bukkit.generator.structure.StructureType
+org.bukkit.entity.Entity
+org.bukkit.entity.LivingEntity
+org.bukkit.entity.Mob

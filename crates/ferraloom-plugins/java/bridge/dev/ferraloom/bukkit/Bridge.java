@@ -31,6 +31,13 @@ public final class Bridge {
         EVENTS[2] = AsyncPlayerChatEvent.getHandlerList();
         // Blocks: 16-31.
         EVENTS[16] = BlockBreakEvent.getHandlerList();
+        // Entities: 40-47.
+        EVENTS[40] = org.bukkit.event.entity.EntityDamageEvent.getHandlerList();
+        EVENTS[41] = org.bukkit.event.entity.EntityDeathEvent.getHandlerList();
+        EVENTS[42] = org.bukkit.event.entity.EntitySpawnEvent.getHandlerList();
+        EVENTS[43] = org.bukkit.event.entity.EntityTargetEvent.getHandlerList();
+        EVENTS[44] = org.bukkit.event.entity.EntityExplodeEvent.getHandlerList();
+        EVENTS[45] = org.bukkit.event.player.PlayerInteractEntityEvent.getHandlerList();
     }
 
     /** {@link #tick}'s bit for "the command labels changed: ask {@link #commands} again". */

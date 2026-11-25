@@ -24,14 +24,28 @@ pub enum Event {
     AsyncPlayerChat = 2,
     // Blocks.
     BlockBreak = 16,
+    // Entities: 40-47. One bit can stand for a group of Bukkit events (`Bridge.EVENTS`).
+    EntityDamage = 40,
+    EntityDeath = 41,
+    /// `EntitySpawnEvent`'s list: `CreatureSpawnEvent` is one.
+    EntitySpawn = 42,
+    EntityTarget = 43,
+    EntityExplode = 44,
+    PlayerInteractEntity = 45,
 }
 
 impl Event {
-    pub const ALL: [Event; 4] = [
+    pub const ALL: [Event; 10] = [
         Event::PlayerJoin,
         Event::PlayerQuit,
         Event::AsyncPlayerChat,
         Event::BlockBreak,
+        Event::EntityDamage,
+        Event::EntityDeath,
+        Event::EntitySpawn,
+        Event::EntityTarget,
+        Event::EntityExplode,
+        Event::PlayerInteractEntity,
     ];
 
     const fn bit(self) -> u64 {
@@ -48,6 +62,13 @@ pub fn listens(event: Event) -> bool {
     FLAGS.load(Ordering::Relaxed) & event.bit() != 0
 }
 
+/// Latches the listener bits of `events` alone, for tests of event sites in
+/// other crates (no JVM). Never called by the game.
+#[doc(hidden)]
+pub fn latch_for_tests(events: &[Event]) {
+    set(events.iter().fold(0, |m, e| m | e.bit()));
+}
+
 /// Latches what the bridge reported, between ticks. Bits for events this
 /// side does not know are dropped.
 pub(crate) fn set(bits: u64) {
@@ -61,7 +82,7 @@ mod tests {
 
     #[test]
     fn bits_name_their_events_only() {
-        set(0b10 | 1 << 16 | 1 << 40);
+        set(0b10 | 1 << 16 | 1 << 47);
         assert!(!listens(Event::PlayerJoin));
         assert!(listens(Event::PlayerQuit));
         assert!(!listens(Event::AsyncPlayerChat));

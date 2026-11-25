@@ -180,7 +180,7 @@ pub(crate) fn register(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Location, PlayerHost, ServerHost, WorldHost};
+    use crate::{EntityHost, Location, PlayerHost, ServerHost, WorldHost};
 
     /// A host that records what it is told.
     #[derive(Default)]
@@ -216,6 +216,21 @@ mod tests {
         }
         fn shutdown(&mut self) {
             self.stopped = true;
+        }
+    }
+
+    impl EntityHost for Host {
+        fn entity(&mut self, _: crate::EntityRef) -> crate::Reach<crate::EntityState> {
+            crate::Reach::Gone
+        }
+        fn change(&mut self, _: crate::EntityRef, _: crate::Change) -> crate::Reach<bool> {
+            crate::Reach::Gone
+        }
+        fn entities(&mut self, _: usize, _: Option<[f64; 6]>) -> crate::Reach<Vec<crate::Named>> {
+            crate::Reach::Gone
+        }
+        fn spawn(&mut self, _: &str, _: Location) -> crate::Reach<Option<crate::Named>> {
+            crate::Reach::Elsewhere
         }
     }
 
