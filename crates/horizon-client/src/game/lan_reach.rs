@@ -86,7 +86,8 @@ impl Game<'_> {
 
     /// `handleUseItemOn` after the use: a block placement attempt
     /// (`wasBlockPlacementAttempt`) that didn't consume the click, up from
-    /// the top layer or down from the bottom one, is told of the limit.
+    /// the top layer or down from the bottom one, is told of the limit; up
+    /// from the top twice, as vanilla checks it twice.
     pub(super) fn guest_use_on_limit(
         &self,
         host: &LanHost,
@@ -106,6 +107,7 @@ impl Game<'_> {
         let (min_y, max_y) = (self.dim.min_y(), self.dim.max_y());
         // Direction 1 up, 0 down.
         if p.face == 1 && p.pos[1] >= max_y {
+            build_limit_message(host, g.conn, true, max_y);
             build_limit_message(host, g.conn, true, max_y);
         } else if p.face == 0 && p.pos[1] <= min_y {
             build_limit_message(host, g.conn, false, min_y);
