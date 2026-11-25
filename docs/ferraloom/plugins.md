@@ -22,7 +22,8 @@ the API out in parallel. The foundation (a vertical slice, below) is in place.
 |---|---|
 | `crates/ferraloom-plugins/src/` | The Rust side, no `horizon-client` dependency. `lib.rs` (public API, `PluginHost`), `events.rs` (listener bits), `jvm.rs` (find/load/create the JVM), `bridge.rs` (runtime, lifecycle, the `Entry` and `call` helpers), `natives.rs` (host lending, deferral, the exception wall), one module per API area: `players.rs`, `worlds.rs`, `server.rs` (host trait, natives, event calls), `commands.rs` (command tree JSON). |
 | `crates/ferraloom-plugins/java/` | The Java side, built with the JDK alone by `build.py`. `bridge/dev/ferraloom/bukkit/`: `Bridge` (lifecycle), `PlayerEvents`/`BlockEvents` (event entry points), `ServerNative`/`PlayerNative`/`WorldNative` (natives), `Ferraloom*` (the implementations), `FerraloomScheduler`, `FerraloomCommandMap`, `Internals` (the NMS check), `NativeLog`. `tools/StubGen.java`, `tools/Coverage.java`, `stubs.txt`, `api.lock.json`, `test-plugin/`, `nms-plugin/`. |
-| `crates/horizon-client/src/game/plugins.rs`, `game/plugins/{players,worlds,server}.rs` | The game's side: `GameHost` (the host over `Game`), lifecycle, event glue per area. |
+| `crates/horizon-client/src/game/plugins.rs`, `game/plugins/{players,worlds,server,entities}.rs` | The game's side: `GameHost` (the host over `Game`), lifecycle, event glue per area. |
+| `crates/horizon-client/src/mobs/plugin_sites.rs` | The entity events fired inside mob code, and the rule for the parallel mob pass. |
 | `crates/horizon-client/src/lan/hub/plugins.rs` | Plugin commands in the hub's command tree. |
 | `tools/plugins_e2e.py`, `crates/ferraloom-plugins/examples/plugin_bot.rs` | The end-to-end test and its scripted player. |
 
@@ -123,6 +124,68 @@ offline for good: name and UUID answer, `getLocation()` is where they left, mess
 answer false. A reconnect makes a new object (CraftBukkit does the same), so a plugin that kept the old one
 sees `isOnline()` false. Entities, inventories and items follow the same rule when they arrive: a handle is
 an id plus a generation the host checks, so a stale handle answers as removed, never as another entity.
+
+## Entities
+
+The entities area (`src/entities.rs`, `game/plugins/entities.rs`, `mobs/plugin_sites.rs`; Java `Entities`,
+`FerraloomEntity`, `FerraloomLivingEntity`, `FerraloomMob`, `EntityNative`, `EntityEvents`).
+
+**Handles.** A non-player entity crosses as its id and a generation, the FNV-1a hash of its type key.
+`Game::next_entity` only grows during a run, so an id never names two entities, and the type check keeps
+apart the game's separate lists (mobs, items) and conversions. A gone handle reads as removed: `isValid()`
+false, `getLocation()` null, setters do nothing. An event naming a player passes the players area's object.
+
+**Typed objects without a class per type.** A plugin gets a `java.lang.reflect.Proxy` over its type's own
+interface (`EntityType.getEntityClass()`: `Zombie`, `Wolf`, `Item`), so `instanceof Monster`, `Animals`,
+`Tameable`, `Ageable`, `Item`, `Projectile`... answer as on CraftBukkit for every type. A call goes to the first
+of `FerraloomMob` (Mob, Tameable, Ageable), `FerraloomLivingEntity` and `FerraloomEntity` that declares it, a
+default method runs as written, anything else throws the stub's `Ferraloom does not implement Zombie.isBaby()
+yet`. Equality and hash are the handle's. Plugin-side state lives in the game's own fields or side tables keyed
+by id; `Mob` does not grow.
+
+**Two hosts.** `GameHost` answers the level in place (mobs, items, players), where a site holds the game: a
+spawn, a death, an explosion, a packet. Other worlds' entities read as gone and their lists are empty;
+`spawnEntity` there throws (`game/levels.rs` keeps them parked). Inside mob code the game is not reachable
+(the mob is borrowed out of it), so events there get `SiteHost`: it reads the mob in hand, and in the mob
+pass the pass's own view (the snapshot of the other mobs, the player the mob sees, the blocks, the time); a
+change to the mob in hand is made at once, a change to another entity is queued (`plugin_sites::queue`) and
+applied in mob order after the pass (or at the next level tick); a read it cannot answer throws
+`IllegalStateException` rather than answer wrong.
+
+**The mob pass.** The sites follow the rule in "Parallel sections". `Mob::damage_with` and the tick's watched
+fields (target, fire) call `note_impure` in a speculative tick and reach the plugin in the mob's serial
+turn. Block changes leave a tick as `MobEvent`s, so `EntityChangeBlockEvent` fires at each mob's commit, in mob
+order, and costs no serial tick: a cancelled change's event is dropped. `FERRALOOM_CHECK_MOBS=1` runs the
+serial pass on a copy and puts its queued changes back, so listeners are called twice there.
+`speculative_ticks_match_the_serial_loop_with_entity_listeners` runs the crowd with listeners for all four
+and checks mobs, events, random and queued changes against the serial loop.
+
+What a listener turns serial, per tick:
+
+| Listened event | Mobs whose tick runs again in turn |
+|---|---|
+| `EntityTargetEvent` | those whose target changed this tick (acquiring or losing one) |
+| `EntityCombustEvent` | those whose fire grew: every undead burning in daylight, each tick it burns |
+| `EntityDamageEvent` | those hurt inside their own tick (drowning, burning, falling, suffocation, effects); damage from others is dealt after the pass |
+| `EntityChangeBlockEvent`, the rest | none |
+
+| Event | Fired at | Notes |
+|---|---|---|
+| `EntityDamageEvent`, `...ByEntityEvent` | `Mob::damage_with` past the cooldown check, before the health changes; `hurt_player_from`/`hurt_player_by` for players | cancel, `setDamage`. Armor and enchantments cross as one ARMOR modifier. A player's cooldown and armor apply after the event. The damager is the causing entity (an arrow's shooter, not the arrow). |
+| `EntityDeathEvent` | `drop_death_loot`, the loot collected and not dropped | experience changes; drops are an empty list until the inventory area lands |
+| `CreatureSpawnEvent` | as `spawn_mob_for` and natural spawning add the mob | cancel removes it; reasons NATURAL, CHUNK_GEN, CUSTOM (`spawnEntity`), DEFAULT for the rest (CraftBukkit: COMMAND, SPAWNER_EGG...) |
+| `EntityTargetEvent` | the end of a mob's tick that changed its target | cancel puts the old target back, after a tick with the new one; a brain mob's memory may set it again |
+| `EntityCombustEvent` | the end of a mob's tick that set it burning longer | mobs in their own tick only (not a player's fire aspect) |
+| `EntityChangeBlockEvent` | a mob's commit in the pass | its BlockData comes from the blocks area; the mob's own state stays (a refused sheep is fed), but an enderman keeps what it held |
+| `EntityExplodeEvent` | `server_explode_as`, before the blocks shuffle and break | blasts a mob set off; the block list can be edited |
+| `PlayerInteractEntityEvent` | the interact packet, before the use | cancel |
+
+Costs: each site is one flag test (the watched fields one test of both bits). `as_guest`, `pvp_land` and
+`note_killer` add one `running()` check, `tick_world` and the end of the mob pass one each. `damage_with` keeps
+the damage before armor in a local. With a damage listener, each level tick records every mob's type by id,
+so a mob that attacks from inside mob code gets its Bukkit type.
+
+Entry points for other areas (`Entities`): `inWorld`, `inChunk`, `nearby`, `spawn`, `of`.
 
 ## Errors and crash isolation
 

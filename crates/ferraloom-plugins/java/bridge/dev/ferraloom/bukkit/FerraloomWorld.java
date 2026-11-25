@@ -725,4 +725,14 @@ final class FerraloomWorld extends StubWorld {
     public String toString() {
         return "CraftWorld{name=" + name + "}";
     }
+
+    // Entities area (Entities): the level in place's entities; another world's are not reachable yet.
+    @Override public List<Entity> getEntities() { return Entities.inWorld(this); }
+    @Override public List<org.bukkit.entity.LivingEntity> getLivingEntities() { List<org.bukkit.entity.LivingEntity> living = new ArrayList<>(); for (Entity e : getEntities()) { if (e instanceof org.bukkit.entity.LivingEntity l) { living.add(l); } } return living; }
+    @Override @SuppressWarnings("unchecked") public <T extends Entity> Collection<T> getEntitiesByClass(Class<T> type) { List<T> found = new ArrayList<>(); for (Entity e : getEntities()) { if (type.isInstance(e)) { found.add((T) e); } } return found; }
+    @Override public Collection<Entity> getNearbyEntities(Location at, double x, double y, double z) { return Entities.nearby(this, at.getX() - x, at.getY() - y, at.getZ() - z, at.getX() + x, at.getY() + y, at.getZ() + z); }
+    @Override public Entity spawnEntity(Location at, org.bukkit.entity.EntityType type) { return Entities.spawn(this, at, type); }
+    @Override public Entity spawnEntity(Location at, org.bukkit.entity.EntityType type, boolean randomizeData) { return Entities.spawn(this, at, type); }
+    @Override public org.bukkit.entity.Item dropItem(Location at, org.bukkit.inventory.ItemStack stack) { return Entities.dropItem(this, at, stack, false); }
+    @Override public org.bukkit.entity.Item dropItemNaturally(Location at, org.bukkit.inventory.ItemStack stack) { return Entities.dropItem(this, at, stack, true); }
 }

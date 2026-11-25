@@ -106,4 +106,7 @@ final class FerraloomChunk extends StubChunk {
     public String toString() {
         return "CraftChunk{x=" + x + "z=" + z + "}";
     }
+
+    // Entities area (Entities).
+    @Override public org.bukkit.entity.Entity[] getEntities() { return Entities.inChunk(world, x, z).toArray(new org.bukkit.entity.Entity[0]); }
 }

@@ -69,6 +69,10 @@ public final class TestPlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
+        // Entities: their checks and /fentity.
+        EntityChecks entities = new EntityChecks(this);
+        getServer().getPluginManager().registerEvents(entities, this);
+        getCommand("fentity").setExecutor(entities);
         getLogger().info("lifecycle: onEnable");
         saveDefaultConfig();
         getLogger().info("config: greeting=" + getConfig().getString("greeting")

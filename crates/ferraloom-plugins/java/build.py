@@ -42,6 +42,9 @@ IMPLEMENTATIONS = [
     'dev.ferraloom.bukkit.FerraloomChunk',
     'dev.ferraloom.bukkit.FerraloomWorldBorder',
     'dev.ferraloom.bukkit.FerraloomBlockState',
+    'dev.ferraloom.bukkit.FerraloomEntity',
+    'dev.ferraloom.bukkit.FerraloomLivingEntity',
+    'dev.ferraloom.bukkit.FerraloomMob',
     # Inventory.
     'dev.ferraloom.bukkit.FerraloomItemFactory',
     'dev.ferraloom.bukkit.FerraloomItemMeta',
