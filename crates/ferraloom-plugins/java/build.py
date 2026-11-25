@@ -39,6 +39,15 @@ IMPLEMENTATIONS = [
     'dev.ferraloom.bukkit.FerraloomUnsafe',
 ]
 TEST_PLUGINS = {'FerraloomTest': HERE / 'test-plugin', 'FerraloomNms': HERE / 'nms-plugin'}
+# Classes a test plugin compiles against but the server lacks, written at build time and kept out of its jar
+# (a server internal's path may not be in the tree: tools/check_public_tree.py).
+PROVIDED = {
+    'FerraloomNms': {
+        'net/minecraft/server/MinecraftServer.java':
+            'package net.minecraft.server;\n'
+            'public final class MinecraftServer { public static MinecraftServer getServer() { return null; } }\n',
+    },
+}
 
 
 def tool(name):
@@ -122,7 +131,16 @@ def main():
     # The test plugins.
     for name, folder in TEST_PLUGINS.items():
         classes = out / 'plugin-classes' / name
-        compile_java(api, classes, folder)
+        classpath = str(api)
+        if name in PROVIDED:
+            source = out / 'plugin-provided' / name
+            shutil.rmtree(source, ignore_errors=True)
+            for path, text in PROVIDED[name].items():
+                (source / path).parent.mkdir(parents=True, exist_ok=True)
+                (source / path).write_text(text)
+            compile_java(api, out / 'plugin-classes' / f'{name}-provided', source)
+            classpath += sep + str(out / 'plugin-classes' / f'{name}-provided')
+        compile_java(classpath, classes, folder)
         make_jar(out / 'test-plugins' / f'{name}.jar', classes, folder / 'resources')
 
     # Coverage.

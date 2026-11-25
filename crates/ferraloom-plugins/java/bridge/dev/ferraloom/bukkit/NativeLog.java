@@ -43,6 +43,9 @@ final class NativeLog extends Handler {
         if (!isLoggable(record)) {
             return;
         }
+        if (record.getThrown() != null && Internals.reached(record)) {
+            return;
+        }
         String message = formatter.formatMessage(record);
         if (record.getThrown() != null) {
             StringWriter trace = new StringWriter();

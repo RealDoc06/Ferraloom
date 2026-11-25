@@ -1,13 +1,29 @@
 package dev.ferraloom.nmsplugin;
 
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.java.JavaPlugin;
 
-/** Names a server internal the way compiled NMS code does: Ferraloom must refuse to load it. */
+/**
+ * A multi-version plugin's shape: it probes for server internals by name and
+ * handles their absence (so it loads and stays enabled), and its adapter
+ * ({@link Adapter}) names one directly, which {@code /fnms} reaches: Ferraloom
+ * then disables it with one line.
+ */
 public final class NmsPlugin extends JavaPlugin {
-    static final String SERVER = "net/minecraft/server/MinecraftServer";
-
     @Override
     public void onEnable() {
-        getLogger().info("NmsPlugin enabled, which it must not be");
+        try {
+            Class.forName("net.minecraft.server.MinecraftServer");
+            getLogger().info("probe: internals found");
+        } catch (ClassNotFoundException e) {
+            getLogger().info("probe: no internals, enabled");
+        }
+    }
+
+    @Override
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        sender.sendMessage("nms " + Adapter.server());
+        return true;
     }
 }

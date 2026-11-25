@@ -5,7 +5,8 @@ Builds the bridge and the test plugins (crates/ferraloom-plugins/java/build.py),
 server twice on a fresh flat world:
 
 1. without a plugins folder: the server starts, and no JVM is mapped into it (/proc/<pid>/maps);
-2. with plugins/FerraloomTest.jar (and FerraloomNms.jar, which uses server internals and must be refused):
+2. with plugins/FerraloomTest.jar and FerraloomNms.jar (which names server internals in an adapter: it loads
+   with a warning, and is disabled in one line when a command reaches the adapter; FerraloomTest runs on):
    one scripted player (crates/ferraloom-plugins/examples/plugin_bot.rs) joins, and the checks read the
    server's log and what the player is sent: lifecycle order, config and data folder, Bukkit.getServer()'s
    basics, the scheduler's ticks (a 40-tick delay, a 10-tick timer, an async task), the join and quit
@@ -170,21 +171,22 @@ def check_plugins(engine, bot_binary, built, out, scratch):
     log = server.out
     bot = None
     try:
-        # Lifecycle: onLoad before the level, onEnable before Done; the NMS plugin refused in one line.
+        # Lifecycle: onLoad before the level, onEnable before Done; the NMS plugin loads with a warning.
         loaded, _ = log.wait_for(r'\[FerraloomTest\] lifecycle: onLoad', timeout=300)
         level, _ = log.wait_for(r'Preparing level')
         enabled, _ = log.wait_for(r'\[FerraloomTest\] lifecycle: onEnable')
         done, _ = log.wait_for(r'Done \(')
         if not loaded < level < enabled < done:
             raise Failed(f'lifecycle out of order: onLoad {loaded}, level {level}, onEnable {enabled}, Done {done}')
-        log.wait_for(r"Could not load 'plugins/FerraloomNms\.jar': it uses net\.minecraft\.server\.MinecraftServer")
-        log.absent(r'NmsPlugin enabled')
+        log.wait_for(r"'plugins/FerraloomNms\.jar' names net\.minecraft\.server\.MinecraftServer "
+                     r"\(from dev\.ferraloom\.nmsplugin\.Adapter\).*it is disabled if it reaches one")
+        log.wait_for(r'\[FerraloomNms\] probe: no internals, enabled')
         log.wait_for(r'\[FerraloomTest\] config: greeting=hello from config\.yml folder=true')
         log.wait_for(r'\[FerraloomTest\] server: name=Ferraloom bukkit=26\.3-R0\.1-SNAPSHOT online=0 '
                      r'worlds=world/NORMAL,world_nether/NETHER,world_the_end/THE_END primary=true')
         if sys.platform.startswith('linux') and 'libjvm' not in server.maps():
             raise Failed('plugins: no libjvm mapped')
-        print('lifecycle, config, server basics, NMS refusal: ok')
+        print('lifecycle, config, server basics, NMS plugin loaded: ok')
 
         # The scheduler: async off the server thread; a 40-tick delay and a 10-tick timer, counted in game ticks.
         log.wait_for(r'\[FerraloomTest\] schedule: async primary=false')
@@ -213,6 +215,18 @@ def check_plugins(engine, bot_binary, built, out, scratch):
         bot.out.wait_for(r'^chat .*An internal error occurred while attempting to perform this command')
         log.wait_for(r'Ferraloom does not implement Player\.getHealth\(\) yet')
         print('commands, stub exception: ok')
+
+        # The NMS plugin's adapter reached: one line, no trace, the plugin disabled, the others unaffected.
+        mark, bot_mark = len(log.lines), len(bot.out.lines)
+        bot.send('command fnms')
+        bot.out.wait_for(r'^chat .*An internal error occurred while attempting to perform this command', start=bot_mark)
+        log.wait_for(r'Disabling FerraloomNms v1\.0: it reached net\.minecraft\.server\.MinecraftServer '
+                     r'\(from dev\.ferraloom\.nmsplugin\.Adapter\.server\)', start=mark)
+        log.wait_for(r'\[FerraloomNms\] Disabling FerraloomNms v1\.0', start=mark)
+        log.absent(r'NoClassDefFoundError', mark)
+        bot.send('command ftest ping')
+        bot.out.wait_for(rf'^chat pong {PLAYER}$', start=bot_mark)
+        print('NMS adapter reached: plugin disabled in one line, others run: ok')
 
         # Where the player stands, and the block under their feet.
         mark = len(bot.out.lines)

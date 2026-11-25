@@ -78,6 +78,7 @@ public final class Bridge {
     /** The scheduler's heartbeat for this tick; answers which events have listeners now. */
     public static long tick(long tick) {
         try {
+            Internals.disableReached();
             server.scheduler.heartbeat(tick);
         } catch (Throwable ex) {
             log(ex, "running scheduled tasks");

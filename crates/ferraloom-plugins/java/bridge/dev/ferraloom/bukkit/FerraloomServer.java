@@ -117,7 +117,7 @@ final class FerraloomServer extends StubServer {
 
     // Startup and shutdown, in CraftServer's order.
 
-    /** CraftServer.loadPlugins: every jar in plugins/ that needs no server internals, then their onLoad. */
+    /** CraftServer.loadPlugins: every jar in plugins/ (a warning for those naming server internals), then their onLoad. */
     void loadPlugins() {
         pluginManager.registerInterface(JavaPluginLoader.class);
         File folder = new File(directory, "plugins");
@@ -126,17 +126,15 @@ final class FerraloomServer extends StubServer {
             return;
         }
         java.util.Arrays.sort(jars);
-        List<File> loadable = new ArrayList<>();
         for (File jar : jars) {
-            String internal = Internals.find(jar);
-            if (internal == null) {
-                loadable.add(jar);
-            } else {
-                logger.severe("Could not load 'plugins/" + jar.getName() + "': it uses " + internal
-                        + ", a Minecraft server internal (NMS or CraftBukkit) that Ferraloom does not provide");
+            Internals.Found internal = Internals.find(jar);
+            if (internal != null) {
+                logger.warning("'plugins/" + jar.getName() + "' names " + internal.describe()
+                        + ", Minecraft server internals (NMS or CraftBukkit) that Ferraloom does not provide;"
+                        + " it is disabled if it reaches one");
             }
         }
-        for (Plugin plugin : pluginManager.loadPlugins(loadable.toArray(new File[0]))) {
+        for (Plugin plugin : pluginManager.loadPlugins(jars)) {
             try {
                 plugin.getLogger().info(String.format("Loading %s", plugin.getDescription().getFullName()));
                 plugin.onLoad();
