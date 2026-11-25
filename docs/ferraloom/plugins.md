@@ -1,0 +1,263 @@
+# Bukkit plugins
+
+Ferraloom runs Spigot plugins (`.jar`, Bukkit API) on its dedicated server
+without costing the server anything when no plugin uses a feature. This page
+is the design, the rules every API area follows, and the plan for building
+the API out in parallel. The foundation (a vertical slice, below) is in place.
+
+## Decisions
+
+| Question | Answer |
+|---|---|
+| Where Java runs | In the server process: a JVM started through the JNI invocation API. `libjvm` is found and `dlopen`ed at run time, only when `plugins/` holds a jar. No link-time Java dependency: without plugins no JVM, no thread, no mapping (`/proc/<pid>/maps` has no `libjvm`; the e2e test checks it). |
+| Why not a separate process | A cancellable event is a synchronous question; out of process every listener call is an IPC round trip on the tick thread. |
+| What plugins see | The real `org.bukkit.*` interfaces, implemented by Ferraloom's Java bridge (`crates/ferraloom-plugins/java/bridge/`), whose methods call into Rust. Bukkit's own machinery from the API jar does the rest: `JavaPluginLoader`, `SimplePluginManager`, `PluginDescriptionFile`, `SimpleCommandMap`, `PermissibleBase`, `SimpleServicesManager`, `StandardMessenger`, the configuration classes. |
+| NMS / CraftBukkit | Not provided. A jar whose classes name `net/minecraft/` or `org/bukkit/craftbukkit/` is refused at load with one line: `Could not load 'plugins/X.jar': it uses net.minecraft.server.MinecraftServer (from com.example.Foo), a Minecraft server internal (NMS or CraftBukkit) that Ferraloom does not provide`. |
+| Unimplemented API | Generated stubs throw `UnsupportedOperationException("Ferraloom does not implement Player.getHealth() yet")`. |
+| API artifact | `org.spigotmc:spigot-api:26.3-R0.1-SNAPSHOT`, classifier `shaded`, pinned to build `20261123.204233-11` by SHA-256 in `java/api.lock.json`. Spigot publishes 26.3 only as snapshots (hub.spigotmc.org snapshots repository; no release). The shaded jar carries the API's runtime libraries (Guava 33.6, Gson 2.14, SnakeYAML 2.7, BungeeCord chat 1.21-R0.4, JOML 1.10.9). Not in it, as CraftBukkit provides them: commons-lang3 and the Maven resolver, so `libraries:` in `plugin.yml` does not work yet (the loader logs "Could not initialize LibraryLoader"). The jar is fetched by `build.py`, never committed. |
+
+## Layout
+
+| Path | What |
+|---|---|
+| `crates/ferraloom-plugins/src/` | The Rust side, no `horizon-client` dependency. `lib.rs` (public API, `PluginHost`), `events.rs` (listener bits), `jvm.rs` (find/load/create the JVM), `bridge.rs` (runtime, lifecycle, the `Entry` and `call` helpers), `natives.rs` (host lending, deferral, the exception wall), one module per API area: `players.rs`, `worlds.rs`, `server.rs` (host trait, natives, event calls), `commands.rs` (command tree JSON). |
+| `crates/ferraloom-plugins/java/` | The Java side, built with the JDK alone by `build.py`. `bridge/dev/ferraloom/bukkit/`: `Bridge` (lifecycle), `PlayerEvents`/`BlockEvents` (event entry points), `ServerNative`/`PlayerNative`/`WorldNative` (natives), `Ferraloom*` (the implementations), `FerraloomScheduler`, `FerraloomCommandMap`, `Internals` (the NMS check), `NativeLog`. `tools/StubGen.java`, `tools/Coverage.java`, `stubs.txt`, `api.lock.json`, `test-plugin/`, `nms-plugin/`. |
+| `crates/horizon-client/src/game/plugins.rs`, `game/plugins/{players,worlds,server}.rs` | The game's side: `GameHost` (the host over `Game`), lifecycle, event glue per area. |
+| `crates/horizon-client/src/lan/hub/plugins.rs` | Plugin commands in the hub's command tree. |
+| `tools/plugins_e2e.py`, `crates/ferraloom-plugins/examples/plugin_bot.rs` | The end-to-end test and its scripted player. |
+
+Running plugins: `python3 crates/ferraloom-plugins/java/build.py --install <server folder>` puts
+`ferraloom-bukkit.jar` and the API jar in `<server folder>/ferraloom-bukkit/` (or point
+`FERRALOOM_BUKKIT_DIR` at a folder holding them), plugins go in `plugins/`. Java is found through
+`FERRALOOM_JVM` (a libjvm or a Java home), `JAVA_HOME`, then `java` on `PATH`; `FERRALOOM_JVM_OPTIONS` adds JVM
+options (`-Xmx2G`). The JVM gets `-Xrs`, so Ctrl-C and SIGTERM stay the server's.
+
+## Lifecycle
+
+As CraftBukkit orders it in `DedicatedServer.initServer` and `MinecraftServer.stopServer`:
+
+1. `start_plugins` before "Preparing level": JVM, natives bound, `Bukkit.setServer`, the NMS check, every
+   plugin's `onLoad` ("[Name] Loading Name vX").
+2. `enable_plugins` before "Done": both load orders (`STARTUP` and `POSTWORLD`, the worlds exist by then),
+   `plugin.yml` permissions, commands registered by `SimplePluginManager.enablePlugin`, then `onEnable`.
+3. Each tick, before the tick runs (`tickChildren`'s heartbeat; not while the server is paused empty):
+   queued off-thread messages go out, due sync tasks run, the listener bits are latched, changed command
+   labels are fetched.
+4. `disable_plugins` right after "Stopping server": `onDisable` in reverse order, tasks cancelled, the chat
+   thread drained.
+
+## Threading and event dispatch
+
+**The server thread is Bukkit's main thread.** It creates the JVM (so it stays attached) and is the only
+thread that calls into Java, except `chat`, which only queues. `Bukkit.isPrimaryThread()` is true on it.
+
+**Calls lend the host.** Every call into Java that can run plugin code takes a `&mut dyn PluginHost` and lends
+it for its length (`natives::lend`). A native called on the server thread during that call reaches the
+game through it, synchronously, as the call's own continuation; it is taken out of the slot while in use,
+so no native can reach it twice at once, and a nested call lends its own. Off the server thread, or between
+calls, there is no host: `sendMessage`, console lines, logging and `shutdown` are queued and delivered at
+the next tick's start; everything else throws `IllegalStateException("Player.getLocation is answered on the
+server thread only (schedule a sync task)")`, as Spigot's AsyncCatcher does.
+
+**Host methods are leaves.** They read and change `Game` and never call into Java. When a host method must
+fire an event (a future `PlayerTeleportEvent` from `teleport`), it lends itself to that call, never the host
+it was reached through. This keeps the borrow chain sound: event site `&mut Game` → `GameHost` → lent
+pointer → native → host method, each reborrowing the one before, none used while a later one lives.
+
+**Where the game's state is.** Horizon swaps a guest into `Game` for their turn (`as_guest`) and takes the
+hub (`LanHost`) out of `Game::lan` while it runs. `GameHost` resolves both: the acting guest's position is
+the game's own player; other players are read from the hub, which is in `Game::lan`, passed in by a packet
+handler, or lent by `as_guest` (`plugins::lend_hub`, a thread-local pointer to the hub the turn holds and
+does not touch until the turn ends). What needs the hub in `Game::lan` while it is elsewhere (moving another
+player through `for_player`, a vanilla command) is queued (`Pending`) for the next tick's start; it still
+answers `true`. This is the one place the slice is not synchronous; it disappears when players stop being
+swapped (`core.md`, step 3).
+
+**Listener bits, latched per tick.** `Bridge.tick` answers a bit per bridged event: 1 when its `HandlerList`
+has a registered listener. Rust stores them in one `AtomicU64` (`events.rs`) between ticks only, never during
+one. An event site is
+
+```rust
+if ferraloom_plugins::listens(Event::BlockBreak) && self.plugin_block_break(pos) {
+    return Ok(());
+}
+```
+
+and every decision in a tick sees the same bits: the hub leaving the join message to plugins and the game
+sending the plugin's agree. A listener registered mid-tick takes effect at the next tick.
+
+**Cancellation before the mutation.** A cancellable event's site is placed where CraftBukkit fires it, before
+the change it guards, and returns before it: `BlockBreakEvent` is checked in `break_block_as_player` after
+`canDestroyBlock` and before `playerWillDestroy`; a cancelled break changes nothing and resends the block to
+the player (whose client predicted the break), as CraftBukkit does.
+
+**Parallel sections.** Mobs tick speculatively on the pool (`mobs/tick_loop.rs`: a tick that read something
+another changed, or that called `note_impure`, reruns serially in mob order). An event whose site is inside a
+parallel section follows one rule: *with a listener, that site takes the serial path.* Concretely, in the
+mob loop: the site checks `listens(E)`; in a speculative tick it calls `tick_loop::note_impure()` and
+returns the speculative tick's result unused, so the mob reruns in its serial turn, where the site calls the
+plugin and can be cancelled before it mutates. The bits are latched for the whole tick, so the speculative and
+serial passes agree on whether an event is listened to. Without a listener the parallel path is untouched.
+The serial mob turn runs with the mobs taken out of `Game`, so its host is a restricted one: reads come from
+the pass's own state (the mob, the snapshot), and changes to other things are queued as the pass already
+queues `MobEvent`s, applied in mob order. The entities area builds that host (`EntityHost`, below); nothing in
+the slice runs inside a parallel section. The network tick's parallel parts (encoding, compression, entity
+tracking prefetch) fire no events: packets are handled serially in `lan_guest_packet`, and that is where
+player events fire.
+
+**Chat is asynchronous**, as in Spigot. The hub hands the line to `AsyncPlayerChatEvent` on Java's single "Async
+Chat Thread" (`isAsynchronous()` true) and skips its own broadcast; the event's format and recipients decide
+who gets what, delivered as system messages at the start of the next tick. The signed player-chat path is
+not used while a plugin listens: plugin-handled chat goes out unsigned, like Spigot's with a format.
+
+## Java objects and server state
+
+Java objects hold identity, not state. A `FerraloomPlayer` is a UUID (its two halves cross JNI), its name,
+entity id and operator status read at join; everything else is asked of the host when called. A
+`FerraloomWorld` is an index into the fixed world list given at start (`world`, `world_nether`,
+`world_the_end`, CraftBukkit's names). A `FerraloomBlock` is a world and a position; its type is read when
+asked, or is the state the event saw.
+
+A player's object lives from join to quit. During `PlayerQuitEvent` it is still online; after it, it is
+offline for good: name and UUID answer, `getLocation()` is where they left, messages are dropped, teleports
+answer false. A reconnect makes a new object (CraftBukkit does the same), so a plugin that kept the old one
+sees `isOnline()` false. Entities, inventories and items follow the same rule when they arrive: a handle is
+an id plus a generation the host checks, so a stale handle answers as removed, never as another entity.
+
+## Errors and crash isolation
+
+| Failure | What happens |
+|---|---|
+| A listener throws | `SimplePluginManager` logs "Could not pass event X to Y", other listeners run. |
+| A task throws | "Task #N for Plugin vX generated an exception", the scheduler goes on. |
+| `onLoad`/`onEnable` throws | Logged; `JavaPluginLoader` disables the plugin. |
+| Anything else escapes a bridge entry point | Each `Bridge`/`*Events` method catches `Throwable`, logs it and answers the default (event not cancelled, vanilla message). |
+| A Java exception crosses JNI anyway | `bridge::call` logs it with its trace and clears it. |
+| A Rust panic in a native | Caught (`natives::guard`) and thrown into Java as `RuntimeException`; never unwinds into the JVM. |
+| A plugin with server internals | Refused at load, one line. |
+| A plugin loops or deadlocks on the main thread | The tick stalls, as on Spigot. Not isolated; a watchdog that logs the main thread's Java stack is future work. |
+| The JVM crashes (a plugin's native library, OOM) | The process goes down with it: the price of in-process. `-Xmx` through `FERRALOOM_JVM_OPTIONS` bounds the heap. |
+
+Java's own `SIGSEGV` handling replaces the process's once the JVM starts; a Rust stack overflow then crashes
+through the JVM's handler instead of Rust's message. Only with plugins.
+
+## Performance budget and how it is checked
+
+| Situation | Cost | Checked by |
+|---|---|---|
+| No plugin jar | Nothing loaded. Each event site: one relaxed load and one branch, never taken. `lend_hub`: one `OnceLock` check. Plugin command check: one `OnceLock` check. | e2e check 1 (`/proc/<pid>/maps` has no libjvm); the disassembly below |
+| Plugins, no listener for an event | The same branch at that event's sites. | `Bridge.tick`'s bits |
+| Plugins, per tick | One JNI call (heartbeat + bits) and the queue drain; one more when command labels change. | |
+| A command line | A lookup in a label set before any JNI; vanilla commands never reach the JVM. | |
+| An event with listeners | One JNI call with its arguments (a few strings), the listeners' own time. | |
+| Join/quit with plugins | One JNI call each, listener or not (the player objects). | |
+
+The event bit is a plain static and `listens` is `#[inline(always)]` over `FLAGS.load(Relaxed) & bit != 0`,
+so the site compiles to the bit test and nothing else. `break_block_as_player` in the release build
+(`--no-default-features`, x86-64), right after `canDestroyBlock`'s call:
+
+```
+mov    0x147de80(%rip),%rax   # GOT slot, relocated to ferraloom_plugins::events::FLAGS
+mov    (%rax),%rax
+test   $0x10000,%eax          # bit 16: BlockBreak
+jne    <the plugin path>
+```
+
+(The address comes through the GOT because `FLAGS` is in another crate of a PIE; still no call.) The 500-player benchmark
+(`tools/server_bench.py`) comparing a server with an empty `plugins/` folder, one with a listener-less plugin and
+the baseline is the coordinator's next step; budget: no measurable MSPT difference for the first two.
+
+## What works (the slice)
+
+- Plugins load from `plugins/`; `plugin.yml` is read; `onLoad`, `onEnable`, `onDisable` in order; data
+  folder, logger (lines in the server's log as `[Name] message`), `config.yml` with defaults from the jar.
+- `Bukkit.getServer()`: name `Ferraloom`, version `<version>-Ferraloom (MC: 26.3)`, Bukkit version from the API
+  jar, online players, worlds, `getPlayer`/`getPlayerExact`, `getPluginCommand`, `dispatchCommand` (plugin
+  commands; vanilla ones from the console), `broadcastMessage`, services, messenger, `isPrimaryThread`,
+  `shutdown`, the console sender.
+- `plugin.yml` commands from players and the console, with permissions through `PermissibleBase` and
+  operators from the ops list; they are in the command tree players receive (a literal and a greedy
+  `args`). Bukkit's `/version` and `/plugins` work; its `/reload` and `/timings` are removed (vanilla
+  `/reload` stays).
+- `BukkitScheduler`, every method: sync tasks on the server thread with CraftScheduler's timing (due at
+  `tick + delay`, never in the heartbeat that scheduled them), async ones on a pool, timers, cancel,
+  `callSyncMethod`.
+- Events with priorities and `ignoreCancelled` (Bukkit's own `SimplePluginManager`): `PlayerJoinEvent`
+  (message replaced or removed), `PlayerQuitEvent` (same), `AsyncPlayerChatEvent` (format, message,
+  recipients, cancel), `BlockBreakEvent` (cancel).
+- `Player`: `sendMessage` (and `spigot().sendMessage` components), `getName`, `getDisplayName`,
+  `getUniqueId`, `getLocation`, `getWorld`, `teleport` (across worlds too), `isOnline`, `isOp`, permissions.
+- `World`: name, UID, environment, key, heights, game time and time of day, players, `getBlockAt`.
+  `Block`: position, world, location, type (the loaded level in place).
+
+Known differences from CraftBukkit, each for its area to remove: join/quit messages are sent as plain
+translations (no hover); `BlockBreakEvent.setDropItems`/`setExpToDrop` are ignored and the block entity is
+not resent; `Block.getType` reads only the level in place; `AsyncPlayerChatEvent`'s lines go out unsigned;
+`PlayerChatEvent` (the deprecated sync one) is not fired; the command tree shows every plugin command to
+everyone (no permission filter, no tab completion); legacy plugins (no `api-version`) load without
+legacy-material support; plugins run on the dedicated server only, not in single player or LAN worlds.
+
+## Fan-out
+
+Each area owns a Rust module in the crate, a module of `GameHost` glue, its Java classes and its event bits.
+Shared files take one line per addition, in the area's own block, so parallel branches merge as appends.
+
+| Area | Bukkit surface | Rust (crate) | Game glue | Java | Event bits | Upstream hooks it needs |
+|---|---|---|---|---|---|---|
+| **players** | `Player`, `HumanEntity` (non-inventory), `OfflinePlayer`, chat, join/quit/kick/login, move/teleport, game mode, health/food/exp, `PlayerInteractEvent` | `src/players.rs` | `game/plugins/players.rs` | `FerraloomPlayer`, `PlayerEvents`, `PlayerNative`, package `dev.ferraloom.bukkit` (later `.entity.player`) | 0-15 | `game/lan_actions.rs` (packet handlers: move, interact, game mode), `lan/hub.rs` (login, kick), `game/lan.rs` (`HostEvent`s) |
+| **blocks** | `Block`, `BlockState`, `BlockData`, `Material` registry, block events (break, place, physics, redstone, burn, grow, piston) | `src/worlds.rs` → split `src/blocks.rs` | `game/plugins/worlds.rs` → `blocks.rs` | `FerraloomBlock`, `BlockEvents`, `WorldNative`, `.block` | 16-31 | `game.rs` (`break_block_as_player`, place), `horizon-world/src/level/` (hooks for physics, via a callback the game installs) |
+| **worlds** | `World` (time, weather, spawn, chunks, `getBlockAt` everywhere, `spawnEntity`), `Chunk`, `WorldBorder`, world events | `src/worlds.rs` | `game/plugins/worlds.rs` | `FerraloomWorld`, `.world` | 32-39 | `game/levels.rs` (other dimensions' chunks through `Parked`), `game/world_loading.rs` |
+| **entities** | `Entity`, `LivingEntity`, mobs, projectiles, damage and death, `EntityDamageEvent`, `CreatureSpawnEvent`, targeting | `src/entities.rs` (new), `EntityHost` incl. the restricted host for the mob pass | `game/plugins/entities.rs` | `.entity` | 40-47 | `game/creatures.rs`, `mobs/tick_loop.rs` (`note_impure` at sites, the serial-turn host), `game/combat.rs` (after the combat agent's branch merges) |
+| **inventory** | `Inventory`, `ItemStack` (to and from Horizon's `ItemStack`), `ItemMeta`, `InventoryClickEvent`, `InventoryOpenEvent`, `Player.openInventory`, `ItemFactory` | `src/inventory.rs` (new) | `game/plugins/inventory.rs` | `.inventory` | 48-55 | `game/lan_actions.rs` (container clicks), `menu.rs`, `game/stations.rs` |
+| **server** | `Server` remainder (ops, whitelist, bans, boss bars, recipes, `getOfflinePlayer`, `createInventory`), scoreboard, `ServicesManager` already done, `HelpMap`, tab completion (`TabCompleter` through `CommandSuggestions`), watchdog | `src/server.rs` | `game/plugins/server.rs` | `FerraloomServer`, `FerraloomConsole`, `.command`, `.scoreboard` | 56-62 | `game/dedicated.rs`, `lan/hub.rs` (suggestions), `game/scoreboard.rs` |
+
+Rules for every area:
+
+- **Adding an API method**: override it in the area's `Ferraloom*` class. If it needs the game, add a
+  method to the area's host trait, a native in the area's `*Native.java` and its Rust function in the area's
+  module (`natives::register` in its `load`), and implement the trait method in its glue file.
+- **Adding an interface**: add it to `java/stubs.txt` (the stub is generated), a class extending the stub,
+  and the class to `IMPLEMENTATIONS` in `build.py` for coverage.
+- **Adding an event**: a bit in the area's range in `Event` (`src/events.rs`) and in `Bridge.EVENTS`
+  (`Bridge.java`), an entry point in the area's `*Events.java` with its line in the area's `Entry` table, a
+  Rust function calling it, and one line at the site in upstream code behind `listens`, with a
+  `// Ferraloom:` comment, at the place CraftBukkit fires it.
+- **A new area module**: its line in `bridge::AREAS` (`src/bridge.rs`), its host trait in `PluginHost`'s
+  supertraits (`src/lib.rs`), its `mod` line in `game/plugins.rs`.
+- **Tests**: unit tests next to the code; behaviour visible to players goes in `tools/plugins_e2e.py` (its
+  `plugin_bot` can be taught more inputs), and gameplay sites keep passing the parity harnesses
+  `tools/parity.py --changed-files` names, in single- and parallel-region modes.
+- Shared lines (`AREAS`, `PluginHost`, the `mod` list, `Event`, `Bridge.EVENTS`, `stubs.txt`, `IMPLEMENTATIONS`)
+  are appends in each area's block: rebase conflicts there are resolved by keeping both.
+
+**Coverage measure.** `build.py` prints and writes `coverage.md`: per stubbed interface, the abstract methods
+and how many the bridge class overrides. At the foundation (14% overall):
+
+| Interface | Implemented | Methods | % |
+|---|---:|---:|---:|
+| `org.bukkit.Server` | 34 | 165 | 20.6 |
+| `org.bukkit.entity.Player` | 33 | 479 | 6.9 |
+| `org.bukkit.World` | 11 | 253 | 4.3 |
+| `org.bukkit.block.Block` | 8 | 53 | 15.1 |
+| `org.bukkit.command.ConsoleCommandSender` | 21 | 27 | 77.8 |
+| `org.bukkit.scheduler.BukkitScheduler` | 34 | 34 | 100.0 |
+| `org.bukkit.UnsafeValues` | 2 | 28 | 7.1 |
+| **Total** | 143 | 1039 | 13.8 |
+
+The coordinator tracks this table per area, plus events bridged (bits set in `Bridge.EVENTS`) against
+Bukkit's event classes. A method overridden only to throw differently does not count as implemented: review
+checks overrides.
+
+## Licensing (for Doc to decide)
+
+The Bukkit and Spigot API is GPL-3.0; Ferraloom is MIT. The Java bridge implements GPL interfaces and is
+compiled against them, which the FSF and Bukkit's history treat as a derivative work: the bridge
+(`crates/ferraloom-plugins/java/`) should be licensed GPL-3.0 (MIT code may be combined into it) and offered
+with its source. The open question is the Rust server, which loads that bridge into its own process through
+JNI: under the FSF's reading of in-process combination, a distribution that ships the server together with the
+bridge is a combined work under the GPL's terms; shipping them separately (the server MIT, the bridge a
+separate GPL download the server finds at run time, as today: the server never bundles or requires it) keeps
+the server MIT. The API jar is fetched, never redistributed by us (it also carries a Mojang translation file).
+Options: (a) license `java/` GPL-3.0, keep everything else MIT, distribute the bridge separately; (b) license
+the whole of Ferraloom GPL-3.0; (c) get a lawyer's view before the first release that includes the bridge.
+Until decided, nothing here is released. The bridge's files carry no license header yet.

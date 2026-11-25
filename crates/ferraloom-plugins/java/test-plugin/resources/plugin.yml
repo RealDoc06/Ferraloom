@@ -1,0 +1,10 @@
+name: FerraloomTest
+version: '1.0'
+main: dev.ferraloom.testplugin.TestPlugin
+api-version: '26.3'
+description: The plugin the bridge's end-to-end test (tools/plugins_e2e.py) loads.
+commands:
+  ftest:
+    description: Ferraloom's plugin bridge test
+    usage: /ftest <ping|protect on|protect off|where|tp x y z>
+    aliases: [ft]

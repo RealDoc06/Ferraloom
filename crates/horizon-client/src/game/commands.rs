@@ -1245,7 +1245,7 @@ impl Game<'_> {
         self.feedback(message);
         Ok(targets.len() as i32)
     }
-    fn teleport_to(&mut self, t: Target, pos: [f64; 3], rotation: Option<[f32; 2]>) {
+    pub(super) fn teleport_to(&mut self, t: Target, pos: [f64; 3], rotation: Option<[f32; 2]>) {
         // An entity in another level is teleported in the level that holds it.
         let _ = self.in_target_level(t, |g| g.teleport_to_in_level(t, pos, rotation));
     }
@@ -1400,7 +1400,7 @@ impl Game<'_> {
     /// A server's player teleported into another level than theirs
     /// (ServerPlayer.teleport): queued to move after the command. False
     /// when `t` is not a player in another level.
-    fn teleport_across(
+    pub(super) fn teleport_across(
         &mut self,
         t: Target,
         level: super::Dim,

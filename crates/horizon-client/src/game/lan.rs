@@ -1681,9 +1681,13 @@ impl Game<'_> {
                     }
                     HostEvent::PlayerChat { sender, text } => {
                         self.mod_player_chat(super::server_mods::Who::Uuid(sender), &text);
+                        // Ferraloom: AsyncPlayerChatEvent (game/plugins.rs).
+                        self.plugin_chat(sender, &text);
                     }
                     HostEvent::Joined(conn) => {
                         self.lan_guest_joined(&mut host, conn, state.as_ref(), entities, spawn);
+                        // Ferraloom: PlayerJoinEvent; true when it sent the join message.
+                        let plugins_told = self.plugin_join(&mut host, conn);
                         if self.options.dedicated.is_some()
                             && let Some(g) = host.hub.guest(conn)
                         {
@@ -1702,10 +1706,12 @@ impl Game<'_> {
                                     super::dedicated::java_double(z)
                                 ),
                             );
-                            super::dedicated::log(
-                                "INFO",
-                                &format!("System chat: {} joined the game", g.name),
-                            );
+                            if !plugins_told {
+                                super::dedicated::log(
+                                    "INFO",
+                                    &format!("System chat: {} joined the game", g.name),
+                                );
+                            }
                         } else if self.player.is_some()
                             && let Some(g) = host.hub.guest(conn)
                             && g.placed
@@ -1738,6 +1744,8 @@ impl Game<'_> {
                             host.award_leave_game(guest.conn);
                         }
                         self.save_guest(&host, &guest);
+                        // Ferraloom: PlayerQuitEvent; true when it sent the quit message.
+                        let plugins_told = self.plugin_quit(&mut host, &guest);
                         host.models.remove(&guest.conn);
                         host.play.remove(&guest.conn);
                         self.guest_combat.remove(&guest.conn);
@@ -1746,10 +1754,12 @@ impl Game<'_> {
                                 "INFO",
                                 &format!("{} lost connection: {}", guest.name, guest.left_reason),
                             );
-                            super::dedicated::log(
-                                "INFO",
-                                &format!("System chat: {} left the game", guest.name),
-                            );
+                            if !plugins_told {
+                                super::dedicated::log(
+                                    "INFO",
+                                    &format!("System chat: {} left the game", guest.name),
+                                );
+                            }
                         } else if self.player.is_some() && guest.placed {
                             // ServerGamePacketListenerImpl.removePlayerFromWorld.
                             let who = self.player_text(&guest.name, guest.uuid);
