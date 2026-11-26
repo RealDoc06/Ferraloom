@@ -87,7 +87,7 @@ pub(super) fn log_from(thread: &str, level: &str, message: &str) {
         }
     });
     // Log4j's %d{HH:mm:ss}: the local time, as in logs/latest.log.
-    // The launcher can close its stdout pipe while the server keeps running.
+    // Whatever started the server can close its stdout pipe while the server keeps running.
     let _ = writeln!(
         std::io::stdout().lock(),
         "[{}] [{thread}/{level}]: {message}",

@@ -1,7 +1,7 @@
-//! `horizon-shader`: make Horizon shader packs (docs/shaders.md).
+//! `horizon-shader`: make Horizon shader packs (docs/api/shaders-reference.md).
 //!
 //! - `new <dir> [--template post|sky|material] [--name "Name"]`: a pack from a template.
-//! - `check <pack>... [--json]`: the check the game, the launcher and the registry run.
+//! - `check <pack>... [--json]`: the check `cargo horizon-mod` and the registry run.
 //! - `pack <dir> [--out <file.hshader>]`: check, then write the reproducible `.hshader`.
 use horizon_shader_api::{EXTENSION, MANIFEST, Pack, Problem, check, package::sha256_hex};
 use serde::Serialize;

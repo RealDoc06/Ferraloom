@@ -130,7 +130,7 @@ impl Item {
 }
 
 /// The machine, as coarse as is useful: no serial numbers, names or exact memory. Every field
-/// explains performance; `docs/telemetry.md` lists them. Empty or zero: not known.
+/// explains performance. Empty or zero: not known.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct System {

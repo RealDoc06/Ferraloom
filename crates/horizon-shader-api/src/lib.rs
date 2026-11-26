@@ -1,8 +1,8 @@
-//! Horizon's own shader packs (docs/api/shaders.md): WGSL written against
-//! the renderer's stages, described by `horizon-shaders.toml` and shipped as
-//! a folder or a `.hshader`. This crate reads and checks packs; the game, the
-//! launcher and the registry all use it, so a pack is judged the same way
-//! everywhere.
+//! Horizon's own shader packs (`docs/api/shaders-reference.md`): WGSL written
+//! against the renderer's stages, described by `horizon-shaders.toml` and
+//! shipped as a folder or a `.hshader`. This crate reads and checks packs; the
+//! mod index's check (`horizon-mods`, feature `shader-packs`) uses it. The server
+//! engine draws nothing and loads no pack.
 pub mod check;
 pub mod inputs;
 pub mod manifest;

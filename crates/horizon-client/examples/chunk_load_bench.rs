@@ -6,7 +6,7 @@
 //!         .local/horizon-client/26.3 [--seed 1234] [--center CX CZ] [--radius 8]
 //!         [--threads N]
 //!
-//! The default centre is the village of `tools/perf_bench.py`. The figure is
+//! The default centre is a village. The figure is
 //! wall time with N workers (the game's own pool).
 use horizon_client::{
     assets::Assets,

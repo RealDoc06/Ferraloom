@@ -1,8 +1,8 @@
 //! Extras that became official mods (docs/mods.md, "Horizon's official
 //! mods"). For a player who had one on, the game installs the mod from
-//! Horizon's registry once, checked as the launcher checks it, turns it on
+//! Horizon's registry once, checked against the index's digest and signature, turns it on
 //! and carries the extra's settings over into the mod's storage. A player
-//! who had it off gets nothing: the mod is in the mod browser.
+//! who had it off gets nothing.
 use crate::{extras::Extras, mod_list::ModList};
 use horizon_mods::index::{self, Index};
 use std::{
@@ -12,7 +12,7 @@ use std::{
 };
 
 /// Horizon's registry; `HORIZON_MOD_INDEX` points elsewhere (a local file
-/// for trials, whose files may then be `file://`), as for the launcher.
+/// for trials, whose files may then be `file://`).
 pub const INDEX_URL: &str = "https://horizon-rust.github.io/horizon-mods/index.json";
 const MAX_INDEX: u64 = 16 << 20;
 

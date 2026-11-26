@@ -8654,7 +8654,7 @@ fn load_resources(
         }
         Err(e) => {
             return Err(format!(
-                "{e}\nPrepare resources with the launcher, or: horizon-prepare --prepare"
+                "{e}\nPrepare resources with: horizon-prepare --prepare"
             )
             .into());
         }

@@ -1,7 +1,7 @@
 #!/bin/sh
 # Installs horizon-server (docs/server.md) on Linux or macOS: the latest Horizon release for this computer,
 # downloaded from GitHub Releases and checked against the SHA-256 GitHub publishes for it. On Linux that is
-# the server build (horizon-server-linux-x86_64.tar.gz), which needs neither ALSA nor udev.
+# the server archive (horizon-server-linux-x86_64.tar.gz).
 #
 #   curl -fsSL https://raw.githubusercontent.com/RealDoc06/Ferraloom/main/packaging/server/install.sh | sh
 #   curl -fsSL .../install.sh | sh -s -- --version v0.5.0 --dir /opt/horizon --bin /usr/local/bin
@@ -102,18 +102,6 @@ for tool in horizon-server horizon-prepare; do
 done
 
 echo "Installed Horizon $TAG in $RELEASE; horizon-server and horizon-prepare are in $BIN."
-# The full game (releases before the server build) links ALSA and udev; minimal Linux images often lack them.
-if [ "$(uname -s)" = Linux ] && [ ! -e "$RELEASE/horizon-engine" ] && command -v ldd >/dev/null; then
-  MISSING=$(ldd "$RELEASE/horizon-client" 2>/dev/null | awk '/not found/ { printf "%s ", $1 }')
-  if [ -n "$MISSING" ]; then
-    echo "The game needs libraries this system doesn't have: $MISSING"
-    echo "Install them before starting a server:"
-    echo "  Debian, Ubuntu: sudo apt install libasound2 libudev1   (Ubuntu 24.04 and later: libasound2t64)"
-    echo "  Fedora, RHEL: sudo dnf install alsa-lib systemd-libs"
-    echo "  Arch: sudo pacman -S alsa-lib systemd-libs"
-    echo "  NixOS: enable programs.nix-ld with alsa-lib and udev in its libraries"
-  fi
-fi
 case ":$PATH:" in
   *":$BIN:"*) ;;
   *) echo "Add $BIN to your PATH, for example: echo 'export PATH=\"$BIN:\$PATH\"' >> ~/.profile" ;;

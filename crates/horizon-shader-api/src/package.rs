@@ -1,6 +1,6 @@
 //! A shader pack on disk: a folder holding `horizon-shaders.toml`, or the
-//! same files zipped as a `.hshader` (what the registry and the launcher
-//! carry). Both read into one [`Pack`].
+//! same files zipped as a `.hshader` (what the registry
+//! carries). Both read into one [`Pack`].
 use crate::manifest::{MANIFEST, Manifest};
 use std::{
     collections::BTreeMap,

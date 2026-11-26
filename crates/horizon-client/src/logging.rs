@@ -268,8 +268,8 @@ struct Logger {
     out: mpsc::Sender<Out>,
     /// The last lines, kept here (not on the writer) so a crash report has them at once.
     recent: Mutex<VecDeque<String>>,
-    /// What the main thread is called in the log: "Render thread", or "Server thread" for the
-    /// dedicated server, as in vanilla.
+    /// What the main thread is called in the log: "Server thread" for the dedicated server, as in
+    /// vanilla, or "Main thread" for a fixture run.
     main_thread: &'static str,
 }
 

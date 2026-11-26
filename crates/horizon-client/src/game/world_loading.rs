@@ -157,7 +157,7 @@ pub(super) fn make_streaming(
         let structures =
             horizon_client::save::WorldGen::read(world_root).is_none_or(|w| w.structures);
         let inner = Arc::new(VanillaTerrain::for_world(&options.resources.join("worldgen"), pack.assets.registry, res.biomes(), seed, dim.id(), structures).map_err(|e| {
-                format!("{e}\nPrepare the worldgen bundle with the launcher, or: horizon-prepare --prepare")
+                format!("{e}\nPrepare the worldgen bundle with: horizon-prepare --prepare")
             })?);
         if dim == Dim::Overworld && structures {
             inner.search_rings_behind();

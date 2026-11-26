@@ -5,7 +5,7 @@
 //! [`upload::flush`] drops anything the player has since turned off before it opens a
 //! connection. Items are small summaries (percentiles and histogram buckets, never raw streams),
 //! dated to the day, with no account, world, server or address in them ([`scrub`]); they leave
-//! in zstd batches ([`batch`]). `docs/telemetry.md` lists every field.
+//! in zstd batches ([`batch`]). [`payload`] defines every field.
 //!
 //! The one exception is [`live`]: the anonymous "I'm playing" ping the game sends while it
 //! runs, for the live player count. It holds no install ID and nothing about the player.

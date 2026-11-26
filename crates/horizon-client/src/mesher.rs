@@ -25,7 +25,7 @@ pub use sides::Sides;
 use std::sync::Arc;
 
 /// An entity, item and effect vertex (the entity pipelines), with a face
-/// normal for `entity.wgsl`'s directional light.
+/// normal for a directional light.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex {
@@ -55,8 +55,7 @@ pub struct Vertex {
 pub struct TerrainVertex {
     /// Section-relative position.
     pub pos: [f32; 3],
-    /// UV within the sprite, `UV_STEPS` per unit (`TerrainVertex::new`,
-    /// `terrain.wgsl`'s `terrain_uv`).
+    /// UV within the sprite, `UV_STEPS` per unit (`TerrainVertex::new`).
     pub(crate) uv: [u16; 2],
     /// Sprite array layer, with `OPAQUE_LAYER` for opaque leaves and quads over opaque texels.
     pub layer: u16,

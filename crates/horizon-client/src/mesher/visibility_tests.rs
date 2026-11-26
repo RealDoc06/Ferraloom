@@ -230,7 +230,7 @@ fn visibility_preserves_every_face_pair() {
 }
 
 #[test]
-#[ignore = "opt-in optimized microbenchmark; see docs/visibility-benchmark.md"]
+#[ignore = "opt-in optimized microbenchmark"]
 fn visibility_benchmark() {
     use std::{hint::black_box, time::Instant};
     const WARMUP: usize = 200;

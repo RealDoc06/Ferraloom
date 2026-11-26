@@ -3,7 +3,7 @@
 //! game thread. Keep-alives are answered on the network thread; pings wait for
 //! the game thread, like ClientCommonPacketListenerImpl.handlePing, so a pong
 //! cannot overtake an earlier world update or teleport acknowledgement.
-//! Online-mode servers need the Microsoft account the launcher signed in
+//! Online-mode servers need a signed-in Microsoft account's session
 //! (crate::auth): the login joins the server through the session service and
 //! encrypts the connection (ClientHandshakePacketListenerImpl.handleHello).
 use horizon_protocol::text::Language;
