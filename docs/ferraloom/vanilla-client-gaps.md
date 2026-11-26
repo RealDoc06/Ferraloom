@@ -7,7 +7,7 @@ Horizon's own client is out of scope.
 Verified against `ferraloom/next` at `5d5371c7b` (2026-11-26): every **Fixed** row's commit is an ancestor of
 that head, and every **Open** row was checked in the code unless it says otherwise.
 
-**Adding a gap.** Give it the next free number (the first free one is **#126**), put it in its area, ranked by how
+**Adding a gap.** Give it the next free number (the first free one is **#127**), put it in its area, ranked by how
 visible it is to players, and fill every column: what is seen and how vanilla differs, the vanilla
 reference (`Class#method` from `.cache/decompiled/26.3/`), where it lives in our code, a size and who found
 it. When it is fixed, move it to **Fixed** with the commit and the harness case that proves it. Numbers are
@@ -75,6 +75,7 @@ Sizes: S under a day, M a few days, L a week or more. Sources: *audit* (the orig
 |---|---|---|---|---|---|
 | 58 | `attribute_modifiers` set on an individual stack are ignored; only the item type's defaults apply | `ItemStack#forEachModifier` (`DataComponents.ATTRIBUTE_MODIFIERS`) | `game/lan_attributes.rs` `apply_equipment` | S | combat |
 | 59 | A broken item (`isBroken`) still applies its modifiers | `LivingEntity#collectEquipmentChanges` (`ItemStack#isBroken`) | `game/lan_attributes.rs` | S | combat |
+| 126 | A `damage_resistant` component that names damage types directly (one id or a list) is not sent to clients; only the tag form is, which is all vanilla's items use. The server still applies it | `DamageResistant.STREAM_CODEC` (`ByteBufCodecs.holderSet`: size plus one, then registry ids) | `lan/item_extras.rs` `network` (needs the damage type registry's ids) | S | review |
 
 ### Networking and protocol
 

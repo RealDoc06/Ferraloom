@@ -26,7 +26,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         mpsc,
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 /// What `Player` reads and changes of the game. The methods with a default
@@ -744,6 +744,8 @@ struct Login {
     op: bool,
     vanilla: LoginResult,
     message: String,
+    /// When it started waiting: past [`LOGIN_WAIT`] it was refused already.
+    asked: Instant,
     answer: mpsc::SyncSender<Option<String>>,
 }
 
@@ -797,6 +799,7 @@ pub fn login(
             op,
             vanilla,
             message: message.to_owned(),
+            asked: Instant::now(),
             answer,
         });
     LOGINS_WAITING.store(true, Ordering::Release);
@@ -813,6 +816,10 @@ pub fn serve_logins(host: &mut dyn crate::PluginHost) {
     let waiting = std::mem::take(&mut *LOGINS.lock().unwrap_or_else(|e| e.into_inner()));
     let Some(events) = EVENTS.get() else { return };
     for l in waiting {
+        // Refused by its timeout: no event for a login that is over.
+        if l.asked.elapsed() >= LOGIN_WAIT {
+            continue;
+        }
         let refused = (l.vanilla != LoginResult::Allowed).then(|| l.message.clone());
         let verdict = bridge::call(host, |env| {
             let name = env.new_string(&l.name)?;
