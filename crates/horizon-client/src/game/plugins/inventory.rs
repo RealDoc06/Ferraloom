@@ -244,10 +244,16 @@ impl InventoryHost for GameHost<'_, '_> {
     fn open_container(&mut self, player: PlayerId, at: Holder, menu: &str, title: Tag) -> bool {
         let dim = super::world_index(self.game.dim);
         self.split(|game, hub| {
-            let Some(g) = hub.hub.guests.iter().find(|g| g.uuid == player && g.placed) else {
+            let Some(gi) = hub
+                .hub
+                .guests
+                .iter()
+                .position(|g| g.uuid == player && g.placed)
+            else {
                 return false;
             };
-            let conn = g.conn;
+            let g = &hub.hub.guests[gi];
+            let (conn, open) = (g.conn, g.menu.is_some());
             let (slots, pos) = match at {
                 Holder::Custom(id) => (Slots::Custom(id), (i32::MIN, PLUGIN_KEY_Y, id as i32)),
                 Holder::Block { world, pos } if world == dim => {
@@ -259,9 +265,16 @@ impl InventoryHost for GameHost<'_, '_> {
             let Some(items) = slots.read(&game.world, g) else {
                 return false;
             };
-            // ServerPlayer.openMenu closes the menu that was open.
+            // ServerPlayer.openMenu closes the menu that was open, as close_container.
             game.guest_container_closed(hub, conn);
-            game.lan_station_closed(hub, conn, None);
+            let closed = open
+                || game.lan_station_closed(hub, conn, None)
+                || game.lan_crafting_closed(hub, conn, None)
+                || game.lan_merchant_closed(hub, conn, None)
+                || game.lan_mount_closed(hub, conn, None);
+            if closed {
+                game.guest_carried_back(hub, gi);
+            }
             hub.hub.open_container(conn, menu, title, pos, slots, items);
             true
         })
