@@ -867,15 +867,17 @@ impl Game<'_> {
         }
     }
 
-    /// The container over `slots` closed because its block went (`HostEvent::MenuGone`).
+    /// The container over `slots` (of `InventoryType` `kind`) closed because
+    /// its block went (`HostEvent::MenuGone`).
     pub(in crate::game) fn plugin_menu_block_gone(
         &mut self,
         host: &mut LanHost,
         conn: u32,
         slots: Slots,
+        kind: &'static str,
     ) {
         if let Some(g) = host.hub.guest(conn).filter(|g| g.placed) {
-            let menu = (g.uuid, holder(g, slots), top_type(self, slots));
+            let menu = (g.uuid, holder(g, slots), kind);
             self.plugin_menu_gone(host, menu);
         }
     }

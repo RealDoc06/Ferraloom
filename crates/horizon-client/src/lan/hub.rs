@@ -166,8 +166,9 @@ pub enum HostEvent {
     /// A server log error (LOGGER.error).
     Error(String),
     /// Ferraloom: the guest's open container closed because its block went
-    /// (`sync_containers`), told while plugins run so the bridge forgets it.
-    MenuGone(u32, super::menu::Slots),
+    /// (`sync_containers`), told while plugins run so the bridge forgets it:
+    /// its slots and its `InventoryType`, named as it opened.
+    MenuGone(u32, super::menu::Slots, &'static str),
 }
 
 /// Profiling-only telemetry. Missing columns are movement observations, not

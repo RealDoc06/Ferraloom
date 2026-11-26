@@ -706,11 +706,12 @@ impl Hub {
             else {
                 continue;
             };
-            let (size, window, slots) = (menu.size, menu.window, menu.slots);
+            let (size, window, slots, kind) =
+                (menu.size, menu.window, menu.slots, menu.inventory_type);
             if !slots.valid(world) {
                 self.close_container_at(i);
                 if ferraloom_plugins::running() {
-                    events.push(HostEvent::MenuGone(self.guests[i].conn, slots));
+                    events.push(HostEvent::MenuGone(self.guests[i].conn, slots, kind));
                 }
                 continue;
             }
