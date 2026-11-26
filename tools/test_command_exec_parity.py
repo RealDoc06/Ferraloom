@@ -20,6 +20,7 @@ KNOWN lists the commands Ferraloom still gets wrong and why; one that matches
 again is reported, and should leave the list.
 """
 import argparse
+import difflib
 import hashlib
 import json
 import os
@@ -55,9 +56,45 @@ PROPERTIES = {
     'allow-flight': 'true',
     'pause-when-empty-seconds': '-1',
 }
-# Commands Ferraloom still gets wrong (the command as in the corpus -> why). Their mismatches are reported, and do
-# not fail the run.
-KNOWN = {}
+# Commands Ferraloom still gets wrong (the command as in the corpus, or "COMMAND #N" for its Nth occurrence -> why).
+# Their mismatches are reported, and do not fail the run. TICKS_SHORT covers every `tick` whose step ended short.
+TICKS_SHORT = '#tick step ends short'
+# A command that ends in say, me or msg runs as the player's own chat: the execute chain before it is skipped (as, on,
+# in, forks to nothing, an unknown dimension), selectors in the message stay as typed, and no result is reported.
+CHAT = ("say/me/msg run as the player's chat: execute's source, forks and errors are skipped, selectors stay unresolved, "
+        "no result")
+KNOWN = {
+    '/say Hello world': CHAT,
+    '/me waves': CHAT,
+    '/msg @s secret': CHAT,
+    '/tell Player hi': CHAT,
+    '/w @a hi all': CHAT,
+    '/say @s says': CHAT,
+    '/execute as @a run say connected owner': CHAT,
+    '/execute as @s run say hi': CHAT,
+    '/execute as @e[tag=h] run say mob': CHAT,
+    '/execute on vehicle run say mounted': CHAT,
+    '/execute on vehicle run say still mounted': CHAT,
+    '/execute on vehicle run say still riding after teleport': CHAT,
+    '/execute on vehicle run say still riding after ticks': CHAT,
+    '/execute as @e[tag=ride_r] on vehicle run say carrying': CHAT,
+    '/execute as @e[tag=ride_r] on vehicle run say still carrying': CHAT,
+    '/execute in minecraft:the_end run say elsewhere': CHAT,
+    '/execute in minecraft:nowhere run say nowhere': CHAT,
+    '/execute as @e[tag=ex] on passengers run say passenger': CHAT,
+    '/execute on vehicle run say vehicle': CHAT,
+    '/execute in minecraft:the_nether if dimension minecraft:the_nether run say source dimension': CHAT,
+    '/execute in minecraft:the_nether at @s if dimension minecraft:overworld run say entity dimension': CHAT,
+    '/execute in minecraft:the_nether positioned as @s if dimension minecraft:the_nether run say position only': CHAT,
+    '/execute if dimension minecraft:the_nether run say dimension switched': CHAT,
+    '/execute if dimension minecraft:overworld run say relative dimension': CHAT,
+    '/execute if dimension minecraft:overworld run say dimension restored': CHAT,
+    '/execute if dimension minecraft:the_nether run say through the portal': CHAT,
+    '/execute if dimension minecraft:overworld run say back through the portal': CHAT,
+    '/perf stop': 'Ferraloom has no /perf (a dedicated command)',
+    '/help': 'lists no /perf',
+    TICKS_SHORT: 'tick step N moves the game time fewer than N ticks after the player changed dimension or chunks loaded',
+}
 
 
 def offline_uuid(name):
@@ -178,34 +215,46 @@ def main():
         commands_by_group.append((name, index, index + n))
         index += n
     mismatches, known, fixed = [], [], set(KNOWN)
-    for v, r in zip(vanilla, rust):
+    seen = {}
+    for at, (v, r) in enumerate(zip(vanilla, rust)):
         assert v['cmd'] == r['cmd'], (v['cmd'], r['cmd'])
+        seen[v['cmd']] = seen.get(v['cmd'], 0) + 1
         kind = compare(v, r)
         if kind:
-            (known if v['cmd'] in KNOWN else mismatches).append({'kind': kind, 'cmd': v['cmd'], 'vanilla': v, 'rust': r})
-            fixed.discard(v['cmd'])
+            # A KNOWN key names the command, or one of its occurrences ("/waypoint list #6").
+            key = next((k for k in (f'{v["cmd"]} #{seen[v["cmd"]]}', v['cmd']) if k in KNOWN), None)
+            (known if key else mismatches).append({'kind': kind, 'cmd': v['cmd'], 'at': at, 'occurrence': seen[v['cmd']],
+                                                   'key': key, 'vanilla': v, 'rust': r})
+            fixed.discard(key)
     # A `tick` whose step ended short on one server only (vanilla's step them all).
     for note in sorted(set(vanilla_notes) ^ set(rust_notes)):
         side = 'vanilla' if note in vanilla_notes else 'ferraloom'
         record = {'cmd': note, 'messages': [], 'results': [], 'side': side}
-        (known if note in KNOWN else mismatches).append({'kind': 'ticks', 'cmd': note, 'vanilla': record, 'rust': record})
-        fixed.discard(note)
+        key = TICKS_SHORT if side == 'ferraloom' and TICKS_SHORT in KNOWN else None
+        (known if key else mismatches).append({'kind': 'ticks', 'cmd': note, 'at': None, 'key': key,
+                                               'vanilla': record, 'rust': record})
+        fixed.discard(key)
     (build / 'mismatches.jsonl').write_text(''.join(json.dumps(m, ensure_ascii=False) + '\n' for m in mismatches + known),
                                             encoding='utf-8')
     summary = []
-    bad = {m['cmd'] for m in mismatches + known}
+    bad = {m['at'] for m in mismatches + known}
     for name, lo, hi in commands_by_group:
-        failed = sum(1 for rec in vanilla[lo:hi] if rec['cmd'] in bad)
+        failed = sum(1 for at in range(lo, hi) if at in bad)
         summary.append({'group': name, 'commands': hi - lo, 'mismatches': failed})
         print(f'{name}: {hi - lo - failed}/{hi - lo} commands match', flush=True)
     for m in mismatches[:args.limit]:
-        print(m['kind'], repr(m['cmd']))
+        print(m['kind'], repr(m['cmd']), '' if m['at'] is None else f'(#{m["occurrence"]}, record {m["at"]})')
+        if m['kind'] == 'messages' and max(len(m['vanilla']['messages']), len(m['rust']['messages'])) > 3:
+            lines = [[''.join(span[0] for span in message) for message in side['messages']] for side in (m['vanilla'], m['rust'])]
+            for line in difflib.unified_diff(*lines, 'vanilla', 'ferraloom', n=0, lineterm=''):
+                print('   ', line[:300])
+            continue
         print('  vanilla  ', render(m['vanilla'])[:400])
         print('  ferraloom', render(m['rust'])[:400])
     for m in known:
-        print(f'known: {m["cmd"]!r} ({KNOWN[m["cmd"]]})')
-    for command in sorted(fixed):
-        print(f'matches now, leave KNOWN: {command!r}')
+        print(f'known: {m["cmd"]!r} ({KNOWN[m["key"]]})')
+    for key in sorted(fixed):
+        print(f'matches now, leave KNOWN: {key!r}')
     total = len(vanilla)
     print(f'total: {total - len(mismatches) - len(known)}/{total} commands match ({len(known)} known)', flush=True)
     report = {'schema': 2, 'minecraft': lock['minecraft']['version'], 'platform': platform.platform(), 'seed': SEED,
