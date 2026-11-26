@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import nightly_set as ns  # noqa: E402  (the same list, owner and paused rule as /nightly)
+import reviewers as ns  # noqa: E402
 
 MAX_PER_DAY = 60
 PREFIX = "🤖 Triage: "

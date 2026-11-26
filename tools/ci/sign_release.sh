@@ -4,7 +4,7 @@
 # for every key set in RELEASE_SIGNING_KEY and RELEASE_SIGNING_KEY_NEXT (base64 PKCS#8, the `release`
 # environment's secrets). The job that runs this holds the private keys, so it runs nothing from the repository
 # but this file, which calls only the runner's sha256sum and OpenSSL; the publish job then checks the result
-# with horizon-release-sign, as launchers do.
+# with horizon-release-sign, as `horizon-server update` does.
 # EPHEMERAL=yes (dry runs) signs with a throwaway key instead and writes its public key to ephemeral.pub.
 #   tools/ci/sign_release.sh v2026.10.19 dist/horizon-linux-x86_64.tar.gz dist/horizon-windows-x64.zip ...
 set -euo pipefail

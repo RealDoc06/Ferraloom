@@ -1,25 +1,21 @@
 name: release
-# Automatic game releases (docs/release-flow.md). After every green `checks` run on main, every 10 minutes (so a
+# Automatic server releases (docs/release-flow.md). After every green `checks` run on main, every 10 minutes (so a
 # release waiting for merges to settle goes out without another merge) and by hand, tools/release_train.py decides,
 # for a commit whose checks and parity-main (the vanilla harnesses on main) both passed:
-# a release when 5 pull requests merged since the last one changed what players run and the newest merged 5 minutes
+# a release when 5 pull requests merged since the last one changed what a server runs and the newest merged 5 minutes
 # ago, or when the oldest has waited 6 hours, or at once for a pull request labelled release-now.
 # RELEASES_PAUSED=1 (repository variable) stops them; so does an open issue labelled release-blocker, forced runs too.
-# Builds Linux (an older Ubuntu, so the binary runs on any recent distribution and on NixOS through nix-ld) and
-# Windows on GitHub, macOS on the Mac mini's runner (MAC_RUNNER=macos-latest sends it to GitHub), then
-# publishes vX.Y.Z on the release line in .github/release-line.txt (docs/versioning.md; without it, the dated
-# vYYYY.MM.DD[.N] from before 0.2) with notes from the merged pull requests, as the release and GitHub's latest: one
-# channel, which launchers, `horizon-server update` and install.sh follow at once. So it is published only after the
-# checks that used to gate a promotion pass in this run: the Mac mini's smoke test drew a world, and no release-blocker
-# is open (tools/release_train.py gate); otherwise nothing is published. macOS: with the repository variable
-# MACOS_SIGN_IDENTITY set, the programs are signed with
-# Developer ID and the hardened runtime and the zip is notarized, from the runner's signing keychain
-# (packaging/macos/README.md); unset (forks), ad hoc.
+# Builds the server folder for Linux (an older Ubuntu, so the binaries run on any recent distribution) and Windows
+# on GitHub and macOS on the Mac mini's runner (MAC_RUNNER=macos-latest sends it to GitHub), then publishes vX.Y.Z on
+# the release line in .github/release-line.txt (docs/versioning.md; without it, the dated vYYYY.MM.DD[.N] from before
+# 0.2) with notes from the merged pull requests, as the release and GitHub's latest: one channel, which
+# `horizon-server update`, install.sh and install.ps1 follow at once. So it is published only when no release-blocker
+# is open (tools/release_train.py gate); otherwise nothing is published.
 #   gh workflow run release --ref <branch>                       # dry run: builds and notes, publishes nothing
 #   gh workflow run release -f dry_run=false -f force=true       # on main: release now, whatever the rules say
 on:
   workflow_run:
-    # A game release ships a commit both passed on (parity-main runs on batches: the newest commit it passed on).
+    # A release ships a commit both passed on (parity-main runs on batches: the newest commit it passed on).
     workflows: [checks, parity-main]
     types: [completed]
     branches: [main]
@@ -74,7 +70,7 @@ jobs:
           HEAD_SHA: ${{ github.event.workflow_run.head_sha || (steps.mode.outputs.dry_run == 'true' && github.sha) || '' }}
           FORCE: ${{ inputs.force && 'yes' || '' }}
         run: |
-          python3 tools/release_train.py decide --kind game ${HEAD_SHA:+--head "$HEAD_SHA"} ${FORCE:+--force} | tee decision.json
+          python3 tools/release_train.py decide ${HEAD_SHA:+--head "$HEAD_SHA"} ${FORCE:+--force} | tee decision.json
           echo "### $(jq -r '.reason' decision.json)" >> "$GITHUB_STEP_SUMMARY"
           # The version the programs are built with (docs/versioning.md): the tag without its v.
           tag=$(jq -r '.tag' decision.json)
@@ -85,12 +81,11 @@ jobs:
   build:
     needs: decide
     if: needs.decide.outputs.release == 'true'
-    # Every platform's archive, and macOS's smoke test (game-build.yml).
+    # Every platform's server archive (game-build.yml).
     uses: ./.github/workflows/game-build.yml
     with:
       ref: ${{ needs.decide.outputs.head }}
       version: ${{ needs.decide.outputs.version }}
-      trusted: true  # main: the release runner, the release cache, no shared sccache
 
   sign:
     needs: [decide, build]
@@ -118,8 +113,8 @@ jobs:
           EPHEMERAL: ${{ needs.decide.outputs.dry_run == 'true' && 'yes' || '' }}
           TAG: ${{ needs.decide.outputs.tag }}
         run: |
-          bash tools/ci/sign_release.sh "$TAG" dist/horizon-linux-x86_64.tar.gz dist/horizon-windows-x64.zip \
-            dist/horizon-macos-arm64.zip dist/horizon-server-linux-x86_64.tar.gz
+          bash tools/ci/sign_release.sh "$TAG" dist/horizon-server-linux-x86_64.tar.gz dist/horizon-windows-x64.zip \
+            dist/horizon-macos-arm64.zip
       - uses: actions/upload-artifact@v4
         with:
           name: signature
@@ -148,28 +143,28 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python3 tools/release_train.py notes --kind game --tag "${{ needs.decide.outputs.tag }}" \
+          python3 tools/release_train.py notes --tag "${{ needs.decide.outputs.tag }}" \
             --head "${{ needs.decide.outputs.head }}" --out notes > /dev/null
           { echo "## $(cat notes/title.txt)"; echo; cat notes/body.md; } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
-      - name: The signature, checked as launchers check it
+      - name: The signature, checked as horizon-server update checks it
         env:
           TAG: ${{ needs.decide.outputs.tag }}
           EPHEMERAL: ${{ needs.decide.outputs.dry_run == 'true' && 'yes' || '' }}
         run: |
           key=(); [[ -n "$EPHEMERAL" ]] && key=(--key "$(cat dist/ephemeral.pub)")
           cargo run --locked --quiet -p horizon-release-sign -- verify --tag "$TAG" --publishing "${key[@]}" dist
-      - name: Ready to publish (the smoke test passed, no release-blocker is open)
+      - name: Ready to publish (no release-blocker is open)
         # Right before publishing: an issue labelled while the builds ran still holds this release. A dry run only
         # reports what a real run would do.
         env:
           GH_TOKEN: ${{ github.token }}
           DRY_RUN: ${{ needs.decide.outputs.dry_run }}
         run: |
-          if ! python3 tools/release_train.py gate --kind game --smoke dist/smoke-test.json --blockers; then
+          if ! python3 tools/release_train.py gate --blockers; then
             [[ "$DRY_RUN" == true ]] || { echo "::error::Nothing published"; exit 1; }
             echo "::warning::A real run would publish nothing"
           fi
@@ -181,15 +176,14 @@ jobs:
         run: |
           signature=(); [[ -f dist/SHA256SUMS.sig ]] && signature=(dist/SHA256SUMS.sig)
           # The release and the latest at once: there is one channel (docs/release-flow.md). Each archive gets a
-          # label (file#label), which GitHub's page shows instead of the file name, so nobody takes the game's
-          # files for the download (#1647). Launchers, servers and install.sh match the name, which stays.
+          # label (file#label), which GitHub's page shows instead of the file name. Servers and the installers
+          # match the name, which stays.
           gh release create "$TAG" --target "${{ needs.decide.outputs.head }}" --title "$(cat notes/title.txt)" \
             --notes-file notes/body.md --latest \
-            "dist/horizon-linux-x86_64.tar.gz#Game files the launcher installs: Linux (horizon-linux-x86_64.tar.gz)" \
-            "dist/horizon-windows-x64.zip#Game files the launcher installs: Windows (horizon-windows-x64.zip)" \
-            "dist/horizon-macos-arm64.zip#Game files the launcher installs: macOS (horizon-macos-arm64.zip)" \
             "dist/horizon-server-linux-x86_64.tar.gz#Dedicated server for Linux (horizon-server-linux-x86_64.tar.gz)" \
-            dist/SHA256SUMS "${signature[@]}" dist/smoke-test.json
+            "dist/horizon-windows-x64.zip#Dedicated server for Windows (horizon-windows-x64.zip)" \
+            "dist/horizon-macos-arm64.zip#Dedicated server for macOS (horizon-macos-arm64.zip)" \
+            dist/SHA256SUMS "${signature[@]}"
       - name: Dry run, the release that would be published
         if: needs.decide.outputs.dry_run == 'true'
         run: |

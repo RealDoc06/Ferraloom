@@ -34,7 +34,7 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             .github/trusted-reviewers.txt
-            tools/ci/nightly_set.py
+            tools/ci/reviewers.py
             tools/ci/triage_command.py
           sparse-checkout-cone-mode: false
       - name: Run the command

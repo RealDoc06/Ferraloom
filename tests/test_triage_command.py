@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-from tools.ci import nightly_set as ns
+from tools.ci import reviewers as ns
 from tools.ci import triage_command as tc
 
 ROOT = Path(__file__).resolve().parents[1]
