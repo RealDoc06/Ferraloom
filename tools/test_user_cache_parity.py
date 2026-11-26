@@ -48,6 +48,8 @@ PROPERTIES = {
     'simulation-distance': '2',
     'spawn-protection': '0',
     'pause-when-empty-seconds': '-1',
+    # No watchdog: vanilla kills a server whose tick (a slow "Saving the game") passes 60 s.
+    'max-tick-time': '-1',
 }
 NOTCH = '069a79f444e94726a5befca90e38aaf5'
 SEEDED = [

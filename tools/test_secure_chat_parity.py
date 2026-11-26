@@ -61,6 +61,8 @@ PROPERTIES = {
     'spawn-protection': '0',
     'max-players': '8',
     'pause-when-empty-seconds': '-1',
+    # No watchdog: vanilla kills a server whose tick (a slow "Saving the game") passes 60 s.
+    'max-tick-time': '-1',
 }
 
 

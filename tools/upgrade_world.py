@@ -35,7 +35,7 @@ def main():
         scratch = Path(scratch)
         (scratch / 'eula.txt').write_text('eula=true\n')
         (scratch / 'server.properties').write_text(
-            f'level-name=world\nonline-mode=false\nserver-port={lab.free_port()}\n')
+            f'level-name=world\nonline-mode=false\nserver-port={lab.free_port()}\nmax-tick-time=-1\n')
         shutil.copytree(source, scratch / 'world')
         # The server upgrades at startup, then keeps running as a normal server: stop it
         # once it reports "Done".

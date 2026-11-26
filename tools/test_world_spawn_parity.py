@@ -92,7 +92,8 @@ def world_spawn(command, directory, seed, log_name):
         shutil.rmtree(directory)
     directory.mkdir(parents=True)
     props = {'online-mode': 'false', 'level-seed': str(seed), 'server-port': str(free_port()),
-             'view-distance': '4', 'simulation-distance': '4', 'pause-when-empty-seconds': '-1'}
+             'view-distance': '4', 'simulation-distance': '4', 'pause-when-empty-seconds': '-1',
+             'max-tick-time': '-1'}
     (directory / 'server.properties').write_text(''.join(f'{k}={v}\n' for k, v in props.items()), encoding='iso-8859-1')
     (directory / 'eula.txt').write_text('eula=true\n')
     server = Server(command, directory, log_name)

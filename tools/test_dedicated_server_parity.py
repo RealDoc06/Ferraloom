@@ -94,6 +94,8 @@ PROPERTIES = {
     'max-players': '5',
     'motd': '\\u00a7aHorizon \\u00a7rparity \\u00e9t\\u00e9',
     'pause-when-empty-seconds': '-1',
+    # No watchdog: vanilla kills a server whose tick (a slow "Saving the game") passes 60 s.
+    'max-tick-time': '-1',
 }
 
 

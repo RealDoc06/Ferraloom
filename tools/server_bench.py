@@ -77,6 +77,8 @@ PROPERTIES = {
     'max-players': '200',
     'difficulty': 'easy',
     'sync-chunk-writes': 'true',
+    # No watchdog: vanilla kills a server whose tick (a slow "Saving the game") passes 60 s.
+    'max-tick-time': '-1',
 }
 
 
