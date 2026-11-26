@@ -358,7 +358,11 @@ public final class CommandExecClient {
                 String time = argument(poll, "commands.time.query.gametime", 0);
                 messages.addAll(withoutBookkeeping(poll));
                 if (time != null && Long.parseLong(time) >= until) return messages;
-                if (System.nanoTime() > deadline) throw new IllegalStateException("the game time did not reach " + until);
+                if (System.nanoTime() > deadline) {
+                    throw new IllegalStateException("the game time did not reach " + until + "; the last reply: "
+                        + poll.stream().map(Component::getString).toList() + ", to `tick step`: "
+                        + step.get(0).stream().map(Component::getString).toList());
+                }
                 Thread.sleep(20);
             }
         }
