@@ -1155,6 +1155,8 @@ fn accept_code_of_conduct(
                 if outstanding.lock().unwrap().replace(id).is_some() {
                     writer_timed_out.store(true, Ordering::Relaxed);
                     let _ = writer.send(&timeout());
+                    // Wakes the blocked read, as write_loop does.
+                    writer.shutdown();
                     break;
                 }
                 let keep_alive = cfg::Clientbound::KeepAlive(cfg::KeepAlive { id });
@@ -1189,8 +1191,12 @@ fn accept_code_of_conduct(
         drop(stop);
         answer
     });
+    // The writer's timeout wins over an acceptance read at the same moment.
+    if writer_timed_out.into_inner() {
+        return Err(TIMED_OUT.to_owned());
+    }
     // A wrong answer: the writer is back, so the disconnect goes now.
-    if matches!(&answer, Err(e) if e == TIMED_OUT) && !writer_timed_out.into_inner() {
+    if matches!(&answer, Err(e) if e == TIMED_OUT) {
         let _ = c.send(&timeout());
     }
     answer
