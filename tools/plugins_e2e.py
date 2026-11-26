@@ -244,6 +244,14 @@ def check_plugins(engine, bot_binary, built, out, scratch):
         log.wait_for(r'Ferraloom does not implement Player\.getShoulderEntityLeft\(\) yet')
         print('commands, stub exception: ok')
 
+        # A plugin recursing until StackOverflowError gets the error, and the server keeps answering.
+        mark = len(bot.out.lines)
+        bot.send('command ftest deep')
+        bot.out.wait_for(r'^chat deep ok$', start=mark)
+        bot.send('command ftest ping')
+        bot.out.wait_for(rf'^chat pong {PLAYER}$', start=mark)
+        print('stack overflow in a plugin: ok')
+
         # The NMS plugin's adapter reached: one line, no trace, the plugin disabled, the others unaffected.
         mark, bot_mark = len(log.lines), len(bot.out.lines)
         bot.send('command fnms')

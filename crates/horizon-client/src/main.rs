@@ -67,12 +67,28 @@ fn main() {
     if dedicated {
         raise_open_file_limit();
     }
-    if let Err(error) = game::run() {
-        log::error!("Horizon: {error}");
-        if !help {
-            crash::report_error(&home, side, &*error);
+    // The engine runs on a thread of its own, as the `java` launcher runs `main`: HotSpot does not
+    // control the process's first thread's stack, so a plugin recursing too deep there could crash
+    // the process instead of getting a StackOverflowError. 8 MiB is what the first thread has.
+    let engine = std::thread::Builder::new()
+        .name(thread.into())
+        .stack_size(8 << 20)
+        .spawn(move || {
+            if let Err(error) = game::run() {
+                log::error!("Horizon: {error}");
+                if !help {
+                    crash::report_error(&home, side, &*error);
+                }
+                std::process::exit(1);
+            }
+        });
+    match engine.map(std::thread::JoinHandle::join) {
+        Ok(Ok(())) => logging::flush(),
+        // A panic was reported by the crash hook; 101 as a panic on the first thread exits.
+        Ok(Err(_)) => std::process::exit(101),
+        Err(error) => {
+            eprintln!("Horizon: could not start the {thread}: {error}");
+            std::process::exit(1);
         }
-        std::process::exit(1);
     }
-    logging::flush();
 }

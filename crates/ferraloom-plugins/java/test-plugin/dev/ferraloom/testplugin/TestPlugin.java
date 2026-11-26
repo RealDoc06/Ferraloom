@@ -335,6 +335,10 @@ public final class TestPlugin extends JavaPlugin implements Listener {
         return Integer.parseInt(args[i]);
     }
 
+    private static int recurse(int depth) {
+        return recurse(depth + 1) + 1;
+    }
+
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (command.getName().equals("fadmin")) {
@@ -383,6 +387,14 @@ public final class TestPlugin extends JavaPlugin implements Listener {
                 sender.sendMessage("stalled");
             }
             case "ping" -> sender.sendMessage("pong " + sender.getName());
+            case "deep" -> {
+                // Recurses until the JVM's guard: the server thread must get the error, not a crash.
+                try {
+                    recurse(0);
+                } catch (StackOverflowError e) {
+                    sender.sendMessage("deep ok");
+                }
+            }
             case "protect" -> {
                 protect = args.length > 1 && args[1].equals("on");
                 sender.sendMessage("protect " + protect);

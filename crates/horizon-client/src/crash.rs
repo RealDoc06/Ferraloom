@@ -406,14 +406,17 @@ pub fn panic_report(info: &std::panic::PanicHookInfo, side: &'static str) -> Rep
     }
 }
 
-/// Reports panics: on the main thread a crash report (the panic then ends the game, exit code
-/// 101); on other threads the error goes to the log, as vanilla's uncaught exception handler
-/// does. The default hook still prints the panic.
+/// Reports panics: on the main thread (the engine's) a crash report (the panic then ends the
+/// game, exit code 101); on other threads the error goes to the log, as vanilla's uncaught
+/// exception handler does. The default hook still prints the panic.
 pub fn install(home: PathBuf, side: &'static str) {
     let default = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         default(info);
-        let main = std::thread::current().name() == Some("main");
+        // The engine's thread (`main.rs` names it as the log's main thread) or the first one.
+        let current = std::thread::current();
+        let main =
+            matches!(current.name(), Some(n) if n == "main" || n == crate::logging::main_thread());
         if main {
             deliver(&home, panic_report(info, side));
         } else {
