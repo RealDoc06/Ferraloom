@@ -9,7 +9,7 @@
 2. Generates the stubs: tools/StubGen.java over the interfaces in stubs.txt.
 3. Compiles bridge/ against the API into dist/ferraloom-bukkit.jar, beside the API jar.
 4. Runs the bridge's own checks (tests/, TESTS below).
-5. Compiles the test plugins into test-plugins/.
+5. Compiles the test plugins into test-plugins/ and the benchmark plugins into bench-plugins/.
 6. Prints tools/Coverage.java's table (also in coverage.md).
 7. With --usage, writes tools/Usage.java's report on the plugins given to usage.md (docs/ferraloom/plugin-usage.md).
 
@@ -63,6 +63,8 @@ TESTS = [
     'dev.ferraloom.bukkit.ItemsTest',
 ]
 TEST_PLUGINS = {'FerraloomTest': HERE / 'test-plugin', 'FerraloomNms': HERE / 'nms-plugin'}
+# Plugins for the server benchmark (tools/ferraloom-bench/README.md), built into bench-plugins/.
+BENCH_PLUGINS = {'FerraloomBenchIdle': HERE / 'bench-plugins/idle', 'FerraloomBenchMove': HERE / 'bench-plugins/move'}
 # Classes a test plugin compiles against but the server lacks, written at build time and kept out of its jar
 # (a server internal's path may not be in the tree: tools/check_public_tree.py).
 PROVIDED = {
@@ -171,6 +173,11 @@ def main():
             classpath += sep + str(out / 'plugin-classes' / f'{name}-provided')
         compile_java(classpath, classes, folder)
         make_jar(out / 'test-plugins' / f'{name}.jar', classes, folder / 'resources')
+
+    # The benchmark plugins.
+    for name, folder in BENCH_PLUGINS.items():
+        compile_java(api, out / 'plugin-classes' / name, folder)
+        make_jar(out / 'bench-plugins' / f'{name}.jar', out / 'plugin-classes' / name, folder / 'resources')
 
     # Coverage.
     table = subprocess.run([tool('java'), '-cp', sep.join(map(str, [api, out / 'classes', out / 'tools'])), 'Coverage',

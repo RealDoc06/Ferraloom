@@ -257,6 +257,10 @@ def server_command(kind, directory, args):
     server = BIN / f'horizon-server{EXE}'
     subprocess.run([server, '--dir', directory, 'import', directory / 'server.properties'], check=True,
                    capture_output=True)
+    # Ferraloom: a folder laid over the server's before it starts, for plugins/ and ferraloom-bukkit/
+    # (tools/ferraloom-bench/README.md).
+    if overlay := os.environ.get('FERRALOOM_BENCH_OVERLAY'):
+        shutil.copytree(overlay, directory, dirs_exist_ok=True)
     toml = directory / 'server.toml'
     # The same settings, without the web panel.
     toml.write_text(re.sub(r'(?m)^bind = "127\.0\.0\.1:8130"', 'bind = ""', toml.read_text()))

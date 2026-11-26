@@ -1,0 +1,5 @@
+name: FerraloomBenchMove
+version: '1.0'
+main: dev.ferraloom.benchmove.BenchMove
+api-version: '26.3'
+description: Benchmark plugin that listens to PlayerMoveEvent.
