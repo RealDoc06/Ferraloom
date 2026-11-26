@@ -238,6 +238,8 @@ impl Game<'_> {
             .or_else(|| self.end_destination(target))
             .unwrap_or(Vec3::new(from.x * scale, from.y, from.z * scale));
         self.end_portal_travel = false;
+        // Ferraloom: the container the change of level closes, read in its own level.
+        let told = self.plugin_open_menu(host, conn);
         if let Err(e) = self.enter_level(Some(host), target) {
             log::error!("could not open {}: {e}", target.id());
             return;
@@ -250,6 +252,9 @@ impl Game<'_> {
         let ctx = self.server_ctx();
         // TeleportTransition.PLAY_PORTAL_SOUND.
         host.hub.change_level(i, at, yaw, None, true, &ctx);
+        if let Some(menu) = told {
+            self.plugin_menu_gone(host, menu);
+        }
         self.as_guest(host, conn, |g| g.trigger_dimension(source, target));
         self.server_trips.push(Trip {
             conn,
@@ -495,6 +500,8 @@ impl Game<'_> {
                 continue;
             };
             let source = self.dim;
+            // Ferraloom: the container the change of level closes, read in its own level.
+            let told = self.plugin_open_menu(host, t.conn);
             if let Err(e) = self.enter_level(Some(host), t.dim) {
                 log::error!("could not open {}: {e}", t.dim.id());
                 continue;
@@ -506,6 +513,9 @@ impl Game<'_> {
             let ctx = self.server_ctx();
             host.hub
                 .change_level(i, t.at, yaw, Some(pitch), false, &ctx);
+            if let Some(menu) = told {
+                self.plugin_menu_gone(host, menu);
+            }
             self.as_guest(host, t.conn, |g| g.trigger_dimension(source, t.dim));
             self.server_trips.retain(|trip| !trip.is(t.conn));
             self.server_trips.push(Trip {

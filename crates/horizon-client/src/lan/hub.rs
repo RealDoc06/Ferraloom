@@ -165,6 +165,9 @@ pub enum HostEvent {
     Warn(String),
     /// A server log error (LOGGER.error).
     Error(String),
+    /// Ferraloom: the guest's open container closed because its block went
+    /// (`sync_containers`), told while plugins run so the bridge forgets it.
+    MenuGone(u32, super::menu::Slots),
 }
 
 /// Profiling-only telemetry. Missing columns are movement observations, not
@@ -1531,7 +1534,7 @@ impl Hub {
                 g.send(&C::BlockChangedAck(play::BlockChangedAck { sequence }));
             }
         }
-        self.sync_containers(ctx.world);
+        self.sync_containers(ctx.world, &mut events);
         crate::spans::time("lan_track", || self.track_entities(ctx));
         crate::spans::time("lan_player_state", || {
             for i in 0..self.guests.len() {

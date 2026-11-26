@@ -1,7 +1,7 @@
 //! Hub operations on what guests perceive and do beyond the basics: sounds,
 //! level events, animations and block containers with their clicks.
 use super::{
-    hub::Hub,
+    hub::{HostEvent, Hub},
     menu::{self, Menu, Rules, Slots, View},
 };
 use crate::{containers::BlockEntity, items::ItemStack, world::World};
@@ -676,7 +676,9 @@ impl Hub {
     }
 
     /// Slot changes of open containers (AbstractContainerMenu.broadcastChanges).
-    pub fn sync_containers(&mut self, world: &World) {
+    /// A container whose block went closes, and while plugins run the game is
+    /// told (`HostEvent::MenuGone`).
+    pub fn sync_containers(&mut self, world: &World, events: &mut Vec<HostEvent>) {
         for i in 0..self.guests.len() {
             let Some(menu) = self.guests[i]
                 .menu
@@ -688,6 +690,9 @@ impl Hub {
             let (size, window, slots) = (menu.size, menu.window, menu.slots);
             if !slots.valid(world) {
                 self.close_container_at(i);
+                if ferraloom_plugins::running() {
+                    events.push(HostEvent::MenuGone(self.guests[i].conn, slots));
+                }
                 continue;
             }
             for slot in 0..size + 36 {

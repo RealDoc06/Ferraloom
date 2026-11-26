@@ -1639,6 +1639,10 @@ impl Game<'_> {
                             );
                         }
                     }
+                    // Ferraloom: InventoryCloseEvent (game/plugins/inventory.rs).
+                    HostEvent::MenuGone(conn, slots) => {
+                        self.plugin_menu_block_gone(&mut host, conn, slots);
+                    }
                     HostEvent::Packet(conn, packet) => {
                         self.lan_guest_packet(&mut host, conn, *packet);
                         if !host.commands.is_empty() {

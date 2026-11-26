@@ -386,18 +386,29 @@ fn top(game: &Game, g: &Guest, window: i32) -> Option<(Holder, &'static str, usi
         return Some((Holder::Crafting(g.uuid), "CRAFTING", 5));
     }
     let m = g.menu.as_ref().filter(|m| m.window == window)?;
-    // A single block's container is the block's, as its InventoryOpenEvent named it.
-    let holder = match m.slots {
-        Slots::Custom(id) => Holder::Custom(id),
-        Slots::Ender => Holder::Ender(g.uuid),
+    Some((
+        holder(game, g.uuid, m.slots),
+        top_type(game, m.slots),
+        m.size,
+    ))
+}
+
+/// The holder of player `id`'s menu over `slots`: a single block's container
+/// is the block's, as its InventoryOpenEvent named it.
+fn holder(game: &Game, id: PlayerId, slots: Slots) -> Holder {
+    match slots {
+        Slots::Custom(c) => Holder::Custom(c),
+        Slots::Ender => Holder::Ender(id),
         Slots::Block(key) => Holder::Block {
             world: super::world_index(game.dim),
             pos: [key.0, key.1, key.2],
         },
-        Slots::Double(..) => Holder::Menu(g.uuid),
-    };
-    Some((holder, top_type(game, m.slots), m.size))
+        Slots::Double(..) => Holder::Menu(id),
+    }
 }
+
+/// A closed menu as the bridge names it: the player, its top and its `InventoryType`.
+pub(in crate::game) type ClosedMenu = (PlayerId, Holder, &'static str);
 
 impl Game<'_> {
     /// What raw slot `slot` of the guest's menu `window` (its container `size` slots) holds.
@@ -774,8 +785,9 @@ impl Game<'_> {
         ferraloom_plugins::inventory_open(&mut GameHost::new(self, Some(host)), id, holder, kind)
     }
 
-    /// InventoryCloseEvent as the client closes its window (`handleContainerClose`).
-    /// Always false: the close goes on.
+    /// InventoryCloseEvent as the client closes its window (`handleContainerClose`),
+    /// told whenever plugins run so the bridge forgets the menu even when nobody
+    /// listens. Always false: the close goes on.
     pub(in crate::game) fn plugin_closed(
         &mut self,
         host: &mut LanHost,
@@ -791,6 +803,42 @@ impl Game<'_> {
         let id = g.uuid;
         ferraloom_plugins::inventory_close(&mut GameHost::new(self, Some(host)), id, top, kind);
         false
+    }
+
+    /// The guest's open container as the bridge names it, while plugins run: a
+    /// close the server makes by itself (out of reach, a respawn, another level)
+    /// reads it before and tells it after (`plugin_menu_gone`).
+    pub(in crate::game) fn plugin_open_menu(
+        &self,
+        host: &LanHost,
+        conn: u32,
+    ) -> Option<ClosedMenu> {
+        if !ferraloom_plugins::running() {
+            return None;
+        }
+        let g = host.hub.guest(conn).filter(|g| g.placed)?;
+        let slots = g.menu.as_ref()?.slots;
+        Some((g.uuid, holder(self, g.uuid, slots), top_type(self, slots)))
+    }
+
+    /// The container over `slots` closed because its block went (`HostEvent::MenuGone`).
+    pub(in crate::game) fn plugin_menu_block_gone(
+        &mut self,
+        host: &mut LanHost,
+        conn: u32,
+        slots: Slots,
+    ) {
+        if let Some(id) = host.hub.guest(conn).filter(|g| g.placed).map(|g| g.uuid) {
+            let menu = (id, holder(self, id, slots), top_type(self, slots));
+            self.plugin_menu_gone(host, menu);
+        }
+    }
+
+    /// CraftBukkit's InventoryCloseEvent for a menu the server closed by itself
+    /// (`ServerPlayer.closeContainer`), after it closed.
+    pub(in crate::game) fn plugin_menu_gone(&mut self, host: &mut LanHost, menu: ClosedMenu) {
+        let (id, top, kind) = menu;
+        ferraloom_plugins::inventory_close(&mut GameHost::new(self, Some(host)), id, top, kind);
     }
 
     /// HopperBlockEntity's InventoryMoveItemEvent for `item` (one item, taken

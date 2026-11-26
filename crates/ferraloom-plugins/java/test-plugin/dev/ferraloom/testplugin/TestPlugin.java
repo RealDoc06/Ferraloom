@@ -22,6 +22,7 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.HandlerList;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.GameRule;
@@ -99,6 +100,7 @@ public final class TestPlugin extends JavaPlugin implements Listener {
                 + " online=" + Bukkit.getOnlinePlayers().size() + " worlds=" + String.join(",", worlds)
                 + " primary=" + Bukkit.isPrimaryThread());
         getServer().getPluginManager().registerEvents(this, this);
+        getServer().getPluginManager().registerEvents(closes, this);
         // Plugin messages: what comes on ferraloom:test goes back as "pong <it>".
         getServer().getMessenger().registerOutgoingPluginChannel(this, "ferraloom:test");
         getServer().getMessenger().registerIncomingPluginChannel(this, "ferraloom:test", (channel, player, data) -> {
@@ -285,10 +287,13 @@ public final class TestPlugin extends JavaPlugin implements Listener {
                 + " price=" + price + " title=" + event.getView().getTitle() + " cancelled=" + event.isCancelled());
     }
 
-    @EventHandler
-    public void onClose(InventoryCloseEvent event) {
-        getLogger().info("event: close " + event.getView().getTitle() + " gui=" + (event.getInventory().getHolder() instanceof Gui));
-    }
+    /** The close listener, on its own so `ftest closes off` can leave the plugin a simple menu plugin without one. */
+    private final Listener closes = new Listener() {
+        @EventHandler
+        public void onClose(InventoryCloseEvent event) {
+            getLogger().info("event: close " + event.getView().getTitle() + " gui=" + (event.getInventory().getHolder() instanceof Gui));
+        }
+    };
 
     @EventHandler
     public void onTabComplete(TabCompleteEvent event) {
@@ -453,6 +458,17 @@ public final class TestPlugin extends JavaPlugin implements Listener {
             case "guiclick" -> {
                 guiOnClick = true;
                 sender.sendMessage("guiclick true");
+            }
+            case "closes" -> {
+                // Off: no close listener, and a stick in inventory slot 9 for the click that follows.
+                boolean on = args.length > 1 && args[1].equals("on");
+                if (on) {
+                    getServer().getPluginManager().registerEvents(closes, this);
+                } else {
+                    HandlerList.unregisterAll(closes);
+                    ((Player) sender).getInventory().setItem(9, new ItemStack(Material.STICK));
+                }
+                sender.sendMessage("closes " + on);
             }
             case "cursor" -> {
                 ItemStack cursor = ((Player) sender).getItemOnCursor();

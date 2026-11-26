@@ -21,7 +21,8 @@ server twice on a fresh flat world:
    BlockPhysicsEvent, a cancelled and an uncancelled block place, world reads (heights, chunks, border,
    game rules, another dimension) and a storm with its WeatherChangeEvent; a chest GUI a command opens
    (its title, its items' names, lore and plugin data) with a cancelled click leaving both sides as they
-   were and an uncancelled one taking the item, its close event, and a held item written through as
+   were and an uncancelled one taking the item, its close event (and, with no close listener, the player's
+   own inventory taking clicks again once it closed), and a held item written through as
    CraftItemStack's mirror is; entities: spawn events and a cancelled spawn, damage events cancelled and
    changed, reads and changes of an entity, using an entity, death and its killer; the server area: a
    command hidden from a player without its permission, tab
@@ -503,6 +504,24 @@ def check_plugins(engine, bot_binary, built, out, scratch):
         bot.send(f'close {window}')
         log.wait_for(r'event: close \S*Ferraloom GUI gui=true', start=log_mark)
         print('cancelled inventory click opening a GUI keeps the inventory: ok')
+
+        # A menu plugin with no close listener: once its GUI is closed, a click in the
+        # player's own inventory goes through (the bridge forgot the GUI).
+        bot.send('command ftest closes off')
+        bot.out.wait_for(r'^chat closes false$', start=mark)
+        mark, log_mark = len(bot.out.lines), len(log.lines)
+        bot.send('command ftest gui')
+        _, opened = bot.out.wait_for(r'^open (\d+) Ferraloom GUI$', start=mark)
+        bot.send(f'close {opened.split()[1]}')
+        bot.send('click 0 9 0 0')
+        log.wait_for(r'event: click CRAFTING raw=9 LEFT PICKUP_ALL', start=log_mark)
+        bot.send('command ftest cursor')
+        bot.out.wait_for(r'^chat cursor STICK 1$', start=mark)
+        bot.send('click 0 9 0 0')
+        bot.send('command ftest closes on')
+        bot.out.wait_for(r'^chat closes true$', start=mark)
+        log.absent(r'event: close ', log_mark)
+        print('GUI closed without a close listener, then an inventory click goes through: ok')
 
         # A cancelled PlayerMoveEvent sends the player back; uncancelled, the move stands.
         bot.send('command ftest freeze on')

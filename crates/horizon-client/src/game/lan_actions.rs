@@ -1243,10 +1243,15 @@ impl Game<'_> {
             .map(|g| g.conn)
             .collect();
         for conn in far {
+            let told = self.plugin_open_menu(host, conn);
             self.guest_container_closed(host, conn);
             host.hub.close_container(conn);
             if let Some(gi) = host.hub.guest_index(conn) {
                 self.guest_carried_back(host, gi);
+            }
+            // Ferraloom: InventoryCloseEvent (game/plugins/inventory.rs).
+            if let Some(menu) = told {
+                self.plugin_menu_gone(host, menu);
             }
         }
     }
@@ -1699,10 +1704,9 @@ impl Game<'_> {
             }
             S::SetBeacon(p) => self.lan_station_beacon(host, conn, p.primary, p.secondary),
             S::SelectTrade(p) => self.lan_select_trade(host, conn, p.item),
-            // Ferraloom: InventoryCloseEvent; never takes the close.
+            // Ferraloom: InventoryCloseEvent, told whenever plugins run; never takes the close.
             S::ContainerClose(p)
-                if ferraloom_plugins::listens(ferraloom_plugins::Event::InventoryClose)
-                    && self.plugin_closed(host, conn, p.container) => {}
+                if ferraloom_plugins::running() && self.plugin_closed(host, conn, p.container) => {}
             S::ContainerClose(p) if self.lan_merchant_closed(host, conn, Some(p.container)) => {
                 self.guest_carried_back(host, gi);
             }
@@ -2445,6 +2449,8 @@ impl Game<'_> {
         if !host.hub.guests[i].dead {
             return;
         }
+        // Ferraloom: the container the respawn closes, read in its own level.
+        let told = self.plugin_open_menu(host, conn);
         // PlayerList.respawn removes the dead player (Player.remove).
         self.guest_drop_carried(host, i);
         // PlayerList.respawn: a server's player comes back in its respawn
@@ -2522,6 +2528,10 @@ impl Game<'_> {
             border: &self.border,
         };
         host.hub.respawn(i, spawn, &ctx);
+        // Ferraloom: the respawn closed the open container (game/plugins/inventory.rs).
+        if let Some(menu) = told {
+            self.plugin_menu_gone(host, menu);
+        }
         // ServerGamePacketListenerImpl.handleClientCommand: a hardcore world's
         // respawned player only watches.
         if self.level.hardcore {
