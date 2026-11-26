@@ -1,5 +1,5 @@
 [workspace]
-exclude = ["crates/horizon-telemetry-server", "crates/horizon-mod-registry", "third_party/wgpu-hal"]
+exclude = ["third_party/wgpu-hal"]
 members = [
     "crates/ferraloom-core",
     "crates/ferraloom-plugins",
@@ -23,7 +23,6 @@ members = [
     "crates/horizon-telemetry",
     "crates/horizon-bench",
     "crates/horizon-friends",
-    "crates/horizon-relay",
     "crates/horizon-mod-sdk",
     "crates/horizon-mods",
     "crates/horizon-mods/tests/guest",
