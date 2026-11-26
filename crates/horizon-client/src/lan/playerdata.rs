@@ -169,7 +169,10 @@ pub fn store(guest: &Guest, level: &mut Level) {
     level.last_death = guest.last_death.clone();
     level.player_extra = guest.saved.clone();
     // Ferraloom: Player.addAdditionalSaveData's `Score`.
-    if let Some(horizon_world::nbt::Tag::Compound(map)) = level.player_extra.as_mut() {
+    if let horizon_world::nbt::Tag::Compound(map) = level
+        .player_extra
+        .get_or_insert_with(|| horizon_world::nbt::Tag::Compound(Default::default()))
+    {
         map.insert(
             "Score".into(),
             horizon_world::nbt::Tag::Int(guest.meta.score),
