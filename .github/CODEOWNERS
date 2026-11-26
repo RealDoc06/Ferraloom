@@ -1,12 +1,12 @@
-# Changes to these files wait for Ludovic's review once branch protection requires code owners' reviews
+# Changes to these files wait for the owner's review once branch protection requires code owners' reviews
 # (docs/security.md). They are what builds, signs and ships releases, the code that
 # checks downloads before installing them (horizon-server's update.rs; its Cargo.toml picks the crates that do it),
 # and this file. Everything else merges as soon as
 # `verify` passes.
-/.github/                                @ludovic111
-/tools/ci/                               @ludovic111
-/tools/release_train.py                  @ludovic111
-/crates/horizon-release-sign/            @ludovic111
-/crates/horizon-server/src/update.rs     @ludovic111
-/crates/horizon-server/Cargo.toml        @ludovic111
-/packaging/                              @ludovic111
+/.github/                                @RealDoc06
+/tools/ci/                               @RealDoc06
+/tools/release_train.py                  @RealDoc06
+/crates/horizon-release-sign/            @RealDoc06
+/crates/horizon-server/src/update.rs     @RealDoc06
+/crates/horizon-server/Cargo.toml        @RealDoc06
+/packaging/                              @RealDoc06
