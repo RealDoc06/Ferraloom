@@ -1,112 +1,141 @@
 #!/usr/bin/env python3
-"""Leaving a world and opening it again keeps its entities as they were (#374).
+"""Stopping a server and starting it again on its world keeps its entities as they were (#374).
 
-Vanilla's integrated server unloads every entity with the level when the player saves
-and quits (`MinecraftServer.stopServer`), so a world reopened in the same session holds
-each entity once. Horizon kept non-mob entities (minecarts, boats, armor stands...) in
-memory after Save and Quit to Title; opening the world loaded them again from disk and
-the next save wrote both copies, doubling them each time, until the game crawled.
+Horizon once kept non-mob entities (minecarts, boats, armor stands...) in memory after a
+world was closed; opening it again loaded them from disk too and the next save wrote both
+copies, doubling them each time. A dedicated server reopens its world in a new process, so
+what this checks now is that saving and loading entities neither drops nor copies them.
 
-The game runs offscreen (macOS) or on the virtual screen (Linux) with a control socket:
-a minecart is summoned beside the player (seed 7 also has mineshaft chest minecarts in
-view), then the world is closed through the pause menu and reopened from the title three
-times. The minecarts must be the same ones each time, each once.
+Vanilla's dedicated server and Ferraloom's (`horizon-client --dedicated --nogui`) each
+generate a world from seed 7, force-load the chunks around the origin (seed 7 has
+mineshaft chest minecarts there), and their consoles summon a minecart on a stone pad at
+y 200. Once the minecarts stop changing, the console saves (`save-all flush`) and stops
+the server; then the server starts again on its world three times. Each time the
+minecarts in the force-loaded chunks (kind, position to 0.1 and UUID) must be the ones it
+had before it first stopped, each once, and Ferraloom's must be where vanilla's are.
 
-  test_world_reopen_parity.py [--bin-dir DIR] [--keep]
+  test_world_reopen_parity.py [--engine PATH] [--keep]
 """
 import argparse
-import json
-import os
 import re
 import shutil
-import subprocess
 import sys
-import tempfile
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lab  # noqa: E402
+from test_command_exec_parity import server_dir, servers  # noqa: E402
+from test_dedicated_server_parity import Server  # noqa: E402
 
-ROOT = Path(__file__).resolve().parent.parent
-RESOURCES = ROOT / '.local' / 'horizon-client' / '26.3'
-RUN = ROOT / '.local' / 'world-reopen'
+RUN = lab.LOCAL / 'world-reopen'
 CYCLES = 3
+PROPERTIES = {
+    'online-mode': 'false',
+    'level-seed': '7',
+    'view-distance': '4',
+    'simulation-distance': '4',
+    'spawn-protection': '0',
+    'pause-when-empty-seconds': '-1',
+}
+KINDS = ['minecart', 'chest_minecart', 'furnace_minecart', 'hopper_minecart', 'tnt_minecart', 'spawner_minecart',
+         'command_block_minecart']
+# The force-loaded chunks (-3..6 on both axes, with three of seed 7's mineshaft chest minecarts); others, around
+# the world spawn, are loaded only while the server starts.
+AREA = 'x=-48,y=-64,z=-48,dx=160,dy=400,dz=160'
+ENTITY_DATA = re.compile(r'has the following entity data: (.*)$')
 
 
-def game_env():
-    """macOS renders offscreen; Linux uses the virtual screen (as test_save_roundtrip_parity), or renders
-    offscreen too where there is no vscreen."""
-    env = lab.game_env()
-    if sys.platform == 'darwin' or not shutil.which('vscreen'):
-        return env, ['--offscreen']
-    subprocess.run(['vscreen', 'up'], check=False, capture_output=True)
-    text = subprocess.run(['vscreen', 'env'], capture_output=True, text=True, check=True).stdout
-    env.pop('DISPLAY', None)
-    for match in re.finditer(r'(\w+)=(\S+)', text.split('unset')[0]):
-        env[match.group(1)] = match.group(2)
-    return env, []
+def console(server, command, timeout=300):
+    """Runs a console command; returns the log lines that came before the marker said after it (the console runs
+    its queue in order)."""
+    console.marker += 1
+    marker = f'@@{console.marker}@@'
+    start = len(server.lines)
+    server.console(command)
+    server.console(f'say {marker}')
+    server.wait_for(re.escape(f'[Server] {marker}'), timeout=timeout)
+    lines = server.lines[start:]
+    return lines[:next(i for i, l in enumerate(lines) if l.endswith(f'[Server] {marker}'))]
+
+
+console.marker = 0
+
+
+def carts(server):
+    """The loaded minecarts once their list stops changing: entities of the force-loaded chunks keep arriving after
+    the server says it is done."""
+    last = None
+    for _ in range(30):
+        found = []
+        for kind in KINDS:
+            for line in console(server, f'execute as @e[type=minecraft:{kind},{AREA}] run data get entity @s'):
+                if m := ENTITY_DATA.search(line):
+                    data = m.group(1)
+                    pos = re.search(r'Pos: \[([-0-9.]+)d, ([-0-9.]+)d, ([-0-9.]+)d\]', data)
+                    uuid = re.search(r'UUID: \[I; ([-0-9]+), ([-0-9]+), ([-0-9]+), ([-0-9]+)\]', data)
+                    found.append((kind, *(round(float(v), 1) for v in pos.groups()),
+                                  ','.join(uuid.groups()) if uuid else '?'))
+        found.sort()
+        if found == last:
+            return found
+        last = found
+        time.sleep(2)
+    return last
+
+
+def run_side(label, command):
+    """(the minecarts before the first stop, [the minecarts after each restart])."""
+    directory = RUN / label
+    server_dir(directory, PROPERTIES)
+    server = Server(command, directory, f'{label}-0')
+    try:
+        server.wait_for(r'Done \(', timeout=600)
+        console(server, 'forceload add -48 -48 111 111', timeout=600)
+        console(server, 'fill 0 200 0 2 200 2 minecraft:stone')
+        console(server, 'summon minecraft:minecart 1.5 201 1.5')
+        expected = carts(server)
+        console(server, 'save-all flush', timeout=600)
+    finally:
+        server.stop()
+    after = []
+    for cycle in range(1, CYCLES + 1):
+        server = Server(command, directory, f'{label}-{cycle}')
+        try:
+            server.wait_for(r'Done \(', timeout=600)
+            after.append(carts(server))
+        finally:
+            server.stop()
+    return expected, after
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--bin-dir', help='prebuilt horizon-client and horizon-ctl (default: build them with the fast profile)')
+    parser.add_argument('--engine', type=Path, help='an already-built engine instead of compiling the fast profile')
     parser.add_argument('--keep', action='store_true', help='keep the run folder')
     args = parser.parse_args()
-    bin_dir = Path(args.bin_dir).resolve() if args.bin_dir else None
-    if bin_dir is None:
-        subprocess.run(['cargo', 'build', '--locked', '--profile', 'fast', '-p', 'horizon-client', '--no-default-features', '--bins'], cwd=ROOT, check=True)
-        bin_dir = ROOT / os.environ.get('CARGO_TARGET_DIR', 'target') / 'fast'
     shutil.rmtree(RUN, ignore_errors=True)
     RUN.mkdir(parents=True)
-    socket = Path(tempfile.mkdtemp(prefix='hzro')) / 'control.sock'  # sockets need short paths
-    env, extra = game_env()
-
-    def ctl(*words, check=True):
-        result = subprocess.run([str(bin_dir / 'horizon-ctl'), '--socket', str(socket), '--timeout', '600', *words],
-                                cwd=RUN, env=env, capture_output=True, text=True)
-        if check and result.returncode:
-            sys.exit(f'horizon-ctl {" ".join(words)} failed: {result.stdout}{result.stderr}')
-        return json.loads(result.stdout) if result.stdout.strip().startswith('{') else result.stdout
-
-    def carts():
-        """The loaded minecarts once their list stops changing: on a loaded runner the mineshaft's chunks and their
-        entities keep arriving after the world counts as loaded, so one reading can be short of a cart."""
-        last = None
-        for _ in range(30):
-            found = sorted((c['kind'], *(round(v, 1) for v in c['position'])) for c in ctl('status')['carts'])
-            if found == last:
-                return found
-            last = found
-            ctl('wait', '40')
-        return last
-
-    ctl('launch', '--resources', str(RESOURCES), '--world', 'reopen', '--seed', '7', '--creative',
-        '--render-distance', '4', *extra)
+    _, vanilla, ferraloom, _ = servers(RUN, args.engine)
     failures = 0
-    try:
-        ctl('wait-ready', '300')
-        ctl('wait-for', 'loaded', '--timeout', '300')  # as after each reopen below
-        ctl('command', 'summon minecraft:minecart ~2 ~ ~2')
-        ctl('wait', '20')
-        expected = carts()
-        print('minecarts:', len(expected))
-        if not any(kind == 'minecraft:minecart' for kind, *_ in expected):
-            sys.exit(f'the summoned minecart is not there: {expected}')
-        for cycle in range(1, CYCLES + 1):
-            ctl('pause')
-            ctl('click-button', 'Save and Quit to Title')
-            ctl('wait-for', 'screen', 'title', '--timeout', '120')
-            ctl('open', 'reopen')
-            ctl('wait-for', 'loaded', '--timeout', '300')
-            ctl('wait', '20')
-            got = carts()
+    sides = {}
+    for label, command in [('vanilla', vanilla), ('ferraloom', ferraloom)]:
+        expected, after = sides[label] = run_side(label, command)
+        print(f'{label}: {len(expected)} minecarts')
+        if not any(kind == 'minecart' and y >= 200 for kind, x, y, z, _ in expected):
+            print(f'{label}: the summoned minecart is not there: {expected}')
+            failures += 1
+        for cycle, got in enumerate(after, 1):
             ok = got == expected
             failures += not ok
-            print(f'reopen {cycle}: {len(got)} minecarts', 'ok' if ok else f'FAIL (expected {len(expected)})')
-    finally:
-        ctl('quit', check=False)
-        if not args.keep and not failures:
-            shutil.rmtree(RUN, ignore_errors=True)
+            print(f'{label} restart {cycle}: {len(got)} minecarts', 'ok' if ok else f'FAIL (expected {expected}, got {got})')
+    # UUIDs are random, but where the world and the console put minecarts is not.
+    placed = {label: [cart[:4] for cart in expected] for label, (expected, _) in sides.items()}
+    if placed['ferraloom'] != placed['vanilla']:
+        failures += 1
+        print(f'FAIL: Ferraloom\'s minecarts {placed["ferraloom"]} are not vanilla\'s {placed["vanilla"]}')
+    if not args.keep and not failures:
+        shutil.rmtree(RUN, ignore_errors=True)
     print('world reopen:', 'PASS' if not failures else f'{failures} FAILED')
     sys.exit(1 if failures else 0)
 
