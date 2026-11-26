@@ -142,7 +142,9 @@ fn strings(
     for (i, item) in items.iter().enumerate() {
         if let Some(s) = item {
             let s = env.new_string(s)?;
-            env.set_object_array_element(&array, i as jint, s)?;
+            env.set_object_array_element(&array, i as jint, &s)?;
+            // A long ban or whitelist file piles up no local references.
+            env.delete_local_ref(s)?;
         }
     }
     Ok(array.into_raw())
