@@ -317,8 +317,8 @@ clicks on blocks and in the air; `useInteractedBlock` and `useItemInHand` act se
 `FerraloomMetadataStore` is the one store behind every `Metadatable` (`player(name)`, `entity(uuid)`,
 `block(world, x, y, z)` name subjects).
 
-Players' differences from CraftBukkit: `PlayerInteractEvent.getItem` and `PlayerDeathEvent.getDrops` throw
-until the bridge's `ItemStack` arrives (`getMaterial` answers), `getDamageSource` until the entities area's;
+Players' differences from CraftBukkit: `PlayerDeathEvent.getDrops` throws until the bridge's `ItemStack`
+arrives, `getDamageSource` until the entities area's;
 `PlayerDeathEvent`'s keepLevel and new experience are not applied; a `PlayerRespawnEvent` place is reached
 as a teleport at the next tick's start; `PlayerMoveEvent` sees the position from the tick's start (the
 packets of one tick are checked before the hub handles any); `PlayerTeleportEvent` from a pearl cannot
