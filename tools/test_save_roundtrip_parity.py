@@ -95,6 +95,7 @@ IGNORED = {
 # Real differences that are known and not fixed yet: (pattern -> what is wrong). They are
 # reported, and do not fail the run, so that new differences still do.
 KNOWN_GAPS = {
+    r'^players/data/.*\.dat\.Pos$': "Ferraloom's save rewrites the file of a player who never joined it, without Pos",
 }
 
 SUSPICIOUS = re.compile(
