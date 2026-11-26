@@ -227,6 +227,10 @@ final class FerraloomServer extends StubServer {
 
     /** CraftServer.dispatchCommand for a plugin command: true when the command map has the label. */
     boolean dispatchPluginCommand(CommandSender sender, String line) {
+        // Here, not in dispatchCommand: Player.performCommand comes this way too.
+        if (!isPrimaryThread()) {
+            throw new IllegalStateException("Asynchronous command dispatch!");
+        }
         String label = line.split(" ", -1)[0].toLowerCase(Locale.ROOT);
         if (commandMap.getCommand(label) == null) {
             return false;
@@ -406,9 +410,6 @@ final class FerraloomServer extends StubServer {
     /** CraftServer.dispatchCommand: a plugin's command, else vanilla's as the sender (the console or a player). */
     @Override
     public boolean dispatchCommand(CommandSender sender, String commandLine) {
-        if (!isPrimaryThread()) {
-            throw new IllegalStateException("Asynchronous command dispatch!");
-        }
         if (dispatchPluginCommand(sender, commandLine)) {
             return true;
         }

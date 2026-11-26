@@ -751,8 +751,8 @@ static LOGINS: Mutex<Vec<Login>> = Mutex::new(Vec::new());
 /// Some login waits: lets [`serve_logins`] skip the lock.
 static LOGINS_WAITING: AtomicBool = AtomicBool::new(false);
 
-/// How long a login waits for the server thread before it goes on with
-/// vanilla's verdict (the server stopping, say).
+/// How long a login waits for the server thread (the server stopping, say)
+/// before it is refused: a listener that would have refused it never ran.
 const LOGIN_WAIT: Duration = Duration::from_secs(10);
 
 /// A login on its connection's thread, after authentication:
@@ -800,7 +800,8 @@ pub fn login(
             answer,
         });
     LOGINS_WAITING.store(true, Ordering::Release);
-    wait.recv_timeout(LOGIN_WAIT).unwrap_or(refused)
+    wait.recv_timeout(LOGIN_WAIT)
+        .unwrap_or_else(|_| Some(refused.unwrap_or_else(|| "Took too long to log in".to_owned())))
 }
 
 /// The logins waiting for `PlayerLoginEvent`, on the server thread (even

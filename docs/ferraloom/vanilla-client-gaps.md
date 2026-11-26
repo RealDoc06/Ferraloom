@@ -7,7 +7,7 @@ Horizon's own client is out of scope.
 Verified against `ferraloom/next` at `5d5371c7b` (2026-11-26): every **Fixed** row's commit is an ancestor of
 that head, and every **Open** row was checked in the code unless it says otherwise.
 
-**Adding a gap.** Give it the next free number (the first free one is **#125**), put it in its area, ranked by how
+**Adding a gap.** Give it the next free number (the first free one is **#126**), put it in its area, ranked by how
 visible it is to players, and fill every column: what is seen and how vanilla differs, the vanilla
 reference (`Class#method` from `.cache/decompiled/26.3/`), where it lives in our code, a size and who found
 it. When it is fixed, move it to **Fixed** with the commit and the harness case that proves it. Numbers are
@@ -17,7 +17,7 @@ Sizes: S under a day, M a few days, L a week or more. Sources: *audit* (the orig
 (sword cooldown), *A*, *B*, *C*, *D* (the fix clusters), *fperm* (function permission level), *found*
 (plugin foundation), *p-server*, *p-players*, *p-blocks*, *p-entities*, *p-inv* (the plugin areas), *orch*
 (the orchestrator's integration), *rig* (live checks through the vanilla client rig,
-`docs/ferraloom/client-rig.md`), *harness* (the command_exec, save and loot harnesses ported to the dedicated server), *docs* (an existing doc).
+`docs/ferraloom/client-rig.md`), *harness* (the command_exec, save and loot harnesses ported to the dedicated server), *review* (code review of the branch), *docs* (an existing doc).
 
 ## Open
 
@@ -41,6 +41,7 @@ Sizes: S under a day, M a few days, L a week or more. Sources: *audit* (the orig
 | 46 | A spectator's camera isn't reset by `/tp`, and a camera entity changing dimension resets the camera instead of taking the spectator along | `ServerPlayer#teleport` (`setCamera(this)`), `ServerPlayer#tick` camera follow | `game/lan_spectate.rs`; teleports in `game/commands.rs` | S | B |
 | 47 | A camel or nautilus dash emits no `ENTITY_ACTION` game event, so sculk doesn't hear it | `Camel#handleStartJump` → `gameEvent(GameEvent.ENTITY_ACTION)` | `game/mounts.rs` riding-jump handler (`bfb5b4a89`) | S | B |
 | 48 | A player newly joined sees players standing still only after they send a move (hidden in practice: clients send one every 20 ticks) | `ChunkMap#playerLoadedChunk`, `ChunkMap.TrackedEntity#updatePlayer` | Pairing in `lan/hub.rs` `track_entities` runs on moves | S | A |
+| 125 | The sweep check reads the last move of the tick's whole packet pass, so a move the client sent after the attack in the same pass decides whether that hit sweeps; vanilla reads the movement known when the attack packet is handled, and zeroes it at `ClientTickEnd` when no move came. Off by one client tick while the player's speed crosses the sweep threshold | `ServerGamePacketListenerImpl#handleMovePlayer`, `#handleClientTickEnd`, `Player#isSweepAttack` | `game/lan_actions.rs` `guest_attack` (`known_movement` from `guests[gi].moves.last()`) | S | review |
 
 ### Commands
 

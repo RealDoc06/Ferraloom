@@ -67,13 +67,15 @@ fn network(id: &str, tag: &Tag) -> Option<(i32, Component)> {
             Component::Bool(int(tag)? != 0),
         ),
         "minecraft:enchantable" => (ENCHANTABLE, Component::Int(int(tag.get("value")?)?)),
-        // DamageResistant: the damage type tag, by its id without the `#`.
+        // DamageResistant: a holder set of damage types (ByteBufCodecs.holderSet).
+        // Only a tag crosses: 0, then the tag's id. Vanilla's items name
+        // tags; a list of types would need the registry's ids.
         "minecraft:damage_resistant" => {
             let types = text(tag.get("types")?)?;
-            (
-                DAMAGE_RESISTANT,
-                Component::Ident(types.trim_start_matches('#').to_owned()),
-            )
+            let mut w = horizon_protocol::buf::Writer::new();
+            w.varint(0);
+            w.string(types.strip_prefix('#')?);
+            (DAMAGE_RESISTANT, Component::Raw(w.data))
         }
         "minecraft:custom_model_data" => (
             component::CUSTOM_MODEL_DATA,
@@ -353,6 +355,18 @@ mod tests {
     fn a_stack_without_extras_is_sent_as_before() {
         let stack = stack_with(Tag::compound([("minecraft:damage", Tag::Int(3))]));
         assert_eq!(stack.added, vec![(component::DAMAGE, Component::Int(3))]);
+    }
+
+    /// `ByteBufCodecs.holderSet` for a tag: 0, then the id as a string.
+    #[test]
+    fn damage_resistant_is_a_holder_set_naming_its_tag() {
+        let tag = Tag::compound([("types", Tag::String("#minecraft:is_fire".into()))]);
+        let mut bytes = vec![0, 17];
+        bytes.extend(b"minecraft:is_fire");
+        assert_eq!(
+            network("minecraft:damage_resistant", &tag),
+            Some((DAMAGE_RESISTANT, Component::Raw(bytes)))
+        );
     }
 
     #[test]

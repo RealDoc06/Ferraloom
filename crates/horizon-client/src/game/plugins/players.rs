@@ -1327,7 +1327,8 @@ impl Game<'_> {
             pitch: g.pitch,
         };
         let (mut sneaking, mut sprinting, mut flying) = (g.sneaking, g.sprinting, g.flying);
-        let may_fly = g.creative() || g.spectator();
+        // As the hub's handlePlayerAbilities: a plugin's allow-flight counts.
+        let may_fly = g.creative() || g.spectator() || g.allow_flight;
         let mut k = 0;
         while k < host.hub.guests[i].inbox.len() {
             let (pos, rot) = match &host.hub.guests[i].inbox[k] {

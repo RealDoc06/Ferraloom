@@ -998,7 +998,29 @@ impl Game<'_> {
                 } else {
                     translatable("multiplayer.disconnect.kicked", &[])
                 };
-                self.kick_uuid(user.id, reason);
+                // Ferraloom: PlayerKickEvent, as a player's /kick; cancelled,
+                // they stay and nothing is reported (game/plugins/players.rs).
+                let plain = if rest.len() > 1 {
+                    rest[1..].join(" ")
+                } else {
+                    "Kicked by an operator".to_owned()
+                };
+                let conns: Vec<u32> = self.lan.as_ref().map_or(Vec::new(), |h| {
+                    let guests = h.hub.guests.iter();
+                    guests.filter(|g| g.uuid == user.id).map(|g| g.conn).collect()
+                });
+                let mut kicked = false;
+                for conn in conns {
+                    if let Some(tag) = self.plugin_kick(conn, &plain, reason.clone())
+                        && let Some(h) = self.lan.as_mut()
+                    {
+                        h.hub.kick(conn, tag);
+                        kicked = true;
+                    }
+                }
+                if !kicked {
+                    return;
+                }
                 self.console_reply(Text::translate(
                     "commands.kick.success",
                     &[
