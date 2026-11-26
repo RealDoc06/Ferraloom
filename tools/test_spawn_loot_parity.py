@@ -55,10 +55,12 @@ def rolled(directory, world, command=None):
     try:
         server.run('forceload add 0 0')
         time.sleep(2)
-        server.run('execute if items block {} {} {} container.* *'.format(*CHEST))
+        before = ' '.join(server.run('data get block {} {} {}'.format(*CHEST)))
+        replies = server.run('execute if items block {} {} {} container.* *'.format(*CHEST))
         text = ' '.join(server.run('data get block {} {} {} Items'.format(*CHEST)))
     finally:
         server.stop()
+    print(f'{directory.name}: the chest {before[:300]}; execute if items -> {replies}; then {text[:300]}')
     items = []
     for item in re.finditer(r'\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}', text.split('data:', 1)[-1]):
         found = item.group(0)

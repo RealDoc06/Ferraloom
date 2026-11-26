@@ -408,7 +408,9 @@ public final class CommandExecClient {
             synchronized (inbox) {
                 while (respawns == before || awaitingSpawn) {
                     long left = (until - System.nanoTime()) / 1_000_000L;
-                    if (left <= 0 || failure != null) throw new IllegalStateException("the portal did not take the player");
+                    if (left <= 0 || failure != null) {
+                        throw new IllegalStateException("the portal did not take the player" + (failure != null ? ": " + failure : ""));
+                    }
                     inbox.wait(Math.min(left, 1000));
                 }
             }
