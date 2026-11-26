@@ -161,7 +161,8 @@ final class FerraloomInventories {
                 throw new UnsupportedOperationException("Ferraloom does not implement opening a " + top.getType()
                         + " inventory yet");
             }
-            closeOpen();
+            // Whatever is open closes, a menu the engine opened by itself too.
+            closeInventory();
             FerraloomInventoryView view = new FerraloomInventoryView(player, top);
             InventoryOpenEvent event = new InventoryOpenEvent(view);
             Bridge.server.pluginManager.callEvent(event);
@@ -183,13 +184,18 @@ final class FerraloomInventories {
             }
         }
 
-        /** InventoryCloseEvent for the open menu, which the server then closes and which is forgotten. */
+        /**
+         * InventoryCloseEvent for the open menu, which is forgotten and which the server then closes, unless a
+         * listener opened another menu in its place.
+         */
         private void closeOpen() {
             FerraloomInventoryView view = open;
             if (view != null) {
                 open = null;
                 Bridge.server.pluginManager.callEvent(new InventoryCloseEvent(view));
-                InventoryNative.close(most(), least());
+                if (open == null) {
+                    InventoryNative.close(most(), least());
+                }
             }
         }
 
