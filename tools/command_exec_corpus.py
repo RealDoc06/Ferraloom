@@ -815,6 +815,9 @@ def progression():
         cmd('/experience query @s levels'),
         cmd('/experience query @s points'),
         cmd('/advancement revoke @s everything'),
+        # The player ticks between two commands and earns some again (its location trigger runs every 20
+        # ticks): the second revoke follows enough ticks for that.
+        {'op': 'tick', 'n': 40},
         cmd('/advancement revoke @s everything'),
         cmd('/advancement grant @s only minecraft:nonexistent'),
         cmd('/recipe give @s minecraft:oak_planks'),
