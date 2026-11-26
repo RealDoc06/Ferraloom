@@ -87,9 +87,9 @@ class ParseTests(unittest.TestCase):
 
 
 class AllowTests(unittest.TestCase):
-    def test_listed_and_ludovic(self):
+    def test_listed_and_the_owner(self):
         do("/close", login="RDBTcvs")
-        do("/close", login="ludovic111")
+        do("/close", login="realdoc06")
 
     def test_stranger_refused(self):
         with self.assertRaisesRegex(tc.Refused, "Only Ludovic"):
@@ -99,12 +99,12 @@ class AllowTests(unittest.TestCase):
         paused = ns.read_reviewers("kacpherek\npaused\n")
         with self.assertRaisesRegex(tc.Refused, "paused"):
             do("/close", reviewers=paused)
-        do("/close", reviewers=paused, login="ludovic111")
+        do("/close", reviewers=paused, login="realdoc06")
 
     def test_the_repos_list_is_the_nightlys(self):
         self.assertEqual(ns.REVIEWERS, ".github/trusted-reviewers.txt")
         listed = ns.read_reviewers((ROOT / ns.REVIEWERS).read_text())
-        self.assertEqual(listed.logins, {"kacpherek", "rdbtcvs", "online5277", "levzzz5154"})
+        self.assertEqual(listed.logins, set())
         self.assertFalse(listed.paused)
 
 
@@ -168,10 +168,10 @@ class RefusalTests(unittest.TestCase):
         with self.assertRaises(tc.Refused):
             do("/label bug, release-now")
 
-    def test_ludovics_threads(self):
+    def test_the_owners_threads(self):
         for text in ("/close", "/label bug", "/unlabel bug", "/reopen"):
-            for t in (thread(user="ludovic111", state="closed" if text == "/reopen" else "open"),
-                      thread(user="Ludovic111", pr=True)):
+            for t in (thread(user="realdoc06", state="closed" if text == "/reopen" else "open"),
+                      thread(user="RealDoc06", pr=True)):
                 with self.assertRaisesRegex(tc.Refused, "Ludovic's"):
                     do(text, Fake({5: t}))
 
@@ -190,7 +190,7 @@ class RefusalTests(unittest.TestCase):
             do("/close", Fake({}))
 
     def test_nothing_written_on_refusal(self):
-        api = Fake({5: thread(user="ludovic111")})
+        api = Fake({5: thread(user="realdoc06")})
         with self.assertRaises(tc.Refused):
             do("/close", api)
         self.assertEqual(api.calls, [])
@@ -219,8 +219,8 @@ class LimitTests(unittest.TestCase):
         with self.assertRaises(tc.Refused):
             do("/close", Fake(past=past("kacpherek", 60)), login="Kacpherek")
 
-    def test_ludovic_is_unlimited(self):
-        do("/close", Fake(past=past("ludovic111", 100)), login="ludovic111")
+    def test_the_owner_is_unlimited(self):
+        do("/close", Fake(past=past("realdoc06", 100)), login="realdoc06")
 
 
 class WorkflowTests(unittest.TestCase):

@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-OWNER = "ludovic111"
+OWNER = "realdoc06"  # lowercase: `is_owner` compares lowercased logins
 REVIEWERS = ".github/trusted-reviewers.txt"
 LOGIN = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$")
 
