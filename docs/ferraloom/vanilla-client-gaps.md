@@ -7,7 +7,7 @@ Horizon's own client is out of scope.
 Verified against `ferraloom/next` at `5d5371c7b` (2026-11-26): every **Fixed** row's commit is an ancestor of
 that head, and every **Open** row was checked in the code unless it says otherwise.
 
-**Adding a gap.** Give it the next free number (the first free one is **#118**), put it in its area, ranked by how
+**Adding a gap.** Give it the next free number (the first free one is **#120**), put it in its area, ranked by how
 visible it is to players, and fill every column: what is seen and how vanilla differs, the vanilla
 reference (`Class#method` from `.cache/decompiled/26.3/`), where it lives in our code, a size and who found
 it. When it is fixed, move it to **Fixed** with the commit and the harness case that proves it. Numbers are
@@ -16,7 +16,8 @@ never reused: #1 to #32 are the original audit's (`9b35c1726`), so old reference
 Sizes: S under a day, M a few days, L a week or more. Sources: *audit* (the original audit), *combat*
 (sword cooldown), *A*, *B*, *C*, *D* (the fix clusters), *fperm* (function permission level), *found*
 (plugin foundation), *p-server*, *p-players*, *p-blocks*, *p-entities*, *p-inv* (the plugin areas), *orch*
-(the orchestrator's integration), *docs* (an existing doc).
+(the orchestrator's integration), *rig* (live checks through the vanilla client rig,
+`docs/ferraloom/client-rig.md`), *docs* (an existing doc).
 
 ## Open
 
@@ -52,6 +53,7 @@ Sizes: S under a day, M a few days, L a week or more. Sources: *audit* (the orig
 | 53 | `/perf` answers "Unknown or incomplete command" though the dedicated tree offers it to level-4 players | `PerfCommand` (`MinecraftServer#startRecordingMetrics`) | Left out of `horizon-command/src/tree_server.rs`; still listed in `lan/commands.rs:32` `DEDICATED_ONLY`. No metrics recorder | M | C |
 | 54 | A player's command keeps the permission level they had when it was queued, so a `/deop` in the same tick can come too late | `Commands#performCommand` checks at execution | Guest command queue, `game/lan_actions.rs` `guest_command` | S | C |
 | 55 | `/help` inside a function lists commands at the function's compile level, not the caller's | `HelpCommand` (source's permissions) | `game/functions.rs` runs lines at the compiled level | S | fperm |
+| 118 | From the console, `attribute <player> <attribute> get` answers "is not a valid entity for this command" and `execute as <player> run attribute @s ...` prints nothing; vanilla returns the value. Mobs work, and so does the player typing it in the client | `AttributeCommand#getLivingEntity` (a `ServerPlayer` is a `LivingEntity`) | The `attribute` command's target lookup for server players when the source is not that player, `game/commands*`. Seen live with the client rig, not traced | S | rig |
 | 56 | `@e` without a distance or volume reads only the source's level; vanilla reads every level | `EntitySelector#findEntities` | Selectors in `game/commands.rs`. From `docs/server-levels.md`, not re-verified | M | docs |
 
 ### World and blocks
@@ -86,6 +88,7 @@ Sizes: S under a day, M a few days, L a week or more. Sources: *audit* (the orig
 |---|---|---|---|---|---|
 | 30 | RCON, Query and the management server are missing: `enable-rcon`, `rcon.*`, `enable-query`, `query.port`, `management-server-*` and `status-heartbeat-interval` do nothing, so owners' tools can't connect | `RconThread`, `QueryThreadGs4`, `ManagementServer` | `horizon-server-files/src/properties.rs` fields with no reader outside the crate (only `examples/probe/server_files_probe.rs`) | L | audit |
 | 31 | Other ignored properties: `rate-limit` (packet-rate kick), `max-world-size`, `max-chained-neighbor-updates`, `max-tick-time` (watchdog), `broadcast-rcon-to-ops`, `initial-enabled-packs` and `initial-disabled-packs`, `region-file-compression`, `sync-chunk-writes`, `enable-jmx-monitoring`, `text-filtering-config`/`-version`. `function-permission-level` is fixed (`8ec12d527`) | `DedicatedServerProperties` readers | `properties.rs` fields with no reader | M | audit, fperm |
+| 119 | The console prints command feedback with a `System chat: ` prefix, and debug lines (`mobs: ... speculative ticks ...`, `dropped items: N`) on stdout; vanilla prints the feedback bare and no such lines | `MinecraftServer#sendSystemMessage` (logs the plain text) | `game/dedicated.rs:917` (the system-chat log) and the debug prints. Seen live with the client rig | S | rig |
 | 64 | Data packs load on the first tick, so their load errors are logged after `Done`; vanilla logs them before. Content is identical | `MinecraftServer` loads `ReloadableServerResources` before the server starts | `game/dedicated.rs`, `datapack.rs` `DataStore::load` | S | fperm |
 | 65 | The floating kick departs from vanilla in two small ways: a block in a chunk the server doesn't have counts as solid (nobody is kicked over chunks the server can't see), and the fly counter also resets on the hub's correction teleports (vanilla only in `teleportTo`) | `ServerGamePacketListenerImpl#tickPlayer`, `#noBlocksAround` | `lan/hub/player_meta.rs:315` `update_floating` | S | A |
 
