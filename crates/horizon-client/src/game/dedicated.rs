@@ -1007,7 +1007,10 @@ impl Game<'_> {
                 };
                 let conns: Vec<u32> = self.lan.as_ref().map_or(Vec::new(), |h| {
                     let guests = h.hub.guests.iter();
-                    guests.filter(|g| g.uuid == user.id).map(|g| g.conn).collect()
+                    guests
+                        .filter(|g| g.uuid == user.id)
+                        .map(|g| g.conn)
+                        .collect()
                 });
                 let mut kicked = false;
                 for conn in conns {
