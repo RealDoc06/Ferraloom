@@ -20,10 +20,10 @@ public final class Bridge {
     /**
      * Bit {@code i % 64} of word {@code i / 64} of {@link #tick}'s answer:
      * {@code EVENTS[i]} has listeners. The bits are {@code Event}'s in
-     * src/events.rs; each area keeps its own range (docs/ferraloom/plugins.md,
-     * "Fan-out") and a word of its own past the first: inventory 64-127,
-     * players 128-191, blocks 192-255, entities 256-319, server 320-383,
-     * worlds 384-447. Index 63 is not an event: {@link #COMMANDS_CHANGED}.
+     * src/events.rs, all in the first word today; the other words are room
+     * for an area that outgrows it: inventory 64-127, players 128-191, blocks
+     * 192-255, entities 256-319, server 320-383, worlds 384-447. Index 63 is
+     * not an event: {@link #COMMANDS_CHANGED}.
      */
     private static final HandlerList[] EVENTS = new HandlerList[7 * 64];
 

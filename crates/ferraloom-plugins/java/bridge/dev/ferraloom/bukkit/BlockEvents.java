@@ -184,7 +184,7 @@ public final class BlockEvents {
     public static int[] explode(int world, int x, int y, int z, int state, float yield, int[] blocks) {
         FerraloomWorld in = Bridge.server.world(world);
         if (in == null) {
-            return null;
+            return unchanged(yield, blocks);
         }
         try {
             List<Block> list = new ArrayList<>();
@@ -208,10 +208,15 @@ public final class BlockEvents {
             return out;
         } catch (Throwable ex) {
             Bridge.log(ex, "an explosion");
-            int[] out = new int[1 + blocks.length];
-            out[0] = Float.floatToRawIntBits(yield);
-            System.arraycopy(blocks, 0, out, 1, blocks.length);
-            return out;
+            return unchanged(yield, blocks);
         }
+    }
+
+    /** {@link #explode}'s answer for an explosion left as it was. */
+    private static int[] unchanged(float yield, int[] blocks) {
+        int[] out = new int[1 + blocks.length];
+        out[0] = Float.floatToRawIntBits(yield);
+        System.arraycopy(blocks, 0, out, 1, blocks.length);
+        return out;
     }
 }

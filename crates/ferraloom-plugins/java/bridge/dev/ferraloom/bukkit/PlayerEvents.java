@@ -305,7 +305,10 @@ public final class PlayerEvents {
         if (call(event)) {
             return null;
         }
-        return event.getMessage().substring(1);
+        // A listener's line may come without its slash; an empty one runs the original.
+        String message = event.getMessage();
+        String run = message.startsWith("/") ? message.substring(1) : message;
+        return run.isEmpty() ? line : run;
     }
 
     /** Player.chat of a command: the preprocess event, then a plugin's command or vanilla's. */

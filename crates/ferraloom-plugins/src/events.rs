@@ -147,10 +147,10 @@ impl Event {
 }
 
 /// How many words of bits there are: event `e` is bit `e % 64` of word
-/// `e / 64`. Word 0 holds the first ranges (its bit 63 is Java's "the command
-/// labels changed", never latched here); each area then has a word of its
-/// own: inventory 64-127, players 128-191, blocks 192-255, entities 256-319,
-/// server 320-383, worlds 384-447.
+/// `e / 64`. Every event is in word 0 today (its bit 63 is Java's "the
+/// command labels changed", never latched here); the other words are room
+/// for an area that outgrows it: inventory 64-127, players 128-191, blocks
+/// 192-255, entities 256-319, server 320-383, worlds 384-447.
 pub(crate) const WORDS: usize = 7;
 
 /// Whether a plugin listens to any of `events` this tick. With a constant

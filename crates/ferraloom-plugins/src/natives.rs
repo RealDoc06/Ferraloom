@@ -116,13 +116,16 @@ pub(crate) fn halves(id: PlayerId) -> (jlong, jlong) {
 pub(crate) enum Fail {
     /// Not on the server thread inside a call: `IllegalStateException` naming the API method.
     NoHost(&'static str),
-    /// A JNI call failed; its Java exception, if any, is pending already.
+    /// The native threw its exception already, or answers the default.
     Jni,
+    /// A JNI call failed: its Java exception is pending, or, when none is
+    /// (a `null` where a string is read), one is thrown with its text.
+    Error(jni::errors::Error),
 }
 
 impl From<jni::errors::Error> for Fail {
-    fn from(_: jni::errors::Error) -> Self {
-        Fail::Jni
+    fn from(e: jni::errors::Error) -> Self {
+        Fail::Error(e)
     }
 }
 
@@ -142,6 +145,18 @@ pub(crate) fn guard<R: Copy>(
             default
         }
         Ok(Err(Fail::Jni)) => default,
+        Ok(Err(Fail::Error(e))) => {
+            if !env.exception_check().unwrap_or(true) {
+                let class = match e {
+                    jni::errors::Error::NullPtr(_) | jni::errors::Error::NullDeref(_) => {
+                        "java/lang/NullPointerException"
+                    }
+                    _ => "java/lang/IllegalArgumentException",
+                };
+                let _ = env.throw_new(class, e.to_string());
+            }
+            default
+        }
         Err(panic) => {
             let what = panic
                 .downcast_ref::<&str>()

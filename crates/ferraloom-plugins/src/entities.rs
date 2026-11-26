@@ -376,7 +376,10 @@ fn object<'local>(env: &mut JNIEnv<'local>, who: Named) -> Result<JObject<'local
     let events = EVENTS.get().ok_or(Fail::Jni)?;
     let who = actor(env, Some(who))?;
     // SAFETY: `of`'s signature in `load`.
-    Ok(unsafe { events.invoke(env, OF, ReturnType::Object, &args3(&who)) }?.l()?)
+    let out = unsafe { events.invoke(env, OF, ReturnType::Object, &args3(&who)) };
+    // The kind's string, so `entities::list`'s loop leaks no reference per entity.
+    env.delete_local_ref(who.2)?;
+    Ok(out?.l()?)
 }
 
 /// A damage about to be dealt, for [`entity_damage`].
