@@ -46,7 +46,11 @@ fn network(id: &str, tag: &Tag) -> Option<(i32, Component)> {
     let value = match id {
         "minecraft:custom_data" => (component::CUSTOM_DATA, Component::Nbt(tag.clone())),
         "minecraft:lore" => match tag {
-            Tag::List(lines) => (component::LORE, Component::Lore(lines.clone())),
+            // ItemLore.MAX_LINES: the client's codec refuses a longer list.
+            Tag::List(lines) => {
+                let lines = lines.iter().take(256).cloned().collect();
+                (component::LORE, Component::Lore(lines))
+            }
             _ => return None,
         },
         "minecraft:max_stack_size" => (component::MAX_STACK_SIZE, Component::Int(int(tag)?)),
