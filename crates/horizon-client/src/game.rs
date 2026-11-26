@@ -3800,22 +3800,24 @@ impl Game<'_> {
                     .res
                     .items()
                     .correct_for_drops(held.as_ref(), &facts.name);
-            // Ferraloom: a BlockBreakEvent may keep the drops back (game/plugins/blocks.rs).
-            if harvest && self.plugin_break_drops() {
+            if harvest {
                 // Block.playerDestroy: the mined statistic, the exhaustion and the drops.
                 self.stats.add("mined", &facts.name, 1);
                 if let Some(p) = self.player.as_mut() {
                     p.cause_food_exhaustion(0.005);
                 }
-                let drops = self.block_loot_at(pos, state, held.as_ref());
+                // Ferraloom: a BlockBreakEvent may keep the items back (game/plugins/blocks.rs),
+                // only them, as CraftBukkit's dropResources with `dropItems` false.
+                if self.plugin_break_drops() {
+                    for d in self.block_loot_at(pos, state, held.as_ref()) {
+                        if &*d.item != "minecraft:air" {
+                            self.pop_resource(pos, d);
+                        }
+                    }
+                }
                 let silk = held
                     .as_ref()
                     .is_some_and(|h| h.enchantment_level("minecraft:silk_touch") > 0);
-                for d in drops {
-                    if &*d.item != "minecraft:air" {
-                        self.pop_resource(pos, d);
-                    }
-                }
                 // BeehiveBlock.playerDestroy: silk touch keeps the bees in.
                 if let Some((hive, (honey, facing))) = hive
                     && !silk
