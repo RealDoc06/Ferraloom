@@ -48,10 +48,11 @@ pub use inventory::{
 pub use lent::{borrow_lent, lend};
 pub use players::{
     Action, Cause, Client, Death, Effect, Field, Interact, Interaction, Joined, LoginResult, Moved,
-    PlayerHost, PlayerState, Show, Toggle, chat, command_preprocess, login, player_changed_world,
-    player_command, player_death, player_game_mode_change, player_interact, player_item_held,
-    player_join, player_kick, player_move, player_quit, player_respawn, player_teleport,
-    player_toggle, plugin_message, serve_logins, snapshots_wanted, store_snapshots,
+    PlayerHost, PlayerState, Show, Toggle, chat, command_preprocess, login, login_abandoned,
+    player_changed_world, player_command, player_death, player_game_mode_change, player_interact,
+    player_item_held, player_join, player_kick, player_move, player_quit, player_respawn,
+    player_teleport, player_toggle, plugin_message, serve_logins, snapshots_wanted,
+    store_snapshots,
 };
 pub use server::{
     Ban, BanTarget, List, PluginBossBar, Profile, ServerHost, ServerLists, WhitelistFlag,

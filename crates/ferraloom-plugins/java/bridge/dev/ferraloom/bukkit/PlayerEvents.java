@@ -142,9 +142,15 @@ public final class PlayerEvents {
             LOGGING_IN.remove(id, player);
             return event.getKickMessage() == null ? "" : event.getKickMessage();
         } catch (Throwable ex) {
+            LOGGING_IN.remove(id);
             Bridge.log(ex, "a player's login");
             return result == 0 ? null : message;
         }
+    }
+
+    /** A login that ended before its join: its pending player is dropped (a newer attempt's too, which join remakes). */
+    public static void abandon(long most, long least) {
+        LOGGING_IN.remove(new UUID(most, least));
     }
 
     /** PlayerList.placeNewPlayer's PlayerJoinEvent: the join message to send, or null for none. */

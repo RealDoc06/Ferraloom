@@ -894,6 +894,8 @@ fn serve_login(
     // verifyLoginAndFinishConnectionSetup: PlayerList.canPlayerLogin, then
     // duplicates and a full server.
     if let Some(reason) = shared.try_admit(address, uuid, &hello.name) {
+        // Ferraloom: a refusal after PlayerLoginEvent let them in leaves no pending player.
+        ferraloom_plugins::login_abandoned(uuid);
         let text = refuse(&mut c, shared, "Server thread", &user, &reason);
         lost(shared, &user, &text);
         return Ok(());
@@ -906,10 +908,12 @@ fn serve_login(
         }
         Ok(None) => {
             shared.release(uuid);
+            ferraloom_plugins::login_abandoned(uuid);
             Ok(())
         }
         Err(err) => {
             shared.release(uuid);
+            ferraloom_plugins::login_abandoned(uuid);
             // ServerConfigurationPacketListenerImpl.onDisconnect.
             let profile = format!("{} ({})", hello.name, uuid_string(uuid));
             lost(shared, &profile, "Disconnected");

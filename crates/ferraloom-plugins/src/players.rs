@@ -485,7 +485,8 @@ const CHANGED_WORLD: usize = 14;
 const ITEM_HELD: usize = 15;
 const PLUGIN_MESSAGE: usize = 16;
 const DEATH: usize = 17;
-const ENTRIES: usize = 18;
+const ABANDON: usize = 18;
+const ENTRIES: usize = 19;
 
 static EVENTS: OnceLock<Entry<ENTRIES>> = OnceLock::new();
 
@@ -557,6 +558,7 @@ pub(crate) fn load(env: &mut JNIEnv) -> jni::errors::Result<()> {
             ("itemHeld", "(JJII)Z".into()),
             ("pluginMessage", sig("(JJ$[B)V")),
             ("death", sig("(JJ$IIZZ)[$")),
+            ("abandon", "(JJ)V".into()),
         ],
     )?;
     let _ = EVENTS.set(entry);
@@ -805,6 +807,19 @@ pub fn login(
     LOGINS_WAITING.store(true, Ordering::Release);
     wait.recv_timeout(LOGIN_WAIT)
         .unwrap_or_else(|_| Some(refused.unwrap_or_else(|| "Took too long to log in".to_owned())))
+}
+
+/// A login that ends before its join (refused after its `PlayerLoginEvent`,
+/// or its connection lost during configuration), on its connection's
+/// thread: the bridge forgets the player object the join would have reused.
+/// Nothing without plugins.
+pub fn login_abandoned(id: PlayerId) {
+    let Some(events) = EVENTS.get() else { return };
+    bridge::call_attached(|env| {
+        // SAFETY: `abandon`'s signature in `load`.
+        unsafe { events.invoke(env, ABANDON, void(), &id_args(id)) }?;
+        Ok(())
+    });
 }
 
 /// The logins waiting for `PlayerLoginEvent`, on the server thread (even
