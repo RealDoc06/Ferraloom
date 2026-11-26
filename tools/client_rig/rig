@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Run one client-rig command on the builder: `tools/client_rig/rig <command> [args]` (see rig.py).
+# rig.py is piped over ssh, so the builder needs no checkout of this branch. Screenshots a command
+# takes (lines `shot: PATH`) are copied to $RIG_SHOTS on this machine, and their local paths printed.
+set -euo pipefail
+host=${RIG_HOST:-ferraloom-builder}
+shots=${RIG_SHOTS:-$HOME/.cache/ferraloom-client-rig/shots}
+[[ $# -eq 0 ]] && set -- --help
+here=$(cd "$(dirname "$0")" && pwd)
+out=$(ssh "$host" "python3 - $(printf '%q ' "$@")" < "$here/rig.py") || { status=$?; echo "$out"; exit $status; }
+echo "$out" | grep -v '^shot: ' || true
+while read -r _ path extra; do
+  mkdir -p "$shots"
+  scp -q "$host:$path" "$shots/"
+  echo "$shots/$(basename "$path") $extra"
+done < <(echo "$out" | grep '^shot: ')
