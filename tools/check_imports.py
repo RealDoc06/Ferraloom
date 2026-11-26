@@ -31,7 +31,7 @@ LINUX_SYSTEM = {
     "libc.so.6", "libm.so.6", "libgcc_s.so.1", "libdl.so.2", "libpthread.so.0", "librt.so.1",
     "ld-linux-x86-64.so.2", "libasound.so.2", "libudev.so.1",
 }
-# The game's sound (cpal) and controllers (gilrs): a desktop has them, a server image may not.
+# What the removed client linked for sound (cpal) and controllers (gilrs): a server image may not have them.
 LINUX_DESKTOP_ONLY = {"libasound.so.2", "libudev.so.1"}
 
 
@@ -140,7 +140,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("binaries", nargs="+")
     parser.add_argument("--server", action="store_true",
-                        help="a server build: not even ALSA or udev (the game's sound and controllers)")
+                        help="a server build: not even ALSA or udev (what the removed client linked)")
     args = parser.parse_args()
     ok = all([check(path, args.server) for path in args.binaries])
     sys.exit(0 if ok else 1)
