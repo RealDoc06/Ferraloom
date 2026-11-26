@@ -15,6 +15,25 @@ static MOD_API_LEVEL: [u8; 27] = horizon_mods::api_level::MARK;
 #[global_allocator]
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
+/// Raises the open-file limit to the hard one, as the JVM does at start (`-XX:+MaxFDLimit`), so vanilla
+/// never meets the usual soft limit of 1024. A server holds a socket per player and a file per open
+/// region: at 500 players that limit made region and entity saves fail with "Too many open files".
+#[cfg(unix)]
+fn raise_open_file_limit() {
+    use rustix::process::{Resource, Rlimit, getrlimit, setrlimit};
+    let limit = getrlimit(Resource::Nofile);
+    if limit.current == limit.maximum {
+        return;
+    }
+    let raised = Rlimit {
+        current: limit.maximum,
+        maximum: limit.maximum,
+    };
+    if let Err(error) = setrlimit(Resource::Nofile, raised) {
+        log::warn!("Open-file limit stays at {:?}: {error}", limit.current);
+    }
+}
+
 fn main() {
     std::hint::black_box(&MOD_API_LEVEL);
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -40,6 +59,10 @@ fn main() {
         // The log's first line names the build, so a bug report that carries the log says which one it was.
         log::info!("Horizon {}", crash::version());
         crash::install(home.clone(), side);
+    }
+    #[cfg(unix)]
+    if dedicated {
+        raise_open_file_limit();
     }
     if let Err(error) = game::run() {
         log::error!("Horizon: {error}");
