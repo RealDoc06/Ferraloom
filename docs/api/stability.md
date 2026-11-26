@@ -17,10 +17,8 @@ promise, how something is deprecated and removed, and the tests that keep old mo
 | API | The version | A user names the line they need |
 | --- | --- | --- |
 | Mods | the WIT package (`horizon:mods@0.1.0`) | `api = "0.1"` in `horizon-mod.toml` |
-| Agent control | the control protocol's version (planned: a `hello` reply and MCP `serverInfo`) | `horizon-ctl --api 1` (planned) |
 | Server control API | the path (`/api/v1/`) | the path |
 | `server.toml` | the file's keys; a key is never renamed in place | nothing: old files keep loading |
-| Launcher commands | the command names and their `--json` output | nothing |
 | Data formats | a `version` or `schema` field in the file | the reader rejects versions newer than it knows |
 
 ## What counts as a breaking change
@@ -56,14 +54,14 @@ Every part of an API has one level, shown in its reference and its surface page.
 
 | | Experimental | Preview | Stable |
 | --- | --- | --- | --- |
-| Who may use it | opt-in only (a flag or a manifest field naming it); never in a release default | anyone; marked "preview" where players see it (a mod's row on the Mods page) | anyone |
+| Who may use it | opt-in only (a flag or a manifest field naming it); never in a release default | anyone; marked "preview" in its reference | anyone |
 | May change | in any release, without notice | only at a new line, after a deprecation | only at a new major, after a deprecation |
 | Deprecation window | none | at least 30 days, with one release line serving old and new | at least 180 days, with the old major served beside the new one |
 | Needs | a design note | a generated reference, a guide section, an example, compatibility tests | the same, plus one line of real use without a break |
 
 - **Promotion.** Experimental → preview when it has what the table asks. Preview → stable when real users (a published
-  mod, a host's script, an agent's tool) used it for a whole line and nothing broke. The maintainers' orchestrator
-  proposes the promotion with the evidence (the compatibility tests, the complete docs, that line of use) and Ludovic
+  mod, a host's script, an agent's tool) used it for a whole line and nothing broke. A pull request proposes the
+  promotion with the evidence (the compatibility tests, the complete docs, that line of use) and the maintainer
   approves it.
 - **Horizon-only by design.** An API is stable only for what Horizon itself does; a vanilla concept it exposes (a block
   id, a command, a `server.properties` key) changes when vanilla changes it, with a version port
@@ -74,7 +72,7 @@ Every part of an API has one level, shown in its reference and its surface page.
 1. The pull request that deprecates marks it where it is defined (a `/// Deprecated: use X; goes in 0.3.` doc comment,
    WIT's `@deprecated`, a `deprecated` field in a tool's schema) and adds the replacement in the same release.
 2. The reference shows it as deprecated, and the surface page's changelog says what replaces it and when it goes.
-3. Using it logs one warning per mod, session or client, naming the replacement; it keeps working.
+3. Using it logs one warning per mod or session, naming the replacement; it keeps working.
 4. It is removed only after the window, and only at the next line (preview) or major (stable).
 5. A line or major that is no longer served is refused with a clear message (`needs API 0.1; this Horizon serves 0.3
    and 0.4`), never loaded half-way.
@@ -86,9 +84,7 @@ Every preview and stable API has tests that run old users against the current co
 | API | The test |
 | --- | --- |
 | Mods | a test mod per served line, built from source against that line's WIT and SDK, loaded by today's runtime with expected output (`crates/horizon-mods/tests/`); a line is served as long as its test mod passes |
-| Agent control | a transcript per protocol version: commands and the reply keys each must have |
 | Server | `api::ROUTES` against `route()` (generated reference); a `server.toml` from each release line parses to the same settings; golden replies per endpoint |
-| Launcher | the generated reference; golden `--json` output per command |
 | Data formats | a sample file of every version a reader accepts, read by today's reader |
 
 The generated references are the API's own diff: a pull request that changes an API changes its reference, and the
@@ -103,39 +99,13 @@ Deprecations and breaking changes are in bold. The release notes of the game rel
 
 | Part | Level | Version |
 | --- | --- | --- |
-| Mod API: `log`, `game`, `chat`, `hud`, `storage`, `command`, `events` | preview | 0.1.0 |
-| Mod API: `ui`, `ui-events` (a mod's screens and settings page) | experimental | manifest `experimental = ["ui"]` |
-| Mod API: `render` (HUD shapes, camera shake and zoom; drawn by the game, no mod shaders) | experimental | manifest `experimental = ["render"]` |
-| Mod API: `input` (claimed items' use, the mod's keys, the mouse wheel) | experimental | manifest `experimental = ["input"]` |
+| Mod API, client world: `log`, `game`, `chat`, `hud`, `storage`, `command`, `events` (preview) and `ui`, `render`, `input`, `recipes` (experimental) | no host: they ran in Horizon's game window, removed in November 2026 | 0.1.0 |
 | Content mods (`registries`: data-driven blocks and items) | preview | manifest `api = "0.2"` |
 | Server mods: world `horizon-server-mod`, `players`, `server-events`, `world`, typed `server-command`s | experimental | manifest `api = "0.3"` |
 | Script mods (Lua run by an interpreter mod, [mods.md](mods.md#ways-in)) | not started | |
-| `cargo horizon-mod` (`new`, `build`, `run`), `horizon-mod-sdk` | preview | 0.1.0 |
-| Shader API | not started | |
-| `horizon-ctl` commands and MCP tools | preview | none yet (unversioned) |
-| The game's own control-socket commands outside `horizon-ctl`'s table (test hooks) | experimental | |
+| `cargo horizon-mod` (`new`, `build`, `test`, `check`; `run` needs the removed `--dev-mod`), `horizon-mod-sdk` | preview | 0.1.0 |
 | `horizon-server` commands, `server.toml` | stable | `horizon-server --version` |
 | Server control API | stable | `/api/v1` |
-| `horizon-launcher` commands and MCP tools | preview | none yet (unversioned) |
 | Benchmark report | stable | `"version": 1` |
-| Telemetry batch and consent | stable | `"schema": 1`, consent `2` |
 | `horizon-graphics.txt`, `horizon-extras.txt`, `horizon-mods.txt` | preview | none |
 | `SHA256SUMS` and `SHA256SUMS.sig` | stable | |
-
-### The experimental mod APIs' choices
-
-- **What a mod may take from the game.** `input.claim-wheel` is the one input a mod consumes: while it holds the
-  wheel, the steps are its `wheel` events and the hotbar doesn't move. `claim-items` takes the use button only on the
-  items it names. A mod's keys (`register-key`) never consume: vanilla's mapping on the same key still runs. Whether
-  keys may consume too is decided before `input` becomes preview.
-- **`input`'s `wheel` event** is a new case in a variant the game sends, so it breaks mods built before it (allowed
-  because `input` is experimental): an `input` mod that calls `poll` needs a rebuild against the new WIT.
-- **`render.set-minimap`** draws a map the game makes, not one a mod composes: reading the blocks around the player
-  for a map image costs too much through hook calls, so the game keeps the tiles (vanilla's map colours) and the mod
-  picks the corner, side, scale and shape. One map shows at a time, the first loaded mod's. It is a new function and a
-  new type, so mods built before it keep loading.
-- **`render.set-far-terrain`** turns on the game's own distant terrain, not one a mod builds: sampling the generator
-  and meshing thousands of far tiles runs on the game's workers within its frame and upload budgets, which no hook
-  call could match. The mod picks the distance (64 to 1024 chunks, capped lower on integrated graphics as LOD Distance
-  is) and Far Detail's Reduced. The player's own LOD Distance, when on, wins; one far terrain shows at a time, the
-  first loaded mod's.

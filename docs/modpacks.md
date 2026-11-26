@@ -11,6 +11,10 @@ This page is the design. It builds on [mods.md](mods.md) (the mod API, WASM in w
 why Java jars cannot run in Horizon, so we port instead). The ATM10 inventory behind the numbers below is
 [modpacks/atm10-mods.csv](modpacks/atm10-mods.csv).
 
+Written for Horizon when it was a whole game. Its client, launcher (with the mod browser and "Import modpack")
+and `horizon-ctl` were removed in November 2026, so the FPS goals, the client tier and the launcher steps below
+are history. What remains here: `horizon-port-pack` (the CLI) and content mods, which a Ferraloom server loads.
+
 ## In one picture
 
 ```
@@ -134,7 +138,7 @@ derivative work. These rules are part of the pipeline, not advice to users:
 2. **The licence is recorded per mod** in the inventory (`license` from `mods.toml` or
    `fabric.mod.json`, plus Modrinth's SPDX id where one exists) and travels with the port into
    its `horizon-mod.toml` (`ported-from = { id, version, license, url }`).
-3. **Publishing needs permission.** A port can go into a mod index, the launcher browser or a
+3. **Publishing needs permission.** A port can go into a mod index or a
    server's download list only if its licence allows redistributing derivatives (permissive,
    or copyleft with the port under the same licence and its source published) or the author
    has given written permission, recorded in the index entry. The tooling refuses to package
@@ -178,7 +182,7 @@ frame, chat and command hooks. Server mods do not run yet. What a content pack n
 | Custom renderers and animated models (block-entity, entity, item; GeckoLib's format) | — | deep | 0.5 | data models (Bedrock geometry + animations), plus a budgeted draw-list interface for the rest |
 | Dimensions: dimension types, levels, chunk generators | — | about 10 (Twilight Forest, Aether, Ad Astra, Undergarden, ...) | 0.5 | JSON part with worldgen; custom generators as mod code |
 | New hooks into vanilla behaviour (what Mixins do) | — | deep | as asked | each becomes a named hook, added for everyone |
-| Client interfaces: `keys`, `target`, `inventory-read`, `ui`, `render`, `world-read` | planned | client tier (38) | 0.2–0.4 | as in [mods.md](mods.md#planned-interfaces) |
+| Client interfaces: `keys`, `target`, `inventory-read`, `ui`, `render`, `world-read` | dropped with the client | client tier (38) | none | |
 
 Two rules from mods.md stay: **the sandbox** (no files, sockets or processes; memory cap; fuel
 per call; a crashing mod stops alone) and **free when unused** (no mods means vanilla code
@@ -242,8 +246,8 @@ How the game loads them, without touching vanilla's path:
   listed namespace another mod that is on already owns is left out, with both named in the log.
   `horizon-port-pack` avoids that inside a pack: a namespace two carried mods both claim (YUNG's
   structure mods all ship files under `yungsapi`, the namespace of YUNG's API, whose own jar isn't
-  carried) is left to none of them, and its files stay outside. The launcher applies the game's
-  rule before it starts a pack (`pipeline::loadable`) and lists what it left off.
+  carried) is left to none of them, and its files stay outside. `pipeline::loadable` applies the game's
+  rule before a pack starts and lists what it leaves off.
 - The overlay is built on the first start with a set of mods and kept for later starts. A stamp
   (`horizon-mod-content.stamp`) hashes the game executable, the base tables and every mod file's
   size and mtime. Adding, removing or editing a mod, or a new build of Horizon, rebuilds it. For
@@ -272,7 +276,7 @@ How the game loads them, without touching vanilla's path:
 
 ## The pipeline: `horizon-port-pack`
 
-A Rust tool in this repo (`crates/horizon-port-pack`, a CLI the launcher also calls), modelled
+A Rust tool in this repo (`crates/horizon-port-pack`, a CLI), modelled
 on the version-port pipeline (`tools/version_port.py`: detect, diff, regen, harnesses, report,
 publish). Each step reads and writes files in a work directory, so it can be rerun, resumed and
 inspected:
@@ -292,8 +296,7 @@ inspected:
 ```
 
 **Status.** `import`, `inventory`, `fetch`, `carry` and `report` run today, and `port` runs
-them all for what a player's machine can port (content mods of the data tier), as the
-launcher's "Import modpack" does:
+them all for what a player's machine can port (content mods of the data tier):
 
 ```
 cargo run -p horizon-port-pack -- import ~/Downloads/pack.mrpack ~/.horizon/ports/pack
@@ -855,7 +858,8 @@ In scope (each is a PR or a small stack):
    with its harness against the NeoForge 1.21.1 oracle. The ports stay local even though these
    licences would allow publishing: we ask first.
 5. **Launcher:** "Import modpack" (`.mrpack` / CurseForge zip / instance) showing the
-   coverage report (ATM10's first), and "Port and play" for what is portable.
+   coverage report (ATM10's first), and "Port and play" for what is portable. Built in Horizon's launcher,
+   removed with it.
 6. **Measured:** load time, RAM and FPS of that pack on NeoForge 1.21.1 against Horizon, with
    the full ATM10 on NeoForge as the reference row.
 
@@ -913,7 +917,7 @@ What is missing, ranked by how much a player notices:
 6. **Smaller gaps:** Mo' Structures' mixin that keeps lakes out of its structures and its two
    block-ageing processors, and the 5 missing block models.
 
-### Three packs through the mod browser, measured
+### Three packs through the mod browser, measured (Horizon's launcher and game, since removed)
 
 2026-10-22, Mac mini M4 Pro (offscreen, a debug launcher, release-profile `horizon-port-pack` and game), while
 other sessions kept the CPU at 85 to 93 %, so times are upper bounds. The two Modrinth packs were imported with
@@ -938,7 +942,7 @@ Adventure lost three of YUNG's mods at start ("both use the namespace yungsapi")
 the mods that need porting (not counting performance mods and libraries), 2 of 81 ported partly, 20 of 66 and 42 of
 375. Every ported mod is Partial: their Java code (block entities, entities, Mixins) doesn't come along.
 
-## Open questions for Ludovic
+## Open questions (upstream's, October 2026)
 
 - Contacting authors of permissively licensed mods to publish ports (none contacted).
 - Whether players should run code-port agents themselves (their own Claude Code or Codex
