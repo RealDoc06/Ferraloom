@@ -62,6 +62,8 @@ public final class PlayerEvents {
     });
     /** Players between PlayerLoginEvent and their join, whose join reuses the object (CraftBukkit does). */
     private static final Map<UUID, FerraloomPlayer> LOGGING_IN = new ConcurrentHashMap<>();
+    /** A pending player older than this lost its join (a path that never abandoned it): the next login drops it. */
+    private static final long STALE_NANOS = TimeUnit.MINUTES.toNanos(5);
     private static final double[] CANCELLED = new double[0];
     /** CraftPlayer's limit on the channels a player registers. */
     private static final int MAX_CHANNELS = 128;
@@ -127,13 +129,17 @@ public final class PlayerEvents {
 
     /**
      * PlayerList.canPlayerLogin's PlayerLoginEvent, with vanilla's verdict ({@code result}, PlayerLoginEvent.Result's
-     * ordinal, and its message): the kick message, or null to let them in. Makes the player's object.
+     * ordinal, and its message): the kick message, or null to let them in. Makes the player's object, pending
+     * under {@code attempt} (src/players.rs's login attempt id) until its join.
      */
     public static String login(long most, long least, String name, String ip, String hostname, boolean op, int result,
-            String message) {
+            String message, long attempt) {
         UUID id = new UUID(most, least);
         try {
             FerraloomPlayer player = new FerraloomPlayer(Bridge.server, id, name, op);
+            player.attempt = attempt;
+            player.attemptNanos = System.nanoTime();
+            LOGGING_IN.values().removeIf(p -> player.attemptNanos - p.attemptNanos > STALE_NANOS);
             LOGGING_IN.put(id, player);
             InetAddress address = InetAddress.getByName(ip);
             PlayerLoginEvent event = new PlayerLoginEvent(player, hostname, address,
@@ -145,15 +151,15 @@ public final class PlayerEvents {
             LOGGING_IN.remove(id, player);
             return event.getKickMessage() == null ? "" : event.getKickMessage();
         } catch (Throwable ex) {
-            LOGGING_IN.remove(id);
+            abandon(most, least, attempt);
             Bridge.log(ex, "a player's login");
             return result == 0 ? null : message;
         }
     }
 
-    /** A login that ended before its join: its pending player is dropped (a newer attempt's too, which join remakes). */
-    public static void abandon(long most, long least) {
-        LOGGING_IN.remove(new UUID(most, least));
+    /** A login attempt that ended before its join: its pending player is dropped, not another attempt's. */
+    public static void abandon(long most, long least, long attempt) {
+        LOGGING_IN.computeIfPresent(new UUID(most, least), (id, p) -> p.attempt == attempt ? null : p);
     }
 
     /** PlayerList.placeNewPlayer's PlayerJoinEvent: the join message to send, or null for none. */

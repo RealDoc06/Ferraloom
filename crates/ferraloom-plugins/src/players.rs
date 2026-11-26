@@ -20,10 +20,11 @@ use jni::{
     sys::{JNI_FALSE, jboolean, jdouble, jdoubleArray, jfloat, jint, jlong, jobjectArray, jvalue},
 };
 use std::{
+    cell::Cell,
     ffi::c_void,
     sync::{
         Condvar, Mutex, OnceLock,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicI64, Ordering},
         mpsc,
     },
     time::{Duration, Instant},
@@ -547,7 +548,7 @@ pub(crate) fn load(env: &mut JNIEnv) -> jni::errors::Result<()> {
             ("command", sig("(JJ$)Z")),
             ("preprocess", sig("(JJ$)$")),
             ("preLogin", sig("(JJ$$Z)$")),
-            ("login", sig("(JJ$$$ZI$)$")),
+            ("login", sig("(JJ$$$ZI$J)$")),
             ("kick", sig("(JJ$$)[$")),
             ("move", format!("(JJ{LOC}{LOC})[D")),
             ("teleport", format!("(JJ{LOC}{LOC}I)[D")),
@@ -559,7 +560,7 @@ pub(crate) fn load(env: &mut JNIEnv) -> jni::errors::Result<()> {
             ("itemHeld", "(JJII)Z".into()),
             ("pluginMessage", sig("(JJ$[B)V")),
             ("death", sig("(JJ$IIZZ)[$")),
-            ("abandon", "(JJ)V".into()),
+            ("abandon", "(JJJ)V".into()),
         ],
     )?;
     let _ = EVENTS.set(entry);
@@ -749,6 +750,8 @@ struct Login {
     message: String,
     /// When it started waiting: past [`LOGIN_WAIT`] it was refused already.
     asked: Instant,
+    /// Its attempt id, which Java keeps on the pending player.
+    attempt: i64,
     answer: mpsc::SyncSender<Option<String>>,
 }
 
@@ -759,6 +762,15 @@ static LOGINS_WAITING: AtomicBool = AtomicBool::new(false);
 /// How long a login waits for the server thread (the server stopping, say)
 /// before it is refused: a listener that would have refused it never ran.
 const LOGIN_WAIT: Duration = Duration::from_secs(10);
+
+/// Draws login attempt ids; 0 is none.
+static ATTEMPTS: AtomicI64 = AtomicI64::new(1);
+
+thread_local! {
+    /// The login attempt this connection thread queued, 0 for none: what
+    /// [`login_abandoned`] drops.
+    static ATTEMPT: Cell<i64> = const { Cell::new(0) };
+}
 
 /// A login on its connection's thread, after authentication:
 /// `AsyncPlayerPreLoginEvent` here, then `PlayerLoginEvent` on the server
@@ -775,6 +787,7 @@ pub fn login(
     message: &str,
 ) -> Option<String> {
     let refused = (vanilla != LoginResult::Allowed).then(|| message.to_owned());
+    ATTEMPT.set(0);
     let Some(events) = EVENTS.get() else {
         return refused;
     };
@@ -790,6 +803,8 @@ pub fn login(
     if let Some(Some(kick)) = pre {
         return Some(kick);
     }
+    let attempt = ATTEMPTS.fetch_add(1, Ordering::Relaxed);
+    ATTEMPT.set(attempt);
     let (answer, wait) = mpsc::sync_channel(1);
     LOGINS
         .lock()
@@ -803,6 +818,7 @@ pub fn login(
             vanilla,
             message: message.to_owned(),
             asked: Instant::now(),
+            attempt,
             answer,
         });
     LOGINS_WAITING.store(true, Ordering::Release);
@@ -811,14 +827,25 @@ pub fn login(
 }
 
 /// A login that ends before its join (refused after its `PlayerLoginEvent`,
-/// or its connection lost during configuration), on its connection's
-/// thread: the bridge forgets the player object the join would have reused.
-/// Nothing without plugins.
+/// or its connection lost during configuration), on the connection's thread
+/// that ran [`login`]: the bridge forgets the player object this attempt's
+/// join would have reused, not another attempt's. Nothing when this thread
+/// queued no login, or without plugins.
 pub fn login_abandoned(id: PlayerId) {
+    let attempt = ATTEMPT.replace(0);
+    if attempt != 0 {
+        abandon(id, attempt);
+    }
+}
+
+/// Drops `attempt`'s pending player, if it is still the one under `id`.
+fn abandon(id: PlayerId, attempt: i64) {
     let Some(events) = EVENTS.get() else { return };
     bridge::call_attached(|env| {
+        let [most, least] = id_args(id);
+        let args = [most, least, JValue::Long(attempt).as_jni()];
         // SAFETY: `abandon`'s signature in `load`.
-        unsafe { events.invoke(env, ABANDON, void(), &id_args(id)) }?;
+        unsafe { events.invoke(env, ABANDON, void(), &args) }?;
         Ok(())
     });
 }
@@ -852,12 +879,16 @@ pub fn serve_logins(host: &mut dyn crate::PluginHost) {
                 JValue::Bool(l.op.into()).as_jni(),
                 JValue::Int(l.vanilla as i32).as_jni(),
                 obj(&message),
+                JValue::Long(l.attempt).as_jni(),
             ];
             // SAFETY: `login`'s signature in `load`.
             let out = unsafe { events.invoke(env, LOGIN, ReturnType::Object, &args) }?;
             string_or_none(env, out)
         });
-        let _ = l.answer.send(verdict.unwrap_or(refused));
+        // Its connection stopped waiting meanwhile: nothing will join.
+        if l.answer.send(verdict.unwrap_or(refused)).is_err() {
+            abandon(l.id, l.attempt);
+        }
     }
 }
 

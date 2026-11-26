@@ -94,6 +94,9 @@ final class FerraloomPlayer extends StubPlayer {
     private volatile String footer;
     /** The plugin channels the client registered (minecraft:register), which sendPluginMessage sends on. */
     final Set<String> channels = ConcurrentHashMap.newKeySet();
+    /** The login attempt that made this player and when (System.nanoTime), while it waits for its join. */
+    long attempt;
+    long attemptNanos;
     private final String metadata;
     private final Spigot spigot = new Spigot() {
         @Override
