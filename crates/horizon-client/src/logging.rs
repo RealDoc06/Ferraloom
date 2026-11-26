@@ -525,12 +525,7 @@ mod tests {
     fn lines_look_like_log4js_pattern() {
         let time = chrono::TimeZone::with_ymd_and_hms(&Local, 2026, 10, 14, 9, 5, 7).unwrap();
         assert_eq!(
-            format_line(
-                &time,
-                "Server thread",
-                log::Level::Info,
-                "Done (1.200s)!"
-            ),
+            format_line(&time, "Server thread", log::Level::Info, "Done (1.200s)!"),
             "[09:05:07] [Server thread/INFO]: Done (1.200s)!"
         );
         assert_eq!(

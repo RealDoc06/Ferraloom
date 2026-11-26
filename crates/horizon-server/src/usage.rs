@@ -32,9 +32,9 @@ pub fn cpu_seconds(pid: u32) -> Option<f64> {
             Some((d, rest)) => (rest, d.parse::<f64>().ok()?),
             None => (time.as_str(), 0.0),
         };
-        let seconds = rest
-            .split(':')
-            .try_fold(0.0, |acc, part| part.parse::<f64>().ok().map(|v| acc * 60.0 + v))?;
+        let seconds = rest.split(':').try_fold(0.0, |acc, part| {
+            part.parse::<f64>().ok().map(|v| acc * 60.0 + v)
+        })?;
         return Some(days * 86_400.0 + seconds);
     }
     // utime and stime, fields 14 and 15, in clock ticks (100 per second on Linux).
