@@ -17,7 +17,7 @@ use horizon_items::{item_nbt, items::ItemStack};
 use horizon_world::nbt::{self, Limits, Tag};
 use jni::{
     JNIEnv,
-    objects::{JByteArray, JClass, JObject, JString, JValue},
+    objects::{JByteArray, JClass, JLongArray, JObject, JString, JValue},
     signature::{Primitive, ReturnType},
     sys::{JNI_FALSE, jboolean, jbyteArray, jint, jintArray, jlong, jstring},
 };
@@ -146,6 +146,13 @@ pub trait InventoryHost {
     }
     /// Sends the player's whole inventory and open menu again (`Player.updateInventory`).
     fn resend_inventory(&mut self, _player: PlayerId) {}
+    /// The top of the container menu the player has open now and its
+    /// `InventoryType` name; none for their own inventory, or for a menu the
+    /// game runs itself (a crafting table, trading...). The bridge's record
+    /// of the open menu holds only while it names this.
+    fn open_menu(&mut self, _player: PlayerId) -> Option<(Holder, &'static str)> {
+        None
+    }
     /// What `ItemType` answers of an item (`minecraft:stone`); none for an unknown one.
     fn item_facts(&mut self, _item: &str) -> Option<ItemFacts> {
         None
@@ -219,6 +226,11 @@ pub(crate) fn load(env: &mut JNIEnv) -> jni::errors::Result<()> {
             ),
             ("close", "(JJ)Z", close_container as *mut c_void),
             ("resend", "(JJ)V", resend as *mut c_void),
+            (
+                "openMenu",
+                "(JJ[J)Ljava/lang/String;",
+                open_menu as *mut c_void,
+            ),
             (
                 "itemFacts",
                 "(Ljava/lang/String;)[I",
@@ -748,6 +760,27 @@ extern "system" fn resend(mut env: JNIEnv, _: JClass, most: jlong, least: jlong)
         with_host(|h| h.resend_inventory(player_id(most, least)))
             .ok_or(Fail::NoHost("Player.updateInventory"))?;
         Ok(())
+    })
+}
+
+/// The player's open container menu: its `InventoryType` name, its holder's
+/// `(kind, a, b)` written into `at`; null for none.
+extern "system" fn open_menu(
+    mut env: JNIEnv,
+    _: JClass,
+    most: jlong,
+    least: jlong,
+    at: JLongArray,
+) -> jstring {
+    guard(&mut env, std::ptr::null_mut(), |env| {
+        let open = with_host(|h| h.open_menu(player_id(most, least)))
+            .ok_or(Fail::NoHost("HumanEntity.getOpenInventory"))?;
+        let Some((top, top_type)) = open else {
+            return Ok(std::ptr::null_mut());
+        };
+        let (kind, a, b) = top.to_java();
+        env.set_long_array_region(&at, 0, &[jlong::from(kind), a, b])?;
+        Ok(env.new_string(top_type)?.into_raw())
     })
 }
 

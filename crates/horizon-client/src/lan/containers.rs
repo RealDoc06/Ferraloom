@@ -307,6 +307,7 @@ impl Hub {
             sent: Vec::new(),
             drag: None,
             sent_data: Vec::new(),
+            inventory_type: "",
         });
         self.send_menu_content(i, items);
     }

@@ -1204,6 +1204,7 @@ impl Game<'_> {
             slots,
             items,
         );
+        self.plugin_name_menu(host, conn);
         true
     }
 

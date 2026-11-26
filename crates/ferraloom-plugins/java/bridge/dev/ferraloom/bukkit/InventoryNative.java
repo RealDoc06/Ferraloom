@@ -45,6 +45,12 @@ final class InventoryNative {
     /** Closes the player's open menu; false when none was open. */
     static native boolean close(long most, long least);
 
+    /**
+     * The container menu the player has open now: its InventoryType's name, its top's {@code (kind, a, b)} written
+     * into {@code at}; null for none (their own inventory, or a menu the server runs itself, a crafting table...).
+     */
+    static native String openMenu(long most, long least, long[] at);
+
     /** Sends the player's inventory and open menu again. */
     static native void resend(long most, long least);
 

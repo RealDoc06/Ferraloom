@@ -523,6 +523,28 @@ def check_plugins(engine, bot_binary, built, out, scratch):
         log.absent(r'event: close ', log_mark)
         print('GUI closed without a close listener, then an inventory click goes through: ok')
 
+        # A crafting table the player opens over the GUI replaces it: the bridge's open menu
+        # is what the server has open, and an inventory click after the table goes through.
+        table = (11, -50, 11)
+        server.console('setblock {} {} {} minecraft:crafting_table'.format(*table))
+        mark, log_mark = len(bot.out.lines), len(log.lines)
+        bot.send('command ftest gui')
+        bot.out.wait_for(r'^open \d+ Ferraloom GUI$', start=mark)
+        mark = len(bot.out.lines)
+        bot.send('use {} {} {}'.format(*table))
+        _, opened = bot.out.wait_for(r'^open (\d+) container\.crafting$', start=mark)
+        bot.send('command ftest view')
+        bot.out.wait_for(r'^chat view CRAFTING gui=false$', start=mark)
+        bot.send(f'close {opened.split()[1]}')
+        log_mark = len(log.lines)
+        bot.send('click 0 9 0 0')
+        log.wait_for(r'event: click CRAFTING raw=9 LEFT PICKUP_ALL', start=log_mark)
+        bot.send('command ftest cursor')
+        bot.out.wait_for(r'^chat cursor STICK 1$', start=mark)
+        bot.send('click 0 9 0 0')
+        server.console('setblock {} {} {} minecraft:air'.format(*table))
+        print('a crafting table opened over the GUI is the open menu, then an inventory click goes through: ok')
+
         # A cancelled PlayerMoveEvent sends the player back; uncancelled, the move stands.
         bot.send('command ftest freeze on')
         bot.out.wait_for(r'^chat freeze true$')

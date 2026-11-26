@@ -286,6 +286,7 @@ impl InventoryHost for GameHost<'_, '_> {
                 }
             }
             hub.hub.open_container(conn, menu, title, pos, slots, items);
+            game.plugin_name_menu(hub, conn);
             true
         })
         .unwrap_or(false)
@@ -331,6 +332,12 @@ impl InventoryHost for GameHost<'_, '_> {
             compostable: i.compostable.is_some(),
             remainder: i.crafting_remainder.clone(),
         })
+    }
+
+    fn open_menu(&mut self, player: PlayerId) -> Option<(Holder, &'static str)> {
+        let g = self.placed(player)?;
+        let m = g.menu.as_ref()?;
+        Some((holder(g, m.slots), m.inventory_type))
     }
 
     fn resend_inventory(&mut self, player: PlayerId) {
@@ -381,29 +388,26 @@ fn top_type(game: &Game, slots: Slots) -> &'static str {
 }
 
 /// The top of a guest's open menu as Bukkit names it.
-fn top(game: &Game, g: &Guest, window: i32) -> Option<(Holder, &'static str, usize)> {
+fn top(g: &Guest, window: i32) -> Option<(Holder, &'static str, usize)> {
     if window == 0 {
         return Some((Holder::Crafting(g.uuid), "CRAFTING", 5));
     }
     let m = g.menu.as_ref().filter(|m| m.window == window)?;
-    Some((
-        holder(game, g.uuid, m.slots),
-        top_type(game, m.slots),
-        m.size,
-    ))
+    Some((holder(g, m.slots), m.inventory_type, m.size))
 }
 
-/// The holder of player `id`'s menu over `slots`: a single block's container
-/// is the block's, as its InventoryOpenEvent named it.
-fn holder(game: &Game, id: PlayerId, slots: Slots) -> Holder {
+/// The holder of guest `g`'s menu over `slots`: a single block's container
+/// is the block's, as its InventoryOpenEvent named it, in the guest's own
+/// dimension (a change of level reports its close from the next one).
+fn holder(g: &Guest, slots: Slots) -> Holder {
     match slots {
         Slots::Custom(c) => Holder::Custom(c),
-        Slots::Ender => Holder::Ender(id),
+        Slots::Ender => Holder::Ender(g.uuid),
         Slots::Block(key) => Holder::Block {
-            world: super::world_index(game.dim),
+            world: super::world_index(crate::game::Dim::from_id(&g.dimension)),
             pos: [key.0, key.1, key.2],
         },
-        Slots::Double(..) => Holder::Menu(id),
+        Slots::Double(..) => Holder::Menu(g.uuid),
     }
 }
 
@@ -629,7 +633,7 @@ impl Game<'_> {
         let Some(g) = host.hub.guest(conn).filter(|g| g.placed && !g.spectator()) else {
             return false;
         };
-        let Some((top, top_type, size)) = top(self, g, p.container) else {
+        let Some((top, top_type, size)) = top(g, p.container) else {
             return false;
         };
         let (click, action) = self.plugin_click_kind(g, p, size);
@@ -671,7 +675,7 @@ impl Game<'_> {
         let Some(g) = host.hub.guest(conn).filter(|g| g.placed && !g.spectator()) else {
             return false;
         };
-        let Some((top, top_type, size)) = top(self, g, p.container) else {
+        let Some((top, top_type, size)) = top(g, p.container) else {
             return false;
         };
         let drag = if p.container == 0 {
@@ -798,7 +802,11 @@ impl Game<'_> {
         let Some(g) = host.hub.guest(conn).filter(|g| g.placed) else {
             return false;
         };
-        let Some((top, kind, _)) = top(self, g, window) else {
+        // A stale close of the inventory while a container is open closes nothing.
+        if window == 0 && g.menu.is_some() {
+            return false;
+        }
+        let Some((top, kind, _)) = top(g, window) else {
             return false;
         };
         let id = g.uuid;
@@ -818,8 +826,19 @@ impl Game<'_> {
             return None;
         }
         let g = host.hub.guest(conn).filter(|g| g.placed)?;
-        let slots = g.menu.as_ref()?.slots;
-        Some((g.uuid, holder(self, g.uuid, slots), top_type(self, slots)))
+        let m = g.menu.as_ref()?;
+        Some((g.uuid, holder(g, m.slots), m.inventory_type))
+    }
+
+    /// Names the guest's container just opened as Bukkit does, while plugins
+    /// run, for the events and the bridge's questions until it closes.
+    pub(in crate::game) fn plugin_name_menu(&self, host: &mut LanHost, conn: u32) {
+        if !ferraloom_plugins::running() {
+            return;
+        }
+        if let Some(m) = host.hub.guest_mut(conn).and_then(|g| g.menu.as_mut()) {
+            m.inventory_type = top_type(self, m.slots);
+        }
     }
 
     /// The container over `slots` closed because its block went (`HostEvent::MenuGone`).
@@ -829,8 +848,8 @@ impl Game<'_> {
         conn: u32,
         slots: Slots,
     ) {
-        if let Some(id) = host.hub.guest(conn).filter(|g| g.placed).map(|g| g.uuid) {
-            let menu = (id, holder(self, id, slots), top_type(self, slots));
+        if let Some(g) = host.hub.guest(conn).filter(|g| g.placed) {
+            let menu = (g.uuid, holder(g, slots), top_type(self, slots));
             self.plugin_menu_gone(host, menu);
         }
     }

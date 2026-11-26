@@ -35,6 +35,10 @@ pub struct Menu {
     pub drag: Option<(u8, Vec<usize>)>,
     /// The data slots the client was last sent (ContainerSetData), a furnace's progress.
     pub sent_data: Vec<i16>,
+    /// Ferraloom: the Bukkit `InventoryType` of the container, named as it
+    /// opens while plugins run (its block may be gone when it closes); empty
+    /// otherwise.
+    pub inventory_type: &'static str,
 }
 
 /// The y of the key a chest minecart's or chest boat's items are kept under

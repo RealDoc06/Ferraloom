@@ -470,6 +470,10 @@ public final class TestPlugin extends JavaPlugin implements Listener {
                 }
                 sender.sendMessage("closes " + on);
             }
+            case "view" -> {
+                org.bukkit.inventory.InventoryView view = ((Player) sender).getOpenInventory();
+                sender.sendMessage("view " + view.getType() + " gui=" + (view.getTopInventory().getHolder() instanceof Gui));
+            }
             case "cursor" -> {
                 ItemStack cursor = ((Player) sender).getItemOnCursor();
                 sender.sendMessage("cursor " + cursor.getType() + " " + cursor.getAmount());

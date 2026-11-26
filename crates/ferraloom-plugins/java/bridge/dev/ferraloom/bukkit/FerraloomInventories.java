@@ -66,8 +66,10 @@ final class FerraloomInventories {
         private FerraloomPlayerInventory inventory;
         private FerraloomInventory enderChest;
         private FerraloomInventoryView own;
-        /** The menu open over the player's inventory, null for none (their own inventory). */
+        /** The view of the menu open over the player's inventory as last seen: kept while the server names its top. */
         private FerraloomInventoryView open;
+        /** The menu whose close event runs: it reads as closed already. */
+        private FerraloomInventoryView closing;
 
         Of(FerraloomPlayer player) {
             this.player = player;
@@ -104,13 +106,28 @@ final class FerraloomInventories {
             return own;
         }
 
+        /**
+         * The menu open over the player's inventory, null for none (their own, or a menu the server runs itself): the
+         * server says which, so a menu it opened or closed by itself is never missed.
+         */
         FerraloomInventoryView open() {
-            return open;
+            long[] at = new long[3];
+            String type = InventoryNative.openMenu(most(), least(), at);
+            int kind = (int) at[0];
+            if (type == null) {
+                open = null;
+                return null;
+            }
+            if (closing != null && closing.top.is(kind, at[1], at[2])) {
+                return null;
+            }
+            return view(kind, at[1], at[2], type);
         }
 
         /** HumanEntity.getOpenInventory: the open menu, or the player's own. */
         InventoryView openView() {
-            return open != null ? open : own();
+            FerraloomInventoryView view = open();
+            return view != null ? view : own();
         }
 
         /**
@@ -184,35 +201,47 @@ final class FerraloomInventories {
             }
         }
 
-        /**
-         * InventoryCloseEvent for the open menu, which is forgotten and which the server then closes, unless a
-         * listener opened another menu in its place.
-         */
-        private void closeOpen() {
-            FerraloomInventoryView view = open;
-            if (view != null) {
-                open = null;
+        /** InventoryCloseEvent for {@code view}, which reads as closed while it runs. */
+        private void fireClose(FerraloomInventoryView view) {
+            FerraloomInventoryView outer = closing;
+            closing = view;
+            try {
                 Bridge.server.pluginManager.callEvent(new InventoryCloseEvent(view));
-                if (open == null) {
-                    InventoryNative.close(most(), least());
-                }
+            } finally {
+                closing = outer;
             }
         }
 
         /** HumanEntity.closeInventory: the close event, then the server closes the menu, even one it alone knows. */
         void closeInventory() {
-            if (open != null) {
-                closeOpen();
-            } else {
+            FerraloomInventoryView view = open();
+            if (view == null) {
+                InventoryNative.close(most(), least());
+                return;
+            }
+            open = null;
+            fireClose(view);
+            // A listener that opened another menu in its place keeps it.
+            if (open == null) {
                 InventoryNative.close(most(), least());
             }
         }
 
-        /** The server tells: the client closed {@code (kind, a, b)}. */
+        /**
+         * The server tells: {@code (kind, a, b)} closed (the client closed it, or the server did). The view known
+         * is forgotten only when it is that one: another menu may have opened since.
+         */
         void closed(int kind, long a, long b, String type) {
-            FerraloomInventoryView view = view(kind, a, b, type);
-            open = null;
-            Bridge.server.pluginManager.callEvent(new InventoryCloseEvent(view));
+            FerraloomInventoryView view;
+            if (kind == 2) {
+                view = own();
+            } else if (open != null && open.top.is(kind, a, b)) {
+                view = open;
+                open = null;
+            } else {
+                view = new FerraloomInventoryView(player, top(kind, a, b, type));
+            }
+            fireClose(view);
         }
 
         /** The server tells: it is about to open {@code (kind, a, b)} for the player; true when cancelled. */
