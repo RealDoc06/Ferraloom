@@ -112,9 +112,8 @@ interface command {
     /// `line` without its slash; its feedback goes to the chat as if typed.
     run: func(line: string);
     /// `lines` (each without its slash, at most 256 a call) as `run` does,
-    /// but with nothing in the chat: no feedback and no failure. In single
-    /// player and on Horizon's servers, each runs exactly as the player
-    /// typing it would (the same rights), in order, 64 a tick, and the
+    /// but with nothing in the chat: no feedback and no failure. On Horizon's
+    /// servers, each runs exactly as the player typing it would (the same rights), in order, 64 a tick, and the
     /// server logs one line a batch; one that carries a chat message (`say`,
     /// `msg`) is refused. On any other server they go as chat commands, and
     /// there their feedback shows: a mod running many should say so.
@@ -425,7 +424,7 @@ interface render {
     /// it on its own workers, from the chunks already loaded or saved and,
     /// where nobody has been, from the world's generator; the simulation
     /// distance doesn't change. Only worlds whose generator the game has
-    /// (single player and a LAN world you host) show it. The player's own LOD
+    /// show it. The player's own LOD
     /// Distance setting, when on, wins. One far terrain shows at a time: the
     /// first loaded mod's.
     set-far-terrain: func(far-terrain: option<far-terrain>);
@@ -457,9 +456,9 @@ interface events {
 }
 
 /// Capability `recipes` (experimental): the recipes and items the game
-/// knows, for recipe viewers. In single player and on Horizon's servers
-/// they are the world's; on any other server they are vanilla 26.3's (a
-/// client is sent no others), while `known` follows that server's book.
+/// knows, for recipe viewers. On Horizon's servers they are the world's;
+/// on any other server they are vanilla 26.3's (a client is sent no
+/// others), while `known` follows that server's book.
 interface recipes {
     /// An item of `items`, by its index there, with a count and the
     /// components it has beyond the item's own, in vanilla's item syntax
@@ -783,7 +782,8 @@ interface server-events {
     block-placed: func(player: player, pos: block-pos, state: string);
 }
 
-/// A client mod: runs in the player's game.
+/// A client mod: ran in the player's game, Horizon's game window, which was
+/// removed in November 2026; nothing hosts it now.
 world horizon-mod {
     import log;
     import game;
@@ -795,8 +795,7 @@ world horizon-mod {
 }
 
 /// A server mod (manifest `side = "server"`, `api = "0.3"`, experimental):
-/// runs where the world is simulated, on the dedicated server, a LAN host
-/// and single player's own server.
+/// runs on the dedicated server, where the world is simulated.
 world horizon-server-mod {
     import log;
     import storage;
