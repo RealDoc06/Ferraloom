@@ -61,6 +61,8 @@ pub struct Guest {
     pub conn: u32,
     /// The client's address (IP bans, `list`).
     pub address: std::net::SocketAddr,
+    /// Ferraloom: the plugin login attempt it was admitted under (`Joined`).
+    pub plugin_attempt: i64,
     /// The hub tick of the player's last action (ServerPlayer.lastActionTime),
     /// for player-idle-timeout.
     pub last_action_tick: u64,
@@ -281,6 +283,7 @@ impl Guest {
         Self {
             conn: j.conn,
             address: j.address,
+            plugin_attempt: j.plugin_attempt,
             last_action_tick: 0,
             chat_index: 0,
             chain: Default::default(),

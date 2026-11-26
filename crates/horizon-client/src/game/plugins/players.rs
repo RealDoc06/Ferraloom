@@ -833,6 +833,7 @@ impl Game<'_> {
             return false;
         };
         let (id, name, entity_id, op) = (g.uuid, g.name.clone(), g.entity_id, g.permission > 0);
+        let attempt = g.plugin_attempt;
         // OfflinePlayer.hasPlayedBefore and its times: the player file as it
         // was before this join (its time is the last save).
         let file = horizon_client::lan::playerdata::path(&self.world_root, id);
@@ -862,6 +863,7 @@ impl Game<'_> {
             played_before,
             first_played,
             last_played,
+            attempt,
         };
         let message = ferraloom_plugins::player_join(&mut GameHost::new(self, Some(host)), &joined);
         if !listens(Event::PlayerJoin) {

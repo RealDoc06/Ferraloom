@@ -73,6 +73,9 @@ pub struct Joined {
     /// Smoothed keep-alive round trip in milliseconds.
     pub latency: Arc<AtomicI32>,
     pub address: SocketAddr,
+    /// Ferraloom: the plugin bridge's login attempt it was admitted under
+    /// (`ferraloom_plugins::login_attempt`), 0 for none.
+    pub plugin_attempt: i64,
 }
 /// Queued for a connection's writer thread.
 pub enum Out {

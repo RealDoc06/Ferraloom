@@ -384,6 +384,9 @@ pub struct Joined<'a> {
     /// `getFirstPlayed` and `getLastPlayed`, in milliseconds since the epoch (0: unknown).
     pub first_played: i64,
     pub last_played: i64,
+    /// The login attempt it was admitted under ([`login_attempt`]), 0 for none:
+    /// its own pending player is the one that joins.
+    pub attempt: i64,
 }
 
 /// What a player-moving event's listeners decided.
@@ -542,7 +545,7 @@ pub(crate) fn load(env: &mut JNIEnv) -> jni::errors::Result<()> {
         env,
         "dev/ferraloom/bukkit/PlayerEvents",
         [
-            ("join", sig("(JJ$IZ$ZJJ)$")),
+            ("join", sig("(JJ$IZ$ZJJJ)$")),
             ("quit", sig(&format!("(JJ${LOC})$"))),
             ("chat", sig("(JJ$)V")),
             ("command", sig("(JJ$)Z")),
@@ -653,6 +656,7 @@ pub fn player_join(host: &mut dyn crate::PluginHost, p: &Joined) -> Option<Strin
             JValue::Bool(p.played_before.into()).as_jni(),
             JValue::Long(p.first_played).as_jni(),
             JValue::Long(p.last_played).as_jni(),
+            JValue::Long(p.attempt).as_jni(),
         ];
         // SAFETY: `join`'s signature in `load`.
         let out = unsafe { events.invoke(env, JOIN, ReturnType::Object, &args) }?;
@@ -824,6 +828,13 @@ pub fn login(
     LOGINS_WAITING.store(true, Ordering::Release);
     wait.recv_timeout(LOGIN_WAIT)
         .unwrap_or_else(|_| Some(refused.unwrap_or_else(|| "Took too long to log in".to_owned())))
+}
+
+/// The login attempt this connection thread queued ([`login`]), 0 for none:
+/// handed with the player to the server, so its join takes that attempt's
+/// pending player and not another's of the same profile.
+pub fn login_attempt() -> i64 {
+    ATTEMPT.get()
 }
 
 /// A login that ends before its join (refused after its `PlayerLoginEvent`,

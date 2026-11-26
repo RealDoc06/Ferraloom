@@ -64,7 +64,7 @@ public final class PlayerEvents {
     });
     /**
      * Players between PlayerLoginEvent and their join, whose join reuses the object (CraftBukkit does): a profile's
-     * attempts in arrival order, since a later one is admitted only once the earlier ones are gone. Guarded by itself.
+     * attempts in arrival order, each join taking its own attempt's. Guarded by itself.
      */
     private static final Map<UUID, ArrayDeque<FerraloomPlayer>> LOGGING_IN = new HashMap<>();
     /** A pending player older than this lost its join (a path that never abandoned it): the next login drops it. */
@@ -176,16 +176,25 @@ public final class PlayerEvents {
         }
     }
 
-    /** PlayerList.placeNewPlayer's PlayerJoinEvent: the join message to send, or null for none. */
+    /**
+     * PlayerList.placeNewPlayer's PlayerJoinEvent: the join message to send, or null for none. The player is the
+     * object pending under the admitted login's {@code attempt}, a fresh one when there is none.
+     */
     public static String join(long most, long least, String name, int entityId, boolean op, String message,
-            boolean playedBefore, long firstPlayed, long lastPlayed) {
+            boolean playedBefore, long firstPlayed, long lastPlayed, long attempt) {
         try {
             UUID id = new UUID(most, least);
             FerraloomPlayer player = null;
             synchronized (LOGGING_IN) {
                 ArrayDeque<FerraloomPlayer> pending = LOGGING_IN.get(id);
                 if (pending != null) {
-                    player = pending.pollFirst();
+                    for (FerraloomPlayer p : pending) {
+                        if (p.attempt == attempt) {
+                            player = p;
+                            break;
+                        }
+                    }
+                    pending.remove(player);
                     if (pending.isEmpty()) {
                         LOGGING_IN.remove(id);
                     }

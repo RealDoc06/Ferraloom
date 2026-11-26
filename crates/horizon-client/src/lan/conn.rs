@@ -1294,6 +1294,7 @@ fn play(c: Connection, shared: &Arc<Shared>, parts: Parts, address: std::net::So
         sender,
         latency: latency.clone(),
         address,
+        plugin_attempt: ferraloom_plugins::login_attempt(),
     };
     let player = Player {
         conn: conn_id,
