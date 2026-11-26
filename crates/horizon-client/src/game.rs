@@ -8653,10 +8653,7 @@ fn load_resources(
             (assets, render)
         }
         Err(e) => {
-            return Err(format!(
-                "{e}\nPrepare resources with: horizon-prepare --prepare"
-            )
-            .into());
+            return Err(format!("{e}\nPrepare resources with: horizon-prepare --prepare").into());
         }
     };
     let assets = Arc::new(assets);
