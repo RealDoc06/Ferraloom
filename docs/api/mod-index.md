@@ -1,7 +1,7 @@
 # The registry index and `.hpack`
 
 Horizon's registry lists what is made for Horizon and reviewed: mods (`.hmod`), modpacks (`.hpack`), resource packs
-and Horizon shader packs (`.hshader`, [shaders.md](../shaders.md)). Submissions are pull requests in
+and Horizon shader packs (`.hshader`). Submissions are pull requests in
 [horizon-rust/horizon-mods](https://github.com/horizon-rust/horizon-mods); merging one publishes it. The launcher and the
 website read one file, `index.json`, which that repository's CI builds. The Rust types and every check below are
 `horizon_mods::index` and `horizon_mods::modpack` (feature `index`); the sample is
@@ -133,7 +133,7 @@ reason = "Sent chat messages it didn't declare."
 date = "2026-10-24"
 ```
 
-The submission form's service (`crates/horizon-mod-registry`) writes these entries: it signs the creator in with GitHub, runs the file's checks, uploads the file to the repository's `staging` release as `<sha256>.<extension>` and opens the pull request. Only an entry's `owners` publish updates through it.
+The submission form's service (Horizon's `horizon-mod-registry`, not part of Ferraloom) writes these entries: it signs the creator in with GitHub, runs the file's checks, uploads the file to the repository's `staging` release as `<sha256>.<extension>` and opens the pull request. Only an entry's `owners` publish updates through it.
 
 Unknown keys are refused. Its CI runs `cargo-horizon-mod` (`crates/cargo-horizon-mod`):
 
@@ -161,7 +161,7 @@ How the repository runs (its workflows are in `.github/workflows/`):
   nobody installed) fails `registry review` on purpose and needs an administrator's merge.
 
 Kinds open to submissions: `mod`, `modpack`, `resourcepack`, `shader`. A shader pack (`.hshader`) passes
-`horizon_shader_api::check`, the check the game runs before it loads one (`horizon-shader check`, [shaders.md](../shaders.md)):
+`horizon_shader_api::check`, the check the game runs before it loads one (`horizon-shader check`):
 every stage validated by naga and translated for Vulkan, Metal and DirectX 12; its manifest's id, version and shader
 API line are its facts. Iris and OptiFine packs are for the Modrinth browser. A new kind gets its own check before it
 opens.

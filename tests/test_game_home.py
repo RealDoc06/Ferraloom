@@ -25,12 +25,16 @@ SPAWN_MARKERS = {
 EXEMPT = {
     "lab.py": "defines game_env",
     "parity.py": "runs the harnesses and gives each its own HORIZON_HOME",
-    "package_native_client.py": "packs the binaries into an archive",
     "build_release.py": "builds and packs the release",
     "release_train.py": "release bookkeeping",
     "pr_ready.py": "runs cargo checks and parity.py",
     "test_friends_integration_parity.py": "builds binaries; test_friends.Game isolates every game through integration_env",
     "port_harness.py": "ports Java code, starts no game",
+    "plugins_e2e.py": "gives each server it starts scratch HORIZON_HOME and XDG folders of its own",
+    "test_server_combat_parity.py": "names the engine binary it builds",
+    "test_server_entity_data_parity.py": "names the engine binary it builds",
+    "test_server_items_parity.py": "names the engine binary it builds",
+    "test_server_player_handlers_parity.py": "names the engine binary it builds",
 }
 
 

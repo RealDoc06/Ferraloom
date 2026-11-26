@@ -1,6 +1,6 @@
 # Decompilation and Rust research lab
 
-Horizon started as a decompilation and optimization lab. This page describes the local game inspection workspace and the first Rust research crates. For the playable client, see [the native client](native-client.md); for the rewrite as a whole, see [Rust rewrite status](rust-parity.md).
+Horizon started as a decompilation and optimization lab. This page describes the local game inspection workspace and the first Rust research crates. For the rewrite as a whole, see [Rust rewrite status](rust-parity.md).
 
 ## Local game inspection
 

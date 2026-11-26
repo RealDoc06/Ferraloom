@@ -4,7 +4,7 @@
 #   tools/remote.sh [--host H] [--name N] [--cpus LIST] [--exclusive] [--jobs J] <worktree> <command...>
 #   tools/remote.sh .claude/worktrees/my-fix cargo test -p horizon-world --lib
 #   tools/remote.sh . python3 tools/parity.py food light
-#   tools/remote.sh --cpus 0-3 --exclusive . python3 tools/perf_bench.py   # a benchmark: CPUs 0-3 to itself
+#   tools/remote.sh --cpus 0-3 --exclusive . python3 tools/server_bench.py   # a benchmark: CPUs 0-3 to itself
 #   tools/remote.sh --list                          # checkouts on the host, their size and last use
 #   tools/remote.sh --gc [DAYS]                     # remove checkouts unused for DAYS (default 2)
 #

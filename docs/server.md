@@ -182,7 +182,7 @@ prepared on their own computer to the server (`scp -r`). Planned wrappers:
 - **On this machine:** `horizon-server prepare --server-jar PATH` runs `horizon-prepare` on the owner's own
   server jar plus their launcher install.
 - **Prepared elsewhere:** `horizon-server import-resources DIR` copies a folder prepared on the owner's own
-  computer, for example by the launcher, to a headless machine.
+  computer, for example by `horizon-prepare`, to a headless machine.
 
 A server-only `prepare` (from `server.jar` alone, without the client jar or a JDK) is the follow-up that
 removes the last Java step. It needs a list of which prepared files the server really reads, and that list
@@ -307,8 +307,7 @@ a typed key set again under `[properties]` and values vanilla would refuse. Plan
   After it stops, the supervisor compares the file with what it wrote and copies any changed keys back into
   `server.toml`, so an in-game change survives the next start. Edits go through `toml_edit`, so the owner's
   comments and order are kept.
-- **Changes without opening the file.** `horizon-server config set KEY=VALUE...` (the launcher's Servers
-  page uses it) writes through `toml_edit`, checks the result as `server.toml` is checked, and writes nothing
+- **Changes without opening the file.** `horizon-server config set KEY=VALUE...` writes through `toml_edit`, checks the result as `server.toml` is checked, and writes nothing
   if a value is wrong. On a running server it sends what vanilla changes live through its console:
   `difficulty`, `defaultgamemode` and `whitelist on|off`; the backup settings apply at once because the
   supervisor reads them each time. Everything else waits for the next start, and the command says which. A
@@ -450,8 +449,7 @@ runtime or new dependency. Server-sent events can replace the polling later if a
 - **MCP.** `horizon-server mcp` is an MCP server on stdio, for Claude Code or any MCP client run as the same OS
   user. It reads the token itself, and its tools map one to one onto the API: `status`, `players`,
   `run_command`, `logs`, `backup`, `list_backups`, `restore` (needs `confirm: true`), `start`, `stop`,
-  `restart`, `get_config` and `set_config`. It's the same idea as the game's `horizon-ctl`
-  (docs/agent-control.md): an AI can run and diagnose a server, and every action it takes shows in the log.
+  `restart`, `get_config` and `set_config`. It's the same idea as the game's `horizon-ctl`: an AI can run and diagnose a server, and every action it takes shows in the log.
 - **Vanilla's own management protocol.** Vanilla 26.3 has a server management protocol: JSON-RPC over a
   WebSocket, set up by the `management-server-*` keys in server.properties. Horizon's engine already parses
   those keys but doesn't serve the protocol. Serving it later, on the engine or the supervisor, would let tools

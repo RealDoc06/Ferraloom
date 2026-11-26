@@ -26,7 +26,6 @@ Not every line is read by a person. Instead, every change is checked against the
 - **Signed checksums.** Every release has a `SHA256SUMS` file, a fingerprint of each download, and `SHA256SUMS.sig`, a signature of that list made with Horizon's release key, which only release builds from main can use. The launcher and `horizon-server update` check both before they install anything, and refuse a file that does not match. The very first server install with `install.sh` checks the fingerprint but not the signature.
 - **Not yet signed by Apple or Microsoft.** The macOS app is not notarized by Apple, because it is not signed with a paid Apple developer account, so macOS asks you to confirm the first time ([Install](https://playhorizon.dev/docs/install#download-the-launcher) shows how). The Windows programs are not code-signed either, so Windows may warn you too.
 - **Mods run in a sandbox.** Horizon mods are WebAssembly programs with no access to your files, the network or other programs. A mod lists what it needs, you see that list before you turn it on, and it can do nothing else. See [Mods](mods.md).
-- **Nothing collected unless you say yes.** Data collection is off until you turn it on, with four separate switches. The one exception is an anonymous "I'm playing" ping for the launcher's player count, which holds nothing about you. See [Opt-in data collection](telemetry.md).
 
 ## What it doesn't contain
 

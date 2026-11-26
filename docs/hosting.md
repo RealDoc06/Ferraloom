@@ -65,9 +65,6 @@ Options: `--version vX.Y.Z`, `--dir FOLDER`, `--bin FOLDER` (Windows: `-Version`
 such as Linux on ARM, build from source: `cargo build --release -p horizon-client --bin horizon-client -p
 horizon-server` and keep both programs in one folder.
 
-The Horizon launcher also installs releases. Every release folder holds `horizon-server`, so you can run it
-from there too.
-
 ## 2. Prepare the game files
 
 Horizon reads Minecraft's data from your own copy of the game. You need Minecraft Java Edition 26.3, played
@@ -81,7 +78,7 @@ horizon-prepare --prepare --server-jar /path/to/server.jar
 Add `--minecraft-dir PATH` if your launcher keeps the game elsewhere. The prepared files go to
 `game-files`, which updates keep.
 
-**On a headless machine** (a VPS, a home server), prepare on your own computer instead, with the launcher or
+**On a headless machine** (a VPS, a home server), prepare on your own computer instead, with
 `horizon-prepare`, and copy the prepared `26.3` folder to the server: into
 `~/.local/share/horizon/game-files/horizon-client/26.3`, or into `resources/` in the server folder, or anywhere
 `[engine] resources` in `server.toml` names. A folder copied this way needs release v2026.10.17.07 or

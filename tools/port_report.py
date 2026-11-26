@@ -55,7 +55,7 @@ def version_sites(facts, root=ROOT):
     pattern = ["-e", str(facts["protocol_version"]), "-e", str(facts["world_version"])]
     found = []
     for command in (["git", "grep", "-n", "-w"] + pattern, ["git", "grep", "-n", "-F", f'"{facts["id"]}"']):
-        result = subprocess.run(command + ["--", "crates/*.rs", "launcher/*.rs", "tools/*.py"],
+        result = subprocess.run(command + ["--", "crates/*.rs", "tools/*.py"],
                                 cwd=root, capture_output=True, text=True)
         found += [line.split(":", 2)[0] + ":" + line.split(":", 2)[1] for line in result.stdout.splitlines()]
     return sorted({site for site in found if not re.search(r"(^|/)tests?(/|\.rs)|/test_|_tests?\.rs", site)})
@@ -63,7 +63,7 @@ def version_sites(facts, root=ROOT):
 
 def files_containing(text, root=ROOT):
     """Rust and Python files that contain this text (a report's file name)."""
-    command = ["git", "grep", "-l", "-F", text, "--", "crates/*.rs", "launcher/*.rs", "tools/*.py"]
+    command = ["git", "grep", "-l", "-F", text, "--", "crates/*.rs", "tools/*.py"]
     return subprocess.run(command, cwd=root, capture_output=True, text=True).stdout.split()
 
 

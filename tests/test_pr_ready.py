@@ -5,8 +5,7 @@ from unittest import mock
 
 from tools import pr_ready
 
-PACKAGES = {"horizon-core": "crates/horizon-core", "horizon-client": "crates/horizon-client",
-            "horizon-theme": "crates/horizon-theme", "xtask": "xtask"}
+PACKAGES = {"horizon-core": "crates/horizon-core", "horizon-client": "crates/horizon-client", "xtask": "xtask"}
 LIBRARIES = set(PACKAGES) - {"xtask"}
 DEPENDENCIES = {"horizon-client": {"horizon-core"}}
 MODS = " --features horizon-client/mods,horizon-mods/pack"
@@ -23,28 +22,16 @@ class PrReadyTests(unittest.TestCase):
                                                   "xtask/src/main.rs", "tools/parity.py"}, PACKAGES),
                          ["horizon-client", "horizon-core", "xtask"])
         self.assertEqual(pr_ready.touched_crates({"crates/horizon-core/README.md"}, PACKAGES), [])
-        # The generated stylesheet is checked by horizon-theme's tests.
-        self.assertEqual(pr_ready.touched_crates({"crates/horizon-theme/tokens.css"}, PACKAGES), ["horizon-theme"])
         # A crate whose name prefixes another's directory doesn't own it.
         self.assertEqual(pr_ready.touched_crates({"crates/horizon-core-extra/x.rs"}, PACKAGES), [])
         # The workspace manifest and lock touch every crate.
         self.assertIsNone(pr_ready.touched_crates({"Cargo.lock", "crates/horizon-core/src/lib.rs"}, PACKAGES))
 
     def test_which_workspace_builds_a_path(self):
-        self.assertTrue(pr_ready.workspace_rust("crates/horizon-theme/fonts/x.ttf"))
+        self.assertTrue(pr_ready.workspace_rust("crates/horizon-world/data/x.bin"))
         self.assertTrue(pr_ready.workspace_rust("Cargo.toml"))
         self.assertFalse(pr_ready.workspace_rust("crates/horizon-client/README.md"))
-        self.assertFalse(pr_ready.workspace_rust("launcher/src/main.rs"))
-        self.assertTrue(pr_ready.launcher_rust("launcher/src/main.rs"))
-        # CI's launcher job also runs for the root workspace's manifests and for its own check.
-        self.assertTrue(pr_ready.launcher_rust("Cargo.lock"))
-        self.assertTrue(pr_ready.launcher_rust("tools/ci/rust_changes.py"))
-        self.assertTrue(pr_ready.launcher_rust("crates/horizon-prepare/src/lib.rs"))
-        self.assertTrue(pr_ready.launcher_rust("crates/horizon-theme/src/lib.rs"))
-        self.assertTrue(pr_ready.launcher_rust("crates/horizon-telemetry/src/lib.rs"))
-        self.assertFalse(pr_ready.launcher_rust("launcher/links.json"))
-        self.assertFalse(pr_ready.launcher_rust("launcher/README.md"))
-        self.assertFalse(pr_ready.launcher_rust("crates/horizon-client/src/game.rs"))
+        self.assertFalse(pr_ready.workspace_rust("tools/server_bench.py"))
 
     def test_crate_checks_do_not_link_unrelated_examples(self):
         with mock.patch.object(pr_ready, "affected_here", return_value=[]):
@@ -93,7 +80,7 @@ class PrReadyTests(unittest.TestCase):
         self.assertIsNone({step.name: step for step in steps}["Python tests"].status)
 
     def test_non_rust_changes_skip_workspace_checks(self):
-        for path in ("README.md", "tools/pr_ready.py", "launcher/src/main.rs"):
+        for path in ("README.md", "tools/pr_ready.py"):
             with self.subTest(path=path), mock.patch.object(pr_ready, "affected_here", return_value=[]):
                 steps = pr_ready.plan(args(quick=True), "origin/main", {path}, PACKAGES, LIBRARIES, DEPENDENCIES)
                 by_name = {step.name: step for step in steps}
@@ -170,12 +157,10 @@ class PrReadyTests(unittest.TestCase):
         self.assertEqual(pr_ready.scope_warnings({"crates/horizon-client/src/game.rs", "tools/test_food_parity.py",
                                                   "mods/horizon/src/test/java/dev/horizonlab/parity/X.java",
                                                   "docs/native-client.md"}, 120), [])
-        self.assertEqual(pr_ready.scope_warnings({"crates/horizon-theme/src/lib.rs", "launcher/src/theme.rs"}, 10), [])
-        warnings = pr_ready.scope_warnings({"crates/horizon-client/src/game.rs", "launcher/src/main.rs",
-                                            ".github/workflows/ci.yml"}, 900)
+        warnings = pr_ready.scope_warnings({"crates/horizon-client/src/game.rs", ".github/workflows/ci.yml"}, 900)
         self.assertEqual(len(warnings), 2)
         self.assertIn("900 lines of code: over 500", warnings[0])
-        self.assertEqual(warnings[1], "mixes CI, game, launcher")
+        self.assertEqual(warnings[1], "mixes CI, game")
 
     def test_documentation_and_tests_are_not_counted_in_the_size(self):
         self.assertTrue(pr_ready.reviewed("tools/pr_ready.py"))
@@ -188,14 +173,12 @@ class PrReadyTests(unittest.TestCase):
     def test_cargo_lock_changes_only_with_a_manifest(self):
         self.assertIsNone(pr_ready.lock_problem({"crates/horizon-core/src/lib.rs"}))
         self.assertIsNone(pr_ready.lock_problem({"Cargo.lock", "crates/horizon-client/Cargo.toml"}))
-        self.assertIsNone(pr_ready.lock_problem({"launcher/Cargo.lock", "crates/horizon-theme/Cargo.toml"}))
         self.assertIn("Cargo.lock", pr_ready.lock_problem({"Cargo.lock", "crates/horizon-core/src/lib.rs"}))
 
     def test_label_follows_what_players_get(self):
         self.assertEqual(pr_ready.suggested_label({"tools/pr_ready.py", "CONTRIBUTING.md"}), "`skip-release`")
         self.assertEqual(pr_ready.suggested_label({"crates/horizon-world/examples/probe.rs"}), "`skip-release`")
         self.assertIn("feature", pr_ready.suggested_label({"crates/horizon-client/src/game.rs"}))
-        self.assertIn("feature", pr_ready.suggested_label({"launcher/src/main.rs"}))
 
     def test_affected_harnesses_come_from_the_parity_runner(self):
         found = {"food": "tools/test_food_parity.py", "datafix#1": "tools/test_datafix_parity.py",
@@ -219,7 +202,6 @@ class PrReadyTests(unittest.TestCase):
         self.assertIn("2 affected, to run in CI (--quick): food, light", harness.detail)
         by_name = {step.name: step for step in steps}
         self.assertIn("tests: horizon-world", by_name)
-        self.assertEqual(by_name["launcher clippy"].status, "skip")
         self.assertIsNone(by_name["clippy"].status)
         with mock.patch.object(pr_ready, "affected_here", return_value=["food"]):
             steps = pr_ready.plan(args(host="macmini"), "origin/main", changed, {"horizon-world": "crates/horizon-world"}, {"horizon-world"}, {})

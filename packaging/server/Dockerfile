@@ -2,7 +2,7 @@
 #   docker build -f packaging/server/Dockerfile -t horizon-server .
 #
 # The image holds none of Minecraft's files. Prepare them on the host from your own Minecraft 26.3
-# (horizon-prepare --prepare, see packaging/PLAY.txt) and mount the folder it writes, read-only:
+# (horizon-prepare --prepare, see docs/hosting.md) and mount the folder it writes, read-only:
 #   docker run -d --name horizon -p 25565:25565 --stop-timeout 180 \
 #     -v horizon-data:/data \
 #     -v /path/to/.local/horizon-client/26.3:/opt/horizon/.local/horizon-client/26.3:ro \
