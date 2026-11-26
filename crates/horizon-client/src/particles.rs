@@ -9,10 +9,8 @@ use crate::{
     blocks::{BlockFacts, Fluid},
     collisions::SceneCollisions,
     hud::Rect,
-    mesher::Vertex,
     world::World,
 };
-use glam::{DVec3, Quat, Vec3 as FVec3};
 use horizon_core::{
     geometry::{Aabb, Axis, Vec3, trig},
     random::{LegacyRandom, RandomSource},
@@ -138,7 +136,7 @@ enum Sprite {
     /// Index into the engine's sprite table.
     Index(u32),
     /// An atlas sprite by name (block textures for terrain particles).
-    Named(String),
+    Named,
 }
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Size {
@@ -697,11 +695,10 @@ impl Particle {
         random: &mut LegacyRandom,
         position: [f64; 3],
         velocity: [f64; 3],
-        sprite: String,
         tint: u32,
     ) -> Self {
         let mut p = Self::moving(random, ParticleType::Block, position, velocity);
-        p.sprite = Sprite::Named(sprite);
+        p.sprite = Sprite::Named;
         p.gravity = 1.0;
         let c = |shift: u32| 0.6 * ((tint >> shift) & 255) as f32 / 255.0;
         p.rgba = [c(16), c(8), c(0), 1.0];
@@ -764,9 +761,6 @@ impl Particle {
         self.rgba[1] = g;
         self.rgba[2] = b;
     }
-    pub fn is_alive(&self) -> bool {
-        !self.removed
-    }
     /// `Particle.move` with `Entity.collideBoundingBox` against block collision shapes.
     fn move_by(&mut self, level: &ParticleLevel, d: [f64; 3]) {
         if self.free_move {
@@ -822,48 +816,6 @@ impl Particle {
             self.velocity[2] *= f64::from(0.7f32);
         }
     }
-    /// `getLightCoords(a)` from the world's smooth sky and block light (0..=240).
-    fn light_coords(&self, partial: f32, sky: u32, block: u32) -> (u32, u32) {
-        let t = ((self.age as f32 + partial) / self.lifetime as f32).clamp(0.0, 1.0);
-        match self.light {
-            Light::World => (sky, block),
-            Light::FullBright => (240, 240),
-            Light::Block15 => (sky, 240),
-            Light::AgeEmission => (sky, (block + (t * 240.0) as u32).min(240)),
-            Light::AgeEmission4 => {
-                let b = self.age as f32 / self.lifetime as f32;
-                let b = (b * b) * (b * b);
-                (sky, (block + (b.clamp(0.0, 1.0) * 240.0) as u32).min(240))
-            }
-            Light::Firefly => (
-                0,
-                (255.0 * fade_amount(self.lifetime_progress(self.age as f32 + partial), 0.1, 0.3))
-                    as u32,
-            ),
-        }
-    }
-    fn quad_size(&self, a: f32) -> f32 {
-        let t = (self.age as f32 + a) / self.lifetime as f32;
-        match self.size_curve {
-            Size::Fixed => self.size,
-            Size::GrowIn => self.size * (t * 32.0).clamp(0.0, 1.0),
-            Size::Flame => self.size * (1.0 - t * t * 0.5),
-            Size::Lava => self.size * (1.0 - t * t),
-            Size::Portal => {
-                let s = 1.0 - t;
-                self.size * (1.0 - s * s)
-            }
-            Size::ReversePortal => {
-                self.size * (1.0 - (self.age as f32 + a) / (self.lifetime as f32 * 1.5))
-            }
-            Size::Shriek => self.size * (t * 0.75).clamp(0.0, 1.0),
-            Size::Flash => {
-                7.1 * trig::sin(f64::from(
-                    (self.age as f32 + a - 1.0) * 0.25 * std::f64::consts::PI as f32,
-                ))
-            }
-        }
-    }
     /// `FireflyParticle.getLifetimeProgress`.
     fn lifetime_progress(&self, age: f32) -> f32 {
         (age / self.lifetime as f32).clamp(0.0, 1.0)
@@ -878,34 +830,6 @@ fn fade_amount(progress: f32, fade_in: f32, fade_out: f32) -> f32 {
     } else {
         1.0
     }
-}
-
-/// A particle's fields as the parity probe reports them.
-#[derive(Clone, Debug)]
-pub struct ParticleSnapshot {
-    pub age: i32,
-    pub lifetime: i32,
-    pub removed: bool,
-    pub on_ground: bool,
-    pub position: [f64; 3],
-    pub velocity: [f64; 3],
-    pub previous: [f64; 3],
-    /// `SingleQuadParticle` state; `None` for `NoRenderParticle`s.
-    pub quad: Option<QuadSnapshot>,
-}
-/// `SingleQuadParticle` state at a render.
-#[derive(Clone, Debug)]
-pub struct QuadSnapshot {
-    /// `getQuadSize` at partial ticks 0 and 0.5.
-    pub size: [f32; 2],
-    pub rgba: [f32; 4],
-    /// `roll`, `oRoll`.
-    pub roll: [f32; 2],
-    pub sprite: String,
-    /// `getU0`, `getU1`, `getV0`, `getV1` within the sprite.
-    pub uv: [f32; 4],
-    /// `getLightCoords(0.5)` over full sky light and no block light.
-    pub light: u32,
 }
 
 /// World access for particle physics.
@@ -1003,7 +927,7 @@ pub struct ParticleEngine {
     starters: Vec<Starter>,
     /// Local sounds requested by particles (dripstone drips): (event, position, volume, pitch).
     pub sounds: Vec<(&'static str, [f64; 3], f32, f32)>,
-    /// How many of each type were made, for `horizon-ctl status`.
+    /// How many of each type were made, for the control socket's `status`.
     made: std::collections::BTreeMap<&'static str, u64>,
     /// The item particles' sprites (`BreakingItemParticle`'s slime ball, snowball
     /// and cobweb models, resolved for the ground), one per model layer.
@@ -1094,12 +1018,6 @@ impl ParticleEngine {
         self.names.push(name.to_owned());
         self.rects.push(self.atlas.get(name).map(|&(rect, _)| rect));
         (self.names.len() - 1) as u32
-    }
-    pub fn len(&self) -> usize {
-        self.particles.len()
-    }
-    pub fn is_empty(&self) -> bool {
-        self.particles.is_empty()
     }
     pub fn clear(&mut self) {
         self.emitters.clear();
@@ -1402,75 +1320,6 @@ impl ParticleEngine {
             self.pending.push(particle);
         }
     }
-    /// How many particles of each type were made so far.
-    pub fn made(&self) -> &std::collections::BTreeMap<&'static str, u64> {
-        &self.made
-    }
-    /// Parity probes: seed the provider (`ParticleEngine.random`), level and
-    /// `SpellParticle.RANDOM` generators.
-    pub fn seed_randoms(&mut self, provider: i64, level: i64, spell: i64) {
-        self.random = LegacyRandom::new(provider);
-        self.level_random = LegacyRandom::new(level);
-        self.spell_random = LegacyRandom::new(spell);
-    }
-    /// Parity probes: the next long of the provider, level and spell generators.
-    pub fn next_randoms(&mut self) -> [i64; 3] {
-        [
-            self.random.next_long(),
-            self.level_random.next_long(),
-            self.spell_random.next_long(),
-        ]
-    }
-    /// Parity probes: `ParticleProvider.createParticle` with the particle's own
-    /// random seeded `seed`, ticked in its constructor where vanilla does.
-    pub fn probe_create(
-        &mut self,
-        options: &ParticleOptions,
-        p: [f64; 3],
-        v: [f64; 3],
-        seed: i64,
-        level: &ParticleLevel,
-    ) -> Option<Particle> {
-        let mut particle = self.make(options, p, v, seed)?;
-        if particle.pre_tick {
-            particle.pre_tick = false;
-            self.tick_particle(&mut particle, level);
-            particle.after_constructor_tick();
-        }
-        Some(particle)
-    }
-    /// Parity probes: `Particle.tick`.
-    pub fn probe_tick(&mut self, particle: &mut Particle, level: &ParticleLevel) {
-        self.tick_particle(particle, level);
-    }
-    /// Parity probes: the state vanilla's particle fields hold.
-    pub fn snapshot(&self, p: &Particle) -> ParticleSnapshot {
-        let sprite = match &p.sprite {
-            Sprite::Index(i) => self.names.get(*i as usize).map_or_else(
-                || "-".to_owned(),
-                |n| n.strip_prefix("particle/").unwrap_or(n).to_owned(),
-            ),
-            Sprite::Named(n) => n.clone(),
-        };
-        let (sky, block) = p.light_coords(0.5, 240, 0);
-        ParticleSnapshot {
-            age: p.age,
-            lifetime: p.lifetime,
-            removed: p.removed,
-            on_ground: p.on_ground,
-            position: p.position,
-            velocity: p.velocity,
-            previous: p.previous,
-            quad: (!p.no_render).then(|| QuadSnapshot {
-                size: [p.quad_size(0.0), p.quad_size(0.5)],
-                rgba: p.rgba,
-                roll: [p.roll, p.o_roll],
-                sprite,
-                uv: [p.uv[0], p.uv[2], p.uv[1], p.uv[3]],
-                light: block | sky << 16,
-            }),
-        }
-    }
     /// `SpriteSet.get(random)`.
     fn sprite_from_set(&mut self, ty: ParticleType) -> Sprite {
         match self.sets.get(&ty) {
@@ -1527,8 +1376,8 @@ impl ParticleEngine {
         let r = &mut local;
         let mut particle = match ty {
             T::Block | T::BlockCrumble | T::DustPillar => {
-                let (sprite, tint) = o.block.clone()?;
-                let mut q = Particle::terrain(r, p, v, sprite, tint);
+                let (_, tint) = o.block.clone()?;
+                let mut q = Particle::terrain(r, p, v, tint);
                 q.ty = ty;
                 let pr = &mut self.random;
                 if ty == T::BlockCrumble {
@@ -2608,8 +2457,9 @@ impl ParticleEngine {
                     if layers.is_empty() {
                         Sprite::Index(u32::MAX)
                     } else {
-                        let i = self.random.next_int_bound(layers.len() as i32).unwrap_or(0);
-                        Sprite::Named(layers[i as usize].clone())
+                        // The pick still draws from the level random, which the server shares.
+                        let _ = self.random.next_int_bound(layers.len() as i32);
+                        Sprite::Named
                     }
                 };
                 let mut q = Particle::moving(r, ty, p, [0.0; 3]);
@@ -2731,9 +2581,9 @@ impl ParticleEngine {
             }
             // BlockMarker: the block's particle sprite, half a block wide, 80 ticks.
             T::BlockMarker => {
-                let (sprite, _) = o.block.clone()?;
+                o.block.as_ref()?;
                 let mut q = Particle::at(r, ty, p);
-                q.sprite = Sprite::Named(sprite);
+                q.sprite = Sprite::Named;
                 q.gravity = 0.0;
                 q.lifetime = 80;
                 q.has_physics = false;
@@ -3674,169 +3524,14 @@ impl ParticleEngine {
             }
         }
     }
-
-    /// Camera-facing quads (`QuadParticleRenderState.renderRotatedQuad`).
-    pub fn render(
-        &self,
-        camera: DVec3,
-        yaw: f32,
-        pitch: f32,
-        partial: f32,
-        light_at: &dyn Fn([i32; 3]) -> u8,
-        out: &mut Vec<Vertex>,
-    ) {
-        // Camera.setRotation: rotationYXZ(PI - yRot, -xRot, 0).
-        let base = Quat::from_rotation_y(std::f32::consts::PI - yaw.to_radians())
-            * Quat::from_rotation_x(-pitch.to_radians());
-        for p in &self.particles {
-            if p.no_render {
-                continue;
-            }
-            // SparkParticle.extract: twinkling sparks blink after a third of their life.
-            if let Behaviour::Spark { twinkle: true, .. } = p.behaviour
-                && p.age >= p.lifetime / 3
-                && ((p.age + p.lifetime) / 3) % 2 != 0
-            {
-                continue;
-            }
-            // `SubmitNodeCollection.submitQuadParticleGroup`: the translucent
-            // layer draws after translucent terrain, so a crumb of stained
-            // glass cannot hide the glass behind it (`getLayer`).
-            let (rect, layer) = match &p.sprite {
-                Sprite::Index(i) => (
-                    self.rects.get(*i as usize).copied().flatten(),
-                    p.ty.translucent_layer(),
-                ),
-                Sprite::Named(name) => match self.atlas.get(name) {
-                    Some(&(rect, translucent)) => (Some(rect), translucent),
-                    None => (None, false),
-                },
-            };
-            let Some(r) = rect else { continue };
-            let a = f64::from(partial);
-            let pos = DVec3::new(
-                p.previous[0] + (p.position[0] - p.previous[0]) * a,
-                p.previous[1] + (p.position[1] - p.previous[1]) * a,
-                p.previous[2] + (p.position[2] - p.previous[2]) * a,
-            ) - camera;
-            let center = pos.as_vec3();
-            let rotation = if p.roll != 0.0 {
-                base * Quat::from_rotation_z(p.o_roll + (p.roll - p.o_roll) * partial)
-            } else {
-                base
-            };
-            let size = p.quad_size(partial);
-            let mut alpha = p.rgba[3];
-            // OverlayParticle.extract: the flash fades as it pulses.
-            if p.ty == ParticleType::Flash {
-                alpha = 0.6 - (p.age as f32 + partial - 1.0) * 0.25 * 0.5;
-            }
-            if let Behaviour::FlyTowards { alpha: la, .. } = p.behaviour {
-                alpha = lifetime_alpha(la, p.age, p.lifetime, partial);
-            }
-            let mut rotations = [Some(rotation), None];
-            let mut rgb = [p.rgba[0], p.rgba[1], p.rgba[2]];
-            match p.behaviour {
-                // ShriekParticle.extract: two tilted quads, fading out.
-                Behaviour::Shriek { delay } => {
-                    if delay > 0 {
-                        continue;
-                    }
-                    alpha = 1.0 - ((p.age as f32 + partial) / p.lifetime as f32).clamp(0.0, 1.0);
-                    rotations = [
-                        Some(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_3)),
-                        Some(Quat::from_euler(
-                            glam::EulerRot::YXZ,
-                            -std::f32::consts::PI,
-                            std::f32::consts::FRAC_PI_3,
-                            0.0,
-                        )),
-                    ];
-                }
-                // VibrationSignalParticle.extract: two quads along the flight.
-                Behaviour::Vibration {
-                    rot,
-                    rot_o,
-                    pitch,
-                    pitch_o,
-                    ..
-                } => {
-                    let sway =
-                        ((p.age as f32 + partial - std::f32::consts::TAU) * 0.05).sin() * 2.0;
-                    let lerped_rot = rot_o + (rot - rot_o) * partial;
-                    let lerped_pitch =
-                        pitch_o + (pitch - pitch_o) * partial + std::f32::consts::FRAC_PI_2;
-                    rotations = [
-                        Some(
-                            Quat::from_rotation_y(lerped_rot)
-                                * Quat::from_rotation_x(-lerped_pitch)
-                                * Quat::from_rotation_y(sway),
-                        ),
-                        Some(
-                            Quat::from_rotation_y(-std::f32::consts::PI + lerped_rot)
-                                * Quat::from_rotation_x(lerped_pitch)
-                                * Quat::from_rotation_y(sway),
-                        ),
-                    ];
-                }
-                // DustColorTransitionParticle.lerpColors.
-                Behaviour::Transition { from, to } => {
-                    let t = (p.age as f32 + partial) / (p.lifetime as f32 + 1.0);
-                    rgb = std::array::from_fn(|i| from[i] + (to[i] - from[i]) * t);
-                }
-                _ => {}
-            }
-            let block = ParticleLevel::block_at(p.position);
-            let packed = light_at(block);
-            let (sky_light, block_light) = p.light_coords(
-                partial,
-                u32::from(packed >> 4) * 16,
-                u32::from(packed & 15) * 16,
-            );
-            let light = sky_light | block_light << 8;
-            let c = |v: f32| (v.clamp(0.0, 1.0) * 255.0) as u32;
-            let color = c(alpha) << 24 | c(rgb[2]) << 16 | c(rgb[1]) << 8 | c(rgb[0]);
-            let (du, dv) = (r.u1 - r.u0, r.v1 - r.v0);
-            let (u0, v0, u1, v1) = (
-                r.u0 + du * p.uv[0],
-                r.v0 + dv * p.uv[1],
-                r.u0 + du * p.uv[2],
-                r.v0 + dv * p.uv[3],
-            );
-            for rotation in rotations.into_iter().flatten() {
-                for (n, uv) in [
-                    ((1.0, -1.0), [u1, v1]),
-                    ((1.0, 1.0), [u1, v0]),
-                    ((-1.0, 1.0), [u0, v0]),
-                    ((-1.0, -1.0), [u0, v1]),
-                ] {
-                    let v = center + rotation * FVec3::new(n.0, n.1, 0.0) * size;
-                    out.push(Vertex {
-                        normal: [0; 4],
-                        pos: v.to_array(),
-                        uv,
-                        layer: if layer {
-                            crate::gfx::TRANSLUCENT_PARTICLE_OVERLAY
-                        } else {
-                            0
-                        },
-                        color,
-                        light,
-
-                        glint_uv: [0.0, 0.0],
-                    });
-                }
-            }
-        }
+    /// Parity probes: seed the provider (`ParticleEngine.random`), level and
+    /// `SpellParticle.RANDOM` generators.
+    #[cfg(test)]
+    pub fn seed_randoms(&mut self, provider: i64, level: i64, spell: i64) {
+        self.random = LegacyRandom::new(provider);
+        self.level_random = LegacyRandom::new(level);
+        self.spell_random = LegacyRandom::new(spell);
     }
-}
-/// `Particle.LifetimeAlpha.currentAlphaForAge`.
-fn lifetime_alpha(a: [f32; 4], age: i32, lifetime: i32, partial: f32) -> f32 {
-    if (a[0] - a[1]).abs() < 1.0e-5 {
-        return a[0];
-    }
-    let t = ((age as f32 + partial) / lifetime as f32 - a[2]) / (a[3] - a[2]);
-    a[0] + (a[1] - a[0]) * t.clamp(0.0, 1.0)
 }
 
 struct Starter {
@@ -4029,7 +3724,7 @@ mod tests {
     #[test]
     fn terrain_crumb_samples_a_mirrored_quarter() {
         let mut r = LegacyRandom::new(1);
-        let p = Particle::terrain(&mut r, [0.5; 3], [0.0; 3], "block/stone".into(), 0xFFFFFF);
+        let p = Particle::terrain(&mut r, [0.5; 3], [0.0; 3], 0xFFFFFF);
         assert!((p.uv[0] - p.uv[2] - 0.25).abs() < 1e-6);
         assert!((p.uv[3] - p.uv[1] - 0.25).abs() < 1e-6);
         assert!((p.rgba[0] - 0.6).abs() < 1e-6);
@@ -4037,24 +3732,5 @@ mod tests {
         let s =
             (p.velocity[0].powi(2) + (p.velocity[1] - 0.1).powi(2) + p.velocity[2].powi(2)).sqrt();
         assert!((0.15 * 0.4 - 1e-6..=0.45 * 0.4 + 1e-6).contains(&s));
-    }
-    #[test]
-    fn sizes_follow_vanilla_curves() {
-        let mut r = LegacyRandom::new(2);
-        let mut p = Particle::at(&mut r, ParticleType::Flame, [0.0; 3]);
-        p.size = 1.0;
-        p.lifetime = 10;
-        p.age = 5;
-        p.size_curve = Size::Flame;
-        assert!((p.quad_size(0.0) - (1.0 - 0.25 * 0.5)).abs() < 1e-6);
-        p.size_curve = Size::GrowIn;
-        p.age = 0;
-        assert!((p.quad_size(0.1) - (0.1f32 / 10.0 * 32.0)).abs() < 1e-6);
-    }
-    #[test]
-    fn lifetime_alpha_interpolates() {
-        let a = [0.0, 0.6, 0.25, 1.0];
-        assert_eq!(lifetime_alpha(a, 0, 40, 0.0), 0.0);
-        assert!((lifetime_alpha(a, 40, 40, 0.0) - 0.6).abs() < 1e-6);
     }
 }

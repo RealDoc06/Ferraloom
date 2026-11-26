@@ -72,14 +72,6 @@ impl EffectInstance {
         }
         changed
     }
-    /// `MobEffectInstance.tickClient`: a client counts its effects down
-    /// (the server removes them).
-    pub fn tick_client(&mut self) {
-        if self.infinite() || self.duration > 0 {
-            self.tick_down();
-            self.downgrade();
-        }
-    }
     fn tick_down(&mut self) {
         if let Some(h) = self.hidden.as_mut() {
             h.tick_down();
@@ -285,25 +277,6 @@ impl PlayerEffects {
         }
         (actions, added)
     }
-    /// `LivingEntity.tickEffects` (server part): actions to apply, in order.
-    pub fn tick(&mut self) -> Vec<EffectAction> {
-        self.tick_count = self.tick_count.wrapping_add(1);
-        let mut actions = Vec::new();
-        let tick_count = self.tick_count;
-        self.list.retain_mut(|e| {
-            if !(e.infinite() || e.duration > 0) {
-                return false;
-            }
-            let t = if e.infinite() { tick_count } else { e.duration };
-            if let Some(a) = periodic(e.id, t, e.amplifier) {
-                actions.push(a);
-            }
-            e.tick_down();
-            e.downgrade();
-            e.infinite() || e.duration > 0
-        });
-        actions
-    }
     /// Effects applied by drinking a potion (`PotionContents.applyToLivingEntity`).
     pub fn potion_effects(
         potion: Option<&str>,
@@ -362,6 +335,26 @@ impl PlayerEffects {
             f *= horizon_core::jmath::pow(0.3, f64::from(a + 1)) as f32;
         }
         f
+    }
+    /// `LivingEntity.tickEffects` (server part): actions to apply, in order.
+    #[cfg(test)]
+    pub fn tick(&mut self) -> Vec<EffectAction> {
+        self.tick_count = self.tick_count.wrapping_add(1);
+        let mut actions = Vec::new();
+        let tick_count = self.tick_count;
+        self.list.retain_mut(|e| {
+            if !(e.infinite() || e.duration > 0) {
+                return false;
+            }
+            let t = if e.infinite() { tick_count } else { e.duration };
+            if let Some(a) = periodic(e.id, t, e.amplifier) {
+                actions.push(a);
+            }
+            e.tick_down();
+            e.downgrade();
+            e.infinite() || e.duration > 0
+        });
+        actions
     }
 }
 /// Effect and equipment facts the movement and damage kernels query.

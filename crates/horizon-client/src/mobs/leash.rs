@@ -331,15 +331,6 @@ pub fn follow_speed(m: &Mob) -> f64 {
         1.0
     }
 }
-/// `Mob.leashable` position of the rope on a mob (`getLeashOffset`).
-pub fn leash_offset(m: &Mob) -> [f64; 3] {
-    if super::llama::is_llama(m.species()) {
-        // Llama.getLeashOffset.
-        [0.0, 0.75 * m.eye_height(), f64::from(m.width()) * 0.5]
-    } else {
-        [0.0, m.eye_height(), f64::from(m.width() * 0.4)]
-    }
-}
 #[cfg(test)]
 mod tests {
     use super::*;

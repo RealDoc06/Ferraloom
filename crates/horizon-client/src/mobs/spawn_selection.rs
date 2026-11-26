@@ -881,16 +881,6 @@ pub struct SpawnState {
     /// Reused across the tick's positions; holds the chunk's players.
     nearest: Nearest,
 }
-/// Every spawning category's bit.
-const SPAWNING_BITS: u8 = {
-    let mut bits = 0;
-    let mut i = 0;
-    while i < Category::SPAWNING.len() {
-        bits |= 1 << Category::SPAWNING[i] as usize;
-        i += 1;
-    }
-    bits
-};
 impl SpawnState {
     /// `NaturalSpawner.createState`: every non-persistent entity of a
     /// spawning category in a loaded chunk adds its biome's spawn charge, its
@@ -1054,11 +1044,6 @@ impl SpawnState {
         let max = category.max() * self.spawnable_chunks / 289;
         self.counts[category.index()] < max
     }
-    /// `canSpawnForCategoryLocal` (`LocalMobCapCalculator.canSpawn`), for a
-    /// spawning category: any close player below their cap.
-    pub fn can_spawn_local(&mut self, category: Category, cx: i32, cz: i32) -> bool {
-        self.can_spawn_local_of(SPAWNING_BITS, category, (cx, cz))
-    }
     /// The same, knowing the chunk will be asked about no category outside
     /// `asked`: a player's full cap in another (creatures, most ticks) cannot
     /// keep the search going.
@@ -1133,6 +1118,12 @@ impl SpawnState {
         self.counts[category.index()] += 1;
         self.add_local((pos[0] >> 4, pos[2] >> 4), category);
     }
+    /// `canSpawnForCategoryLocal` (`LocalMobCapCalculator.canSpawn`), for a
+    /// spawning category: any close player below their cap.
+    #[cfg(test)]
+    pub fn can_spawn_local(&mut self, category: Category, cx: i32, cz: i32) -> bool {
+        self.can_spawn_local_of(SPAWNING_BITS, category, (cx, cz))
+    }
 }
 
 /// What a spawn pass did, in vanilla's order (for differential tests).
@@ -1162,7 +1153,6 @@ pub struct SpawnRequest<'a> {
     pub yaw: f32,
     /// Mobs of this group spawned before (the `SpawnGroupData`'s size).
     pub group_index: u32,
-    pub reason: Reason,
 }
 #[derive(Clone, Copy, Debug)]
 pub struct Spawned {
@@ -1421,7 +1411,6 @@ pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
                 position: [xx, f64::from(y), zz],
                 yaw,
                 group_index,
-                reason: Reason::Natural,
             };
             let Some(result) = spawn(l, &request) else {
                 continue;
@@ -1721,7 +1710,6 @@ pub fn spawn_mobs_for_chunk_generation<L: NaturalLevel, R: RandomSource, Q: Rand
                             position: [fx, fy, fz],
                             yaw,
                             group_index,
-                            reason: Reason::ChunkGeneration,
                         };
                         if let Some(result) = spawn(l, &request) {
                             group_index += 1;
@@ -1769,6 +1757,18 @@ fn top_non_colliding<L: NaturalLevel>(l: &L, entity: &str, x: i32, z: i32) -> [i
     }
     [x, y, z]
 }
+
+/// Every spawning category's bit.
+#[cfg(test)]
+const SPAWNING_BITS: u8 = {
+    let mut bits = 0;
+    let mut i = 0;
+    while i < Category::SPAWNING.len() {
+        bits |= 1 << Category::SPAWNING[i] as usize;
+        i += 1;
+    }
+    bits
+};
 
 #[cfg(test)]
 mod tests {

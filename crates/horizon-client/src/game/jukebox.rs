@@ -102,31 +102,20 @@ impl Game<'_> {
     }
     /// Level event 1010: the song from the jukebox, and the "Now Playing" overlay.
     fn start_song(&mut self, pos: [i32; 3], song: &str) {
-        self.stop_sound(pos);
         let Some(s) = self.res.items().songs.get(song).cloned() else {
             return;
         };
-        // LevelRenderer.playJukeboxSong: SimpleSoundInstance.forJukeboxSong.
-        let id = self.audio.play_jukebox_song(&s.sound, pos);
-        self.jukebox_sounds.insert((pos[0], pos[1], pos[2]), id);
         let description =
             horizon_client::component::to_text(&s.description, &mut |k| Text::literal(k));
         self.titles
             .set_overlay(Text::translate("record.nowPlaying", &[description]), true);
-        self.update_song_volumes();
         self.notify_record_playing(pos, true);
         if self.audio.capture.is_some() {
             self.lan_songs.push((pos, Some(song.to_owned())));
         }
     }
-    fn stop_sound(&mut self, pos: [i32; 3]) {
-        if let Some(id) = self.jukebox_sounds.remove(&(pos[0], pos[1], pos[2])) {
-            self.audio.stop_and_release(id);
-        }
-    }
     /// Level event 1011: the song ends, here and for the guests.
     fn stop_song(&mut self, pos: [i32; 3]) {
-        self.stop_sound(pos);
         self.notify_record_playing(pos, false);
         if self.audio.capture.is_some() {
             self.lan_songs.push((pos, None));
@@ -199,7 +188,9 @@ impl Game<'_> {
             self.jukebox_changed(pos);
             return;
         }
-        if !self.jukebox_sounds.contains_key(&key) && ticks == 0 {
+        // The song starts on its first tick (a server has no sound playing
+        // that would have started it already).
+        if ticks == 0 {
             self.start_song(pos, &song);
         }
         if ticks % 20 == 0 {
@@ -217,22 +208,6 @@ impl Game<'_> {
         }
         if let Some(BlockEntity::Jukebox(j)) = self.world.block_entities.get_mut(&key) {
             j.ticks += 1;
-        }
-    }
-    /// Let go of songs that ended or whose jukebox stopped.
-    pub(super) fn update_song_volumes(&mut self) {
-        let sounds: Vec<_> = self
-            .jukebox_sounds
-            .iter()
-            .map(|(k, id)| (*k, *id))
-            .collect();
-        for (k, id) in sounds {
-            if !self.audio.engine.is_active(id)
-                || !matches!(self.world.block_entities.get(&k), Some(BlockEntity::Jukebox(j)) if j.playing)
-            {
-                self.audio.stop_and_release(id);
-                self.jukebox_sounds.remove(&k);
-            }
         }
     }
 }

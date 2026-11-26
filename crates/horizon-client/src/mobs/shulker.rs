@@ -4,7 +4,6 @@
 //! closed.
 use super::{
     Damage, DamageKind, Mob, MobEvent, MobWorld, Species, Who,
-    anim::{Poses, State},
     control::LookKind,
     goals::{
         Cx, Goal, HurtByTarget, LOOK, LookAtPlayer, MOVE, NearestTarget, RandomLookAround,
@@ -325,13 +324,6 @@ pub fn look_yaw(m: &Mob, at: [f64; 3]) -> Option<f32> {
         f64::from(delta_forward),
     ))
 }
-/// `Shulker.tick` on a client that is not the server: the lid eases to the
-/// peek it was sent, and its body stays square (`ShulkerBodyRotationControl`).
-pub fn client_tick(m: &mut Mob) {
-    m.anim.vo = m.anim.v;
-    ease_peek(m);
-    m.body_yaw = 0.0;
-}
 /// `Shulker.hurtServer` before the damage: arrows bounce off a closed shell.
 pub fn accepts(m: &Mob, source: &Damage) -> bool {
     !(m.extra.counter == 0 && source.kind == DamageKind::Arrow)
@@ -525,31 +517,6 @@ impl Goal for Peek {
         self.time -= 1;
     }
 }
-/// The shell's texture: plain or dyed.
-pub fn texture(m: &Mob) -> String {
-    const COLORS: [&str; 16] = [
-        "white",
-        "orange",
-        "magenta",
-        "light_blue",
-        "yellow",
-        "lime",
-        "pink",
-        "gray",
-        "light_gray",
-        "cyan",
-        "purple",
-        "blue",
-        "brown",
-        "green",
-        "red",
-        "black",
-    ];
-    match COLORS.get(m.extra.color as usize) {
-        Some(c) => format!("entity/shulker/shulker_{c}"),
-        None => "entity/shulker/shulker".into(),
-    }
-}
 /// `attachFace.getOpposite().getRotation()` by attach face: the open
 /// direction's rotation (`Direction.getRotation` of `face ^ 1`).
 fn face_quat(face: u8) -> glam::Quat {
@@ -562,34 +529,4 @@ fn face_quat(face: u8) -> glam::Quat {
         4 => glam::Quat::from_euler(glam::EulerRot::XYZ, PI / 2.0, 0.0, -PI / 2.0),
         _ => glam::Quat::from_euler(glam::EulerRot::XYZ, PI / 2.0, 0.0, PI / 2.0),
     }
-}
-/// `ShulkerRenderer.setupRotations`: turned onto its attach face around the
-/// block's centre (after a half turn of the body).
-pub fn rotations(m: &Mob) -> glam::Mat4 {
-    let q = face_quat(m.extra.variant3);
-    glam::Mat4::from_rotation_y(PI)
-        * glam::Mat4::from_translation(glam::Vec3::new(0.0, 0.5, 0.0))
-        * glam::Mat4::from_quat(q)
-        * glam::Mat4::from_translation(glam::Vec3::new(0.0, -0.5, 0.0))
-}
-/// `ShulkerModel.setupAnim`: the lid rises and twists with the peek, the
-/// head turns.
-pub fn anim(m: &Mob, s: &State, p: &mut Poses) {
-    let peek = m.anim.lerp(PEEK, s.partial);
-    let bs = (0.5 + peek) * PI;
-    let q = -1.0 + bs.msin();
-    let extra = if bs > PI {
-        (s.age * 0.1).msin() * 0.7
-    } else {
-        0.0
-    };
-    let lid = p.get("lid");
-    lid[1] = 16.0 + bs.msin() * 8.0 + extra;
-    lid[4] = if peek > 0.3 {
-        q * q * q * q * PI * 0.125
-    } else {
-        0.0
-    };
-    p.xrot("head", s.x_rot.to_radians());
-    p.yrot("head", (s.y_rot - 180.0).to_radians());
 }

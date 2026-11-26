@@ -3,48 +3,11 @@
 //! for partial ticks) plus the damage and warning settings, and how strongly
 //! the warning vignette shows.
 use horizon_core::geometry::border::BorderGeometry;
-pub use horizon_core::geometry::border::BorderStatus;
+#[cfg(test)]
+use horizon_core::geometry::border::BorderStatus;
 
 /// `WorldBorder.MAX_SIZE` (the float 5.999997E7 as a double).
 pub const MAX_SIZE: f64 = 59_999_968.0;
-
-/// `BorderStatus.getColor`: the wall colour.
-pub fn status_color(status: BorderStatus) -> u32 {
-    match status {
-        BorderStatus::Growing => 0x40FF80,
-        BorderStatus::Shrinking => 0xFF3030,
-        BorderStatus::Stationary => 0x20A0FF,
-    }
-}
-
-/// `Math.min(double, double)`, including the signed-zero rule.
-pub(crate) fn jmin(a: f64, b: f64) -> f64 {
-    if a.is_nan() {
-        a
-    } else if a == 0.0 && b == 0.0 && b.is_sign_negative() {
-        b
-    } else if a <= b {
-        a
-    } else {
-        b
-    }
-}
-/// `Math.max(double, double)`, including the signed-zero rule.
-pub(crate) fn jmax(a: f64, b: f64) -> f64 {
-    if a.is_nan() {
-        a
-    } else if a == 0.0 && b == 0.0 && a.is_sign_negative() {
-        b
-    } else if a >= b {
-        a
-    } else {
-        b
-    }
-}
-/// `Mth.clamp(double, double, double)`.
-pub(crate) fn jclamp(v: f64, lo: f64, hi: f64) -> f64 {
-    if v < lo { lo } else { jmin(v, hi) }
-}
 
 #[derive(Clone, Debug)]
 pub struct WorldBorder {
@@ -94,10 +57,6 @@ impl WorldBorder {
     pub fn absolute_max_size(&self) -> i32 {
         self.geometry.absolute_max()
     }
-    /// `setAbsoluteMaxSize`.
-    pub fn set_absolute_max_size(&mut self, limit: i32) {
-        let _ = self.geometry.set_absolute_max(limit);
-    }
     /// `getSize`.
     pub fn size(&self) -> f64 {
         self.geometry.size()
@@ -109,14 +68,6 @@ impl WorldBorder {
     /// `getLerpTime`: ticks left in a size change (0 when none).
     pub fn remaining_ticks(&self) -> i64 {
         self.geometry.lerp_time()
-    }
-    /// `getLerpSpeed`: blocks per tick.
-    pub fn lerp_speed(&self) -> f64 {
-        self.geometry.lerp_speed()
-    }
-    /// `getStatus`.
-    pub fn status(&self) -> BorderStatus {
-        self.geometry.status()
     }
     pub fn set_size(&mut self, size: f64) {
         let _ = self.geometry.set_size(size.clamp(1.0, MAX_SIZE));
@@ -152,25 +103,6 @@ impl WorldBorder {
     }
     pub fn contains(&self, x: f64, z: f64) -> bool {
         self.geometry.is_within_bounds(x, z, 0.0)
-    }
-    /// `Hud.extractVignette`: how strongly the vignette turns red at
-    /// (x, z), 0 when outside the warning distance.
-    pub fn warning_strength(&self, x: f64, z: f64) -> f32 {
-        crate::hud_overlays::border_warning(
-            self.distance(x, z) as f32,
-            self.warning_distance,
-            self.warning_time,
-            self.lerp_speed(),
-            self.target_size() - self.size(),
-        )
-    }
-    /// Clamp a point so a body of half-width `half` stays inside.
-    pub fn clamp(&self, x: f64, z: f64, half: f64) -> [f64; 2] {
-        let [min_x, min_z, max_x, max_z] = self.bounds();
-        [
-            x.clamp(min_x + half, (max_x - half).max(min_x + half)),
-            z.clamp(min_z + half, (max_z - half).max(min_z + half)),
-        ]
     }
     pub fn pack(&self) -> horizon_world::nbt::Tag {
         use horizon_world::nbt::Tag;
@@ -216,6 +148,20 @@ impl WorldBorder {
             b.lerp_between(size, to.clamp(1.0, MAX_SIZE), *t);
         }
         b
+    }
+    /// `getStatus`.
+    #[cfg(test)]
+    pub fn status(&self) -> BorderStatus {
+        self.geometry.status()
+    }
+    /// Clamp a point so a body of half-width `half` stays inside.
+    #[cfg(test)]
+    pub fn clamp(&self, x: f64, z: f64, half: f64) -> [f64; 2] {
+        let [min_x, min_z, max_x, max_z] = self.bounds();
+        [
+            x.clamp(min_x + half, (max_x - half).max(min_x + half)),
+            z.clamp(min_z + half, (max_z - half).max(min_z + half)),
+        ]
     }
 }
 

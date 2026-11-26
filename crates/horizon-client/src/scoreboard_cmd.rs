@@ -96,9 +96,6 @@ impl Tracker {
     pub fn mark(&mut self, h: &Holder) {
         self.track(h, 1);
     }
-    pub fn total(&self) -> i32 {
-        self.total
-    }
     /// `sendFeedback`: `zero` fails when nothing counts; `single` and
     /// `multiple` build the message.
     pub fn send(

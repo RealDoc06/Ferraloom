@@ -1,6 +1,6 @@
 //! Ferraloom: the item components Horizon does not model, on the wire.
 //!
-//! `guest::stack_to_network` writes the components Horizon models; a stack
+//! `guest::stack_ref_to_network` writes the components Horizon models; a stack
 //! keeps the others as their saved NBT (`StackData::other`). Vanilla sends
 //! every networked component, so lore, custom data, a styled name and the
 //! rest that `/give`, loot tables, data packs and plugins put on items reach
@@ -23,7 +23,7 @@ pub fn add(stack: &mut Stack, s: &ItemStack) {
     if d.other.is_empty() {
         return;
     }
-    // A styled name replaces the plain text `stack_to_network` wrote.
+    // A styled name replaces the plain text `stack_ref_to_network` wrote.
     if let Some(name) = d.custom_name_tag() {
         stack.added.retain(|(k, _)| *k != component::CUSTOM_NAME);
         stack
@@ -299,7 +299,7 @@ mod tests {
             damage,
             extra,
         };
-        super::super::guest::stack_to_network(|_| 1, |_, _| None, &Some(item)).unwrap()
+        super::super::guest::stack_ref_to_network(|_| 1, |_, _| None, &item).unwrap()
     }
 
     #[test]

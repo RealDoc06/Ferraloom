@@ -88,20 +88,6 @@ impl Stats {
             .and_then(|m| m.get(key))
             .map_or(0, |c| c.value)
     }
-    /// The type's (namespaced) statistics and their values, by key.
-    pub(super) fn of_type(&self, ty: &str) -> impl Iterator<Item = (&String, i32)> {
-        self.values
-            .get(ty)
-            .into_iter()
-            .flatten()
-            .map(|(key, c)| (key, c.value))
-    }
-    /// A value as a server sent it (`ClientboundAwardStatsPacket`): nothing
-    /// to send back.
-    pub(super) fn set(&mut self, ty: String, key: String, value: i32) {
-        let c = self.values.entry(ty).or_default().entry(key).or_default();
-        c.value = value;
-    }
     pub(super) fn reset(&mut self, ty: &str, key: &str) {
         let ty = format!("minecraft:{ty}");
         match self.values.get_mut(&ty) {
@@ -232,6 +218,22 @@ impl Stats {
             let _ = std::fs::write(path, text);
         }
     }
+    /// A value as a server sent it (`ClientboundAwardStatsPacket`): nothing
+    /// to send back.
+    #[cfg(test)]
+    pub(super) fn set(&mut self, ty: String, key: String, value: i32) {
+        let c = self.values.entry(ty).or_default().entry(key).or_default();
+        c.value = value;
+    }
+    /// The type's (namespaced) statistics and their values, by key.
+    #[cfg(test)]
+    pub(super) fn of_type(&self, ty: &str) -> impl Iterator<Item = (&String, i32)> {
+        self.values
+            .get(ty)
+            .into_iter()
+            .flatten()
+            .map(|(key, c)| (key, c.value))
+    }
 }
 /// `players/<dir>/<uuid>.json` of a world (advancements, stats).
 pub(super) fn player_json(world: &Path, dir: &str, uuid: [i32; 4]) -> PathBuf {
@@ -256,7 +258,7 @@ impl Game<'_> {
     }
     /// `ServerStatsCounter.parseLocal`.
     pub(super) fn load_stats(&mut self) {
-        if self.stats.loaded || self.remote.is_some() || self.no_player_here() {
+        if self.stats.loaded || self.no_player_here() {
             return;
         }
         self.stats.loaded = true;
@@ -266,7 +268,7 @@ impl Game<'_> {
     }
     /// `ServerStatsCounter.save`.
     pub(super) fn save_stats(&self) {
-        if !self.stats.loaded || self.remote.is_some() || self.no_player_here() {
+        if !self.stats.loaded || self.no_player_here() {
             return;
         }
         if let Some(path) = self.stats_path() {

@@ -2,13 +2,8 @@
 //! `animal_brain`) carries items from copper chests to chests
 //! (`transport_items`); here the chest interaction animations, the idle head
 //! spin, and weathering until they turn into statues.
-use super::{
-    Mob, MobEvent, MobWorld,
-    anim::{Poses, State},
-    keyframes::Animation,
-};
+use super::{Mob, MobEvent, MobWorld};
 use horizon_core::random::RandomSource;
-use std::collections::HashMap;
 
 // Copper golem state: `variant` the weathering (0 unaffected .. 3 oxidized),
 // `variant3` the `CopperGolemState`, `main_hand` with `ints[1]` the carried
@@ -31,25 +26,6 @@ pub fn register(m: &mut Mob) {
     m.persistent = true;
     // nextWeatheringTick starts unset (-1); waxed is -2.
     m.extra.vector[0] = -1.0;
-}
-/// `CopperGolemOxidationLevels`: the body and eye textures.
-pub fn texture(m: &Mob) -> String {
-    match m.extra.variant {
-        0 => "entity/copper_golem/copper_golem".into(),
-        n => format!(
-            "entity/copper_golem/copper_golem_{}",
-            WEATHER[n.min(3) as usize]
-        ),
-    }
-}
-pub fn eye_texture(m: &Mob) -> String {
-    match m.extra.variant {
-        0 => "entity/copper_golem/copper_golem_eyes".into(),
-        n => format!(
-            "entity/copper_golem/copper_golem_eyes_{}",
-            WEATHER[n.min(3) as usize]
-        ),
-    }
 }
 /// The sound of the oxidation level: `spin`, `hurt`, `death` or `step`.
 pub fn sound(m: &Mob, what: &str) -> &'static str {
@@ -159,40 +135,6 @@ pub fn update_weathering(
         ];
         if w.facts.is_air(w.world.block(p[0], p[1], p[2])) && lr.next_float() <= 0.0058 {
             events.push(MobEvent::BecomeStatue { mob: m.id });
-        }
-    }
-}
-/// `CopperGolemModel.setupAnim`.
-pub fn anim(m: &Mob, s: &State, p: &mut Poses, animations: &HashMap<String, Animation>) {
-    p.xrot("head", s.x_rot.to_radians());
-    p.yrot("head", s.y_rot.to_radians());
-    let get = |n: &str| animations.get(&format!("CopperGolemAnimation.COPPER_GOLEM_{n}"));
-    let holding = m.extra.main_hand.is_some() || m.extra.off_hand.is_some();
-    if holding {
-        if let Some(a) = get("WALK_ITEM") {
-            a.apply_walk(s.pos, s.speed, 2.0, 2.5, p);
-        }
-        // poseHeldItemArmsIfStill.
-        let right = p.get("right_arm");
-        right[3] = right[3].min(-0.872_664_6);
-        right[4] = right[4].min(-0.113_446_4);
-        right[5] = right[5].min(-0.064_577_185);
-        let left = p.get("left_arm");
-        left[3] = left[3].min(-0.872_664_6);
-        left[4] = left[4].max(0.113_446_4);
-        left[5] = left[5].max(0.064_577_185);
-    } else if let Some(a) = get("WALK") {
-        a.apply_walk(s.pos, s.speed, 2.0, 2.5, p);
-    }
-    for (state, name) in [
-        (&m.anim.states[0], "IDLE"),
-        (&m.anim.states[1], "CHEST_INTERACTION_NOITEM_GET"),
-        (&m.anim.states[2], "CHEST_INTERACTION_NOITEM_NOGET"),
-        (&m.anim.states[3], "CHEST_INTERACTION_ITEM_DROP"),
-        (&m.anim.states[4], "CHEST_INTERACTION_ITEM_NODROP"),
-    ] {
-        if let (Some(ms), Some(a)) = (state.millis(s.age), get(name)) {
-            a.apply(ms, 1.0, p);
         }
     }
 }

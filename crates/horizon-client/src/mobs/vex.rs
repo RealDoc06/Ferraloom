@@ -3,15 +3,12 @@
 //! limited life.
 use super::{
     Damage, DamageKind, Mob, MobEvent, Species, Who,
-    anim::{Poses, State},
     control::Operation,
     goals::{
         Cx, Float, Goal, HurtByTarget, LookAtPlayer, MOVE, NearestTarget, goal_clone, reduced,
     },
 };
-use horizon_core::geometry::trig::Mth;
 use horizon_core::{geometry::Vec3, random::RandomSource};
-use std::f32::consts::PI;
 
 // Vex state: `flag` charging, `counter2` the owner's mob id (0 none),
 // `home` the bound origin, `egg_time` the life left (-1 unlimited).
@@ -222,56 +219,5 @@ pub fn ai_step(m: &mut Mob, w: &super::MobWorld) {
             m.extra.egg_time = 20;
             m.damage(1.0, Damage::of(DamageKind::Generic));
         }
-    }
-}
-/// `VexModel.setupAnim`.
-pub fn anim(m: &Mob, s: &State, p: &mut Poses) {
-    p.yrot("head", s.y_rot.to_radians());
-    p.xrot("head", s.x_rot.to_radians());
-    let bob = (s.age * 5.5 * horizon_core::geometry::trig::DEG_TO_RAD).mcos() * 0.1;
-    p.zrot("right_arm", PI / 5.0 + bob);
-    p.zrot("left_arm", -(PI / 5.0 + bob));
-    if m.extra.flag {
-        p.xrot("body", 0.0);
-        // setArmsCharging
-        let (right, left) = (m.extra.main_hand.is_some(), m.extra.off_hand.is_some());
-        if !right && !left {
-            p.xrot("right_arm", -1.221_730_5);
-            p.yrot("right_arm", PI / 12.0);
-            p.zrot("right_arm", -0.471_238_88 - bob);
-            p.xrot("left_arm", -1.221_730_5);
-            p.yrot("left_arm", -PI / 12.0);
-            p.zrot("left_arm", 0.471_238_88 + bob);
-        } else {
-            let sword = (std::f64::consts::PI * 7.0 / 6.0) as f32;
-            if right {
-                p.xrot("right_arm", sword);
-                p.yrot("right_arm", PI / 12.0);
-                p.zrot("right_arm", -0.471_238_88 - bob);
-            }
-            if left {
-                p.xrot("left_arm", sword);
-                p.yrot("left_arm", -PI / 12.0);
-                p.zrot("left_arm", 0.471_238_88 + bob);
-            }
-        }
-    } else {
-        p.xrot("body", PI / 20.0);
-    }
-    let deg = horizon_core::geometry::trig::DEG_TO_RAD;
-    let wing = 1.099_557_4 + (s.age * 45.836_624 * deg).mcos() * deg * 16.2;
-    p.yrot("left_wing", wing);
-    p.yrot("right_wing", -wing);
-    p.xrot("left_wing", 0.471_238_88);
-    p.zrot("left_wing", -0.471_238_88);
-    p.xrot("right_wing", 0.471_238_88);
-    p.zrot("right_wing", 0.471_238_88);
-}
-/// The vex's texture: brighter while charging.
-pub fn texture(m: &Mob) -> &'static str {
-    if m.extra.flag {
-        "entity/illager/vex_charging"
-    } else {
-        "entity/illager/vex"
     }
 }

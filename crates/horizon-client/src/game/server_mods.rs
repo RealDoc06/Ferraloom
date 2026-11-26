@@ -36,9 +36,6 @@ impl Game<'_> {
     pub(super) fn tick_server_mods(&mut self) {}
     pub(super) fn mod_block_event(&mut self, _pos: [i32; 3], _state: BlockStateId, _placed: bool) {}
     pub(super) fn mod_player_chat(&mut self, _who: Who, _text: &str) {}
-    pub(super) fn local_server_mod_command(&mut self, _line: &str) -> bool {
-        false
-    }
     pub(super) fn guest_server_mod_command(
         &mut self,
         _host: &mut LanHost,
@@ -55,7 +52,6 @@ mod run {
     use super::{Game, LanHost, ModEvent, Who};
     use horizon_client::chunk_map::ChunkMap;
     use horizon_client::{
-        command::args::GameMode as Mode,
         lan::data::component_nbt,
         text::{self, Text},
     };
@@ -199,26 +195,6 @@ mod run {
         /// out of `self.lan`.
         pub(in crate::game) fn server_players(&self, host: Option<&LanHost>) -> Vec<ServerPlayer> {
             let mut out = Vec::new();
-            if self.options.execution_role.is_client()
-                && self.remote.is_none()
-                && let Some(p) = &self.player
-            {
-                out.push(ServerPlayer {
-                    id: self.player_uuid_string(),
-                    name: crate::game::chat::PLAYER_NAME.to_owned(),
-                    x: p.position.x,
-                    y: p.position.y,
-                    z: p.position.z,
-                    dimension: self.dim.id().to_owned(),
-                    game_mode: match self.mode {
-                        Mode::Survival => GameMode::Survival,
-                        Mode::Creative => GameMode::Creative,
-                        Mode::Adventure => GameMode::Adventure,
-                        Mode::Spectator => GameMode::Spectator,
-                    },
-                    health: p.health.health(),
-                });
-            }
             let guests = host
                 .or(self.lan.as_ref())
                 .into_iter()
@@ -239,15 +215,13 @@ mod run {
         /// Whether what players do now reaches server mods: one is running
         /// and this game simulates the world.
         fn hears_players(&self) -> bool {
-            self.mods.server && self.remote.is_none()
+            self.mods.server
         }
 
         /// The tick's end: joins and leaves, the tick's events, the tick hook.
         pub(in crate::game) fn tick_server_mods(&mut self) {
-            if !self.options.execution_role.is_client() {
-                // A server has no frames to check its dev mods in.
-                self.reload_dev_mods();
-            }
+            // A server has no frames to check its dev mods in.
+            self.reload_dev_mods();
             self.send_server_mod_commands();
             if !self.mods.server {
                 return;
@@ -426,26 +400,6 @@ mod run {
             }
         }
 
-        /// `/line` typed by the window's own player in-frame: true when a
-        /// server mod owns it.
-        pub(in crate::game) fn local_server_mod_command(&mut self, line: &str) -> bool {
-            if !self.hears_players() {
-                return false;
-            }
-            let players = self.server_players(None);
-            let Some(me) = players.first().cloned() else {
-                return false;
-            };
-            let snapshot = self.mod_snapshot_with(players);
-            self.mods.mods.set_snapshot(snapshot);
-            self.lend_world();
-            let owned = self.mods.mods.server_command(&me, line);
-            self.return_world();
-            self.show_mod_output();
-            self.apply_mod_block_writes();
-            owned
-        }
-
         /// `/line` typed by a connection's player: true when a server mod
         /// owns it, whatever the player's permission level.
         pub(in crate::game) fn guest_server_mod_command(
@@ -487,13 +441,6 @@ mod run {
             id: &str,
             line: Text,
         ) {
-            let local = self.options.execution_role.is_client()
-                && self.remote.is_none()
-                && self.player.is_some();
-            if local && self.player_uuid_string() == id {
-                self.add_mod_chat_line(line);
-                return;
-            }
             let Some(host) = host.or(self.lan.as_mut()) else {
                 return;
             };

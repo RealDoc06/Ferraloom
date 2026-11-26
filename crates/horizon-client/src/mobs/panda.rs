@@ -7,7 +7,6 @@
 //! `unhappy`, `sneeze` and `eat` are the synched data a server sends.
 use super::{
     DamageKind, Mob, MobEvent, MobWorld, Species, Who,
-    body_anim::Panda as Pose,
     finalize::{self, Attr},
     goals::{
         Avoid, AvoidEntity, Breed, Cx, Float, FollowParent, Goal, HurtByTarget, JUMP, LOOK, MOVE,
@@ -19,7 +18,6 @@ use horizon_core::{
         Vec3,
         trig::{DEG_TO_RAD, Mth},
     },
-    jmath,
     random::{LegacyRandom, RandomSource},
 };
 
@@ -269,32 +267,6 @@ pub fn held_count(m: &Mob) -> u32 {
 
 // ---- synched data ---------------------------------------------------------
 
-/// `DATA_ID_FLAGS` from a server: a sneeze that ends is a sneeze that was
-/// done (`afterSneeze`'s particle).
-pub fn set_flags(m: &mut Mob, flags: u8) {
-    if flag(m, FLAG_SNEEZE) && flags & FLAG_SNEEZE == 0 {
-        let at = [m.position.x, m.position.y, m.position.z];
-        let particle = sneeze_particle(at, m.width(), m.body_yaw, m.eye_y(), m.velocity);
-        st(m).sneezed = Some(particle);
-    }
-    st(m).flags = flags;
-}
-/// `UNHAPPY_COUNTER` and `SNEEZE_COUNTER` from a server.
-pub fn set_unhappy(m: &mut Mob, unhappy: i32) {
-    st(m).unhappy = unhappy;
-}
-pub fn set_sneeze(m: &mut Mob, sneeze: i32) {
-    st(m).sneeze = sneeze;
-}
-/// `EAT_COUNTER` from a server: a bite every five.
-pub fn set_eat(m: &mut Mob, eat: i32) {
-    let bite = eat > 0 && eat % 5 == 0 && st(m).eat != eat && m.extra.main_hand.is_some();
-    st(m).eat = eat;
-    if bite {
-        let crumbs = crumbs(m);
-        st(m).crumbs = Some(crumbs);
-    }
-}
 /// What the window draws since the last call: the crumbs of a bite and the
 /// sneeze's particle (position, velocity).
 pub fn effects(m: &mut Mob) -> (Option<Crumbs>, Option<([f64; 3], [f64; 3])>) {
@@ -312,9 +284,6 @@ fn play(m: &Mob, sound: &'static str, volume: f32, pitch: f32, events: &mut Vec<
         let at = [m.position.x, m.position.y, m.position.z];
         events.push(MobEvent::Sound(sound, at, volume, pitch));
     }
-}
-fn lerp(a: f32, o: f32, n: f32) -> f32 {
-    o + a * (n - o)
 }
 /// `updateSitAmount`, `updateOnBackAnimation` and `updateRollAmount`.
 fn step_amount(amount: &mut [f32; 2], on: bool) {
@@ -505,132 +474,8 @@ pub fn tick(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
     handle_eating(m, w, events);
     // updateOnBackAnimation and updateRollAmount ran with the others.
 }
-/// `Panda.tick` for a panda a client only displays: the flags and counters
-/// are the server's; the amounts and the roll count are the client's own.
-pub fn client_tick(m: &mut Mob, thundering: bool) {
-    if is_rolling(m) {
-        handle_roll(m, false);
-    } else {
-        st(m).roll_counter = 0;
-    }
-    if is_sitting(m) {
-        m.head_pitch = 0.0;
-    }
-    st(m).scared = is_scared(m, thundering);
-    update_amounts(m);
-}
 
 // ---- drawing ---------------------------------------------------------------
-
-/// `PandaRenderer.getTextureLocation`.
-pub fn texture(m: &Mob) -> String {
-    let v = usize::from(variant(m)).min(GENES.len() - 1);
-    let gene = GENES[v];
-    match (m.is_baby(), gene) {
-        (false, "normal") => "entity/panda/panda".into(),
-        (false, g) => format!("entity/panda/panda_{g}"),
-        (true, "normal") => "entity/panda/panda_baby".into(),
-        (true, g) => format!("entity/panda/{g}_panda_baby"),
-    }
-}
-/// What `PandaRenderState` gives `PandaModel.setupAnim`.
-pub fn pose(m: &Mob, partial: f32) -> Pose {
-    let Some(s) = get(m) else {
-        return Pose::default();
-    };
-    let amount = |a: &[f32; 2]| lerp(partial, a[0], a[1]);
-    Pose {
-        unhappy: s.unhappy > 0,
-        sneezing: s.flags & FLAG_SNEEZE != 0,
-        sneeze_time: s.sneeze,
-        eating: s.eat > 0,
-        scared: s.scared,
-        sit_amount: amount(&s.sit_amount),
-        lie_on_back_amount: amount(&s.on_back_amount),
-        roll_amount: if m.is_baby() {
-            0.0
-        } else {
-            amount(&s.roll_amount)
-        },
-    }
-}
-/// `PandaRenderer.setupRotations` after the common ones: the roll over, the
-/// sit up and the lie on its back, and a scared panda's shiver.
-pub fn rotations(m: &Mob, partial: f32) -> glam::Mat4 {
-    use glam::{Mat4, Vec3};
-    let Some(s) = get(m) else {
-        return Mat4::IDENTITY;
-    };
-    let baby = m.is_baby();
-    let x_rot = m.previous_head_pitch + (m.head_pitch - m.previous_head_pitch) * partial;
-    let mut t = Mat4::IDENTITY;
-    let translate = |y: f32| Mat4::from_translation(Vec3::new(0.0, y, 0.0));
-    let tilt = |degrees: f32| Mat4::from_rotation_x(degrees.to_radians());
-    if s.roll_counter > 0 {
-        let time = s.roll_counter as f32 + partial;
-        let (pos, frac) = (time.floor() as i32, time.fract());
-        let next = pos + 1;
-        let y = if baby { 0.3 } else { 0.8 };
-        // getAngle: the angle between this step and the next, except in the
-        // last step of a quarter.
-        let angle = |this: f32, next_angle: f32, threshold: i32| {
-            if next < threshold {
-                lerp(frac, this, next_angle)
-            } else {
-                this
-            }
-        };
-        let quarter = pos / 8;
-        if (0..4).contains(&quarter) {
-            let base = 90.0 * quarter as f32;
-            let step = |p: i32| base + 90.0 * (p - quarter * 8) as f32 / 7.0;
-            let a = angle(step(pos), step(next), (quarter + 1) * 8);
-            let lift = match quarter {
-                0 => (y + 0.2) * (a / 90.0),
-                1 => y + 0.2 + (y - 0.2) * (a - 90.0) / 90.0,
-                2 => y + y * (270.0 - a) / 90.0,
-                _ => y * ((360.0 - a) / 90.0),
-            };
-            t = t * translate(lift) * tilt(-a);
-        }
-    }
-    let sit = s.sit_amount;
-    let sit = lerp(partial, sit[0], sit[1]);
-    if sit > 0.0 {
-        t = t * translate(0.8 * sit) * tilt(lerp(sit, x_rot, x_rot + 90.0)) * translate(-sit);
-        if s.scared {
-            let age = m.age as f32 + partial;
-            let shake = (jmath::cos(f64::from(age * 1.25))
-                * std::f64::consts::PI
-                * f64::from(0.05_f32)) as f32;
-            t *= Mat4::from_rotation_y(shake.to_radians());
-            if baby {
-                t *= Mat4::from_translation(Vec3::new(0.0, 0.8, 0.55));
-            }
-        }
-    }
-    let back = lerp(partial, s.on_back_amount[0], s.on_back_amount[1]);
-    if back > 0.0 {
-        let y = if baby { 0.5 } else { 1.3 };
-        t = t * translate(y * back) * tilt(lerp(back, x_rot, x_rot + 180.0));
-    }
-    t
-}
-/// `PandaHoldsItemLayer`: where the item in its mouth sits, in the model's
-/// space, while it sits and eats.
-pub fn item_offset(m: &Mob, partial: f32) -> Option<glam::Mat4> {
-    let s = get(m)?;
-    if m.extra.main_hand.is_none() || s.flags & FLAG_SIT == 0 || s.scared {
-        return None;
-    }
-    let (mut y, mut z) = (1.4_f32, -0.6_f32);
-    if s.eat > 0 {
-        let bite = ((m.age as f32 + partial) * 0.6).msin();
-        z -= 0.2 * bite + 0.2;
-        y -= 0.09 * bite;
-    }
-    Some(glam::Mat4::from_translation(glam::Vec3::new(0.1, y, z)))
-}
 
 // ---- goals -----------------------------------------------------------------
 

@@ -576,7 +576,6 @@ impl Game<'_> {
             Some(&level_name),
             Some(props.seed),
             game_mode == 1,
-            None,
         )?)?;
         if new_world {
             self.level.hardcore = props.hardcore;

@@ -3,16 +3,14 @@
 //! outside the Nether, hoglins headbutt their targets into the air.
 use super::{
     Mob, MobEvent, MobWorld, Species, Who,
-    anim::{Poses, State},
     goals::{
         Avoid, AvoidEntity, Cx, Float, Goal, HurtByTarget, LOOK, LookAtPlayer, MOVE, MeleeAttack,
         NearestTarget, Prey, RandomLookAround, Stroll, TARGET, TargetState, goal_clone,
         target_continue,
     },
 };
-use horizon_core::geometry::{Vec3, trig::Mth};
+use horizon_core::geometry::Vec3;
 use horizon_core::random::{LegacyRandom, RandomSource};
-use std::f32::consts::PI;
 
 /// `PiglinAi.ADMIRE_DURATION`.
 pub const ADMIRE: i32 = 119;
@@ -465,13 +463,6 @@ pub fn celebrate(m: &mut Mob, w: &MobWorld) {
         t.position.z.floor() as i32,
     ]);
 }
-/// `Hoglin.isConverting` and `AbstractPiglin.isConverting` on a client: in a
-/// dimension that is not piglin safe (`nether` is false), a mob that is not
-/// immune (`flag2`) and has AI shakes. `counter2 > 0` draws the shake, as it
-/// does on the server while the zombification counts up.
-pub fn client_converting(m: &mut Mob, nether: bool) {
-    m.extra.counter2 = i32::from(!nether && !m.extra.flag2 && !m.no_ai);
-}
 /// Per-tick piglin and hoglin state: admiring, anger, zombification and the
 /// hoglin attack animation. Returns a conversion when it happens.
 pub fn ai_step(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
@@ -628,139 +619,4 @@ pub fn hoglin_hurt_target(m: &mut Mob, who: Who, cx: &mut Cx) {
         "entity.hoglin.attack"
     };
     cx.events.push(MobEvent::Sound(sound, m.center(), 1.0, 1.0));
-}
-/// `AbstractPiglinModel.setupAnim`: the ears flap around their default angle
-/// (30 degrees for adults, 5 for babies).
-pub fn ears(p: &mut Poses, s: &State) {
-    use horizon_core::geometry::trig::DEG_TO_RAD;
-    let default = if s.baby { 5.0 } else { 30.0 } * DEG_TO_RAD;
-    let freq = s.age * 0.1 + s.pos * 0.5;
-    let amp = 0.08 + s.speed * 0.4;
-    p.zrot("left_ear", -default - (freq * 1.2).mcos() * amp);
-    p.zrot("right_ear", default + freq.mcos() * amp);
-}
-/// Piglins' and brutes' ears flap (`AbstractPiglinModel`), arms follow the
-/// arm pose (`PiglinModel`).
-pub fn piglin_anim(m: &Mob, s: &State, p: &mut Poses) {
-    // Piglin.getArmPose: dancing comes first.
-    let pose = if m.extra.scratch[0] > 0 {
-        PiglinPose::Dancing
-    } else if m.extra.using_item > 0 {
-        PiglinPose::AdmiringItem
-    } else if m.extra.flag {
-        PiglinPose::CrossbowCharge
-    } else if m.extra.main_hand.as_deref() == Some("minecraft:crossbow") && m.ai.aggressive {
-        PiglinPose::CrossbowHold
-    } else if m.ai.aggressive && m.extra.main_hand.is_some() {
-        PiglinPose::MeleeWeapon
-    } else {
-        PiglinPose::Default
-    };
-    piglin_pose(
-        p,
-        s,
-        pose,
-        25.0,
-        m.extra.using_item as f32,
-        m.main_arm_left(),
-    );
-}
-/// `PiglinArmPose`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PiglinPose {
-    Default,
-    Dancing,
-    MeleeWeapon,
-    CrossbowHold,
-    CrossbowCharge,
-    AdmiringItem,
-}
-/// `PiglinModel.setupAnim`; `left` when the piglin's main arm is the left one.
-pub fn piglin_pose(
-    p: &mut Poses,
-    s: &State,
-    pose: PiglinPose,
-    max_charge: f32,
-    ticks: f32,
-    left: bool,
-) {
-    use super::anim::{ArmPose, Hum, crossbow_charge, crossbow_hold, humanoid};
-    let mut h = Hum::new(ArmPose::Empty, ArmPose::Empty);
-    h.weapon_swing = pose == PiglinPose::MeleeWeapon;
-    h.left_main = left;
-    h.charge = (max_charge, ticks);
-    humanoid(p, s, &h);
-    ears(p, s);
-    let (hy, hx) = (s.y_rot.to_radians(), s.x_rot.to_radians());
-    let rad = |v: f64| v as f32;
-    let deg = horizon_core::geometry::trig::DEG_TO_RAD;
-    match pose {
-        PiglinPose::Dancing => {
-            let dance = s.age / 60.0;
-            p.zrot(
-                "right_ear",
-                rad(std::f64::consts::PI / 6.0) + deg * (dance * 30.0).msin() * 10.0,
-            );
-            p.zrot(
-                "left_ear",
-                rad(-std::f64::consts::PI / 6.0) - deg * (dance * 30.0).mcos() * 10.0,
-            );
-            p.get("head")[0] += (dance * 10.0).msin();
-            p.get("head")[1] += (dance * 40.0).msin() + 0.4;
-            let z = deg * (70.0 + (dance * 40.0).mcos() * 10.0);
-            p.zrot("right_arm", z);
-            p.zrot("left_arm", -z);
-            p.get("right_arm")[1] += (dance * 40.0).msin() * 0.5 - 0.5;
-            p.get("left_arm")[1] += (dance * 40.0).msin() * 0.5 + 0.5;
-            p.get("body")[1] += (dance * 40.0).msin() * 0.35;
-        }
-        // holdWeaponHigh
-        PiglinPose::MeleeWeapon if s.swing == 0.0 => {
-            p.xrot(if left { "left_arm" } else { "right_arm" }, -1.8)
-        }
-        PiglinPose::CrossbowHold => crossbow_hold(p, hx, hy, !left),
-        PiglinPose::CrossbowCharge => crossbow_charge(p, max_charge, ticks, !left),
-        PiglinPose::AdmiringItem => {
-            p.xrot("head", 0.5);
-            p.yrot("head", 0.0);
-            if left {
-                p.yrot("right_arm", -0.5);
-                p.xrot("right_arm", -0.9);
-            } else {
-                p.yrot("left_arm", 0.5);
-                p.xrot("left_arm", -0.9);
-            }
-        }
-        _ => {}
-    }
-}
-/// `Hoglin.handleEntityEvent` and `Zoglin`'s event 4 on a client: the
-/// headbutt, which `aiStep` then counts down.
-pub fn client_event(m: &mut Mob, event: u8) {
-    if event == 4 {
-        m.extra.anim_ticks = 10;
-    }
-}
-/// The headbutt's countdown (`Hoglin.aiStep`, `Zoglin.aiStep`) on a client.
-pub fn client_tick(m: &mut Mob) {
-    if m.extra.anim_ticks > 0 {
-        m.extra.anim_ticks -= 1;
-    }
-}
-/// `HoglinModel.setupAnim`.
-pub fn hoglin_anim(m: &Mob, s: &State, p: &mut Poses) {
-    let (pos, sp) = (s.pos, s.speed);
-    p.zrot("right_ear", -PI * 2.0 / 9.0 - sp * pos.msin());
-    p.zrot("left_ear", PI * 2.0 / 9.0 + sp * pos.msin());
-    p.yrot("head", s.y_rot.to_radians());
-    let remaining = m.extra.anim_ticks as f32;
-    let f = 1.0 - (10.0 - 2.0 * remaining).abs() / 10.0;
-    p.xrot("head", 0.872_664_63 + (-PI / 9.0 - 0.872_664_63) * f);
-    if s.baby {
-        p.get("head")[1] += f * 2.5;
-    }
-    p.xrot("right_front_leg", pos.mcos() * 1.2 * sp);
-    p.xrot("left_front_leg", (pos + PI).mcos() * 1.2 * sp);
-    p.xrot("right_hind_leg", (pos + PI).mcos() * 1.2 * sp);
-    p.xrot("left_hind_leg", pos.mcos() * 1.2 * sp);
 }

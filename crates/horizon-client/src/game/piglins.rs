@@ -225,12 +225,7 @@ impl Game<'_> {
                 continue;
             }
             // Nuggets come whole, anything else one at a time.
-            let (taken_item, id) = (e.clone(), self.mobs[i].id);
             let item = e.stack.item.clone();
-            self.add_pickup(
-                super::pickups::Taken::Item(Box::new(taken_item)),
-                super::pickups::Collector::Mob(id),
-            );
             let stack = if &*item == "minecraft:gold_nugget" {
                 self.dropped.remove(j).stack
             } else {

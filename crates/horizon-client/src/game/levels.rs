@@ -54,7 +54,6 @@ pub(super) struct Parked {
     others: Vec<commands::OtherEntity>,
     boats: Vec<boats::Boat>,
     carts: Vec<minecarts::Minecart>,
-    jukebox_sounds: HashMap<(i32, i32, i32), u64>,
     bolts: Vec<lightning::Bolt>,
     crystals: Vec<dragon::Crystal>,
     dragon: Option<dragon::Dragon>,
@@ -187,7 +186,6 @@ impl Game<'_> {
             others: Vec::new(),
             boats: Vec::new(),
             carts: Vec::new(),
-            jukebox_sounds: HashMap::new(),
             bolts: Vec::new(),
             crystals: Vec::new(),
             dragon: None,
@@ -241,7 +239,6 @@ impl Game<'_> {
         swap(&mut self.others, &mut p.others);
         swap(&mut self.boats, &mut p.boats);
         swap(&mut self.carts, &mut p.carts);
-        swap(&mut self.jukebox_sounds, &mut p.jukebox_sounds);
         swap(&mut self.bolts, &mut p.bolts);
         swap(&mut self.crystals, &mut p.crystals);
         swap(&mut self.dragon, &mut p.dragon);
@@ -280,7 +277,6 @@ impl Game<'_> {
         self.creaking.swap_level(&mut p.creaking);
         // What only the client draws starts over.
         self.particles.clear();
-        self.pickups.clear();
     }
 
     /// Put `target`'s level in place, opening it first if it is not loaded.
@@ -288,10 +284,6 @@ impl Game<'_> {
     /// clock and weather go with the swap. `host` is the hub when the caller
     /// holds it (`self.lan` is taken during the network tick).
     pub(super) fn enter_level(&mut self, host: Option<&mut LanHost>, target: Dim) -> Result<()> {
-        // The in-frame game keeps its one level (`enter_dimension`).
-        if self.options.execution_role.is_client() {
-            return Ok(());
-        }
         if target != self.dim {
             let (mut p, opened) = match self.levels.parked.remove(&target) {
                 Some(p) => (p, false),
@@ -329,7 +321,7 @@ impl Game<'_> {
     /// nobody is in it; returns the level to put back afterwards. Only a
     /// server holds other levels.
     pub(super) fn enter_command_level(&mut self, dim: Dim) -> Option<Dim> {
-        if self.options.execution_role.is_client() || dim == self.dim {
+        if dim == self.dim {
             return None;
         }
         let back = self.dim;

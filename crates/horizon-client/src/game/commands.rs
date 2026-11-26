@@ -3156,17 +3156,8 @@ impl Game<'_> {
             }
         };
         if let Some(capture) = self.chat_capture.as_mut() {
-            capture.push(line.clone());
+            capture.push(line);
         }
-        let focused = self.screen == Screen::Chat;
-        self.ui.chat.add(
-            &self.gui.atlas,
-            line,
-            None,
-            horizon_client::chat::ChatSource::Player,
-            self.ticks,
-            focused,
-        );
         Ok(1)
     }
     /// MessageArgument: `@p`-style selectors in a message become names.

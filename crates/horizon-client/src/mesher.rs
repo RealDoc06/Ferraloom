@@ -42,9 +42,6 @@ pub struct Vertex {
     /// The `GLINT_TEXTURING` atlas UV for a foil item quad; zero elsewhere.
     pub glint_uv: [f32; 2],
 }
-/// `Vertex::normal` of a baked-colour quad of an `entitySolid` model: the render type culls
-/// back faces, which the entity pipelines here do not, so `entity.wgsl` discards them.
-pub const CULL_BACK: [i8; 4] = [0, 0, 0, 1];
 /// A section vertex: vanilla's `DefaultVertexFormat.BLOCK` (position, colour,
 /// UV0, UV2) with the sprite's array layer beside the light, in 24 bytes
 /// rather than vanilla's 28: the UV is fixed point, which holds model UVs
@@ -70,9 +67,6 @@ pub struct TerrainVertex {
 }
 /// Fixed-point steps per unit of `TerrainVertex` UVs, which span `[0, 2)`.
 pub const UV_STEPS: f32 = 32768.0;
-/// Fixed-point steps per block of distant-terrain UVs (`TerrainVertex::tiled`),
-/// which span `[0, 2048)`: merged faces repeat their sprite once per block.
-pub const TILED_UV_STEPS: f32 = 32.0;
 impl TerrainVertex {
     pub fn new(pos: [f32; 3], uv: [f32; 2], layer: u16, color: u32, light: u16) -> Self {
         Self {
@@ -83,42 +77,9 @@ impl TerrainVertex {
             color,
         }
     }
-    /// A vertex of a merged distant-terrain face, its UV in blocks from the
-    /// face's corner. Drawn with an instance UV scale of `1 / TILED_UV_STEPS`.
-    pub fn tiled(pos: [f32; 3], uv: [f32; 2], layer: u16, color: u32, light: u16) -> Self {
-        Self {
-            pos,
-            uv: uv.map(|v| (v * TILED_UV_STEPS).round().clamp(0.0, f32::from(u16::MAX)) as u16),
-            layer,
-            light,
-            color,
-        }
-    }
-    /// The UV the GPU samples.
-    pub fn uv(&self) -> [f32; 2] {
-        self.uv.map(|v| f32::from(v) / UV_STEPS)
-    }
 }
 #[cfg(test)]
 mod vertex_tests {
-    use super::TerrainVertex;
-    #[test]
-    fn model_uvs_pack_exactly() {
-        for i in 0..=32 {
-            let u = i as f32 / 32.0;
-            let v = TerrainVertex::new([0.0; 3], [u, 1.0 - u], 0, 0, 0);
-            assert_eq!(v.uv(), [u, 1.0 - u]);
-        }
-    }
-    #[test]
-    fn other_uvs_round_within_a_step() {
-        // A flowing fluid's rotated UV.
-        let uv = [0.5 + 0.25 * 0.3f32.sin(), 0.5 - 0.25 * 0.3f32.cos()];
-        let packed = TerrainVertex::new([0.0; 3], uv, 0, 0, 0).uv();
-        for (a, b) in packed.iter().zip(uv) {
-            assert!((a - b).abs() <= 0.5 / 32768.0, "{a} {b}");
-        }
-    }
     #[test]
     fn emission_keeps_the_colour_and_the_free_bits() {
         let rgb = super::pack_rgb([0x12, 0x34, 0x56]);
@@ -307,19 +268,6 @@ struct Info {
     /// the full width (vertical faces: 1 when the whole square is covered).
     cover: [f32; 6],
 }
-/// Derived per-state facts, exposed for the section-mesh parity gate.
-#[derive(Clone, Copy, Debug)]
-pub struct MeshFacts {
-    pub shade: f32,
-    pub emissive: bool,
-    pub legacy_solid: bool,
-    pub light_permeable: bool,
-    pub solid_render: bool,
-    pub full_collision: bool,
-    pub emission: u8,
-    pub overlay: bool,
-    pub tint_sources: u8,
-}
 pub struct MeshTables {
     info: Vec<Info>,
     pub visibility: FaceVisibility,
@@ -475,20 +423,6 @@ impl MeshTables {
             water_overlay: layer("minecraft:block/water_overlay")?,
             lava_still: layer("minecraft:block/lava_still")?,
             lava_flow: layer("minecraft:block/lava_flow")?,
-        })
-    }
-    pub fn facts(&self, state: BlockStateId) -> Option<MeshFacts> {
-        let i = self.info.get(state.0 as usize)?;
-        Some(MeshFacts {
-            shade: i.shade,
-            emissive: i.emissive,
-            legacy_solid: i.legacy_solid,
-            light_permeable: i.permeable,
-            solid_render: i.solid,
-            full_collision: i.full,
-            emission: i.emission,
-            overlay: i.overlay,
-            tint_sources: i.tint_count,
         })
     }
     /// `TerrainParticle`'s colour: tint source 0's `colorAsTerrainParticle`,

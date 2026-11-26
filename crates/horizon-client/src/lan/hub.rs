@@ -335,6 +335,14 @@ impl Hub {
         c["insertion"] = name.into();
         crate::scoreboard::component_tag(&c)
     }
+    /// A whole tick with one level: the network, the level, then the
+    /// players' latencies.
+    pub fn tick(&mut self, ctx: &mut TickCtx) -> Vec<HostEvent> {
+        let mut events = self.poll(ctx);
+        events.extend(self.tick_level(ctx));
+        self.end_tick();
+        events
+    }
 }
 
 /// A yellow translation of player names (`multiplayer.player.joined`).
@@ -750,22 +758,6 @@ impl Hub {
             }));
         }
     }
-    /// PlayerList.setViewDistance: every player is told the new radius,
-    /// and each one's chunks follow it, up to what they asked for
-    /// (ChunkMap.getPlayerViewDistance).
-    pub fn set_view_distance(&mut self, distance: i32) {
-        self.config.view_distance = distance;
-        self.broadcast(&C::SetChunkCacheRadius(play::Distance { distance }));
-        for g in &mut self.guests {
-            g.view_distance = i32::from(g.info.view_distance).clamp(2, distance);
-            g.center = None;
-        }
-    }
-    /// PlayerList.setSimulationDistance.
-    pub fn set_simulation_distance(&mut self, distance: i32) {
-        self.config.simulation_distance = distance;
-        self.broadcast(&C::SetSimulationDistance(play::Distance { distance }));
-    }
     /// Whether a guest is placed in the level in place (`config.dimension`).
     pub fn here(&self, g: &Guest) -> bool {
         g.placed && g.dimension == self.config.dimension
@@ -796,18 +788,6 @@ impl Hub {
         self.broadcast(&C::SystemChat(play::SystemChat {
             content,
             overlay: true,
-        }));
-    }
-    /// A chat message from the host (a disguised chat: the host has no
-    /// connection to sign with).
-    pub fn chat(&self, sender: &str, text: &str) {
-        self.broadcast(&C::DisguisedChat(play::DisguisedChat {
-            message: literal(text),
-            chat_type: play::ChatTypeBound {
-                chat_type: self.chat_type,
-                name: literal(sender),
-                target: None,
-            },
         }));
     }
     /// ListPlayersCommand's reply: the players in join order (the host of a
@@ -1443,15 +1423,6 @@ impl Hub {
     }
 
     // ---- per tick ------------------------------------------------------
-
-    /// A whole tick with one level: the network, the level, then the
-    /// players' latencies.
-    pub fn tick(&mut self, ctx: &mut TickCtx) -> Vec<HostEvent> {
-        let mut events = self.poll(ctx);
-        events.extend(self.tick_level(ctx));
-        self.end_tick();
-        events
-    }
 
     /// The network since the last tick, once per server tick before any
     /// level ticks: joins (into the level in place), leaves, and each guest's
@@ -2985,19 +2956,6 @@ impl Hub {
 }
 
 impl Hub {
-    pub fn item_name(&self, id: i32) -> Option<std::sync::Arc<str>> {
-        self.sync
-            .builtin
-            .get("minecraft:item")?
-            .name(id)
-            .map(std::sync::Arc::from)
-    }
-    pub fn enchantment_name(&self, id: i32) -> Option<String> {
-        self.sync
-            .dynamic
-            .name("minecraft:enchantment", id)
-            .map(str::to_owned)
-    }
     /// A stack a client sent (`SetCreativeModeSlot`), read with this
     /// server's registries.
     pub fn stack_from_network(&self, s: &horizon_protocol::item::Stack) -> crate::items::ItemStack {

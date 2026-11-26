@@ -27,7 +27,6 @@ pub const INTERESTED: i32 = 8;
 pub const POUNCING: i32 = 16;
 pub const SLEEPING: i32 = 32;
 pub const FACEPLANTED: i32 = 64;
-pub const DEFENDING: i32 = 128;
 /// `Fox.ticksSinceEaten`.
 const TICKS_SINCE_EATEN: usize = 1;
 /// `Fox.interestedAngle` and `crouchAmount` in `anim.v`, the previous tick's
@@ -825,21 +824,5 @@ impl Goal for EatBerries {
                 .push(MobEvent::Sound("entity.fox.sniff", at, 1.0, 1.0));
         }
         self.block.tick_within(m, cx.w, 2.0);
-    }
-}
-
-/// `FoxRenderState` as the renderer reads it: the flags, `getHeadRollAngle`
-/// and `getCrouchAmount` at the partial tick. `FoxModel.legMotionPos` gains
-/// 0.67 a frame; this takes 60 frames a second.
-pub fn pose(m: &Mob, partial: f32) -> super::body_anim::Fox {
-    super::body_anim::Fox {
-        crouching: flag(m, CROUCHING),
-        sleeping: flag(m, SLEEPING),
-        sitting: flag(m, SITTING),
-        pouncing: flag(m, POUNCING),
-        faceplanted: flag(m, FACEPLANTED),
-        head_roll_angle: m.anim.lerp(INTERESTED_ANGLE, partial) * 0.11 * std::f32::consts::PI,
-        crouch_amount: m.anim.lerp(CROUCH_AMOUNT, partial),
-        leg_motion_pos: (m.age as f32 + partial) * 0.67 * 3.0,
     }
 }

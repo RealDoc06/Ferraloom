@@ -57,15 +57,6 @@ impl ItemEntity {
             Vec3::new(position.x + h, position.y + Self::WIDTH, position.z + h),
         )
     }
-    pub fn environment_tick(
-        &mut self,
-        world: &World,
-        facts: &BlockFacts,
-        registry: &horizon_world::registry::BlockRegistry,
-        items: &crate::items::Items,
-    ) -> ItemEnvironmentTick {
-        self.environment_tick_with(world, facts, registry, items, u16::MAX)
-    }
     /// The `block_kinds` the palettes over the cells of an item's box at
     /// `position` may hold (a superset of what its contact checks read).
     pub fn kinds_around(
@@ -249,18 +240,6 @@ impl ItemEntity {
         let horizontal = v.x * v.x + v.z * v.z;
         !on_ground || horizontal > 1.0e-5 || (age + id).is_multiple_of(4)
     }
-    /// Returns false when the item should be removed. `no_physics`: the item
-    /// moves through blocks this tick ([`ItemEntity::inside_block`]).
-    pub fn tick(
-        &mut self,
-        world: &World,
-        facts: &BlockFacts,
-        collision: &BlockCollisionRegistry<'_>,
-        no_physics: bool,
-        fluids: &crate::motion::FluidResources,
-    ) -> bool {
-        self.tick_with(world, facts, collision, no_physics, fluids, None)
-    }
     /// [`Self::tick`] with its first fluid update read ahead: `ahead` is
     /// taken while it is the update of the item as it stands and moves.
     pub fn tick_with(
@@ -349,6 +328,29 @@ impl ItemEntity {
     /// delay isn't infinite, before its lifetime ends.
     fn mergeable(&self, age: u32, max_stack: u32) -> bool {
         self.pickup_delay != u32::MAX && age < 6000 && self.stack.count < max_stack
+    }
+    #[cfg(test)]
+    pub fn environment_tick(
+        &mut self,
+        world: &World,
+        facts: &BlockFacts,
+        registry: &horizon_world::registry::BlockRegistry,
+        items: &crate::items::Items,
+    ) -> ItemEnvironmentTick {
+        self.environment_tick_with(world, facts, registry, items, u16::MAX)
+    }
+    /// Returns false when the item should be removed. `no_physics`: the item
+    /// moves through blocks this tick ([`ItemEntity::inside_block`]).
+    #[cfg(test)]
+    pub fn tick(
+        &mut self,
+        world: &World,
+        facts: &BlockFacts,
+        collision: &BlockCollisionRegistry<'_>,
+        no_physics: bool,
+        fluids: &crate::motion::FluidResources,
+    ) -> bool {
+        self.tick_with(world, facts, collision, no_physics, fluids, None)
     }
 }
 /// Dropped items by block cell, for `ItemEntity.mergeWithNeighbours`'s
@@ -546,22 +548,6 @@ impl ExperienceOrb {
             .into_iter()
             .find(|&v| value >= v)
             .unwrap_or(1)
-    }
-    /// ExperienceOrb.getIcon
-    pub fn icon(&self) -> u32 {
-        match self.value {
-            2477.. => 10,
-            1237.. => 9,
-            617.. => 8,
-            307.. => 7,
-            149.. => 6,
-            73.. => 5,
-            37.. => 4,
-            17.. => 3,
-            7.. => 2,
-            3.. => 1,
-            _ => 0,
-        }
     }
     pub fn tick(
         &mut self,

@@ -136,7 +136,7 @@ impl Session {
         if self.budgeted {
             self.streaming.begin_server_tick();
         }
-        let (_, unloaded) = if self.budgeted {
+        let unloaded = if self.budgeted {
             self.streaming.update_budgeted(&mut self.world)
         } else {
             self.streaming.update(&mut self.world)
@@ -147,7 +147,7 @@ impl Session {
             }
         }
         if self.budgeted {
-            let (_, extra) = self.streaming.update_budgeted(&mut self.world);
+            let extra = self.streaming.update_budgeted(&mut self.world);
             for chunk in extra {
                 if self.world.modified.remove(&(chunk.x, chunk.z)) {
                     self.generator.save_chunk(&chunk);
@@ -175,12 +175,9 @@ impl Session {
     fn autosave(&mut self) {
         self.streaming.save(&mut self.world, false);
     }
+    /// The closing save, as the server stops: generation finishes and every chunk is written.
     fn save(&mut self) {
-        let deadline = Instant::now() + Duration::from_secs(120);
-        while !self.streaming.poll_save(&mut self.world) {
-            assert!(Instant::now() < deadline, "incremental save never finished");
-            thread::sleep(Duration::from_millis(1));
-        }
+        self.streaming.save(&mut self.world, true);
         for key in std::mem::take(&mut self.world.modified) {
             if let Some(chunk) = self.world.chunks.get(&key) {
                 self.generator.save_chunk(chunk);
@@ -376,12 +373,13 @@ fn saved_proto_chunks_restore_exactly() {
     };
     let assets = Arc::new(Assets::load(&root).unwrap());
     let biomes = Arc::new(Biomes::load(&root).unwrap());
-    let terrain = VanillaTerrain::for_dimension(
+    let terrain = VanillaTerrain::for_world(
         &root.join("worldgen"),
         assets.registry,
         &biomes,
         -1860902098141295193,
         "minecraft:the_nether",
+        true,
     )
     .unwrap();
     let dir = std::env::temp_dir().join(format!("horizon-proto-saves-{}", std::process::id()));
@@ -456,12 +454,13 @@ fn saved_proto_block_entities_keep_their_id() {
     };
     let assets = Arc::new(Assets::load(&root).unwrap());
     let biomes = Arc::new(Biomes::load(&root).unwrap());
-    let terrain = VanillaTerrain::for_dimension(
+    let terrain = VanillaTerrain::for_world(
         &root.join("worldgen"),
         assets.registry,
         &biomes,
         12345,
         "minecraft:overworld",
+        true,
     )
     .unwrap();
     let dir = std::env::temp_dir().join(format!("horizon-proto-ids-{}", std::process::id()));

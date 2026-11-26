@@ -187,11 +187,6 @@ pub fn drowned_update_swimming(m: &mut Mob, w: &super::MobWorld) {
     m.extra.flag =
         !m.no_ai && m.was_eye_in_water && m.fluids.in_water && drowned_wants_to_swim(m, w);
 }
-/// A drowned on a client: `LivingEntity.updateSwimAmount` follows the
-/// swimming flag (`Drowned.isVisuallySwimming`).
-pub fn drowned_client_tick(m: &mut Mob) {
-    m.extra.swim.tick(m.extra.flag, m.fluids.in_water);
-}
 /// Drowned.DrownedMoveControl
 pub fn drowned_move_control(m: &mut Mob, w: &super::MobWorld) {
     let target = m.target_info(w);

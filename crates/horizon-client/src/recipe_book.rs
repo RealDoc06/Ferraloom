@@ -40,39 +40,6 @@ impl BookType {
             Self::Smoker => ("isSmokerGuiOpen", "isSmokerFilteringCraftable"),
         }
     }
-    /// The tab buttons of the book's screen, search first.
-    pub fn tabs(self) -> Vec<Tab> {
-        use Category::*;
-        let categories: &[Category] = match self {
-            Self::Crafting => &[
-                CraftingEquipment,
-                CraftingBuilding,
-                CraftingMisc,
-                CraftingRedstone,
-            ],
-            Self::Furnace => &[FurnaceFood, FurnaceBlocks, FurnaceMisc],
-            Self::BlastFurnace => &[BlastBlocks, BlastMisc],
-            Self::Smoker => &[SmokerFood],
-        };
-        std::iter::once(Tab::Search)
-            .chain(categories.iter().map(|c| Tab::Category(*c)))
-            .collect()
-    }
-    /// The categories the search tab lists, in `SearchRecipeBookCategory` order.
-    fn search_categories(self) -> &'static [Category] {
-        use Category::*;
-        match self {
-            Self::Crafting => &[
-                CraftingEquipment,
-                CraftingBuilding,
-                CraftingMisc,
-                CraftingRedstone,
-            ],
-            Self::Furnace => &[FurnaceFood, FurnaceBlocks, FurnaceMisc],
-            Self::BlastFurnace => &[BlastBlocks, BlastMisc],
-            Self::Smoker => &[SmokerFood],
-        }
-    }
 }
 
 /// `RecipeBookCategories` of the four menus' recipes.
@@ -89,48 +56,11 @@ pub enum Category {
     BlastMisc,
     SmokerFood,
 }
-impl Category {
-    /// The `RecipeBookCategories` registry path.
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::CraftingBuilding => "crafting_building_blocks",
-            Self::CraftingRedstone => "crafting_redstone",
-            Self::CraftingEquipment => "crafting_equipment",
-            Self::CraftingMisc => "crafting_misc",
-            Self::FurnaceFood => "furnace_food",
-            Self::FurnaceBlocks => "furnace_blocks",
-            Self::FurnaceMisc => "furnace_misc",
-            Self::BlastBlocks => "blast_furnace_blocks",
-            Self::BlastMisc => "blast_furnace_misc",
-            Self::SmokerFood => "smoker_food",
-        }
-    }
-}
 /// A tab button: the search tab or one category.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Tab {
     Search,
     Category(Category),
-}
-impl Tab {
-    /// The tab's icon items (`TabInfo`).
-    pub fn icons(self) -> (&'static str, Option<&'static str>) {
-        use Category::*;
-        match self {
-            Self::Search => ("minecraft:compass", None),
-            Self::Category(c) => match c {
-                CraftingEquipment => ("minecraft:iron_axe", Some("minecraft:golden_sword")),
-                CraftingBuilding => ("minecraft:bricks", None),
-                CraftingMisc => ("minecraft:lava_bucket", Some("minecraft:apple")),
-                CraftingRedstone => ("minecraft:redstone", None),
-                FurnaceFood | SmokerFood => ("minecraft:porkchop", None),
-                FurnaceBlocks => ("minecraft:stone", None),
-                FurnaceMisc => ("minecraft:lava_bucket", Some("minecraft:emerald")),
-                BlastBlocks => ("minecraft:redstone_ore", None),
-                BlastMisc => ("minecraft:iron_shovel", Some("minecraft:golden_leggings")),
-            },
-        }
-    }
 }
 
 /// `RecipeDisplay`: how a recipe is laid out.
@@ -164,62 +94,6 @@ pub struct Entry {
     /// Ingredients shown as other stacks than their items (by index in
     /// `requirements`): the potions an imbued arrow's lingering potion is.
     pub stacks: Vec<(usize, Vec<ItemStack>)>,
-}
-impl Entry {
-    /// Every stack the result display cycles through.
-    pub fn results(&self) -> &[ItemStack] {
-        if self.variants.is_empty() {
-            std::slice::from_ref(&self.result)
-        } else {
-            &self.variants
-        }
-    }
-    /// The ingredients that must be matched to craft it, in order.
-    pub fn requirements(&self) -> Vec<&Ingredient> {
-        match &self.display {
-            Display::Shaped { cells, .. } => cells.iter().flatten().collect(),
-            Display::Shapeless(list) => list.iter().collect(),
-            Display::Furnace(i) => vec![i],
-        }
-    }
-    /// `CraftingRecipeBookComponent.canDisplay` for a grid.
-    pub fn fits(&self, grid_width: usize, grid_height: usize) -> bool {
-        match &self.display {
-            Display::Shaped { width, height, .. } => grid_width >= *width && grid_height >= *height,
-            Display::Shapeless(list) => grid_width * grid_height >= list.len(),
-            Display::Furnace(_) => true,
-        }
-    }
-    /// The size the recipe takes in the grid (`PlaceRecipeHelper`).
-    pub fn size_in(&self, grid_width: usize, grid_height: usize) -> (usize, usize) {
-        match &self.display {
-            Display::Shaped { width, height, .. } => (*width, *height),
-            _ => (grid_width, grid_height),
-        }
-    }
-    /// The ingredient of each grid cell the recipe fills, with its grid index
-    /// (the ghost recipe and the placement use the same layout).
-    pub fn grid_cells(&self, grid_width: usize, grid_height: usize) -> Vec<(Option<usize>, usize)> {
-        let (w, h) = self.size_in(grid_width, grid_height);
-        // One entry per recipe cell: the index of its ingredient, if any.
-        let entries: Vec<Option<usize>> = match &self.display {
-            Display::Shaped { cells, .. } => {
-                let mut next = 0;
-                cells
-                    .iter()
-                    .map(|c| {
-                        c.as_ref().map(|_| {
-                            next += 1;
-                            next - 1
-                        })
-                    })
-                    .collect()
-            }
-            Display::Shapeless(list) => (0..list.len()).map(Some).collect(),
-            Display::Furnace(_) => vec![Some(0)],
-        };
-        place_cells(grid_width, grid_height, w, h, &entries)
-    }
 }
 
 /// `PlaceRecipeHelper.placeRecipe`: the grid index each entry goes to; a
@@ -267,13 +141,6 @@ pub fn place_cells<T: Clone>(
         y += 1;
     }
     out
-}
-
-/// A group of recipes shown as one button (`RecipeCollection`).
-#[derive(Clone, Debug, Default)]
-pub struct Collection {
-    /// Indices into `Book::entries`.
-    pub entries: Vec<usize>,
 }
 
 /// Every recipe the menus' books can show.
@@ -384,13 +251,6 @@ impl Book {
             order,
         }
     }
-    /// `RecipeDisplayEntry.canCraft`: the recipe's placement ingredients
-    /// (`craftingRequirements`) can all be found in `stock`.
-    pub fn can_craft(&self, entry: &Entry, stock: &crate::menu::place::Stacked) -> bool {
-        self.placements
-            .get(&entry.id)
-            .is_some_and(|p| stock.can_craft(&p.ingredients.iter().collect::<Vec<_>>()))
-    }
     /// Numbers the entries as `RecipeManager.unpackRecipeInfo` numbers the
     /// displays: every recipe in id order, each with its displays.
     pub fn set_display_ids(&mut self, index: &RecipeIndex) {
@@ -408,157 +268,6 @@ impl Book {
     pub fn entry_of_display(&self, display: i32) -> Option<usize> {
         self.entries.iter().position(|e| e.display_id == display)
     }
-    pub fn entry(&self, id: &str) -> Option<&Entry> {
-        self.entries.iter().find(|e| e.id == id)
-    }
-    /// `ingredient`'s items as its display resolves them (the cycling order
-    /// of ghost slots and the overlay).
-    pub fn items_of(&self, ingredient: &Ingredient) -> Vec<String> {
-        ingredient.1.clone()
-    }
-    /// `RecipeBookComponent.fillGhostRecipe` of a book type: the result and the
-    /// ingredients faded into the menu's slots, in the order the component
-    /// sets them. `grid` is the side of the crafting grid, `fuel_empty`
-    /// whether the furnace's fuel slot is empty.
-    pub fn ghost(
-        &self,
-        entry: &Entry,
-        book_type: BookType,
-        grid: usize,
-        fuel_empty: bool,
-        items: &crate::items::Items,
-    ) -> Vec<GhostSlot> {
-        let stacks = |ingredient: &Ingredient| -> Vec<ItemStack> {
-            self.items_of(ingredient)
-                .iter()
-                .map(|i| ItemStack::new(i, 1))
-                .collect()
-        };
-        let mut out = Vec::new();
-        match book_type {
-            BookType::Crafting => {
-                out.push(GhostSlot {
-                    target: GhostTarget::Result,
-                    items: entry.results().to_vec(),
-                });
-                let requirements = entry.requirements();
-                for (ingredient, index) in entry.grid_cells(grid, grid) {
-                    let Some(i) = ingredient else { continue };
-                    let list = match entry.stacks.iter().find(|s| s.0 == i) {
-                        Some(shown) => shown.1.clone(),
-                        None => stacks(requirements[i]),
-                    };
-                    if !list.is_empty() {
-                        out.push(GhostSlot {
-                            target: GhostTarget::Grid(index),
-                            items: list,
-                        });
-                    }
-                }
-            }
-            _ => {
-                out.push(GhostSlot {
-                    target: GhostTarget::Result,
-                    items: entry.results().to_vec(),
-                });
-                if let Display::Furnace(ingredient) = &entry.display {
-                    out.push(GhostSlot {
-                        target: GhostTarget::Input,
-                        items: stacks(ingredient),
-                    });
-                    if fuel_empty {
-                        // `SlotDisplay.AnyFuel`: every item with a cooking fuel
-                        // component, the registry's component lookup listing the
-                        // items of one component value together, the values in
-                        // the order of their first item.
-                        let mut groups: Vec<(String, Vec<ItemStack>)> = Vec::new();
-                        for item in &items.registry_order {
-                            let Some(fuel) = items.get(item).and_then(|i| i.fuel.as_ref()) else {
-                                continue;
-                            };
-                            let key = format!("{fuel:?}");
-                            match groups.iter_mut().find(|g| g.0 == key) {
-                                Some(group) => group.1.push(ItemStack::new(item, 1)),
-                                None => groups.push((key, vec![ItemStack::new(item, 1)])),
-                            }
-                        }
-                        let fuels = groups.into_iter().flat_map(|g| g.1).collect();
-                        out.push(GhostSlot {
-                            target: GhostTarget::Fuel,
-                            items: fuels,
-                        });
-                    }
-                }
-            }
-        }
-        // `GhostSlots.setSlot` keeps only slots with something to show.
-        out.retain(|g| !g.items.is_empty());
-        out
-    }
-    /// The recipe-book search tree (`SessionSearchTrees.updateRecipes`, a
-    /// `FullTextSearchTree`): without a colon the text must occur in a
-    /// tooltip line of a result item of the collection; `namespace:path`
-    /// needs the namespace in a result id and the path in an id or a line.
-    pub fn collection_matches(
-        &self,
-        entries: &[usize],
-        query: &str,
-        tooltip: &dyn Fn(&ItemStack) -> Vec<String>,
-    ) -> bool {
-        let query = query.to_lowercase();
-        let results: Vec<&ItemStack> = entries
-            .iter()
-            .flat_map(|&i| self.entries[i].results())
-            .collect();
-        let in_lines = |text: &str| {
-            results
-                .iter()
-                .any(|r| tooltip(r).iter().any(|l| l.to_lowercase().contains(text)))
-        };
-        let Some((namespace, path)) = query.split_once(':') else {
-            return in_lines(&query);
-        };
-        let (namespace, path) = (namespace.trim(), path.trim());
-        let id = |r: &&ItemStack| {
-            let (ns, p) = r.item.split_once(':').unwrap_or(("minecraft", &r.item));
-            (ns.to_lowercase(), p.to_lowercase())
-        };
-        results.iter().any(|r| id(r).0.contains(namespace))
-            && (results.iter().any(|r| id(r).1.contains(path)) || in_lines(path))
-    }
-}
-
-/// Where a ghost recipe's stacks are drawn.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum GhostTarget {
-    Result,
-    /// A crafting grid slot, row by row.
-    Grid(usize),
-    /// A furnace's input and fuel slots.
-    Input,
-    Fuel,
-}
-/// One slot of a ghost recipe and the stacks it cycles through.
-#[derive(Clone, Debug)]
-pub struct GhostSlot {
-    pub target: GhostTarget,
-    pub items: Vec<ItemStack>,
-}
-
-/// A `RecipeDisplayId` as a `HashMap` key: a record of one int hashes as it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct DisplayKey(i32);
-impl horizon_world::java_hash_map::JavaKey for DisplayKey {
-    fn java_hash(&self) -> i32 {
-        self.0
-    }
-    fn tie_break(&self, other: &Self) -> std::cmp::Ordering {
-        if self.0 < other.0 {
-            std::cmp::Ordering::Less
-        } else {
-            std::cmp::Ordering::Greater
-        }
-    }
 }
 
 /// `ClientRecipeBook`: the displays the client was sent, in a `HashMap` whose
@@ -566,64 +275,7 @@ impl horizon_world::java_hash_map::JavaKey for DisplayKey {
 /// order of the book's buttons.
 #[derive(Default)]
 pub struct ClientBook {
-    known: horizon_world::java_hash_map::JavaHashMap<DisplayKey, ()>,
     pub highlight: std::collections::HashSet<i32>,
-}
-impl ClientBook {
-    pub fn add(&mut self, display: i32) {
-        self.known.put(DisplayKey(display), ());
-    }
-    pub fn remove(&mut self, display: i32) {
-        self.known.remove(&DisplayKey(display));
-        self.highlight.remove(&display);
-    }
-    /// `clear` (a replacing `ClientboundRecipeBookAddPacket`): the table keeps its size.
-    pub fn clear(&mut self) {
-        self.known.clear();
-        self.highlight.clear();
-    }
-    /// The known display ids in iteration order.
-    pub fn displays(&self) -> Vec<i32> {
-        self.known.entries().map(|(k, _)| k.0).collect()
-    }
-    /// `rebuildCollections` then `getCollection(tab)`: per category, a
-    /// collection per entry without a group or per group, in the order the
-    /// known displays iterate; the search tab lists its categories in turn.
-    pub fn collections(&self, book: &Book, book_type: BookType, tab: Tab) -> Vec<Collection> {
-        let by_display: HashMap<i32, usize> = book
-            .entries
-            .iter()
-            .enumerate()
-            .map(|(i, e)| (e.display_id, i))
-            .collect();
-        let mut by_category: HashMap<Category, Vec<Collection>> = HashMap::new();
-        let mut groups: HashMap<(Category, String), (Category, usize)> = HashMap::new();
-        for display in self.displays() {
-            let Some(&i) = by_display.get(&display) else {
-                continue;
-            };
-            let e = &book.entries[i];
-            let list = by_category.entry(e.category).or_default();
-            match &e.group {
-                None => list.push(Collection { entries: vec![i] }),
-                Some(g) => match groups.get(&(e.category, g.clone())) {
-                    Some(&(_, at)) => list[at].entries.push(i),
-                    None => {
-                        groups.insert((e.category, g.clone()), (e.category, list.len()));
-                        list.push(Collection { entries: vec![i] });
-                    }
-                },
-            }
-        }
-        let categories: Vec<Category> = match tab {
-            Tab::Search => book_type.search_categories().to_vec(),
-            Tab::Category(c) => vec![c],
-        };
-        categories
-            .into_iter()
-            .flat_map(|c| by_category.remove(&c).unwrap_or_default())
-            .collect()
-    }
 }
 
 /// What the server knows of each recipe of the datapack: whether it is
@@ -875,9 +527,6 @@ impl Settings {
 mod tests {
     use super::*;
 
-    fn ing(items: &[&str]) -> Ingredient {
-        Ingredient::of(items.iter().map(|s| (*s).to_owned()).collect())
-    }
     #[test]
     fn the_index_knows_each_recipes_toast_station_and_result() {
         let root = std::env::temp_dir().join(format!("horizon-toast-index-{}", std::process::id()));
@@ -951,76 +600,6 @@ mod tests {
             .map(|(_, i)| i)
             .collect();
         assert_eq!(small, vec![0]);
-    }
-    #[test]
-    fn collections_group_recipes_of_a_category() {
-        let entry = |id: &str, display_id, group: Option<&str>, category| Entry {
-            id: id.into(),
-            display_id,
-            category,
-            group: group.map(str::to_owned),
-            display: Display::Shapeless(vec![ing(&["minecraft:stick"])]),
-            result: ItemStack::new("minecraft:stick", 1),
-            variants: Vec::new(),
-            stacks: Vec::new(),
-        };
-        let book = Book {
-            entries: vec![
-                entry("minecraft:a", 0, Some("planks"), Category::CraftingBuilding),
-                entry("minecraft:b", 1, Some("planks"), Category::CraftingBuilding),
-                entry("minecraft:c", 2, None, Category::CraftingBuilding),
-                entry("minecraft:d", 3, Some("planks"), Category::CraftingMisc),
-            ],
-            placements: HashMap::new(),
-            order: HashMap::new(),
-        };
-        let mut client = ClientBook::default();
-        for d in 0..4 {
-            client.add(d);
-        }
-        let tab = Tab::Category(Category::CraftingBuilding);
-        let c = client.collections(&book, BookType::Crafting, tab);
-        assert_eq!(c.len(), 2);
-        assert_eq!(c[0].entries, vec![0, 1]);
-        // The search tab lists every category; the same group in another category is separate.
-        let all = client.collections(&book, BookType::Crafting, Tab::Search);
-        assert_eq!(all.len(), 3);
-        // Displays the client was not sent are not listed.
-        client.clear();
-        client.add(2);
-        assert_eq!(client.collections(&book, BookType::Crafting, tab).len(), 1);
-    }
-    #[test]
-    fn display_ids_collide_in_a_small_table() {
-        // A 16-bucket table: 17 and 1 share a bucket and keep arrival order.
-        let mut client = ClientBook::default();
-        for d in [17, 3, 1] {
-            client.add(d);
-        }
-        assert_eq!(client.displays(), vec![17, 1, 3]);
-    }
-    #[test]
-    fn search_reads_tooltip_lines_and_ids() {
-        let book = Book {
-            entries: vec![Entry {
-                id: "minecraft:stick".into(),
-                display_id: 0,
-                category: Category::CraftingMisc,
-                group: None,
-                display: Display::Shapeless(Vec::new()),
-                result: ItemStack::new("minecraft:stick", 4),
-                variants: Vec::new(),
-                stacks: Vec::new(),
-            }],
-            placements: HashMap::new(),
-            order: HashMap::new(),
-        };
-        let lines = |s: &ItemStack| vec![format!("Item {}", s.item), "Stick".to_owned()];
-        assert!(book.collection_matches(&[0], "STI", &lines));
-        // Plain text searches tooltips only, not the registry path.
-        assert!(!book.collection_matches(&[0], "stick:", &lines));
-        assert!(book.collection_matches(&[0], "minecraft:stic", &lines));
-        assert!(!book.collection_matches(&[0], "other:stick", &lines));
     }
     #[test]
     fn settings_round_trip() {

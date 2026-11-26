@@ -8,6 +8,7 @@
 use super::{
     Dim, Game, GuestUse, Hit, Mining, Screen, lan::LanHost, respawn_anchor::RespawnConfig,
 };
+use crate::game::keys::KeyCode;
 use horizon_client::{
     command::vanilla,
     containers::BlockEntity,
@@ -28,7 +29,6 @@ use horizon_protocol::{
     text::literal,
 };
 use horizon_world::entity_move::EntityMoveWorld;
-use winit::keyboard::KeyCode;
 
 /// Per-guest state of the gameplay code that lives outside `Guest`.
 #[derive(Default)]
@@ -1050,7 +1050,7 @@ impl Game<'_> {
             host.hub
                 .entity_event(id, super::totem::TOTEM_EVENT, body.at);
             if self.player.is_some() {
-                self.totem_event(body, false);
+                self.totem_event(body);
             }
         }
         host.play.insert(conn, play);
@@ -3532,12 +3532,10 @@ impl Game<'_> {
             let rest = self.as_guest(host, conn, |g| g.give(stack)).flatten();
             match rest {
                 None => {
-                    let item = self.dropped.remove(i);
-                    self.guest_pickup(host, id, item);
+                    self.dropped.remove(i);
                     taken.push((item_id, before));
                 }
                 Some(rest) if rest.count < before => {
-                    self.guest_pickup(host, id, self.dropped[i].clone());
                     self.dropped[i].stack = rest;
                     taken.push((item_id, before - self.dropped[i].stack.count));
                 }
@@ -3613,14 +3611,6 @@ impl Game<'_> {
             pitch,
         );
         let value = orb.value;
-        if let Some(target) = super::pickups::guest_target(host, id as u32) {
-            use super::pickups::{Collector, Taken};
-            self.add_pickup_toward(
-                Taken::Orb(Box::new(orb)),
-                Collector::Guest(id as u32),
-                target,
-            );
-        }
         self.as_guest(host, conn, |game| {
             let rest = game.mending(value);
             if rest > 0 {
@@ -3629,24 +3619,7 @@ impl Game<'_> {
         });
     }
 
-    /// The host's own `ItemPickupParticle` toward the guest's model.
-    fn guest_pickup(
-        &mut self,
-        host: &LanHost,
-        id: i32,
-        item: horizon_client::entities::ItemEntity,
-    ) {
-        use super::pickups::{Collector, Taken, guest_target};
-        if let Some(target) = guest_target(host, id as u32) {
-            self.add_pickup_toward(
-                Taken::Item(Box::new(item)),
-                Collector::Guest(id as u32),
-                target,
-            );
-        }
-    }
-
-    /// `level.playSound(player, ...)` of a guest's use it predicted (`remote::hand_operated`
+    /// `level.playSound(player, ...)` of a guest's use it predicted (`hand_operated`
     /// blocks only, as the guest decides): the others hear it now, the guest already did.
     fn guest_use_sounds(&mut self, host: &mut LanHost, conn: u32, logged: usize, heard: usize) {
         let changed: Vec<(i32, i32, i32)> = self
@@ -3683,9 +3656,9 @@ impl Game<'_> {
             }
         }
         if changed.is_empty()
-            || !changed.iter().all(|&(x, y, z)| {
-                super::remote::hand_operated(&facts.get(self.world.block(x, y, z)).name)
-            })
+            || !changed
+                .iter()
+                .all(|&(x, y, z)| hand_operated(&facts.get(self.world.block(x, y, z)).name))
         {
             return;
         }
@@ -3824,6 +3797,17 @@ fn swing_packet(id: i32, hand: Hand, animation: SwingAnimation) -> C {
         kind: i32::from(animation.kind),
         duration: animation.duration,
     })
+}
+
+/// The blocks a guest's hand flips that its use predicts (and hears at once): a wooden or
+/// copper door, trapdoor or fence gate, a lever or a button. An iron door or trapdoor has
+/// no hand use.
+fn hand_operated(name: &str) -> bool {
+    let name = name.trim_start_matches("minecraft:");
+    ((name.ends_with("_door") || name.ends_with("_trapdoor")) && !name.starts_with("iron_"))
+        || name.ends_with("_fence_gate")
+        || name.ends_with("_button")
+        || name == "lever"
 }
 
 #[cfg(test)]

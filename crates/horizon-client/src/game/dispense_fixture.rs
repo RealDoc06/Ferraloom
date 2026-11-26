@@ -7,6 +7,7 @@ use super::{
     Game,
     dispenser::{Slot, body_in_head, mob_set_slot, mob_slot_item},
 };
+use crate::game::keys::KeyCode;
 use horizon_client::{
     Result,
     chunk::Chunk,
@@ -27,7 +28,6 @@ use horizon_core::{
 use horizon_world::{level::Ticks, registry::BlockStateId};
 use serde_json::Value;
 use std::{cell::RefCell, collections::HashMap, fmt::Write as _, io::Write as _, sync::Arc};
-use winit::keyboard::KeyCode;
 
 thread_local! {
     /// Level and game events recorded while a fixture case runs.
@@ -90,10 +90,6 @@ enum Target {
 impl Game<'_> {
     /// Run every case of `spec` ("CASES,OUTPUT") and write the results.
     pub(super) fn dispense_fixture(&mut self, spec: &str) -> Result<()> {
-        assert!(
-            !self.options.execution_role.is_client(),
-            "fixture requires a server Game"
-        );
         let (input, output) = spec
             .split_once(',')
             .ok_or("HORIZON_DISPENSE_FIXTURE=CASES,OUTPUT")?;

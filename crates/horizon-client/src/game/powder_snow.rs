@@ -86,9 +86,7 @@ impl Game<'_> {
     /// The in-window player's rain extinguish (a server's player has its
     /// fire put out by the server).
     pub(super) fn rain_extinguish_in_frame(&mut self) {
-        if self.remote.is_none() {
-            self.rain_extinguish_player();
-        }
+        self.rain_extinguish_player();
     }
     /// Whether the block at `pos` is powder snow.
     pub(super) fn is_powder_snow(&self, pos: [i32; 3]) -> bool {

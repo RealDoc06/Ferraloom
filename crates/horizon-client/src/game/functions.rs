@@ -222,7 +222,7 @@ impl Game<'_> {
         }
     }
     pub(super) fn save_schedule(&self) {
-        if !self.fns.loaded || self.remote.is_some() {
+        if !self.fns.loaded {
             return;
         }
         let mut events = self.fns.schedule.clone();
@@ -264,9 +264,6 @@ impl Game<'_> {
     /// `ServerFunctionManager.tick` and the scheduled events.
     pub(super) fn tick_functions(&mut self) {
         self.ensure_datapacks();
-        if self.remote.is_some() {
-            return;
-        }
         self.exec = ExecState::default();
         let source = self.server_source();
         if self.fns.load_pending {

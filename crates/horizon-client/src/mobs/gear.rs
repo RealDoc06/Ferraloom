@@ -50,10 +50,6 @@ pub fn gear(m: &Mob) -> Option<&Gear> {
 pub fn level(m: &Mob, slot: usize, id: &str) -> u32 {
     gear(m).map_or(0, |g| g.level(slot, id))
 }
-/// Whether the item in `slot` is enchanted (the glint).
-pub fn enchanted(m: &Mob, slot: usize) -> bool {
-    gear(m).is_some_and(|g| !g.slots[slot].is_empty())
-}
 /// Replace the enchantments of a slot; an empty list removes them.
 pub fn set(m: &mut Mob, slot: usize, levels: Levels) {
     let g = m.extra.gear.get_or_insert_with(Box::default);

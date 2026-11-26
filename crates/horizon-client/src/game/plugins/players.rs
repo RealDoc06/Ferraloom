@@ -8,6 +8,7 @@
 //! the state is, and the turn's end or the next turn's start carries them
 //! over, as `enter_guest` and `leave_guest` always do.
 use super::{DIMS, GameHost, Pending, is_plugin_command, pend, world_index};
+use crate::game::keys::KeyCode;
 use crate::game::{Dim, Game, commands::Target, lan::LanHost, lan_actions::GuestCommand};
 use ferraloom_plugins::{
     Action, Cause, Client, Death, Effect, Event, Field, Interact, Interaction, Joined, Location,
@@ -31,7 +32,6 @@ use horizon_protocol::{
 };
 use horizon_world::{nbt::Tag, registry::BlockStateId};
 use std::sync::atomic::Ordering;
-use winit::keyboard::KeyCode;
 
 fn system_chat(line: &Text) -> C {
     C::SystemChat(play::SystemChat {

@@ -154,10 +154,6 @@ pub fn client_tick(m: &mut Mob) {
     let step = if m.extra.flag { 1.0 } else { -1.0 };
     m.anim.v[STAND] = (v + step).clamp(0.0, STAND_TICKS);
 }
-/// `PolarBear.getStandingAnimationScale`.
-pub fn standing_scale(m: &Mob, partial: f32) -> f32 {
-    m.anim.lerp(STAND, partial) / STAND_TICKS
-}
 
 /// `PolarBear.tick`: the stand animation, the warning sound's delay and
 /// `NeutralMob.updatePersistentAnger`.

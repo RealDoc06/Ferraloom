@@ -11,60 +11,13 @@ use serde_json::Value;
 use std::{collections::HashSet, fs, path::Path};
 
 pub use horizon_client_core::potions::{
-    BASE_POTION_COLOR, Category, EFFECTS, EffectDef, POTIONS, PotionDef, effect, namespaced,
-    potion, potion_color,
+    EFFECTS, EffectDef, POTIONS, effect, namespaced, potion, potion_color,
 };
-/// `MobEffectUtil.formatDuration` at 20 TPS: m:ss or h:mm:ss.
-pub fn format_duration(ticks: i32) -> String {
-    let secs = ticks / 20;
-    let (h, m, s) = (secs / 3600, secs / 60 % 60, secs % 60);
-    if h > 0 {
-        format!("{h}:{m:02}:{s:02}")
-    } else {
-        format!("{m}:{s:02}")
-    }
-}
 /// `item.minecraft.potion.effect.<name>` style translation key for a potion item.
 pub fn potion_name_key(item: &str, potion: Option<&str>) -> String {
     let prefix = item.trim_start_matches("minecraft:");
     let suffix = potion.and_then(self::potion).map_or("empty", |p| p.name);
     format!("item.minecraft.{prefix}.effect.{suffix}")
-}
-/// Roman amplifier suffix (`potion.potency.N`) and duration lines of a potion.
-pub fn tooltip(
-    potion: Option<&str>,
-    scale: f32,
-    translate: &dyn Fn(&str) -> Option<String>,
-) -> Vec<(String, Category)> {
-    let Some(def) = potion.and_then(self::potion) else {
-        return vec![];
-    };
-    if def.effects.is_empty() {
-        return vec![(
-            translate("effect.none").unwrap_or_else(|| "No Effects".into()),
-            Category::Neutral,
-        )];
-    }
-    def.effects
-        .iter()
-        .map(|(e, duration, amp)| {
-            let mut line =
-                translate(&format!("effect.minecraft.{e}")).unwrap_or_else(|| (*e).to_owned());
-            if *amp > 0 {
-                line.push(' ');
-                line.push_str(
-                    &translate(&format!("potion.potency.{amp}"))
-                        .unwrap_or_else(|| crate::enchant::level_name(*amp as u32 + 1)),
-                );
-            }
-            let instant = effect(e).is_some_and(|d| d.instant);
-            let scaled = (*duration as f32 * scale) as i32;
-            if !instant && scaled > 20 {
-                line = format!("{line} ({})", format_duration(scaled));
-            }
-            (line, effect(e).map_or(Category::Neutral, |d| d.category))
-        })
-        .collect()
 }
 
 /// A `PotionIngredient`: item ids plus an optional potion filter.
@@ -300,29 +253,6 @@ pub fn brewing_fuel(items: &Items, stack: &ItemStack) -> Option<(Value, Value)> 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn potion_colours_and_names() {
-        // Swiftness: speed colour 3402751 = 0x33EBFF.
-        assert_eq!(potion_color(Some("minecraft:swiftness")), 0x33EBFF);
-        assert_eq!(potion_color(Some("minecraft:water")), BASE_POTION_COLOR);
-        // Turtle master mixes slowness x4 and resistance x3.
-        let (s, r) = (9154528u32, 9520880u32);
-        let mix = |sh: u32| ((s >> sh & 255) * 4 + (r >> sh & 255) * 3) / 7;
-        assert_eq!(
-            potion_color(Some("minecraft:turtle_master")),
-            mix(16) << 16 | mix(8) << 8 | mix(0)
-        );
-        assert_eq!(
-            potion_name_key("minecraft:splash_potion", Some("minecraft:long_swiftness")),
-            "item.minecraft.splash_potion.effect.swiftness"
-        );
-        assert_eq!(format_duration(9600), "8:00");
-        assert_eq!(format_duration(450), "0:22");
-        let t = tooltip(Some("minecraft:strong_poison"), 1.0, &|_| None);
-        assert_eq!(t[0].0, "poison II (0:21)");
-        assert_eq!(POTIONS.len(), 46);
-    }
 
     #[test]
     fn brewing_stand_brews_after_400_ticks() {

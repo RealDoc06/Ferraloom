@@ -3,7 +3,6 @@
 //! while looked at, and picking up / placing `enderman_holdable` blocks.
 use super::{
     Damage, Mob, MobEvent, MobWorld, Species, Who,
-    anim::{Poses, State},
     goals::{
         Cx, Float, Goal, HurtByTarget, JUMP, LookAtPlayer, MOVE, MeleeAttack, NearestTarget,
         RandomLookAround, Stroll, TARGET, goal_clone, reduced,
@@ -212,24 +211,6 @@ pub fn ai_step(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
     if (m.fluids.in_water || super::ai::in_rain(m, w)) && m.alive() {
         // Hurt by water: teleport away.
         m.extra.counter2 = m.extra.counter2.max(1);
-    }
-}
-/// EndermanModel.setupAnim: half-speed clamped limbs, held-block arms, creepy head.
-pub fn anim(m: &Mob, s: &State, p: &mut Poses) {
-    super::anim::humanoid_pub(p, s, m);
-    for part in ["right_arm", "left_arm", "right_leg", "left_leg"] {
-        let x = p.get(part)[3] * 0.5;
-        p.xrot(part, x.clamp(-0.4, 0.4));
-    }
-    if m.extra.carried.is_some() {
-        p.xrot("right_arm", -0.5);
-        p.xrot("left_arm", -0.5);
-        p.zrot("right_arm", 0.05);
-        p.zrot("left_arm", -0.05);
-    }
-    if m.extra.flag {
-        p.get("head")[1] -= 5.0;
-        p.get("hat")[1] += 5.0;
     }
 }
 /// EndermanFreezeWhenLookedAt

@@ -8,9 +8,7 @@ use horizon_client::{
     collisions::SceneCollisions,
     enchant::EffectContext,
     items::ItemStack,
-    mesher::Vertex,
-    mobs::{Damage, DamageKind, Who, anim::Poses},
-    projectiles::ProjectileWorld,
+    mobs::{Damage, DamageKind, Who},
 };
 use horizon_core::{
     geometry::{Aabb, Vec3, traverse_blocks},
@@ -34,33 +32,10 @@ pub(super) struct ThrownTrident {
     pub(super) no_physics: bool,
     returning: u32,
     creative_only: bool,
-    /// The entity id a server sent as its owner (the one Loyalty returns it to).
-    pub(super) owner: u32,
     /// The guest that threw it (`Projectile.getOwner`); `None` for the host.
     guest: Option<u32>,
 }
 impl ThrownTrident {
-    /// A trident a server sent (`handleAddEntity`): placed and moved by it.
-    pub(super) fn remote(id: u32, position: Vec3, yaw: f32, pitch: f32) -> Self {
-        Self {
-            id,
-            stack: ItemStack::new("minecraft:trident", 1),
-            position,
-            previous: position,
-            velocity: Vec3::ZERO,
-            yaw,
-            pitch,
-            in_ground: false,
-            in_ground_time: 0,
-            dealt_damage: false,
-            loyalty: 0,
-            no_physics: false,
-            returning: 0,
-            creative_only: false,
-            owner: 0,
-            guest: None,
-        }
-    }
     /// `ThrownTrident.tick`'s Loyalty return: pulled up and towards the
     /// owner's eye.
     fn loyalty_pull(&mut self, owner_eye: Vec3) {
@@ -77,52 +52,6 @@ impl ThrownTrident {
             self.velocity.y * 0.95 + v.y / len * accel,
             self.velocity.z * 0.95 + v.z / len * accel,
         );
-    }
-    /// `ThrownTrident.tick` on a server's client: it flies on by itself
-    /// between the server's updates (`AbstractArrow.tick`: gravity and drag,
-    /// a block holds it), and Loyalty pulls it back to its owner; only the
-    /// server decides what it hits.
-    pub(super) fn remote_tick(&mut self, w: &impl ProjectileWorld, owner_eye: Option<Vec3>) {
-        self.previous = self.position;
-        if self.in_ground_time > 4 {
-            self.dealt_damage = true;
-        }
-        if self.loyalty > 0
-            && (self.dealt_damage || self.no_physics)
-            && let Some(eye) = owner_eye
-        {
-            self.no_physics = true;
-            self.in_ground = false;
-            self.loyalty_pull(eye);
-        }
-        if self.in_ground && !self.no_physics {
-            self.in_ground_time += 1;
-            return;
-        }
-        self.in_ground_time = 0;
-        let m = self.velocity;
-        let (x, z) = if self.no_physics {
-            (-m.x, -m.z)
-        } else {
-            (m.x, m.z)
-        };
-        self.yaw = x.atan2(z).to_degrees() as f32;
-        self.pitch = m.y.atan2(m.x.hypot(m.z)).to_degrees() as f32;
-        let to = self.position.add_vector(m);
-        if !self.no_physics
-            && let Some((at, _, _)) = w.clip(self.position, to)
-        {
-            self.position = at;
-            self.velocity = Vec3::ZERO;
-            self.in_ground = true;
-            return;
-        }
-        self.position = to;
-        // A trident's water inertia (0.99) equals the air drag.
-        self.velocity = self.velocity.scale(0.99);
-        if !self.no_physics {
-            self.velocity.y -= 0.05;
-        }
     }
 }
 const HALF: f64 = 0.25;
@@ -308,7 +237,7 @@ impl Game<'_> {
             }
             // `hurtWithoutBreaking` and the sound belong to the server; a server's
             // client only launches.
-            let server_client = self.remote.is_some();
+            let server_client = false;
             if !server_client {
                 self.hurt_held_without_breaking(1);
             }
@@ -351,9 +280,6 @@ impl Game<'_> {
             return;
         }
         // The server throws the trident.
-        if self.remote.is_some() {
-            return;
-        }
         // hurtWithoutBreaking (Unbreaking applies), then the thrown copy.
         self.hurt_held_without_breaking(1);
         let thrown = self.held().cloned().unwrap_or(stack);
@@ -395,7 +321,6 @@ impl Game<'_> {
             no_physics: false,
             returning: 0,
             creative_only: self.creative,
-            owner: 0,
             guest: self.lan_acting,
         });
         self.player_projectile_shot();
@@ -609,67 +534,6 @@ impl Game<'_> {
             }
             self.tridents.insert(i, t);
             i += 1;
-        }
-    }
-    /// ThrownTridentRenderer.
-    pub(super) fn trident_geometry(&self, camera: glam::DVec3, alpha: f64, out: &mut Vec<Vertex>) {
-        let Some(model) = &self.trident_model else {
-            return;
-        };
-        let Some(uv) = self
-            .gui
-            .atlas
-            .sprites
-            .get("entity/trident/trident")
-            .map(|r| [r.u0, r.v0, r.u1, r.v1])
-        else {
-            return;
-        };
-        // AbstractArrow.shouldRenderAtSqrDistance: ten times the default.
-        let range = 10.0
-            * super::entity_culling::default_range(
-                glam::DVec3::splat(2.0 * HALF),
-                self.view_scale(),
-            );
-        for t in &self.tridents {
-            // EntityRenderer.shouldRender; ThrownTridentRenderer grows the box by 1.5.
-            if !self.standing_entity_in_view(
-                camera,
-                super::entity_culling::at(t.previous),
-                super::entity_culling::at(t.position),
-                alpha,
-                2.0 * HALF,
-                2.0 * HALF,
-                range,
-                1.5,
-            ) {
-                continue;
-            }
-            let p = glam::DVec3::new(
-                t.previous.x + (t.position.x - t.previous.x) * alpha,
-                t.previous.y + (t.position.y - t.previous.y) * alpha,
-                t.previous.z + (t.position.z - t.previous.z) * alpha,
-            ) - camera;
-            let base = glam::Mat4::from_translation(p.as_vec3())
-                * glam::Mat4::from_rotation_y((t.yaw - 90.0).to_radians())
-                * glam::Mat4::from_rotation_z((t.pitch + 90.0).to_radians());
-            let l = self.world.light(
-                t.position.x.floor() as i32,
-                t.position.y.floor() as i32,
-                t.position.z.floor() as i32,
-            );
-            let packed = (u32::from(l >> 4) * 16) | ((u32::from(l & 15) * 16) << 8);
-            let poses = Poses::new(model);
-            horizon_client::mobs::render::draw(
-                model,
-                base,
-                &poses,
-                uv,
-                0xFFFF_FFFF,
-                packed,
-                0,
-                out,
-            );
         }
     }
 }

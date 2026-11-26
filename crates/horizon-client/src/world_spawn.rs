@@ -74,10 +74,6 @@ impl ChunkSpiral {
             dz: -1,
         }
     }
-    /// Steps taken so far.
-    pub fn steps(&self) -> i32 {
-        self.step
-    }
     /// The chunk offset to test now, or None once the walk is over.
     pub fn current(&self) -> Option<(i32, i32)> {
         (self.step < 11 * 11).then_some((self.x, self.z))

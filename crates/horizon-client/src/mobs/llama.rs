@@ -267,42 +267,6 @@ pub fn from_nbt(m: &mut Mob, tag: &horizon_world::nbt::Tag) {
             number(tag.get("DespawnDelay")).map_or(DEFAULT_DESPAWN_DELAY, |v| v as i32);
     }
 }
-/// The coat texture (`LlamaRenderer`).
-pub fn texture(m: &Mob) -> String {
-    let baby = if m.is_baby() { "_baby" } else { "" };
-    let coat = VARIANTS[(m.extra.variant as usize).min(3)];
-    format!("entity/llama/llama_{coat}{baby}")
-}
-/// The carpet colour on the llama, if it wears one.
-fn carpet(m: &Mob) -> Option<&str> {
-    m.extra
-        .head
-        .as_deref()
-        .and_then(|i| i.strip_prefix("minecraft:"))
-        .and_then(|i| i.strip_suffix("_carpet"))
-}
-/// `LlamaDecorLayer`: the carpet of an adult, else the trader's blanket.
-pub fn decor(m: &Mob) -> Option<(String, String)> {
-    let baby = m.is_baby();
-    let model = if baby {
-        "llama_baby#decor"
-    } else {
-        "llama#decor"
-    };
-    if let Some(color) = carpet(m)
-        && !baby
-    {
-        return Some((model.into(), format!("entity/equipment/llama_body/{color}")));
-    }
-    is_trader(m).then(|| {
-        let name = if baby {
-            "trader_llama_baby"
-        } else {
-            "trader_llama"
-        };
-        (model.into(), format!("entity/equipment/llama_body/{name}"))
-    })
-}
 #[cfg(test)]
 mod tests {
     use super::*;

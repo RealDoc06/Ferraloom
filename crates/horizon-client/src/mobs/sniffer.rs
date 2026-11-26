@@ -2,12 +2,7 @@
 //! activities, scenting and sniffing for diggable ground, walking there,
 //! digging up a seed, the explored positions, laying eggs when bred, and
 //! `SnifferModel`'s keyframe animations.
-use super::{
-    Mob, MobEvent,
-    anim::{Poses, State},
-    keyframes::Animation,
-};
-use std::collections::HashMap;
+use super::{Mob, MobEvent};
 
 // Sniffer state: `variant` the state (below), `scratch[0]` the state the
 // animations last saw, `positions` the explored positions (newest first),
@@ -168,34 +163,6 @@ pub fn can_mate_state(s: u8) -> bool {
 /// Ambient sound: none while digging or searching.
 pub fn ambient(m: &Mob) -> Option<&'static str> {
     (!matches!(state(m), DIGGING | SEARCHING)).then_some("entity.sniffer.idle")
-}
-/// `SnifferModel.setupAnim` (and `SniffletModel`'s baby transform).
-pub fn anim(m: &Mob, s: &State, p: &mut Poses, animations: &HashMap<String, Animation>) {
-    let get = |n: &str| animations.get(&format!("SnifferAnimation.{n}"));
-    p.xrot("head", s.x_rot.to_radians());
-    p.yrot("head", s.y_rot.to_radians());
-    let walk = if state(m) == SEARCHING {
-        "SNIFFER_SNIFF_SEARCH"
-    } else {
-        "SNIFFER_WALK"
-    };
-    if let Some(a) = get(walk) {
-        a.apply_walk(s.pos, s.speed, 9.0, 100.0, p);
-    }
-    let age = s.age;
-    for (st, name) in [
-        (&m.anim.states[3], "SNIFFER_DIG"),
-        (&m.anim.states[2], "SNIFFER_LONGSNIFF"),
-        (&m.anim.states[4], "SNIFFER_STAND_UP"),
-        (&m.anim.states[0], "SNIFFER_HAPPY"),
-        (&m.anim.states[1], "SNIFFER_SNIFFSNIFF"),
-    ] {
-        if let (Some(ms), Some(a)) = (st.millis(age), get(name)) {
-            a.apply(ms, 1.0, p);
-        }
-    }
-    // The baby layer is SniffletModel geometry, but SnifferRenderer wraps it
-    // in a plain SnifferModel, so SnifferAnimation.BABY_TRANSFORM never runs.
 }
 #[cfg(test)]
 mod tests {

@@ -3,13 +3,11 @@
 //! that hurts and flings everything within 4 blocks.
 use super::{
     Damage, Mob, MobEvent, MobWorld, Species, Who,
-    anim::{Poses, State},
     goals::{Float, HurtByTarget, LookAtPlayer, MeleeAttack, NearestTarget, Stroll},
     path::PathType,
 };
 use horizon_core::geometry::trig::Mth;
 use horizon_core::random::RandomSource;
-use std::f32::consts::PI;
 
 // Ravager state: `counter` attackTick, `counter2` stunnedTick,
 // `anim_ticks` roarTick.
@@ -166,34 +164,6 @@ pub fn ai_step(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
         }
     }
 }
-/// `Ravager.handleEntityEvent` 4 and 39 on a client.
-pub fn entity_event(m: &mut Mob, event: u8) {
-    match event {
-        4 => m.extra.counter = 10,
-        39 => m.extra.counter2 = 40,
-        _ => {}
-    }
-}
-/// `Ravager.aiStep`'s clocks on a client: the bite and roar run down, and
-/// the end of the stun starts the roar (the sounds, particles and the roar's
-/// damage are the server's).
-pub fn client_tick(m: &mut Mob) {
-    if !m.alive() {
-        return;
-    }
-    if m.extra.anim_ticks > 0 {
-        m.extra.anim_ticks -= 1;
-    }
-    if m.extra.counter > 0 {
-        m.extra.counter -= 1;
-    }
-    if m.extra.counter2 > 0 {
-        m.extra.counter2 -= 1;
-        if m.extra.counter2 == 0 {
-            m.extra.anim_ticks = 20;
-        }
-    }
-}
 /// `Ravager.roar`: 6 damage to everything but illagers within 4 blocks,
 /// and a strong knockback (players too, through the client).
 fn roar(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
@@ -253,56 +223,4 @@ fn roar(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
         ],
         count: 40,
     });
-}
-/// `RavagerModel.setupAnim`.
-pub fn anim(m: &Mob, s: &State, p: &mut Poses) {
-    let stunned = if m.extra.counter2 > 0 {
-        m.extra.counter2 as f32 - s.partial
-    } else {
-        0.0
-    };
-    let attack = if m.extra.counter > 0 {
-        m.extra.counter as f32 - s.partial
-    } else {
-        0.0
-    };
-    if attack > 0.0 {
-        // Mth.triangleWave(attack, 10).
-        let wave = ((attack % 10.0 - 5.0).abs() - 2.5) / 2.5;
-        let scaled = (1.0 + wave) * 0.5;
-        let head = scaled * scaled * scaled * 12.0;
-        let neck_x_rot = p.get("neck")[3];
-        let neck = p.get("neck");
-        neck[2] = -6.5 + head;
-        neck[1] = -7.0 - head * neck_x_rot.msin();
-        let mouth = if attack > 5.0 {
-            ((-4.0 + attack) / 4.0).msin() * PI * 0.4
-        } else {
-            PI / 20.0 * (PI * attack / 10.0).msin()
-        };
-        p.xrot("mouth", mouth);
-    } else {
-        let is_stunned = stunned > 0.0;
-        let x_rot: f32 = if is_stunned { 0.219_911_49 } else { 0.0 };
-        let neck = p.get("neck");
-        let y_offset = -neck[3].msin();
-        neck[0] = 0.0;
-        neck[1] = -7.0 - y_offset;
-        neck[2] = 5.5;
-        neck[3] = x_rot;
-        p.xrot("mouth", PI * if is_stunned { 0.05 } else { 0.01 });
-        if is_stunned {
-            p.get("neck")[0] = ((f64::from(stunned) / 40.0) * 10.0).sin() as f32 * 3.0;
-        } else if m.extra.anim_ticks > 0 {
-            let roar = (20.0 - m.extra.anim_ticks as f32 + s.partial) / 20.0;
-            p.xrot("mouth", PI / 2.0 * (roar * PI * 0.25).msin());
-        }
-    }
-    p.xrot("head", s.x_rot.to_radians());
-    p.yrot("head", s.y_rot.to_radians());
-    let (pos, leg) = (s.pos, 0.4 * s.speed);
-    p.xrot("right_hind_leg", (pos * 0.6662).mcos() * leg);
-    p.xrot("left_hind_leg", (pos * 0.6662 + PI).mcos() * leg);
-    p.xrot("right_front_leg", (pos * 0.6662 + PI).mcos() * leg);
-    p.xrot("left_front_leg", (pos * 0.6662).mcos() * leg);
 }

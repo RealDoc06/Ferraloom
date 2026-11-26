@@ -68,20 +68,6 @@ pub enum SceneSound {
     SmallFall,
     BigFall,
 }
-impl SceneSound {
-    fn name(self) -> &'static str {
-        match self {
-            Self::SmallFall => "small",
-            Self::BigFall => "big",
-            Self::Block(v) => match v {
-                LandingSound::HoneySlide => "honey-slide",
-                LandingSound::HoneyFall => "honey-fall",
-                LandingSound::TurtleEggBreak => "egg-break",
-                LandingSound::ShelfMushroomBounce => "mushroom",
-            },
-        }
-    }
-}
 #[derive(Clone, Copy, Debug)]
 pub enum FallEvent {
     Particles {
@@ -127,88 +113,6 @@ pub enum FallEvent {
         position: BlockPos,
         data: i32,
     },
-}
-impl FallEvent {
-    /// Exact-bit diagnostic representation shared by the headless scene probe.
-    pub fn trace(self) -> String {
-        fn p(v: BlockPos) -> String {
-            format!("{},{},{}", v.x, v.y, v.z)
-        }
-        fn v(v: Vec3) -> String {
-            format!(
-                "{:016x},{:016x},{:016x}",
-                v.x.to_bits(),
-                v.y.to_bits(),
-                v.z.to_bits()
-            )
-        }
-        match self {
-            Self::Particles {
-                state,
-                position,
-                count,
-                speed,
-            } => format!(
-                "particles {} {} {} {:016x}",
-                state.0,
-                v(position),
-                count,
-                speed.to_bits()
-            ),
-            Self::HitGround { position, state } => format!("hit {} {}", v(position), state.0),
-            Self::Statistic(n) => format!("stat {n}"),
-            Self::Damage { source, amount } => format!(
-                "damage {} {:08x}",
-                if source == LandingDamage::Fall {
-                    "fall"
-                } else {
-                    "stalagmite"
-                },
-                amount.to_bits()
-            ),
-            Self::Sound {
-                sound,
-                position,
-                volume,
-                pitch,
-            } => format!(
-                "sound {} {} {:08x} {:08x}",
-                sound.name(),
-                position.map_or_else(|| "entity".into(), p),
-                volume.to_bits(),
-                pitch.to_bits()
-            ),
-            Self::BlockFallSound => "block-fall-sound".into(),
-            Self::Broadcast(event) => format!("broadcast {event}"),
-            Self::Write {
-                position,
-                state,
-                flags,
-            } => format!("write {} {} {}", p(position), state.0, flags),
-            Self::Destroy { position, drops } => format!("destroy {} {}", p(position), drops),
-            Self::BlockEvent {
-                kind,
-                position,
-                state,
-                with_entity,
-            } => format!(
-                "event {} {} {} {}",
-                if kind == LandingEvent::BlockChange {
-                    "change"
-                } else {
-                    "destroy"
-                },
-                p(position),
-                state.0,
-                with_entity
-            ),
-            Self::LevelEvent {
-                event,
-                position,
-                data,
-            } => format!("level-event {} {} {}", event, p(position), data),
-        }
-    }
 }
 impl MotionWorld<'_, '_, '_> {
     fn fall_event(&mut self, event: FallEvent) {

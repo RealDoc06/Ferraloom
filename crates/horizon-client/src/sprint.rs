@@ -22,19 +22,6 @@ impl Keys {
             None => input::keyboard_direction(self.forward, self.backward, self.left, self.right),
         }
     }
-    /// Add a stick's move vector: the direction flags code reading keys
-    /// (sprint, vehicles, the server's input packet) see are set past a
-    /// third of the travel.
-    pub fn with_stick(mut self, stick: Option<[f32; 2]>) -> Self {
-        if let Some([left, forward]) = stick {
-            self.forward |= forward > 0.3;
-            self.backward |= forward < -0.3;
-            self.left |= left > 0.3;
-            self.right |= left < -0.3;
-            self.analog = Some([left, forward]);
-        }
-        self
-    }
 }
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SprintState {

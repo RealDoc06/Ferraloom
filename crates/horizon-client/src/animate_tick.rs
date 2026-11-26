@@ -1825,63 +1825,6 @@ fn candle(engine: &mut ParticleEngine, p: [f64; 3]) {
     }
     add(engine, T::SmallFlame, p, [0.0; 3]);
 }
-/// `CampfireBlockEntity.particleTick` for every lit campfire; `cooking` says
-/// which of a campfire's four slots hold an item.
-pub fn campfire_particles<'a>(
-    tables: &AnimateTables,
-    engine: &mut ParticleEngine,
-    ctx: &AnimateContext,
-    blocks: impl Iterator<Item = &'a ([i32; 3], u32)>,
-    cooking: &dyn Fn([i32; 3]) -> [bool; 4],
-) {
-    for &(pos, state) in blocks {
-        if !tables.is_lit_campfire(state) {
-            continue;
-        }
-        let properties = ctx
-            .registry
-            .state(BlockStateId(state))
-            .map(|s| &s.properties);
-        let prop = |k: &str| properties.and_then(|p| p.get(k)).map(String::as_str);
-        let signal = prop("signal_fire") == Some("true");
-        // Direction.get2DDataValue: south, west, north, east.
-        let rotation = match prop("facing") {
-            Some("west") => 1,
-            Some("north") => 2,
-            Some("east") => 3,
-            _ => 0,
-        };
-        let r = engine.random();
-        if r.next_float() < 0.11 {
-            let count = next_int(r, 2) + 2;
-            for _ in 0..count {
-                make_campfire_smoke(engine, pos, signal, false);
-            }
-        }
-        // The smoke over each cooking item, at the slot's corner of the fire.
-        let occupied = cooking(pos);
-        for (slot, _) in occupied.iter().enumerate().filter(|(_, held)| **held) {
-            if engine.random().next_float() >= 0.2 {
-                continue;
-            }
-            // Direction.from2DDataValue((slot + rotation) % 4) and its clockwise side.
-            let (step, clockwise) = match (slot + rotation) % 4 {
-                0 => ([0.0, 1.0], [-1.0, 0.0]),
-                1 => ([-1.0, 0.0], [0.0, -1.0]),
-                2 => ([0.0, -1.0], [1.0, 0.0]),
-                _ => ([1.0, 0.0], [0.0, 1.0]),
-            };
-            let at = [
-                f64::from(pos[0]) + 0.5 - step[0] * 0.3125 + clockwise[0] * 0.3125,
-                f64::from(pos[1]) + 0.5,
-                f64::from(pos[2]) + 0.5 - step[1] * 0.3125 + clockwise[1] * 0.3125,
-            ];
-            for _ in 0..4 {
-                add(engine, T::Smoke, at, [0.0, 5.0e-4, 0.0]);
-            }
-        }
-    }
-}
 /// `CampfireBlock.makeParticles` (always visible, overriding the limiter);
 /// `smoking` adds the plain smoke puff at the logs.
 pub fn make_campfire_smoke(

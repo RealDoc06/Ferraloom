@@ -245,10 +245,6 @@ pub fn set_attack_target(m: &mut Mob, who: Option<Who>) {
     mem(m).attack_target.set_opt(who);
     m.ai.target = who;
 }
-/// The attack target the brain remembers.
-pub fn attack_target(m: &Mob) -> Option<Who> {
-    brain(m).and_then(|b| b.mem.attack_target.value())
-}
 /// `NEAREST_PLAYERS`.
 pub fn nearest_players(m: &Mob) -> Vec<Who> {
     brain(m)

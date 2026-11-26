@@ -205,11 +205,6 @@ impl PlayerIndex {
         self.against_in(0, at, cutoffs, &mut found);
         found.distance_sqr
     }
-    /// [`Self::nearest_against`] given the squared distance of some player
-    /// already measured, which is what its search then has to beat.
-    pub fn nearest_against_from(&self, seen: f64, at: [f64; 3], cutoffs: &[f64; 3]) -> f64 {
-        self.nearest_point_against_from(seen, at, cutoffs).0
-    }
     /// The same, with where the search found a player nearer than `seen`
     /// (`None` when it found none, or the index is linear).
     pub fn nearest_point_against_from(

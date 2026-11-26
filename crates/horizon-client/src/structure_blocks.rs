@@ -141,12 +141,6 @@ pub fn loaded_loot_data() -> Option<Arc<LootData>> {
         .flatten()
 }
 
-/// Let go of the loot data: for a preload no world used
-/// (game/world_loading.rs). The next `loot_data` loads it again.
-pub fn forget_loot_data() {
-    *LOOT.lock().unwrap_or_else(|e| e.into_inner()) = None;
-}
-
 /// `RandomizableContainer.unpackLootTable` of a container at `pos`: `table`
 /// rolled into `slots`. A missing or zero seed is the level's random in
 /// vanilla; Horizon derives one from the position. Without loot data the

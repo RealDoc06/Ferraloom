@@ -546,62 +546,6 @@ fn player_push(m: &mut Mob, p: &super::PlayerView, events: &mut Vec<MobEvent>) {
         });
     }
 }
-/// `SulfurCubeRenderer.scale` (after the cube's size and squish, flat when
-/// holding a block): the fuse swell, half size for an adult and the lift.
-pub fn scale(m: &Mob, alpha: f32) -> glam::Mat4 {
-    let size = m.extra.size.max(1) as f32;
-    let squish = if has_body(m) {
-        0.0
-    } else {
-        m.anim.lerp(0, alpha) / (size * 0.5 + 1.0)
-    };
-    let w = 1.0 / (squish + 1.0);
-    let mut t = glam::Mat4::from_scale(glam::Vec3::splat(0.999))
-        * glam::Mat4::from_translation(glam::Vec3::new(0.0, 0.001, 0.0))
-        * glam::Mat4::from_scale(glam::Vec3::new(w * size, 1.0 / w * size, w * size));
-    let fuse = if primed(m) {
-        fuse(m) as f32 - alpha + 1.0
-    } else {
-        0.0
-    };
-    if fuse < 10.0 && fuse > 0.0 {
-        let g = (1.0 - fuse / 10.0).clamp(0.0, 1.0);
-        let s = 1.0 + g * g * g * g * 0.3;
-        t *= glam::Mat4::from_scale(glam::Vec3::splat(s));
-    }
-    let baby = m.is_baby();
-    let (offset, down) = if baby { (1.24, 1.0) } else { (0.98, 0.5) };
-    t * glam::Mat4::from_scale(glam::Vec3::splat(down))
-        * glam::Mat4::from_translation(glam::Vec3::new(0.0, offset - 1.0 / 16.0, 0.0))
-}
-/// The outer body model and texture.
-pub fn body(m: &Mob) -> (String, String) {
-    if m.is_baby() {
-        (
-            "sulfur_cube_small#main".into(),
-            "entity/sulfur_cube/sulfur_cube_outer_small".into(),
-        )
-    } else {
-        (
-            "sulfur_cube#main".into(),
-            "entity/sulfur_cube/sulfur_cube_outer".into(),
-        )
-    }
-}
-/// `SulfurCubeInnerLayer`: the inner cube when no block is held.
-pub fn inner(m: &Mob) -> Option<(&'static str, &'static str)> {
-    if has_body(m) {
-        return None;
-    }
-    Some(if m.is_baby() {
-        (
-            "sulfur_cube_small#inner",
-            "entity/sulfur_cube/sulfur_cube_inner_small",
-        )
-    } else {
-        ("sulfur_cube#inner", "entity/sulfur_cube/sulfur_cube_inner")
-    })
-}
 /// `SulfurCubeTemptGoal` (`TemptGoal.ForNonPathfinders`): face a player
 /// holding slime balls (babies) or something to swallow (adults) and hop.
 #[derive(Clone, Debug)]

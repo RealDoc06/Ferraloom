@@ -3,7 +3,6 @@
 //! (breathing, smooth swimming).
 use super::{
     Mob, MobEvent, MobWorld, Species,
-    anim::{Poses, State},
     control::MoveKind,
     goals::{
         Avoid, AvoidEntity, BreathAir, Cx, Goal, HurtByTarget, LookAtPlayer, MeleeAttack, Panic,
@@ -290,22 +289,6 @@ pub fn ai_step(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
 /// Squid.aiStep: tentacle cycle, propulsion and body rotation.
 fn squid_ai_step(m: &mut Mob) {
     squid_step(m, false);
-}
-
-/// Squid.aiStep also runs on remote entities: animate from packet velocity,
-/// without running goals or replacing that velocity with the server's movement vector.
-pub fn squid_client_step(m: &mut Mob) {
-    if matches!(m.species(), Species::Squid | Species::GlowSquid) {
-        m.anim.vo = m.anim.v;
-        squid_step(m, true);
-    }
-}
-
-/// Squid.handleEntityEvent(19): begin the next server-synchronised tentacle cycle.
-pub fn squid_cycle_event(m: &mut Mob) {
-    if matches!(m.species(), Species::Squid | Species::GlowSquid) {
-        m.anim.v[TENTACLE_MOVEMENT] = 0.0;
-    }
 }
 
 fn squid_step(m: &mut Mob, client: bool) {
@@ -604,103 +587,5 @@ pub fn finalize(m: &mut Mob) {
         m.extra.variant = p;
         m.extra.variant2 = b;
         m.extra.variant3 = c;
-    }
-}
-/// Model animation for the water mobs.
-pub fn anim(m: &Mob, s: &State, p: &mut Poses) {
-    use Species as S;
-    let amp = if m.fluids.in_water { 1.0 } else { 1.5 };
-    match m.species() {
-        S::Squid | S::GlowSquid => {
-            let angle = m.anim.lerp(TENTACLE_ANGLE, s.partial);
-            for i in 0..8 {
-                p.xrot(&format!("tentacle{i}"), angle);
-            }
-        }
-        S::Cod => p.yrot("tail_fin", -amp * 0.45 * (0.6 * s.age).msin()),
-        // TadpoleModel: a stronger tail swing out of water.
-        S::Tadpole => {
-            let a = if m.fluids.in_water { 1.0 } else { 1.5 };
-            p.yrot("tail", -a * 0.25 * (0.3 * s.age).msin())
-        }
-        S::TropicalFish => p.yrot("tail", -amp * 0.45 * (0.6 * s.age).msin()),
-        S::Salmon => {
-            let (a, k) = if m.fluids.in_water {
-                (1.0, 1.0)
-            } else {
-                (1.3, 1.7)
-            };
-            p.yrot("body_back", -a * 0.25 * (k * 0.6 * s.age).msin());
-        }
-        S::Pufferfish => {
-            let fin = 0.2 - 0.4 * (s.age * 0.2).msin();
-            if p.has("right_blue_fin") {
-                p.zrot("right_blue_fin", -fin);
-                p.zrot("left_blue_fin", fin);
-            } else {
-                p.zrot("right_fin", -fin);
-                p.zrot("left_fin", fin);
-            }
-        }
-        S::Dolphin => {
-            p.xrot("body", s.x_rot.to_radians());
-            p.yrot("body", s.y_rot.to_radians());
-            let moving = m.velocity.x * m.velocity.x + m.velocity.z * m.velocity.z > 1.0e-7;
-            if moving {
-                p.get("body")[3] += -0.05 - 0.05 * (s.age * 0.3).mcos();
-                p.xrot("tail", -0.1 * (s.age * 0.3).mcos());
-                p.xrot("tail_fin", -0.2 * (s.age * 0.3).mcos());
-            }
-        }
-        _ => {}
-    }
-}
-/// Renderer setupRotations for the water mobs (replacing or extending the default).
-pub fn rotations(m: &Mob, alpha: f32, body: f32) -> Option<glam::Mat4> {
-    use Species as S;
-    let age = m.age as f32 + alpha;
-    match m.species() {
-        S::Squid | S::GlowSquid => {
-            let baby = m.is_baby();
-            let x = m.anim.lerp(X_BODY_ROT, alpha);
-            let z = m.anim.lerp(Z_BODY_ROT, alpha);
-            Some(
-                glam::Mat4::from_translation(glam::Vec3::new(
-                    0.0,
-                    if baby { 0.25 } else { 0.5 },
-                    0.0,
-                )) * glam::Mat4::from_rotation_y((180.0 - body).to_radians())
-                    * glam::Mat4::from_rotation_x(x.to_radians())
-                    * glam::Mat4::from_rotation_y(z.to_radians())
-                    * glam::Mat4::from_translation(glam::Vec3::new(
-                        0.0,
-                        if baby { -0.6 } else { -1.2 },
-                        0.0,
-                    )),
-            )
-        }
-        S::Cod | S::Salmon | S::TropicalFish => {
-            let (a, k) = if m.species() == S::Salmon && !m.fluids.in_water {
-                (1.3, 1.7)
-            } else {
-                (1.0, 1.0)
-            };
-            let mut t = glam::Mat4::from_rotation_y((180.0 - body).to_radians())
-                * glam::Mat4::from_rotation_y((a * 4.3 * (k * 0.6 * age).msin()).to_radians());
-            if !m.fluids.in_water {
-                let off = if m.species() == S::Cod {
-                    glam::Vec3::new(0.1, 0.1, -0.1)
-                } else {
-                    glam::Vec3::new(0.2, 0.1, 0.0)
-                };
-                t *= glam::Mat4::from_translation(off) * glam::Mat4::from_rotation_z(PI / 2.0);
-            }
-            Some(t)
-        }
-        S::Pufferfish => Some(
-            glam::Mat4::from_translation(glam::Vec3::new(0.0, (age * 0.05).mcos() * 0.08, 0.0))
-                * glam::Mat4::from_rotation_y((180.0 - body).to_radians()),
-        ),
-        _ => None,
     }
 }

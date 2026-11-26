@@ -343,15 +343,6 @@ impl Progress {
                 .iter()
                 .all(|group| group.iter().any(|c| self.has(&a.id, c)))
     }
-    /// Completed requirement groups and their count (the screen's tooltip).
-    pub fn counts(&self, a: &Advancement) -> (usize, usize) {
-        let done = a
-            .requirements
-            .iter()
-            .filter(|g| g.iter().any(|c| self.has(&a.id, c)))
-            .count();
-        (done, a.requirements.len())
-    }
     pub fn grant(&mut self, adv: &str, criterion: &str, date: &str) -> bool {
         let m = self.criteria.entry(adv.to_owned()).or_default();
         if m.contains_key(criterion) {

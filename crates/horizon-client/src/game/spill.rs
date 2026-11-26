@@ -673,7 +673,6 @@ mod tests {
             let mut dropped = ItemStack::new("minecraft:white_banner", 1);
             pending.attach([pos.0, pos.1, pos.2], &mut dropped);
             assert!(dropped.data().unwrap().ominous_banner);
-            assert!(horizon_client::banner::tooltip_layers(&dropped).is_empty());
             assert_eq!(
                 horizon_client::item_tooltip::name_line(&dropped, &|_| None),
                 "Ominous Banner"
