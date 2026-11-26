@@ -92,7 +92,7 @@ class AllowTests(unittest.TestCase):
         do("/close", login="realdoc06")
 
     def test_stranger_refused(self):
-        with self.assertRaisesRegex(tc.Refused, "Only Ludovic"):
+        with self.assertRaisesRegex(tc.Refused, "Only the owner"):
             do("/close", login="someone")
 
     def test_paused(self):
@@ -172,7 +172,7 @@ class RefusalTests(unittest.TestCase):
         for text in ("/close", "/label bug", "/unlabel bug", "/reopen"):
             for t in (thread(user="realdoc06", state="closed" if text == "/reopen" else "open"),
                       thread(user="RealDoc06", pr=True)):
-                with self.assertRaisesRegex(tc.Refused, "Ludovic's"):
+                with self.assertRaisesRegex(tc.Refused, "the owner's"):
                     do(text, Fake({5: t}))
 
     def test_merged_pr(self):

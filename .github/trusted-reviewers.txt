@@ -1,4 +1,4 @@
 # Trusted reviewers (docs/release-flow.md "Trusted reviewers"): `/close`, `/reopen`, `/label`, `/unlabel` triage
 # issues and pull requests (tools/ci/triage_command.py).
-# Ludovic is always allowed and isn't listed. One GitHub login per line, with who added it and when. Removing a
-# line revokes that login at once. A line with only `paused` stops them for every reviewer (Ludovic's still work).
+# The owner is always allowed and isn't listed. One GitHub login per line, with who added it and when. Removing a
+# line revokes that login at once. A line with only `paused` stops them for every reviewer (the owner's still work).

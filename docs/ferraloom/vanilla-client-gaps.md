@@ -7,7 +7,7 @@ Horizon's own client is out of scope.
 Verified against `ferraloom/next` at `5d5371c7b` (2026-11-26): every **Fixed** row's commit is an ancestor of
 that head, and every **Open** row was checked in the code unless it says otherwise.
 
-**Adding a gap.** Give it the next free number (the first free one is **#129**), put it in its area, ranked by how
+**Adding a gap.** Give it the next free number (the first free one is **#130**), put it in its area, ranked by how
 visible it is to players, and fill every column: what is seen and how vanilla differs, the vanilla
 reference (`Class#method` from `.cache/decompiled/26.3/`), where it lives in our code, a size and who found
 it. When it is fixed, move it to **Fixed** with the commit and the harness case that proves it. Numbers are
@@ -88,6 +88,7 @@ Sizes: S under a day, M a few days, L a week or more. Sources: *audit* (the orig
 | 61 | Equipment changes apply at once, not in the next player tick, so two changes in one tick split into packets differently | `LivingEntity#detectEquipmentUpdates` (in `tick`) | `game/lan_attributes.rs` `apply_equipment` on each guest turn | S | combat |
 | 62 | Invisibility doesn't apply its `waypoint_transmit_range` modifier, so an invisible player still shows on the locator bar at full range | `MobEffects.INVISIBILITY` attribute modifier | `effects.rs`, `lan/waypoints.rs` | S | combat |
 | 63 | Never sent, low impact: `TEST_INSTANCE_BLOCK_STATUS` (with #21), `TAB_LIST` (no vanilla trigger), `CUSTOM_CHAT_COMPLETIONS`, `DELETE_CHAT`, `PLAYER_COMBAT_ENTER`/`END` (narration, telemetry), `DEBUG_*`, `GAME_TEST_HIGHLIGHT_POS`, `LOW_DISK_SPACE_WARNING`, `CUSTOM_REPORT_DETAILS`, `MOVE_MINECART_ALONG_TRACK` (experimental minecarts), `START_CONFIGURATION`, `COOKIE_REQUEST`, `STORE_COOKIE`, `RESOURCE_PACK_POP`, `PING`, `SET_PLAYER_INVENTORY` (its slots go out as `ContainerSetSlot` on window 0). Serverbound `DebugSubscriptionRequest` is dropped (debug renderers only) | | | S each | audit |
+| 129 | While a client sits on the resource-pack prompt during configuration, keep-alives are sent but their replies are never checked (a wrong or missing reply ends the connection only through the socket's read timeout). The code-of-conduct prompt checks them | `ServerCommonPacketListenerImpl#keepConnectionAlive`, `#handleKeepAlive` | `lan/conn.rs` `offer_pack` | S | review |
 
 ### Server administration
 

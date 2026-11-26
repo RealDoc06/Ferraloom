@@ -3,7 +3,7 @@
 
     triage_command.py command     one comment (triage-command.yml): checks who asked, acts, answers in the thread
 
-A comment by Ludovic or by a login in .github/trusted-reviewers.txt, on the first line:
+A comment by the owner or by a login in .github/trusted-reviewers.txt, on the first line:
 
     /close [completed|not planned]     closes an issue (a pull request: closes it without merging)
     /close duplicate of #123           comments "Duplicate of #123" and closes it as a duplicate
@@ -11,7 +11,7 @@ A comment by Ludovic or by a login in .github/trusted-reviewers.txt, on the firs
     /label bug, good first issue       existing labels only; never creates one
     /unlabel bug
 
-Refused with a one-line answer: a label with `release` in it or `full-parity`; anything by Ludovic (his issues and
+Refused with a one-line answer: a label with `release` in it or `full-parity`; anything by the owner (their issues and
 pull requests); a merged pull request; a locked thread; more than 60 actions per reviewer in 24 hours. No code of any
 pull request is read or run: only the comment's text, its author and the API's answers, which reach this script as
 env vars.
@@ -91,18 +91,18 @@ def parse(body: str) -> Command | None:
 def label_refusal(name: str) -> str | None:
     low = name.lower()
     if "release" in low or low == "full-parity":
-        return f"`{safe(name)}` is a release or parity label: only Ludovic's side touches those."
+        return f"`{safe(name)}` is a release or parity label: only the owner's side touches those."
     return None
 
 
 def authorize(login: str, reviewers: ns.Reviewers) -> None:
-    """Ludovic always; a listed reviewer unless the list is paused; nobody else."""
+    """The owner always; a listed reviewer unless the list is paused; nobody else."""
     if ns.is_owner(login):
         return
     if login.lower() not in reviewers.logins:
-        raise Refused(f"Only Ludovic and the trusted reviewers listed in `{ns.REVIEWERS}` can triage this way.")
+        raise Refused(f"Only the owner and the trusted reviewers listed in `{ns.REVIEWERS}` can triage this way.")
     if reviewers.paused:
-        raise Refused(f"Triage commands are paused: Ludovic stopped them in `{ns.REVIEWERS}`.")
+        raise Refused(f"Triage commands are paused: the owner stopped them in `{ns.REVIEWERS}`.")
 
 
 def target_refusal(issue: dict, cmd: Command, login: str) -> str | None:
@@ -110,7 +110,7 @@ def target_refusal(issue: dict, cmd: Command, login: str) -> str | None:
     is_pr = "pull_request" in issue
     kind = "pull request" if is_pr else "issue"
     if not ns.is_owner(login) and ns.is_owner((issue.get("user") or {}).get("login", "")):
-        return f"This {kind} is Ludovic's: triage commands don't touch it."
+        return f"This {kind} is the owner's: triage commands don't touch it."
     if is_pr and (issue["pull_request"] or {}).get("merged_at"):
         return "That pull request is already merged."
     if issue.get("locked"):
