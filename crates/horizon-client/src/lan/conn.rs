@@ -1130,13 +1130,29 @@ fn accept_code_of_conduct(
         .unwrap_or_default();
     c.send(&cfg::Clientbound::CodeOfConduct(cfg::CodeOfConduct { text }).encode())
         .map_err(e)?;
-    std::thread::scope(|scope| {
+    // ServerCommonPacketListenerImpl#keepConnectionAlive and #handleKeepAlive:
+    // the one keep-alive awaiting its answer; a keep-alive still unanswered
+    // when the next is due, or a wrong answer, disconnects with a timeout.
+    const TIMED_OUT: &str = "timed out";
+    let timeout = || {
+        let reason = translatable("disconnect.timeout", &[]);
+        cfg::Clientbound::Disconnect(cfg::Disconnect { reason }).encode()
+    };
+    let outstanding = Mutex::new(None::<i64>);
+    let writer_timed_out = std::sync::atomic::AtomicBool::new(false);
+    let answer = std::thread::scope(|scope| {
         let (stop, stopped) = channel::<()>();
         let writer = &mut c.writer;
+        let (outstanding, writer_timed_out) = (&outstanding, &writer_timed_out);
         scope.spawn(move || {
             let start = Instant::now();
             while stopped.recv_timeout(KEEP_ALIVE_EVERY) == Err(RecvTimeoutError::Timeout) {
                 let id = i64::try_from(start.elapsed().as_millis()).unwrap_or(0);
+                if outstanding.lock().unwrap().replace(id).is_some() {
+                    writer_timed_out.store(true, Ordering::Relaxed);
+                    let _ = writer.send(&timeout());
+                    break;
+                }
                 let keep_alive = cfg::Clientbound::KeepAlive(cfg::KeepAlive { id });
                 if writer.send(&keep_alive.encode()).is_err() {
                     break;
@@ -1144,20 +1160,36 @@ fn accept_code_of_conduct(
             }
         });
         let answer = loop {
-            let (id, payload) = match c.reader.recv() {
+            let packet = c.reader.recv();
+            if writer_timed_out.load(Ordering::Relaxed) {
+                break Err(TIMED_OUT.to_owned());
+            }
+            let (id, payload) = match packet {
                 Ok(packet) => packet,
                 Err(err) => break Err(err.to_string()),
             };
             match cfg::Serverbound::decode(id, &payload) {
                 Ok(cfg::Serverbound::AcceptCodeOfConduct(_)) => break Ok(()),
                 Ok(cfg::Serverbound::ClientInformation(i)) => *info = i,
+                Ok(cfg::Serverbound::KeepAlive(k)) => {
+                    let mut sent = outstanding.lock().unwrap();
+                    if *sent != Some(k.id) {
+                        break Err(TIMED_OUT.to_owned());
+                    }
+                    *sent = None;
+                }
                 Ok(_) => {}
                 Err(err) => break Err(err.to_string()),
             }
         };
         drop(stop);
         answer
-    })
+    });
+    // A wrong answer: the writer is back, so the disconnect goes now.
+    if matches!(&answer, Err(e) if e == TIMED_OUT) && !writer_timed_out.into_inner() {
+        let _ = c.send(&timeout());
+    }
+    answer
 }
 
 /// ServerCommonPacketListenerImpl.handleResourcePackResponse: a player who
