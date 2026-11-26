@@ -118,7 +118,7 @@ pub fn rollover(existing: &[String], date: NaiveDate, max: u32) -> Rollover {
     }
 }
 
-/// `[12:04:31] [Render thread/INFO]: message`
+/// `[12:04:31] [Server thread/INFO]: message`
 pub fn format_line(
     time: &DateTime<Local>,
     thread: &str,
@@ -398,6 +398,12 @@ pub fn init(home: &Path, main_thread: &'static str) {
     }
 }
 
+/// What the main thread is called in the log (`init`'s name for it), and
+/// `Server thread` before the log starts.
+pub fn main_thread() -> &'static str {
+    LOGGER.get().map_or("Server thread", |l| l.main_thread)
+}
+
 /// A line in the log from code that prints it elsewhere itself (the dedicated server console).
 pub fn write_only(level: log::Level, message: &str) {
     if let Some(logger) = LOGGER.get() {
@@ -521,11 +527,11 @@ mod tests {
         assert_eq!(
             format_line(
                 &time,
-                "Render thread",
+                "Server thread",
                 log::Level::Info,
-                "load assets: 1.20s"
+                "Done (1.200s)!"
             ),
-            "[09:05:07] [Render thread/INFO]: load assets: 1.20s"
+            "[09:05:07] [Server thread/INFO]: Done (1.200s)!"
         );
         assert_eq!(
             format_line(&time, "Worker-1", log::Level::Warn, "x"),
@@ -543,7 +549,7 @@ mod tests {
         assert_eq!(fs::read_dir(&dir).unwrap().count(), 2);
         fs::write(
             dir.join("latest.log"),
-            "[10:00:00] [Render thread/INFO]: first run\n",
+            "[10:00:00] [Server thread/INFO]: first run\n",
         )
         .unwrap();
         let mut latest = open_latest(&dir).unwrap().unwrap();
@@ -557,7 +563,7 @@ mod tests {
         flate2::read::GzDecoder::new(File::open(&archive).unwrap())
             .read_to_string(&mut text)
             .unwrap();
-        assert_eq!(text, "[10:00:00] [Render thread/INFO]: first run\n");
+        assert_eq!(text, "[10:00:00] [Server thread/INFO]: first run\n");
         assert_eq!(
             fs::read_to_string(dir.join("latest.log")).unwrap(),
             "second run\n"
