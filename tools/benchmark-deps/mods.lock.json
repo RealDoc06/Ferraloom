@@ -4,30 +4,6 @@
   "java_major": 25,
   "fabric_loader": "0.19.5",
   "projects": {
-    "sodium": {
-      "slug": "sodium",
-      "project_id": "AANobbMI",
-      "version_id": "bAZQdGpg",
-      "version": "mc26.3-0.9.2-fabric",
-      "game_versions": [
-        "26.3"
-      ],
-      "loaders": [
-        "fabric"
-      ],
-      "license": "LicenseRef-Polyform-Shield-1.0.0",
-      "source": "https://github.com/CaffeineMC/sodium",
-      "url": "https://cdn.modrinth.com/data/AANobbMI/versions/bAZQdGpg/sodium-fabric-0.9.2%2Bmc26.3.jar",
-      "filename": "sodium-fabric-0.9.2+mc26.3.jar",
-      "size": 1908068,
-      "hashes": {
-        "sha1": "9acfe851e36f4fb27d7c5baa224e8bd4e0334283",
-        "sha512": "f3f260f204b8ce5e8777c2c73f537956755ec61f3817b0b78b5e5568e8aa40f14891f146475075109747665c7c88a45ca0ca9a8df3c68d79c58ecdaa8d8c4b93"
-      },
-      "dependencies": [],
-      "client_side": "required",
-      "server_side": "unsupported"
-    },
     "lithium": {
       "slug": "lithium",
       "project_id": "gvQqBUqZ",
@@ -48,34 +24,6 @@
       "hashes": {
         "sha512": "4d7fee66132eedc71feab9390b92c95d7058edbdad0fecfac1d836a2950b97a7ca463afbede61c7ef361ce65e1f927ab9e89dde5bf2e0e0ce486afb5c5dbee40",
         "sha1": "dd5a4ec2c68d7601d8bce9076f789c55a5f8bef3"
-      },
-      "dependencies": [],
-      "client_side": "optional",
-      "server_side": "optional"
-    },
-    "ferrite-core": {
-      "slug": "ferrite-core",
-      "project_id": "uXXizFIs",
-      "version_id": "d5ddUdiB",
-      "version": "9.0.0-fabric",
-      "game_versions": [
-        "26.1",
-        "26.1.1",
-        "26.1.2",
-        "26.2",
-        "26.3"
-      ],
-      "loaders": [
-        "fabric"
-      ],
-      "license": "MIT",
-      "source": "https://github.com/malte0811/FerriteCore",
-      "url": "https://cdn.modrinth.com/data/uXXizFIs/versions/d5ddUdiB/ferritecore-9.0.0-fabric.jar",
-      "filename": "ferritecore-9.0.0-fabric.jar",
-      "size": 72677,
-      "hashes": {
-        "sha1": "eac76ff0f3753422c61b2c44487d0d195d88d4bc",
-        "sha512": "d81fa97e11784c19d42f89c2f433831d007603dd7193cee45fa177e4a6a9c52b384b198586e04a0f7f63cd996fed713322578bde9a8db57e1188854ae5cbe584"
       },
       "dependencies": [],
       "client_side": "optional",
@@ -104,31 +52,6 @@
       "dependencies": [],
       "client_side": "optional",
       "server_side": "optional"
-    },
-    "immediatelyfast": {
-      "slug": "immediatelyfast",
-      "project_id": "5ZwdcRci",
-      "version_id": "3MP9UR23",
-      "version": "1.17.1+26.3-fabric",
-      "game_versions": [
-        "26.3"
-      ],
-      "loaders": [
-        "fabric",
-        "quilt"
-      ],
-      "license": "LGPL-3.0-or-later",
-      "source": "https://github.com/RaphiMC/ImmediatelyFast",
-      "url": "https://cdn.modrinth.com/data/5ZwdcRci/versions/3MP9UR23/ImmediatelyFast-Fabric-1.17.1%2B26.3.jar",
-      "filename": "ImmediatelyFast-Fabric-1.17.1+26.3.jar",
-      "size": 99586,
-      "hashes": {
-        "sha512": "8e139589fd995bce3d485a34d92a07243964212f7ed2e4fc2f6de5b9a74d0f59b03252e7ce40c64e006cf3e21bed5de27b830d33ef048b286e041f6178ad8428",
-        "sha1": "f565bbeb201f2305e81761429d3f1f47e1c3a321"
-      },
-      "dependencies": [],
-      "client_side": "required",
-      "server_side": "unsupported"
     }
   }
 }
