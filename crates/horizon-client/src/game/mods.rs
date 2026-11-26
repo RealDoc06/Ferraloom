@@ -77,9 +77,8 @@ impl ModsState {
     /// Whether a mod runs: the chat keeps its lines for them.
     pub(super) fn running(&self) -> bool {
         #[cfg(feature = "mods")]
-        if self.mods.is_running() {
-            return true;
-        }
+        return self.mods.is_running();
+        #[cfg(not(feature = "mods"))]
         false
     }
 }
