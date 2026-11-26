@@ -1746,15 +1746,16 @@ impl Game<'_> {
                 self.drop_guest_items(host, gi, drops);
             }
             S::ContainerClose(p) => {
-                if host.hub.guests[gi]
-                    .menu
-                    .as_ref()
-                    .is_some_and(|m| m.window == p.container)
-                {
+                let menu = host.hub.guests[gi].menu.as_ref().map(|m| m.window);
+                if menu == Some(p.container) {
                     self.guest_container_closed(host, conn);
                 }
                 host.hub.container_closed(conn, p.container);
-                self.guest_carried_back(host, gi);
+                // A stale close (of a window a retitle replaced) leaves the menu
+                // open and its cursor with it.
+                if menu.is_none_or(|w| w == p.container) {
+                    self.guest_carried_back(host, gi);
+                }
             }
             S::ChatCommand(c) => self.guest_chat_command(host, conn, &c.command),
             S::CustomPayload(p) if p.channel == horizon_protocol::quiet::CHANNEL => {
