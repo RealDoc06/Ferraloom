@@ -172,7 +172,7 @@ What a listener turns serial, per tick:
 | Event | Fired at | Notes |
 |---|---|---|
 | `EntityDamageEvent`, `...ByEntityEvent` | `Mob::damage_with` past the cooldown check, before the health changes; `hurt_player_from`/`hurt_player_by` for players | cancel, `setDamage`. Armor and enchantments cross as one ARMOR modifier. A player's cooldown and armor apply after the event. The damager is the causing entity (an arrow's shooter, not the arrow). |
-| `EntityDeathEvent` | `drop_death_loot`, the loot collected and not dropped | experience changes; drops are an empty list until the inventory area lands |
+| `EntityDeathEvent` | `drop_death_loot`, the loot collected and not dropped | experience and drops changes |
 | `CreatureSpawnEvent` | as `spawn_mob_for` and natural spawning add the mob | cancel removes it; reasons NATURAL, CHUNK_GEN, CUSTOM (`spawnEntity`), DEFAULT for the rest (CraftBukkit: COMMAND, SPAWNER_EGG...) |
 | `EntityTargetEvent` | the end of a mob's tick that changed its target | cancel puts the old target back, after a tick with the new one; a brain mob's memory may set it again |
 | `EntityCombustEvent` | the end of a mob's tick that set it burning longer | mobs in their own tick only (not a player's fire aspect) |
@@ -328,11 +328,11 @@ not sent to players who join later; `setWalkSpeed`, `setFlySpeed`, `hidePlayer` 
 health scaling are not bridged; `PlayerLoginEvent.getHostname` is the address, not the handshake's host.
 
 Known differences from CraftBukkit, each for its area to remove: join/quit messages are sent as plain
-translations (no hover); `BlockBreakEvent.setDropItems`/`setExpToDrop` are ignored and the block entity is
-not resent; `Block.getType` reads only the level in place; `AsyncPlayerChatEvent`'s lines go out unsigned;
+translations (no hover); `AsyncPlayerChatEvent`'s lines go out unsigned;
 `PlayerChatEvent` (the deprecated sync one) is not fired; a player's command tree follows their permissions
-when it is sent (join, op changes), and `Player.updateCommands` does not resend it yet; legacy plugins (no `api-version`) load without
-legacy-material support; plugins run on the dedicated server only, not in single player or LAN worlds.
+when it is sent (join, op changes, `Player.updateCommands`, which resends it to every player); legacy plugins
+(no `api-version`) load without legacy-material support. The tracked list of what is still open is
+[`vanilla-client-gaps.md`](vanilla-client-gaps.md).
 
 ## Fan-out
 
