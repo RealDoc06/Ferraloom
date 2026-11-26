@@ -291,7 +291,7 @@ public final class PlayerEvents {
 
     /**
      * ServerGamePacketListenerImpl.handleCommand's PlayerCommandPreprocessEvent for a line (no slash): the line to
-     * run, or null when cancelled.
+     * run, or null when cancelled or rewritten to nothing.
      */
     public static String preprocess(long most, long least, String line) {
         FerraloomPlayer player = online(most, least);
@@ -312,10 +312,10 @@ public final class PlayerEvents {
         if (call(event)) {
             return null;
         }
-        // A listener's line may come without its slash; an empty one runs the original.
+        // A listener's line may come without its slash; an empty one runs nothing.
         String message = event.getMessage();
         String run = message.startsWith("/") ? message.substring(1) : message;
-        return run.isEmpty() ? line : run;
+        return run.isEmpty() ? null : run;
     }
 
     /** Player.chat of a command: the preprocess event, then a plugin's command or vanilla's. */

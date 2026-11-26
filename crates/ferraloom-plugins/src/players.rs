@@ -712,7 +712,7 @@ pub fn player_command(host: &mut dyn crate::PluginHost, id: PlayerId, line: &str
 }
 
 /// `PlayerCommandPreprocessEvent` for a command line (no slash): the line
-/// to run, `None` when a listener cancelled it.
+/// to run, `None` when a listener cancelled it or rewrote it to `/`.
 pub fn command_preprocess(
     host: &mut dyn crate::PluginHost,
     id: PlayerId,
