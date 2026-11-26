@@ -93,7 +93,8 @@ import net.minecraft.world.phys.Vec3;
  *   <li>{@code settle}: waits until the 5x5 chunks around the player are
  *     loaded and entity-ticking ({@code execute if loaded}), then 5 ticks.</li>
  *   <li>{@code portal}: with {@code at}, teleports into the portal there;
- *     without, steps out of the portal the player stands in and back. Then
+ *     without, steps away from the portal it came through and, after the
+ *     portal cooldown, into the middle of that portal's nearest block. Then
  *     waits for the dimension change.</li>
  * </ul>
  *
@@ -391,8 +392,8 @@ public final class CommandExecClient {
         }
 
         /**
-         * Through a nether portal: into the one at `at`, or out of the one the player stands in and back after its
-         * portal cooldown (10 ticks); then waits for the dimension change and its teleport.
+         * Through a nether portal: into the one at `at`, or away from the one the player came through and, after its
+         * portal cooldown (10 ticks), into it again; then waits for the dimension change and its teleport.
          */
         void portal(String at) throws Exception {
             int before;
@@ -400,11 +401,12 @@ public final class CommandExecClient {
                 before = respawns;
             }
             if (at == null) {
-                Vec3 p = position.position();
-                String back = "tp @s " + plain(p.x) + " " + plain(p.y) + " " + plain(p.z);
-                batch(List.of("tp @s ~ ~3 ~"));
+                String portal = nearestPortal();
+                // Clear of any portal (21 blocks tall at most): one block above a portal still counts as inside it,
+                // which keeps resetting the cooldown.
+                batch(List.of("tp @s ~ ~25 ~"));
                 tick(20, false);
-                batch(List.of(back));
+                batch(List.of("tp @s " + portal));
             } else {
                 batch(List.of("tp @s " + at));
             }
@@ -418,6 +420,35 @@ public final class CommandExecClient {
                     inbox.wait(Math.min(left, 1000));
                 }
             }
+        }
+
+        /**
+         * The centre of the nether portal block nearest the player (ties: lower, then smaller x, then smaller z).
+         * A player that came through a portal stands where PortalShape.findCollisionFreePosition put it, which need
+         * not be inside the portal's plane.
+         */
+        String nearestPortal() throws Exception {
+            Vec3 p = position.position();
+            int x = (int) Math.floor(p.x), y = (int) Math.floor(p.y), z = (int) Math.floor(p.z);
+            List<int[]> offsets = new ArrayList<>();
+            for (int dy = -2; dy <= 2; dy++) {
+                for (int dx = -2; dx <= 2; dx++) {
+                    for (int dz = -2; dz <= 2; dz++) offsets.add(new int[] {dx, dy, dz});
+                }
+            }
+            offsets.sort(java.util.Comparator.<int[]>comparingInt(o -> o[0] * o[0] + o[1] * o[1] + o[2] * o[2])
+                .thenComparingInt(o -> o[1]).thenComparingInt(o -> o[0]).thenComparingInt(o -> o[2]));
+            List<String> checks = offsets.stream()
+                .map(o -> "execute if block " + (x + o[0]) + " " + (y + o[1]) + " " + (z + o[2]) + " minecraft:nether_portal")
+                .toList();
+            List<List<Component>> replies = batch(checks);
+            for (int i = 0; i < offsets.size(); i++) {
+                if (replies.get(i).stream().anyMatch(m -> hasKey(m, "commands.execute.conditional.pass"))) {
+                    int[] o = offsets.get(i);
+                    return plain(x + o[0] + 0.5) + " " + (y + o[1]) + " " + plain(z + o[2] + 0.5);
+                }
+            }
+            throw new IllegalStateException("no nether portal near " + p);
         }
 
         void awaitPosition() throws Exception {
