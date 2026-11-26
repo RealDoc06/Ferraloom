@@ -206,6 +206,7 @@ fn the_newest_version_this_horizon_runs_is_installed() {
     assert_eq!(v.version, "0.2.0");
 }
 
+#[cfg(feature = "shader-packs")]
 #[test]
 fn shader_packs_pass_the_game_s_own_check() {
     let manifest = "schema = 1\nid = \"glow\"\nname = \"Glow\"\nversion = \"1.0.0\"\napi = \"0.1\"\n\

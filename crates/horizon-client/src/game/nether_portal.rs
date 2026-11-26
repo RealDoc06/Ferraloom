@@ -429,26 +429,11 @@ impl Game<'_> {
         self.portals.player.set_inside(pos, PLAYER_DELAY);
         self.portals.client_inside = true;
     }
-    /// The same on a server's client: `Entity.canUsePortal` (alive, not a
-    /// passenger), then only the client's `setAsInsidePortal`, which drives
-    /// the confusion effect (`client_portal_effect`).
-    pub(super) fn client_inside_nether_portal(&mut self) {
-        let alive = self
-            .player
-            .as_ref()
-            .is_some_and(|p| !p.health.dead_or_dying());
-        if alive && self.riding.is_none() {
-            self.portals.client_inside = true;
-        }
-    }
     /// `ServerPlayer.handlePortal` (not while changing dimension: there is no
     /// player then). Players wait `players_nether_portal_default_delay`
     /// ticks, or the creative delay with invulnerable abilities.
     pub(super) fn tick_nether_portal(&mut self) -> Result<()> {
         // A server's portals are its own.
-        if self.remote.is_some() {
-            return Ok(());
-        }
         let Some(p) = self.player.as_ref() else {
             return Ok(());
         };
@@ -539,7 +524,6 @@ impl Game<'_> {
             player.fall_distance = 0.0;
             self.previous_position = target;
             self.player = Some(player);
-            self.pad.player_replaced();
             self.sway = Default::default();
             self.apply_equipment();
             return Ok(());
@@ -558,7 +542,6 @@ impl Game<'_> {
         player.velocity = rotate_y(player.velocity, -rotation);
         self.previous_position = player.position;
         self.player = Some(player);
-        self.pad.player_replaced();
         self.sway = Default::default();
         self.apply_equipment();
         let pitch = self.world.random.next_float() * 0.4 + 0.8;
@@ -601,9 +584,6 @@ impl Game<'_> {
     /// at the start of their tick: an item or mob that stayed in a portal
     /// goes through (transition time 0) and waits for its dimension.
     pub(super) fn handle_entity_portals(&mut self) {
-        if self.remote.is_some() {
-            return;
-        }
         self.load_portal_arrivals();
         let mut leaving: Vec<(u32, BlockPos)> = Vec::new();
         self.portals.before.clear();
@@ -727,9 +707,6 @@ impl Game<'_> {
     /// tick: the portal blocks their box swept through (an End portal's
     /// transition time is 0 too).
     pub(super) fn find_entity_portals(&mut self) {
-        if self.remote.is_some() {
-            return;
-        }
         let mut inside: Vec<(u32, BlockPos)> = Vec::new();
         let items: Vec<(u32, Vec3, f32, f32)> = self
             .dropped
@@ -958,9 +935,6 @@ impl Game<'_> {
     /// their exit portal (found or built) or End destination, position,
     /// turned yaw and motion, and portal cooldown; they join the world with the chunk entities.
     pub(super) fn resolve_arrivals(&mut self) {
-        if self.remote.is_some() {
-            return;
-        }
         let mut i = 0;
         while i < self.portals.arrivals.len() {
             let plan = self.portals.arrivals[i].plan;
@@ -1021,7 +995,7 @@ impl Game<'_> {
     }
     /// The waiting entities of the open world (read once).
     pub(super) fn load_portal_arrivals(&mut self) {
-        if self.portals.loaded || self.remote.is_some() {
+        if self.portals.loaded {
             return;
         }
         self.portals.loaded = true;
@@ -1037,7 +1011,7 @@ impl Game<'_> {
     }
     /// Write the waiting entities when they changed.
     pub(super) fn save_portal_arrivals(&mut self) {
-        if !self.portals.dirty || self.remote.is_some() {
+        if !self.portals.dirty {
             return;
         }
         let list = self.portals.arrivals.iter().map(arrival_tag).collect();

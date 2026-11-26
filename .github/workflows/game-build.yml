@@ -107,10 +107,9 @@ jobs:
         with:
           shared-key: release-server-${{ matrix.name }}
       - name: Build the engine, horizon-prepare and horizon-server
-        # The engine without sound or controllers, so it needs neither libasound nor libudev (minimal server images
-        # lack them), and with code mods.
+        # The engine with code mods.
         run: |
-          cargo build --release --locked -p horizon-client --no-default-features --features mods --bin horizon-client \
+          cargo build --release --locked -p horizon-client --features mods --bin horizon-client \
             -p horizon-prepare --bin horizon-prepare -p horizon-server --bin horizon-server
       - uses: actions/download-artifact@v4
         with:

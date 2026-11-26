@@ -247,7 +247,7 @@ static TABLE: LazyLock<Vec<Def>> = LazyLock::new(|| {
         n("musicToast", MUSIC_TOAST, 0),
         n("musicFrequency", MUSIC_FREQUENCY, 0),
     ];
-    for (name, key, _) in crate::keybinds::MAPPINGS {
+    for (name, key) in KEY_DEFAULTS {
         t.push(def(
             &format!("key_{name}"),
             Kind::Key,
@@ -713,164 +713,69 @@ fn split_lines(text: &str) -> Vec<&str> {
     lines
 }
 
-/// Option names in processing order (for tests and tooling).
-pub fn keys() -> Vec<&'static str> {
-    TABLE.iter().map(|d| d.key.as_str()).collect()
-}
-
-/// What an option accepts, for the control socket (`options-get`).
-fn accepts(kind: Kind) -> serde_json::Value {
-    use serde_json::json;
-    match kind {
-        Kind::Option(Spec::Bool) | Kind::PlainBool => json!({ "type": "bool" }),
-        Kind::Option(Spec::Int(lo, hi)) => json!({ "type": "int", "min": lo, "max": hi }),
-        Kind::Option(Spec::LazyInt(lo)) => json!({ "type": "int", "min": lo }),
-        Kind::Option(Spec::Scaled(imin, imax, k, ..)) => json!({
-            "type": "double",
-            "min": f64::from(imin) / k,
-            "max": f64::from(imax) / k,
-            "step": 1.0 / k,
-        }),
-        Kind::Option(Spec::FrameLimit) => {
-            json!({ "type": "int", "min": 10, "max": 260, "step": 10 })
-        }
-        Kind::Option(Spec::Fov) => json!({ "type": "int", "min": 30, "max": 110 }),
-        Kind::Option(Spec::WheelSensitivity) => {
-            json!({ "type": "double", "min": log_mouse(-200), "max": log_mouse(100) })
-        }
-        Kind::Option(Spec::Unit | Spec::UnitSquare | Spec::UnitSquareImplicit) => {
-            json!({ "type": "double", "min": 0.0, "max": 1.0 })
-        }
-        Kind::Option(Spec::Named(names)) => json!({ "type": "enum", "choices": names }),
-        Kind::Option(Spec::Id(count)) => json!({ "type": "int", "min": 0, "max": count - 1 }),
-        Kind::Option(Spec::Clouds) => json!({ "type": "enum", "choices": CLOUDS }),
-        Kind::Option(Spec::AnyStr) | Kind::PlainStr => json!({ "type": "string" }),
-        Kind::PlainInt => json!({ "type": "int" }),
-        Kind::List => json!({ "type": "list" }),
-        Kind::Tutorial => json!({ "type": "enum", "choices": TUTORIAL_STEPS }),
-        Kind::Key => json!({ "type": "key", "example": "key.keyboard.w" }),
-    }
-}
-
-/// The names of an enum-valued option.
-fn choices(kind: Kind) -> Option<&'static [&'static str]> {
-    match kind {
-        Kind::Option(Spec::Named(names)) => Some(names),
-        Kind::Option(Spec::Clouds) => Some(CLOUDS),
-        Kind::Tutorial => Some(&TUTORIAL_STEPS),
-        _ => None,
-    }
-}
-
-impl OptionsFile {
-    /// An option for the control socket: `{"value", "type", ...}` with what
-    /// it accepts (range, choices); enum values by name. None when unknown.
-    pub fn describe(&self, key: &str) -> Option<serde_json::Value> {
-        let i = Self::index(key)?;
-        let kind = TABLE[i].kind;
-        let value = match (choices(kind), &self.values[i]) {
-            (Some(names), V::Int(x)) => usize::try_from(*x)
-                .ok()
-                .and_then(|x| names.get(x))
-                .map_or(serde_json::Value::Null, |n| (*n).into()),
-            (_, V::Bool(b)) => (*b).into(),
-            (_, V::Int(x)) => (*x).into(),
-            (_, V::Double(d)) => (*d).into(),
-            (_, V::Str(s)) => s.as_str().into(),
-            (_, V::List(l)) => l.clone().into(),
-        };
-        let mut out = accepts(kind);
-        out["value"] = value;
-        Some(out)
-    }
-
-    /// Set an option from text, as the control socket's `options-set` does:
-    /// enums by name, key bindings by key name (`key.keyboard.w`), lists as
-    /// JSON. Unlike loading `options.txt`, a value the option refuses is an
-    /// error naming what it accepts, and the option keeps its value.
-    pub fn set_text(&mut self, key: &str, text: &str) -> Result<(), String> {
-        let i = Self::index(key).ok_or_else(|| format!("unknown option {key}"))?;
-        let d = &TABLE[i];
-        let refused = || format!("{key} refuses {text:?}; it accepts {}", accepts(d.kind));
-        let candidate = if let Some(names) = choices(d.kind) {
-            let x = names.iter().position(|n| *n == text).ok_or_else(refused)?;
-            V::Int(x as i32)
-        } else if matches!(d.kind, Kind::Key) {
-            let name = canonical_key(text).map_err(|_| refused())?;
-            if name == "key.keyboard.unknown" && text != name {
-                return Err(refused());
-            }
-            V::Str(name)
-        } else {
-            match &d.default {
-                V::Bool(_) => V::Bool(text.parse().map_err(|_| refused())?),
-                V::Int(_) => V::Int(text.parse().map_err(|_| refused())?),
-                V::Double(_) => V::Double(text.parse().map_err(|_| refused())?),
-                V::Str(_) => V::Str(text.to_owned()),
-                V::List(_) => V::List(serde_json::from_str(text).map_err(|_| refused())?),
-            }
-        };
-        self.values[i] = match d.kind {
-            Kind::Option(spec) => spec.validate(&candidate).ok_or_else(refused)?,
-            _ => candidate,
-        };
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod control_tests {
-    use super::*;
-
-    #[test]
-    fn describes_values_with_what_they_accept() {
-        let f = OptionsFile::default();
-        let fov = f.describe("fov").unwrap();
-        assert_eq!(fov["value"], 70);
-        assert_eq!(
-            (fov["type"].as_str(), fov["min"].as_i64()),
-            (Some("int"), Some(30))
-        );
-        assert_eq!(f.describe("renderClouds").unwrap()["value"], "true");
-        assert_eq!(
-            f.describe("key_key.forward").unwrap()["value"],
-            "key.keyboard.w"
-        );
-        assert_eq!(f.describe("resourcePacks").unwrap()["type"], "list");
-        assert!(f.describe("nope").is_none());
-        for key in keys() {
-            assert!(f.describe(key).is_some(), "{key}");
-        }
-    }
-
-    #[test]
-    fn sets_valid_values_and_refuses_others() {
-        let mut f = OptionsFile::default();
-        f.set_text("fov", "90").unwrap();
-        assert_eq!(f.get("fov"), Some(&V::Int(90)));
-        let e = f.set_text("fov", "200").unwrap_err();
-        assert!(e.contains("\"max\":110"), "{e}");
-        assert_eq!(
-            f.get("fov"),
-            Some(&V::Int(90)),
-            "a refused value changes nothing"
-        );
-        f.set_text("renderClouds", "fast").unwrap();
-        assert_eq!(f.name("renderClouds"), "fast");
-        assert!(f.set_text("renderClouds", "fancy").is_err());
-        f.set_text("maxFps", "125").unwrap();
-        assert_eq!(f.get("maxFps"), Some(&V::Int(120)), "IntRange steps of 10");
-        f.set_text("key_key.jump", "key.keyboard.j").unwrap();
-        assert_eq!(f.key_binding("key.jump"), "key.keyboard.j");
-        assert!(f.set_text("key_key.jump", "jump").is_err());
-        f.set_text("resourcePacks", r#"["vanilla","file/x.zip"]"#)
-            .unwrap();
-        assert_eq!(f.list("resourcePacks"), ["vanilla", "file/x.zip"]);
-        assert!(f.set_text("gamma", "1.5").is_err());
-        assert!(
-            f.set_text("nope", "1")
-                .unwrap_err()
-                .contains("unknown option")
-        );
-    }
-}
+/// The key mappings in `Options.keyMappings` order, with their default keys:
+/// `options.txt` keeps a `key_<name>` entry for each.
+const KEY_DEFAULTS: &[(&str, &str)] = &[
+    ("key.attack", "key.mouse.left"),
+    ("key.use", "key.mouse.right"),
+    ("key.forward", "key.keyboard.w"),
+    ("key.left", "key.keyboard.a"),
+    ("key.back", "key.keyboard.s"),
+    ("key.right", "key.keyboard.d"),
+    ("key.jump", "key.keyboard.space"),
+    ("key.sneak", "key.keyboard.left.shift"),
+    ("key.sprint", "key.keyboard.left.control"),
+    ("key.drop", "key.keyboard.q"),
+    ("key.inventory", "key.keyboard.e"),
+    ("key.chat", "key.keyboard.t"),
+    ("key.playerlist", "key.keyboard.tab"),
+    ("key.pickItem", "key.mouse.middle"),
+    ("key.command", "key.keyboard.slash"),
+    ("key.friends", "key.keyboard.o"),
+    ("key.socialInteractions", "key.keyboard.p"),
+    ("key.toggleGui", "key.keyboard.f1"),
+    ("key.toggleSpectatorShaderEffects", "key.keyboard.f4"),
+    ("key.screenshot", "key.keyboard.f2"),
+    ("key.togglePerspective", "key.keyboard.f5"),
+    ("key.smoothCamera", "key.keyboard.unknown"),
+    ("key.fullscreen", "key.keyboard.f11"),
+    ("key.spectatorOutlines", "key.keyboard.unknown"),
+    ("key.spectatorHotbar", "key.mouse.middle"),
+    ("key.swapOffhand", "key.keyboard.f"),
+    ("key.saveToolbarActivator", "key.keyboard.c"),
+    ("key.loadToolbarActivator", "key.keyboard.x"),
+    ("key.advancements", "key.keyboard.l"),
+    ("key.quickActions", "key.keyboard.g"),
+    ("key.debug.overlay", "key.keyboard.f3"),
+    ("key.debug.modifier", "key.keyboard.f3"),
+    ("key.hotbar.1", "key.keyboard.1"),
+    ("key.hotbar.2", "key.keyboard.2"),
+    ("key.hotbar.3", "key.keyboard.3"),
+    ("key.hotbar.4", "key.keyboard.4"),
+    ("key.hotbar.5", "key.keyboard.5"),
+    ("key.hotbar.6", "key.keyboard.6"),
+    ("key.hotbar.7", "key.keyboard.7"),
+    ("key.hotbar.8", "key.keyboard.8"),
+    ("key.hotbar.9", "key.keyboard.9"),
+    ("key.debug.reloadChunk", "key.keyboard.a"),
+    ("key.debug.showHitboxes", "key.keyboard.b"),
+    ("key.debug.clearChat", "key.keyboard.d"),
+    ("key.debug.crash", "key.keyboard.c"),
+    ("key.debug.showChunkBorders", "key.keyboard.g"),
+    ("key.debug.showAdvancedTooltips", "key.keyboard.h"),
+    ("key.debug.copyRecreateCommand", "key.keyboard.i"),
+    ("key.debug.spectate", "key.keyboard.n"),
+    ("key.debug.switchGameMode", "key.keyboard.f4"),
+    ("key.debug.debugOptions", "key.keyboard.f6"),
+    ("key.debug.focusPause", "key.keyboard.p"),
+    ("key.debug.dumpDynamicTextures", "key.keyboard.s"),
+    ("key.debug.reloadResourcePacks", "key.keyboard.t"),
+    ("key.debug.profiling", "key.keyboard.l"),
+    ("key.debug.copyLocation", "key.keyboard.c"),
+    ("key.debug.dumpVersion", "key.keyboard.v"),
+    ("key.debug.profilingChart", "key.keyboard.1"),
+    ("key.debug.fpsCharts", "key.keyboard.2"),
+    ("key.debug.networkCharts", "key.keyboard.3"),
+    ("key.debug.lightmapTexture", "key.keyboard.4"),
+    ("key.debug.improvedTransparency", "key.keyboard.x"),
+];

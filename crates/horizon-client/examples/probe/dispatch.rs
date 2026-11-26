@@ -28,15 +28,6 @@ pub fn args() -> std::vec::IntoIter<String> {
     args.into_iter()
 }
 
-/// args(), as OsStrings.
-pub fn args_os() -> std::vec::IntoIter<std::ffi::OsString> {
-    let mut args: Vec<_> = std::env::args_os().collect();
-    if args.len() > 1 {
-        args.remove(1);
-    }
-    args.into_iter()
-}
-
 pub fn main(names: &[&str], run: fn(&str) -> Option<ExitCode>) -> ExitCode {
     let name = std::env::args().nth(1).unwrap_or_default();
     run(&name).unwrap_or_else(|| {

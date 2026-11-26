@@ -3,7 +3,6 @@
 //! squish animation and splitting.
 use super::{
     Mob, MobEvent, MobWorld, Species,
-    anim::{Poses, State},
     control::{MoveKind, Operation, rotlerp},
     goals::{Cx, Goal, JUMP, LOOK, MOVE, NearestTarget, Prey, goal_clone, reduced},
 };
@@ -179,14 +178,6 @@ fn landing_splash(m: &mut Mob, events: &mut Vec<MobEvent>) {
         i += 1;
     }
 }
-/// `AbstractCubeMob.tick` on a client of a server: the landing splash follows
-/// the on-ground flag the server sends.
-pub fn client_tick(m: &mut Mob, events: &mut Vec<MobEvent>) {
-    if m.on_ground && !m.extra.flag2 {
-        landing_splash(m, events);
-    }
-    m.extra.flag2 = m.on_ground;
-}
 /// AbstractCubeMob.tick squish and landing sounds, plus contact damage.
 pub fn ai_step(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
     let v = &mut m.anim.v;
@@ -249,27 +240,6 @@ pub fn ai_step(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
             }
         }
     }
-}
-/// MagmaCubeModel.setupAnim (slimes have no animation).
-pub fn anim(m: &Mob, s: &State, p: &mut Poses) {
-    if m.species() == Species::MagmaCube {
-        let squish = m.anim.lerp(SQUISH, s.partial).max(0.0);
-        for i in 0..8 {
-            p.get(&format!("cube{i}"))[1] = -((4 - i) as f32) * squish * 1.7;
-        }
-    }
-}
-/// AbstractCubeMobRenderer.scale: size with squash and stretch.
-pub fn scale(m: &Mob, alpha: f32) -> glam::Mat4 {
-    let size = m.extra.size.max(1) as f32;
-    let squish = m.anim.lerp(SQUISH, alpha) / (size * 0.5 + 1.0);
-    let w = 1.0 / (squish + 1.0);
-    let mut t = glam::Mat4::IDENTITY;
-    if m.species() == Species::Slime {
-        t = glam::Mat4::from_scale(glam::Vec3::splat(0.999))
-            * glam::Mat4::from_translation(glam::Vec3::new(0.0, 0.001, 0.0));
-    }
-    t * glam::Mat4::from_scale(glam::Vec3::new(w * size, 1.0 / w * size, w * size))
 }
 /// CubeMobFloatGoal
 #[derive(Clone, Debug)]

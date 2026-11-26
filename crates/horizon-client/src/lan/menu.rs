@@ -155,9 +155,6 @@ impl View<'_> {
             None => 46,
         }
     }
-    pub fn is_empty(&self) -> bool {
-        false
-    }
     pub fn get(&self, i: usize) -> Option<ItemStack> {
         match &self.container {
             Some(c) if i < c.len() => c[i].clone(),
@@ -208,6 +205,9 @@ impl View<'_> {
             Some(c) => (c.len()..c.len() + 27, c.len() + 27..c.len() + 36),
             None => (9..36, 36..45),
         }
+    }
+    pub fn is_empty(&self) -> bool {
+        false
     }
 }
 
@@ -698,7 +698,6 @@ mod tests {
                 name: "Alex".into(),
                 properties: Vec::new(),
                 info: ClientInformation::new(8),
-                brand: "test".into(),
                 sender: PlayerSender::new(tx, Arc::default()),
                 latency: Arc::new(AtomicI32::new(0)),
                 address: "127.0.0.1:25565".parse().unwrap(),

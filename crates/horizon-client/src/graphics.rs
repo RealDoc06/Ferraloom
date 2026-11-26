@@ -33,15 +33,6 @@ impl Preset {
             Preset::Custom => "custom",
         }
     }
-    pub fn label(self) -> &'static str {
-        match self {
-            Preset::Performance => "Performance",
-            Preset::Balanced => "Balanced",
-            Preset::Quality => "Quality",
-            Preset::Ultra => "Ultra",
-            Preset::Custom => "Custom",
-        }
-    }
     fn parse(s: &str) -> Self {
         Self::ALL
             .into_iter()
@@ -75,14 +66,6 @@ impl PresentMode {
             PresentMode::Fifo => "fifo",
             PresentMode::Mailbox => "mailbox",
             PresentMode::Immediate => "immediate",
-        }
-    }
-    pub fn label(self) -> &'static str {
-        match self {
-            PresentMode::Auto => "Auto (VSync)",
-            PresentMode::Fifo => "FIFO",
-            PresentMode::Mailbox => "Mailbox",
-            PresentMode::Immediate => "Immediate",
         }
     }
     fn parse(s: &str) -> Self {
@@ -121,26 +104,11 @@ impl GraphicsApi {
             GraphicsApi::OpenGl => "opengl",
         }
     }
-    pub fn label(self) -> &'static str {
-        match self {
-            GraphicsApi::Auto => "Auto",
-            GraphicsApi::Vulkan => "Vulkan",
-            GraphicsApi::Dx12 => "DirectX 12",
-            GraphicsApi::OpenGl => "OpenGL",
-        }
-    }
     /// The API a name stands for, ignoring case; `None` for anything else.
     pub fn from_name(s: &str) -> Option<Self> {
         Self::ALL
             .into_iter()
             .find(|api| api.name().eq_ignore_ascii_case(s.trim()))
-    }
-    /// `HORIZON_GRAPHICS_API` (auto, vulkan, dx12 or opengl) if set, else the setting.
-    pub fn with_env(self) -> Self {
-        std::env::var("HORIZON_GRAPHICS_API")
-            .ok()
-            .and_then(|v| Self::from_name(&v))
-            .unwrap_or(self)
     }
 }
 
@@ -182,12 +150,6 @@ impl FarDetail {
             FarDetail::Reduced => "reduced",
         }
     }
-    pub fn label(self) -> &'static str {
-        match self {
-            FarDetail::Full => "Full",
-            FarDetail::Reduced => "Reduced",
-        }
-    }
     fn parse(s: &str) -> Self {
         if s == "reduced" {
             FarDetail::Reduced
@@ -197,40 +159,6 @@ impl FarDetail {
     }
 }
 
-static REDUCED_SUGGESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-/// Whether the settings suggest Reduced far detail: set when the renderer
-/// starts, on the GPUs `lod_capped` names (far terrain slows them most).
-pub fn suggest_reduced_far_detail(on: bool) {
-    REDUCED_SUGGESTED.store(on, std::sync::atomic::Ordering::Relaxed);
-}
-pub fn reduced_far_detail_suggested() -> bool {
-    REDUCED_SUGGESTED.load(std::sync::atomic::Ordering::Relaxed)
-}
-
-/// The farthest LOD Distance, in chunks, on integrated GPUs other than
-/// Apple's: they share the CPU's memory bandwidth, and past it far terrain
-/// costs them more frame time than it is worth.
-pub const INTEGRATED_LOD_DISTANCE: u32 = 128;
-/// Whether `INTEGRATED_LOD_DISTANCE` applies to this adapter. Apple's GPUs
-/// are integrated too, with memory and bandwidth enough for every distance.
-pub fn lod_capped(info: &wgpu::AdapterInfo) -> bool {
-    info.device_type == wgpu::DeviceType::IntegratedGpu && !info.name.starts_with("Apple")
-}
-/// A LOD distance as far terrain uses it on this adapter.
-pub fn lod_distance_capped(distance: u32, info: &wgpu::AdapterInfo) -> u32 {
-    let distance = distance.min(1024);
-    if lod_capped(info) {
-        distance.min(INTEGRATED_LOD_DISTANCE)
-    } else {
-        distance
-    }
-}
-impl Graphics {
-    /// `lod_distance` as far terrain uses it on this adapter.
-    pub fn lod_distance_on(&self, info: &wgpu::AdapterInfo) -> u32 {
-        lod_distance_capped(self.lod_distance, info)
-    }
-}
 #[derive(Clone, Debug, PartialEq)]
 pub struct Graphics {
     pub preset: Preset,
@@ -426,49 +354,6 @@ impl Graphics {
             .max(1);
         if self.battery { auto.div_ceil(2) } else { auto }
     }
-    /// The frame cap battery mode adds: 60 in a world, 30 in menus without a
-    /// world or while another window has focus.
-    pub fn battery_limit(&self, limit: i32, in_world: bool, focused: bool) -> i32 {
-        if !self.battery {
-            limit
-        } else if in_world && focused {
-            limit.min(60)
-        } else {
-            limit.min(30)
-        }
-    }
-}
-
-/// A preset's values for vanilla's options and Horizon's own.
-pub fn apply_preset(preset: Preset, s: &mut crate::settings::Settings) {
-    let (rd, sim, clouds, particles, shadows, blend, mipmaps, entity, leaves, weather_r) =
-        match preset {
-            Preset::Performance => (8, 6, "false", 2, false, 0, 0, 0.5, false, 3),
-            Preset::Balanced => (12, 8, "fast", 1, true, 1, 2, 0.75, true, 5),
-            Preset::Quality => (16, 12, "true", 0, true, 2, 4, 1.0, true, 10),
-            Preset::Ultra => (24, 12, "true", 0, true, 3, 4, 1.5, true, 10),
-            Preset::Custom => return,
-        };
-    s.render_distance = rd;
-    s.simulation_distance = sim;
-    s.clouds = clouds.into();
-    s.particles = particles;
-    s.entity_shadows = shadows;
-    s.biome_blend = blend;
-    s.mipmap_levels = mipmaps;
-    s.entity_distance = entity;
-    s.cutout_leaves = leaves;
-    s.weather_radius = weather_r;
-    s.graphics_preset = "custom".into();
-    let g = &mut s.horizon;
-    g.preset = preset;
-    g.cave_culling = true;
-    g.animated_textures = true;
-    g.chunk_updates = 0;
-    g.upload_budget_kib = 0;
-    g.sky = true;
-    g.fog = true;
-    g.weather = true;
 }
 
 #[cfg(test)]
@@ -518,46 +403,6 @@ mod tests {
     }
 
     #[test]
-    fn integrated_gpus_other_than_apple_cap_the_lod_distance() {
-        let adapter = |name: &str, device_type| wgpu::AdapterInfo {
-            name: name.into(),
-            vendor: 0,
-            device: 0,
-            device_type,
-            device_pci_bus_id: String::new(),
-            driver: String::new(),
-            driver_info: String::new(),
-            backend: wgpu::Backend::Vulkan,
-            subgroup_min_size: 0,
-            subgroup_max_size: 0,
-            transient_saves_memory: None,
-            limit_bucket: None,
-        };
-        let hd620 = adapter(
-            "Intel(R) HD Graphics 620 (KBL GT2)",
-            wgpu::DeviceType::IntegratedGpu,
-        );
-        let m4 = adapter("Apple M4 Pro", wgpu::DeviceType::IntegratedGpu);
-        let discrete = adapter("NVIDIA GeForce RTX 4070", wgpu::DeviceType::DiscreteGpu);
-        for (distance, capped) in [(0, 0), (64, 64), (128, 128), (256, 128), (1024, 128)] {
-            let g = Graphics {
-                lod_distance: distance,
-                ..Graphics::default()
-            };
-            assert_eq!(g.lod_distance_on(&hd620), capped);
-            assert_eq!(g.lod_distance_on(&m4), distance);
-            assert_eq!(g.lod_distance_on(&discrete), distance);
-        }
-        assert!(
-            crate::graphics_ui::rows(crate::graphics_ui::Level::Simple)
-                .iter()
-                .any(|row| matches!(row, crate::graphics_ui::Row::Setting(s)
-                    if s.text.contains(&format!("{INTEGRATED_LOD_DISTANCE} chunks")))),
-            "the LOD Distance description names the cap"
-        );
-    }
-
-    #[test]
     fn lod_distance_is_opt_in_and_bounded() {
         assert_eq!(Graphics::default().lod_distance, 0);
         for distance in [0, 64, 128, 256, 512, 1024] {
@@ -571,24 +416,6 @@ mod tests {
     }
 
     #[test]
-    fn far_detail_is_full_unless_reduced_is_picked() {
-        assert_eq!(Graphics::default().far_detail, FarDetail::Full);
-        assert_eq!(
-            Graphics::parse("farDetail:reduced\n").far_detail,
-            FarDetail::Reduced
-        );
-        for text in ["farDetail:full\n", "farDetail:other\n", ""] {
-            assert_eq!(Graphics::parse(text).far_detail, FarDetail::Full);
-        }
-        // No preset changes it.
-        for preset in Preset::ALL {
-            let mut s = crate::settings::Settings::default();
-            apply_preset(preset, &mut s);
-            assert_eq!(s.horizon.far_detail, FarDetail::Full, "{preset:?}");
-        }
-    }
-
-    #[test]
     fn automatic_workers_leave_a_core_as_vanilla_does() {
         let g = Graphics::default();
         assert_eq!(g.workers, 0);
@@ -597,17 +424,5 @@ mod tests {
         // A manual count is the player's own choice, kept as asked.
         let manual = Graphics { workers: 3, ..g };
         assert_eq!(manual.worker_threads(), 3);
-    }
-
-    #[test]
-    fn battery_mode_only_lowers_the_frame_cap() {
-        let mut g = Graphics::default();
-        assert_eq!(g.battery_limit(260, true, true), 260);
-        g.battery = true;
-        assert_eq!(g.battery_limit(260, true, true), 60);
-        assert_eq!(g.battery_limit(30, true, true), 30);
-        assert_eq!(g.battery_limit(260, false, true), 30);
-        assert_eq!(g.battery_limit(260, true, false), 30);
-        assert_eq!(g.battery_limit(10, true, false), 10);
     }
 }

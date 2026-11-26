@@ -91,20 +91,6 @@ impl ModList {
         }
         let _ = fs::write(path, self.serialize());
     }
-    pub fn is_on(&self, i: usize) -> bool {
-        self.installed
-            .get(i)
-            .is_some_and(|m| m.dev || self.enabled.contains(&m.id))
-    }
-    /// Turns installed mod `i` on or off (a dev mod stays on).
-    pub fn toggle(&mut self, i: usize) {
-        let Some(m) = self.installed.get(i).filter(|m| !m.dev) else {
-            return;
-        };
-        if !self.enabled.remove(&m.id) {
-            self.enabled.insert(m.id.clone());
-        }
-    }
 }
 
 #[cfg(test)]
@@ -129,28 +115,5 @@ mod tests {
         );
         assert!(list.keys_of("other").is_empty());
         assert_eq!(ModList::parse(&list.serialize()), list);
-    }
-
-    #[test]
-    fn toggles_installed_mods_but_not_dev_ones() {
-        let installed = |id: &str, dev| Installed {
-            id: id.into(),
-            title: id.into(),
-            description: String::new(),
-            problem: None,
-            dev,
-            has_settings: false,
-        };
-        let mut list = ModList {
-            installed: vec![installed("a", false), installed("b", true)],
-            ..Default::default()
-        };
-        assert!(!list.is_on(0) && list.is_on(1));
-        list.toggle(0);
-        list.toggle(1);
-        assert!(list.is_on(0) && list.is_on(1));
-        assert_eq!(list.serialize(), "mod.a:true\n");
-        list.toggle(0);
-        assert!(!list.is_on(0));
     }
 }

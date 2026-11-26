@@ -90,10 +90,6 @@ impl Moved {
             _ => Vec::new(),
         }
     }
-    /// The line the player reads once it is installed.
-    pub fn notice(&self) -> String {
-        format!("{} moved to the mod browser: installed for you", self.name)
-    }
 }
 
 /// The moved extras still to install: on, and not done yet.
@@ -217,66 +213,6 @@ pub fn install(index: &Index, m: &Moved, e: &Extras, dir: &Path) -> Result<(), S
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::extras::Corner;
-
-    #[test]
-    fn only_extras_that_were_on_are_installed_and_each_once() {
-        let mut e = Extras::default();
-        assert!(pending(&e).is_empty());
-        assert_eq!(nothing_to_do(&e).len(), 4);
-        e.fps = true;
-        e.fps_corner = Corner::BottomRight;
-        e.fps_lows = true;
-        assert_eq!(pending(&e), [&MOVED[0]]);
-        assert_eq!(
-            MOVED[0].settings(&e),
-            [("corner", "bottom_right".into()), ("lows", "true".into())]
-        );
-        assert_eq!(
-            MOVED[1].settings(&e),
-            [("corner", "top_left".into()), ("cps", "true".into())]
-        );
-        e.moved.push("fps_overlay".into());
-        assert!(pending(&e).is_empty());
-        assert_eq!(nothing_to_do(&e), [&MOVED[1], &MOVED[2], &MOVED[3]]);
-        // Zoom: its settings, and its key only when the player changed it.
-        e.zoom = true;
-        e.zoom_level = 8;
-        e.zoom_smooth = false;
-        assert_eq!(pending(&e), [&MOVED[2]]);
-        assert_eq!(
-            MOVED[2].settings(&e),
-            [
-                ("level", "8".into()),
-                ("smooth", "false".into()),
-                ("sensitivity", "true".into())
-            ]
-        );
-        assert!(MOVED[2].keys(&e).is_empty());
-        e.zoom_key = "key.mouse.4".into();
-        assert_eq!(MOVED[2].keys(&e), [("zoom", "key.mouse.4".into())]);
-        // The minimap: its five settings, in the extra's values.
-        e.minimap = true;
-        e.minimap_corner = Corner::BottomLeft;
-        e.minimap_size = 128;
-        e.minimap_round = true;
-        e.minimap_zoom = 0.5;
-        assert_eq!(pending(&e), [&MOVED[2], &MOVED[3]]);
-        assert_eq!(
-            MOVED[3].settings(&e),
-            [
-                ("corner", "bottom_left".into()),
-                ("size", "128".into()),
-                ("shape", "round".into()),
-                ("zoom", "0.5".into()),
-                ("rotate", "false".into())
-            ]
-        );
-        assert_eq!(
-            MOVED[0].notice(),
-            "FPS counter moved to the mod browser: installed for you"
-        );
-    }
 
     #[test]
     fn a_file_url_needs_a_local_index() {

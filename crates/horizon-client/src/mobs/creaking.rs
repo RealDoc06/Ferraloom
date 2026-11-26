@@ -5,15 +5,10 @@
 //! sways and hurts the heart's resin spreader), dies when the heart no
 //! longer protects it and falls apart with the heart.
 use super::{
-    Damage, DamageKind, Mob, MobEvent, MobWorld, Species, Who,
-    anim::{Poses, State},
-    keyframes::Animation,
-    monster_brain,
-    path::PathType,
+    Damage, DamageKind, Mob, MobEvent, MobWorld, Species, Who, monster_brain, path::PathType,
 };
 use crate::containers::BlockEntity;
 use horizon_core::{geometry::Vec3, random::RandomSource};
-use std::collections::HashMap;
 
 /// `Extra.ints` slots.
 const INVULNERABLE: usize = 0;
@@ -66,14 +61,6 @@ pub fn set_transient(m: &mut Mob, pos: [i32; 3]) {
 /// `Creaking.setTearingDown`: the heart was broken by someone.
 pub fn set_tearing_down(m: &mut Mob) {
     m.extra.ints[TEARING_DOWN] = 1;
-}
-/// `Creaking.hasGlowingEyes` / `isActive`: the eyes layer shows.
-pub fn eyes_glowing(m: &Mob) -> bool {
-    if tearing_down(m) {
-        m.extra.ints[EYES] != 0
-    } else {
-        is_active(m)
-    }
 }
 /// Ticks of death animation before the mob is removed (`tickDeath`).
 pub fn death_limit(m: &Mob) -> i32 {
@@ -164,15 +151,6 @@ fn broadcast(m: &Mob, event: i8, events: &mut Vec<MobEvent>) {
         event,
         at: [m.position.x, m.position.y, m.position.z],
     });
-}
-/// `Creaking.handleEntityEvent` on a client: 66 the invulnerability flash,
-/// 4 the attack swing (the sounds are the server's).
-pub fn entity_event(m: &mut Mob, event: u8) {
-    match event {
-        66 => m.extra.ints[INVULNERABLE] = INVULNERABILITY_TICKS,
-        4 => m.extra.ints[ATTACKING] = ATTACK_TICKS,
-        _ => {}
-    }
 }
 /// The heart this creaking is bound to protects it (`isProtector`); a link
 /// read from a save is trusted until the heart resolves it.
@@ -365,26 +343,6 @@ pub fn player_is_stuck(m: &mut Mob, eye: Option<[f64; 3]>) -> bool {
     } else {
         m.extra.ints[STUCK] = 0;
         false
-    }
-}
-/// `CreakingModel.setupAnim`.
-pub fn anim(m: &Mob, s: &State, p: &mut Poses, animations: &HashMap<String, Animation>) {
-    p.xrot("head", s.x_rot.to_radians());
-    p.yrot("head", s.y_rot.to_radians());
-    let get = |n: &str| animations.get(&format!("CreakingAnimation.CREAKING_{n}"));
-    if can_move(m)
-        && let Some(walk) = get("WALK")
-    {
-        walk.apply_walk(s.pos, s.speed, 1.0, 1.0, p);
-    }
-    for (state, name) in [
-        (&m.anim.states[0], "ATTACK"),
-        (&m.anim.states[1], "INVULNERABLE"),
-        (&m.anim.states[2], "DEATH"),
-    ] {
-        if let (Some(ms), Some(a)) = (state.millis(s.age), get(name)) {
-            a.apply(ms, 1.0, p);
-        }
     }
 }
 /// The creaking species exists in the species table.

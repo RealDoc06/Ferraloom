@@ -7,11 +7,10 @@
 //! only an entity whose `Pos` is the click point's height. Placement uses
 //! outline bounds, collision shapes and suffocation predicates.
 use super::{Game, Hit, view_vector};
+use crate::game::keys::KeyCode;
 use horizon_client::entities::{Cushion, dye_index};
 use horizon_client::items::ItemStack;
-use horizon_client::mobs::anim::Poses;
 use horizon_core::geometry::{Aabb, Vec3};
-use winit::keyboard::KeyCode;
 
 /// `Direction.fromYRot(yaw).toYRot()`: the nearest 90 degree step.
 pub(crate) fn snap_yaw(yaw: f32) -> f32 {
@@ -432,60 +431,5 @@ impl Game<'_> {
             p.fall_distance = 0.0;
         }
         true
-    }
-
-    /// `CushionRenderer`: the coloured model, rotated to the nearest
-    /// direction, with its bottom on the cushion's position.
-    pub(super) fn cushion_geometry(
-        &self,
-        camera: glam::DVec3,
-        out: &mut Vec<horizon_client::mesher::Vertex>,
-    ) {
-        let Some(model) = self.cushion_model.as_ref() else {
-            return;
-        };
-        let sprites = &self.gui.atlas.sprites;
-        for c in &self.cushions {
-            let entity_start = out.len();
-            let a = aabb(c.bounds());
-            let (lo, hi) = (a.min_position(), a.max_position());
-            let (lo, hi) = (
-                glam::DVec3::new(lo.x, lo.y, lo.z),
-                glam::DVec3::new(hi.x, hi.y, hi.z),
-            );
-            let range = super::entity_culling::default_range(hi - lo, self.view_scale());
-            if !self.entity_in_view(camera, (lo + hi) / 2.0, range, lo, hi) {
-                continue;
-            }
-            let Some(uv) = sprites
-                .get(&format!("entity/cushion/{}_cushion", c.color_name()))
-                .map(|r| [r.u0, r.v0, r.u1, r.v1])
-            else {
-                continue;
-            };
-            let p = glam::DVec3::new(c.position.x, c.position.y, c.position.z) - camera;
-            let base = glam::Mat4::from_translation(p.as_vec3())
-                * glam::Mat4::from_rotation_y((180.0 - snap_yaw(c.yaw)).to_radians())
-                * glam::Mat4::from_rotation_x(std::f32::consts::PI)
-                * glam::Mat4::from_translation(glam::Vec3::new(0.0, -0.25, 0.0));
-            // `EntityRenderer.getPackedLightCoords` probes at the eye height.
-            let l = self.world.light(
-                c.position.x.floor() as i32,
-                (c.position.y + 0.2125).floor() as i32,
-                c.position.z.floor() as i32,
-            );
-            let packed = (u32::from(l >> 4) * 16) | ((u32::from(l & 15) * 16) << 8);
-            horizon_client::mobs::render::draw(
-                model,
-                base,
-                &Poses::new(model),
-                uv,
-                0xFFFF_FFFF,
-                packed,
-                0,
-                out,
-            );
-            self.cull_entity_vertices(out, entity_start);
-        }
     }
 }

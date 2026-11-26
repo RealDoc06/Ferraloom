@@ -201,6 +201,8 @@ pub struct Waypoints {
     uuids: Vec<Option<u128>>,
     free: Vec<usize>,
     frame: Vec<SlotFrame>,
+    /// The reference tick's player geometry (`tick_level_output`).
+    #[cfg(test)]
     geometry: Vec<Geometry>,
     view: Vec<Option<([i32; 2], i32)>>,
     #[cfg(test)]
@@ -334,6 +336,8 @@ impl Ready {
 }
 
 enum Output<'a> {
+    /// The reference tick's typed packets (`tick_level_into`).
+    #[cfg(test)]
     Typed(&'a mut Vec<(u32, C)>),
     Encoded {
         ready: &'a mut Ready,
@@ -795,6 +799,7 @@ impl<'a> Tick<'a> {
         }
         let source = self.uuids[source].expect("live waypoint slot");
         match &mut self.out {
+            #[cfg(test)]
             Output::Typed(out) => out.push((conn, waypoint(source, operation, icon, target))),
             Output::Encoded { ready, local } => {
                 if *local == Some(conn) {
@@ -1116,60 +1121,6 @@ impl Waypoints {
         }
     }
 
-    /// One tick: players who left, joined, moved, hid or changed team, and the
-    /// `locator_bar` game rule. `respawned` players are removed and added again,
-    /// as `PlayerList.respawn` replaces the ServerPlayer. Returns the packets for
-    /// each connection.
-    pub fn tick(
-        &mut self,
-        players: &[Player],
-        respawned: &[u128],
-        locator_bar: bool,
-    ) -> Vec<(u32, C)> {
-        self.tick_level(players, &[], respawned, locator_bar)
-    }
-
-    /// [`Self::tick`] for one level of several: `away` supplies connections for
-    /// receivers who left this level. Entries for current players are not queried.
-    pub fn tick_level(
-        &mut self,
-        players: &[Player],
-        away: &[(u128, u32)],
-        respawned: &[u128],
-        locator_bar: bool,
-    ) -> Vec<(u32, C)> {
-        let mut out = Vec::new();
-        self.tick_level_into(players, away, respawned, locator_bar, &mut out);
-        out
-    }
-
-    /// Append in vanilla order, retaining the caller's output allocation.
-    pub fn tick_level_into(
-        &mut self,
-        players: &[Player],
-        away: &[(u128, u32)],
-        respawned: &[u128],
-        locator_bar: bool,
-        out: &mut Vec<(u32, C)>,
-    ) {
-        self.tick_level_output(players, away, respawned, locator_bar, Output::Typed(out));
-    }
-
-    fn tick_level_output(
-        &mut self,
-        players: &[Player],
-        away: &[(u128, u32)],
-        respawned: &[u128],
-        locator_bar: bool,
-        out: Output<'_>,
-    ) {
-        let mut geometry = std::mem::take(&mut self.geometry);
-        geometry.clear();
-        geometry.extend(players.iter().map(Geometry::new));
-        self.tick_level_cached((players, &geometry), away, respawned, locator_bar, out);
-        self.geometry = geometry;
-    }
-
     fn tick_level_cached(
         &mut self,
         (players, geometry): (&[Player], &[Geometry]),
@@ -1435,6 +1386,60 @@ impl Waypoints {
             }
         }
         self.view = t.view;
+    }
+    /// One tick: players who left, joined, moved, hid or changed team, and the
+    /// `locator_bar` game rule. `respawned` players are removed and added again,
+    /// as `PlayerList.respawn` replaces the ServerPlayer. Returns the packets for
+    /// each connection.
+    #[cfg(test)]
+    pub fn tick(
+        &mut self,
+        players: &[Player],
+        respawned: &[u128],
+        locator_bar: bool,
+    ) -> Vec<(u32, C)> {
+        self.tick_level(players, &[], respawned, locator_bar)
+    }
+    /// [`Self::tick`] for one level of several: `away` supplies connections for
+    /// receivers who left this level. Entries for current players are not queried.
+    #[cfg(test)]
+    pub fn tick_level(
+        &mut self,
+        players: &[Player],
+        away: &[(u128, u32)],
+        respawned: &[u128],
+        locator_bar: bool,
+    ) -> Vec<(u32, C)> {
+        let mut out = Vec::new();
+        self.tick_level_into(players, away, respawned, locator_bar, &mut out);
+        out
+    }
+    /// Append in vanilla order, retaining the caller's output allocation.
+    #[cfg(test)]
+    pub fn tick_level_into(
+        &mut self,
+        players: &[Player],
+        away: &[(u128, u32)],
+        respawned: &[u128],
+        locator_bar: bool,
+        out: &mut Vec<(u32, C)>,
+    ) {
+        self.tick_level_output(players, away, respawned, locator_bar, Output::Typed(out));
+    }
+    #[cfg(test)]
+    fn tick_level_output(
+        &mut self,
+        players: &[Player],
+        away: &[(u128, u32)],
+        respawned: &[u128],
+        locator_bar: bool,
+        out: Output<'_>,
+    ) {
+        let mut geometry = std::mem::take(&mut self.geometry);
+        geometry.clear();
+        geometry.extend(players.iter().map(Geometry::new));
+        self.tick_level_cached((players, &geometry), away, respawned, locator_bar, out);
+        self.geometry = geometry;
     }
 }
 

@@ -69,7 +69,6 @@ pub struct Joined {
     /// The profile's properties (skin textures, in online mode).
     pub properties: Vec<horizon_protocol::packets::login::Property>,
     pub info: ClientInformation,
-    pub brand: String,
     pub sender: PlayerSender,
     /// Smoothed keep-alive round trip in milliseconds.
     pub latency: Arc<AtomicI32>,
@@ -436,15 +435,6 @@ pub struct Lan {
     _pinger: Option<discovery::Pinger>,
 }
 impl Lan {
-    /// Listen on `port` (0 picks a free one).
-    pub fn start(
-        sync: Arc<data::SyncData>,
-        port: u16,
-        motd: String,
-        max_players: usize,
-    ) -> io::Result<Self> {
-        Self::start_with(sync, NetConfig::lan(port, motd, max_players))
-    }
     /// ServerConnectionListener.startTcpServerListener with a configuration.
     pub fn start_with(sync: Arc<data::SyncData>, config: NetConfig) -> io::Result<Self> {
         let (tx, events) = channel();
@@ -533,26 +523,6 @@ impl Lan {
         self._pinger = None;
         self.port = 0;
     }
-    /// Whether connections from the network are accepted.
-    pub fn listening(&self) -> bool {
-        self.listener.is_some()
-    }
-    /// `Connection.connectToLocalServer`: a connection through memory, its
-    /// server end served on its own thread like an accepted socket.
-    pub fn connect_local(&self) -> io::Result<horizon_protocol::connection::Pipe> {
-        let (client, server) = horizon_protocol::connection::Pipe::pair();
-        let shared = self.shared.clone();
-        std::thread::Builder::new()
-            .name("horizon-local-conn".into())
-            .spawn(move || {
-                if let Err(e) = conn::serve_local(server, shared)
-                    && std::env::var_os("HORIZON_NET_DEBUG").is_some()
-                {
-                    log::warn!("[lan] local: {e}");
-                }
-            })?;
-        Ok(client)
-    }
     /// Everything the connection threads reported since the last call.
     pub fn poll(&self) -> Vec<NetEvent> {
         self.events.try_iter().collect()
@@ -564,6 +534,15 @@ impl Lan {
     pub fn stop(&mut self) {
         self.shared.stop.store(true, Ordering::Relaxed);
         self.stop_listening();
+    }
+    /// Listen on `port` (0 picks a free one).
+    pub fn start(
+        sync: Arc<data::SyncData>,
+        port: u16,
+        motd: String,
+        max_players: usize,
+    ) -> io::Result<Self> {
+        Self::start_with(sync, NetConfig::lan(port, motd, max_players))
     }
 }
 impl Drop for Lan {
@@ -599,11 +578,4 @@ fn handle(stream: TcpStream, addr: SocketAddr, shared: Arc<Shared>) {
     {
         log::warn!("[lan] {addr}: {e}");
     }
-}
-
-/// HttpUtil.getAvailablePort: a free local port.
-pub fn available_port() -> u16 {
-    TcpListener::bind(("0.0.0.0", 0))
-        .and_then(|l| l.local_addr())
-        .map_or(25565, |a| a.port())
 }

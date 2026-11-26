@@ -640,12 +640,6 @@ impl Tracker {
         self.cache(id, false);
         removed
     }
-    pub fn len(&self) -> usize {
-        self.seen.len()
-    }
-    pub fn is_empty(&self) -> bool {
-        self.seen.is_empty()
-    }
 }
 
 /// Who a level's entities are tracked by this tick: a client's position,
@@ -938,13 +932,6 @@ impl RangeChecks<'_> {
 }
 
 impl Entities {
-    pub fn len(&self) -> usize {
-        self.states.len()
-    }
-    pub fn is_empty(&self) -> bool {
-        self.states.is_empty()
-    }
-
     /// One tick of ChunkMap.tick for the entities in the level now and the
     /// clients in it: each client first loses the entities that left its
     /// range or the level (one ClientboundRemoveEntitiesPacket), then each
@@ -1128,6 +1115,14 @@ impl Entities {
             }
         }
         self.states.retain(|_, s| s.seen == now);
+    }
+    #[cfg(test)]
+    pub fn len(&self) -> usize {
+        self.states.len()
+    }
+    #[cfg(test)]
+    pub fn is_empty(&self) -> bool {
+        self.states.is_empty()
     }
 }
 

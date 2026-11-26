@@ -97,11 +97,6 @@ fn set_ram_cooldown(m: &mut Mob, ticks: i32) {
     }
 }
 const RAM_COOLDOWN: &str = "ram_cooldown";
-/// `Goat.getRammingXHeadRot`.
-pub fn ramming_x_head_rot(m: &Mob) -> f32 {
-    let max = if m.is_baby() { 52.5_f32 } else { 30.0 };
-    m.extra.goat.lower_head_tick as f32 / 20.0 * max * (std::f32::consts::PI / 180.0)
-}
 /// A server's `level.broadcastEntityEvent(goat, 58 or 59)`, sent when it
 /// changes what the goat does.
 fn lower_head(m: &mut Mob, events: &mut Vec<MobEvent>, lower: bool) {

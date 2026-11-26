@@ -7,7 +7,7 @@ rust-version = "1.86"
 description = "cargo horizon-mod new/build/run/check: make Horizon mods in Rust (docs/mods.md)"
 
 [dependencies]
-horizon-mods = { path = "../horizon-mods", default-features = false, features = ["pack", "runtime", "index"] }
+horizon-mods = { path = "../horizon-mods", default-features = false, features = ["pack", "runtime", "index", "shader-packs"] }
 serde_json = "1.0.151"
 
 [lints]

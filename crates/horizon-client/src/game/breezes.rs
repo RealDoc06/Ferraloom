@@ -45,7 +45,7 @@ impl Game<'_> {
                 at[1] = (m.position.y - 0.2).floor() as i32;
                 state = self.world.block(x, at[1], z);
             }
-            let Some((sprite, tint)) = self.particle_sprite(state, at) else {
+            let Some((_, tint)) = self.particle_sprite(state, at) else {
                 continue;
             };
             let at = if jump_trail {
@@ -58,8 +58,7 @@ impl Game<'_> {
                 [m.position.x, m.position.y, m.position.z]
             };
             for _ in 0..amount {
-                let particle =
-                    Particle::terrain(&mut self.world.random, at, [0.0; 3], sprite.clone(), tint);
+                let particle = Particle::terrain(&mut self.world.random, at, [0.0; 3], tint);
                 self.particles.push(particle);
             }
         }

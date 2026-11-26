@@ -37,14 +37,6 @@ impl Mode {
             Self::Redstone => "minecraft:command_block",
         }
     }
-    /// `Enum.ordinal`, which `ServerboundSetCommandBlockPacket` writes.
-    pub fn ordinal(self) -> i32 {
-        match self {
-            Self::Sequence => 0,
-            Self::Auto => 1,
-            Self::Redstone => 2,
-        }
-    }
     /// The mode of a packet's ordinal; `handleSetCommandBlock` treats any
     /// other value as a plain command block (its `default` branch).
     pub fn from_ordinal(ordinal: i32) -> Self {
@@ -52,22 +44,6 @@ impl Mode {
             0 => Self::Sequence,
             1 => Self::Auto,
             _ => Self::Redstone,
-        }
-    }
-    /// `CycleButton`: the next value, wrapping round.
-    pub fn next(self) -> Self {
-        match self {
-            Self::Sequence => Self::Auto,
-            Self::Auto => Self::Redstone,
-            Self::Redstone => Self::Sequence,
-        }
-    }
-    /// `CommandBlockEditScreen`'s label for the mode.
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Sequence => "advMode.mode.sequence",
-            Self::Auto => "advMode.mode.auto",
-            Self::Redstone => "advMode.mode.redstone",
         }
     }
 }
@@ -198,17 +174,6 @@ pub fn power_schedules(mode: Mode, was_powered: bool, powered: bool, auto: bool)
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn modes_cycle_and_map_to_blocks() {
-        for mode in [Mode::Sequence, Mode::Auto, Mode::Redstone] {
-            assert_eq!(Mode::of_block(mode.block()), Some(mode));
-        }
-        assert_eq!(Mode::Redstone.next(), Mode::Sequence);
-        assert_eq!(Mode::Sequence.next(), Mode::Auto);
-        assert!(automatic_block("minecraft:chain_command_block"));
-        assert!(!automatic_block("minecraft:repeating_command_block"));
-    }
 
     #[test]
     fn tick_follows_the_condition() {

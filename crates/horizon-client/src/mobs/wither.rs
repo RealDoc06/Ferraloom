@@ -4,7 +4,6 @@
 //! health.
 use super::{
     DamageKind, Mob, MobEvent, MobWorld, Species, Who,
-    anim::{Poses, State},
     control::{MoveKind, rotlerp},
     goals::{
         Cx, Goal, HurtByTarget, JUMP, LOOK, LookAtPlayer, MOVE, NearestTarget, Prey,
@@ -169,24 +168,6 @@ fn target_pos(w: &MobWorld, id: i32) -> Option<([f64; 3], f64, bool)> {
             .map(|s| ([s.position.x, s.position.y, s.position.z], s.eye_y, false)),
     }
 }
-/// `WitherBoss.aiStep` on a client of a server: the smoke about each head
-/// (`radius` 0.3 of the wither's scale, which is 1 here).
-pub fn client_smoke(m: &mut Mob, events: &mut Vec<MobEvent>) {
-    for i in 0..3 {
-        let h = head_pos(m, i);
-        let r = &mut m.random;
-        let at = [
-            h[0] + r.next_gaussian() * 0.3,
-            h[1] + r.next_gaussian() * 0.3,
-            h[2] + r.next_gaussian() * 0.3,
-        ];
-        events.push(MobEvent::ParticleAt {
-            kind: "smoke",
-            at,
-            velocity: [0.0; 3],
-        });
-    }
-}
 /// The side heads turn toward their targets, else back to the body. `find`
 /// gives the position and eye height of the entity a head's target id names.
 fn turn_heads(m: &mut Mob, find: impl Fn(i32) -> Option<([f64; 3], f64)>) {
@@ -204,13 +185,6 @@ fn turn_heads(m: &mut Mob, find: impl Fn(i32) -> Option<([f64; 3], f64)>) {
             None => m.anim.v[i] = rotlerp(m.anim.v[i], m.body_yaw, 10.0),
         }
     }
-}
-/// `WitherBoss.aiStep` on a client that is not the server: the side heads
-/// turn toward the targets of the synched data (`DATA_TARGET_B` and `_C`,
-/// kept in `ints[0]` and `ints[1]` as network entity ids).
-pub fn client_tick(m: &mut Mob, find: impl Fn(i32) -> Option<([f64; 3], f64)>) {
-    m.anim.vo = m.anim.v;
-    turn_heads(m, find);
 }
 /// `WitherBoss.aiStep` after `super.aiStep()`: the side heads turn, smoke
 /// rises from the heads (the particle offsets are drawn on the server too).
@@ -403,42 +377,4 @@ pub fn accepts(m: &mut Mob, kind: DamageKind, attacker: Option<Who>, others_unde
     m.extra.ints[4] += 3;
     m.extra.ints[5] += 3;
     true
-}
-/// `WitherBossModel.setupAnim`.
-pub fn anim(m: &Mob, s: &State, p: &mut Poses) {
-    let body =
-        m.previous_body_yaw + super::living::wrap(m.body_yaw - m.previous_body_yaw) * s.partial;
-    for (i, head) in ["right_head", "left_head"].into_iter().enumerate() {
-        let y = m.anim.lerp(i, s.partial);
-        let x = m.anim.lerp(2 + i, s.partial);
-        p.yrot(head, (y - body).to_radians());
-        p.xrot(head, x.to_radians());
-    }
-    let anim = (s.age * 0.1).mcos();
-    let rib = (0.065 + 0.05 * anim) * std::f32::consts::PI;
-    p.xrot("ribcage", rib);
-    let tail = p.get("tail");
-    tail[0] = -2.0;
-    tail[1] = 6.9 + rib.mcos() * 10.0;
-    tail[2] = -0.5 + rib.msin() * 10.0;
-    p.xrot("tail", (0.265 + 0.1 * anim) * std::f32::consts::PI);
-    p.yrot("center_head", s.y_rot.to_radians());
-    p.xrot("center_head", s.x_rot.to_radians());
-}
-/// `WitherBossRenderer`: the blinking blue texture while charging.
-pub fn texture(m: &Mob) -> &'static str {
-    let t = m.extra.counter;
-    if t > 0 && (t > 80 || t / 5 % 2 != 1) {
-        "entity/wither/wither_invulnerable"
-    } else {
-        "entity/wither/wither"
-    }
-}
-/// `WitherBossRenderer.scale`: twice the model, smaller while charging.
-pub fn scale(m: &Mob, alpha: f32) -> f32 {
-    let mut s = 2.0;
-    if m.extra.counter > 0 {
-        s -= (m.extra.counter as f32 - alpha) / INVULNERABLE as f32 * 0.5;
-    }
-    s
 }

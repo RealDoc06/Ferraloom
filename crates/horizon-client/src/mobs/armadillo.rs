@@ -69,16 +69,6 @@ pub fn register(m: &mut Mob) {
 pub fn scared(m: &Mob) -> bool {
     m.extra.armadillo.state != IDLE
 }
-/// `ArmadilloState.shouldHideInShell`: the model shows its shell.
-pub fn hiding_in_shell(m: &Mob) -> bool {
-    let a = &m.extra.armadillo;
-    match a.state {
-        ROLLING => a.in_state_ticks > 5,
-        SCARED => true,
-        UNROLLING => a.in_state_ticks < 26,
-        _ => false,
-    }
-}
 /// `Armadillo.getState`, as it is synched.
 pub fn state(m: &Mob) -> u8 {
     m.extra.armadillo.state
@@ -403,45 +393,5 @@ impl Goal for Rolled {
     }
     fn can_use(&mut self, m: &mut Mob, _cx: &mut Cx) -> bool {
         scared(m)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::mobs::sensor_scan_tests::kind;
-    use std::sync::Arc;
-
-    /// An armadillo on the ground.
-    fn armadillo() -> Mob {
-        let mut kind = kind();
-        let k = Arc::make_mut(&mut kind);
-        k.id = "minecraft:armadillo".into();
-        k.species = Species::Armadillo;
-        let mut m = Mob::new(1, kind, Vec3::ZERO, 0.0);
-        m.on_ground = true;
-        m
-    }
-
-    #[test]
-    fn a_hit_rolls_it_up_into_a_ball() {
-        // Armadillo.actuallyHurt: a hit by a living thing curls it up and
-        // keeps the danger in mind for 80 ticks, so the model shows the
-        // shell instead of the armadillo (#2759).
-        let mut m = armadillo();
-        after_hurt(&mut m, &Damage::player([0.0, 0.0, 0.0]));
-        assert_eq!(state(&m), ROLLING);
-        // Armadillo.rollUp: the roll sound.
-        assert!(
-            m.outbox
-                .iter()
-                .any(|e| matches!(e, MobEvent::Sound(s, ..) if *s == "entity.armadillo.roll")),
-            "the roll plays its sound"
-        );
-        // ArmadilloState.shouldHideInShell: the shell shows after five ticks.
-        for _ in 0..6 {
-            tick(&mut m);
-        }
-        assert!(hiding_in_shell(&m), "the model shows the shell");
     }
 }

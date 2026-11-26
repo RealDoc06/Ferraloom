@@ -5,6 +5,7 @@
 //! headless world, ticking in `ServerLevel.tick`'s order, and prints what
 //! changed after every tick in the format of `VanillaSculkOracle`.
 use super::{Game, dispense_fixture};
+use crate::game::keys::KeyCode;
 use horizon_client::{
     Result,
     chunk::{Chunk, MIN_Y},
@@ -27,7 +28,6 @@ use std::{
     io::Write as _,
     sync::Arc,
 };
-use winit::keyboard::KeyCode;
 
 struct MobSpec {
     kind: String,
@@ -156,10 +156,6 @@ const CLIENT_SOUNDS: &[&str] = &[
 impl Game<'_> {
     /// Run every scenario of `spec` ("SCENARIOS,OUTPUT") and write the results.
     pub(super) fn sculk_fixture(&mut self, spec: &str) -> Result<()> {
-        assert!(
-            !self.options.execution_role.is_client(),
-            "fixture requires a server Game"
-        );
         let (input, output) = spec
             .split_once(',')
             .ok_or("HORIZON_SCULK_FIXTURE=SCENARIOS,OUTPUT")?;

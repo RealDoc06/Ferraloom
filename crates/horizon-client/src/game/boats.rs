@@ -2,13 +2,12 @@
 //! paddling controls, collisions, riding (`positionRider`, `clampRotation`,
 //! dismounting), `BoatItem` placement, `VehicleEntity.hurtServer` breaking,
 //! saving and `AbstractBoatRenderer` with animated paddles.
-use super::{Game, Keys, entity_culling::at, view_vector};
+use super::{Game, Keys, view_vector};
 use horizon_client::{
     blocks::Fluid,
     collisions::{EntityCollisions, SceneCollisions},
     items::ItemStack,
-    mesher::Vertex,
-    mobs::{Part, anim::Poses, riders},
+    mobs::{Part, riders},
 };
 use horizon_core::{
     geometry::{Aabb, Vec3},
@@ -144,14 +143,6 @@ impl Boat {
             yaw,
         )
     }
-    /// `getRowingTime`.
-    pub fn rowing_time(&self, side: usize, a: f32) -> f32 {
-        if self.paddling[side] {
-            self.paddles[side] - PI / 8.0 + a * PI / 8.0
-        } else {
-            0.0
-        }
-    }
 }
 /// Item id -> (boat entity id, wood).
 impl Boat {
@@ -187,8 +178,6 @@ pub(super) fn boat_wood(item: &str) -> Option<&str> {
 pub(super) struct BoatModels {
     pub models: HashMap<String, Part>,
     pub chest_models: HashMap<String, Part>,
-    /// `ModelLayers.BOAT_WATER_PATCH`, shared by every boat (not rafts).
-    pub water_patch: Option<Part>,
 }
 impl BoatModels {
     /// Whether a boat of this wood (with or without a chest) can be drawn.
@@ -223,7 +212,6 @@ impl BoatModels {
         Self {
             models,
             chest_models,
-            water_patch: document.and_then(|d| d.model("minecraft:boat#water_patch")),
         }
     }
 }
@@ -780,7 +768,7 @@ impl Game<'_> {
         let Some((i, d)) = self.boat_hit() else {
             return false;
         };
-        let sneaking = self.keys.contains(&winit::keyboard::KeyCode::ShiftLeft);
+        let sneaking = self.keys.contains(&crate::game::keys::KeyCode::ShiftLeft);
         if !self.before_block(d) {
             return false;
         }
@@ -856,108 +844,5 @@ impl Game<'_> {
             }
         }
         destroyed
-    }
-    /// AbstractBoatRenderer.
-    pub(super) fn boat_geometry(&self, camera: glam::DVec3, alpha: f64, out: &mut Vec<Vertex>) {
-        let a = alpha as f32;
-        let range = super::entity_culling::default_range(
-            glam::DVec3::new(WIDTH, HEIGHT, WIDTH),
-            self.view_scale(),
-        );
-        for b in &self.boats {
-            let entity_start = out.len();
-            // EntityRenderer.shouldRender.
-            let (previous, position) = (at(b.previous), at(b.position));
-            if !self.standing_entity_in_view(
-                camera, previous, position, alpha, WIDTH, HEIGHT, range, 0.0,
-            ) {
-                continue;
-            }
-            let models = if b.chest {
-                &self.boat_models.chest_models
-            } else {
-                &self.boat_models.models
-            };
-            let Some(model) = models.get(&*b.wood) else {
-                continue;
-            };
-            let folder = if b.chest { "chest_boat" } else { "boat" };
-            let Some(uv) = self
-                .gui
-                .atlas
-                .sprites
-                .get(&format!("entity/{folder}/{}", b.wood))
-                .map(|r| [r.u0, r.v0, r.u1, r.v1])
-            else {
-                continue;
-            };
-            let p = glam::DVec3::new(
-                b.previous.x + (b.position.x - b.previous.x) * alpha,
-                b.previous.y + (b.position.y - b.previous.y) * alpha,
-                b.previous.z + (b.position.z - b.previous.z) * alpha,
-            ) - camera;
-            let yaw = b.previous_yaw + (b.yaw - b.previous_yaw) * a;
-            let hurt = b.hurt_time as f32 - a;
-            let damage = (b.damage - a).max(0.0);
-            let mut base =
-                glam::Mat4::from_translation(p.as_vec3() + glam::Vec3::new(0.0, 0.375, 0.0))
-                    * glam::Mat4::from_rotation_y((180.0 - yaw).to_radians());
-            if hurt > 0.0 {
-                base *= glam::Mat4::from_rotation_x(
-                    (hurt.sin() * hurt * damage / 10.0 * b.hurt_dir as f32).to_radians(),
-                );
-            }
-            base *= glam::Mat4::from_scale(glam::Vec3::new(-1.0, -1.0, 1.0))
-                * glam::Mat4::from_rotation_y(90f32.to_radians());
-            let mut poses = Poses::new(model);
-            // AbstractBoatModel.animatePaddle
-            for (side, name) in [(0usize, "left_paddle"), (1, "right_paddle")] {
-                if !poses.has(name) {
-                    continue;
-                }
-                let t = b.rowing_time(side, a);
-                let lerp = |f: f32, lo: f32, hi: f32| lo + f.clamp(0.0, 1.0) * (hi - lo);
-                let pose = poses.get(name);
-                pose[3] = lerp(((-t).sin() + 1.0) / 2.0, -PI / 3.0, -PI / 12.0);
-                pose[4] = lerp(((-t + 1.0).sin() + 1.0) / 2.0, -PI / 4.0, PI / 4.0);
-                if side == 1 {
-                    pose[4] = PI - pose[4];
-                }
-            }
-            let l = self.world.light(
-                b.position.x.floor() as i32,
-                (b.position.y + 0.3).floor() as i32,
-                b.position.z.floor() as i32,
-            );
-            let packed = (u32::from(l >> 4) * 16) | ((u32::from(l & 15) * 16) << 8);
-            horizon_client::mobs::render::draw(
-                model,
-                base,
-                &poses,
-                uv,
-                0xFFFF_FFFF,
-                packed,
-                0,
-                out,
-            );
-            // BoatRenderer.submitTypeAdditions: the water patch hides the water
-            // inside the hull unless the boat is under water (RaftRenderer has none).
-            if let Some(patch) = self.boat_models.water_patch.as_ref()
-                && &*b.wood != "bamboo"
-                && !matches!(b.status, Status::UnderWater | Status::UnderFlowingWater)
-            {
-                horizon_client::mobs::render::draw(
-                    patch,
-                    base,
-                    &Poses::new(patch),
-                    uv,
-                    0xFFFF_FFFF,
-                    packed,
-                    horizon_client::gfx::WATER_MASK_OVERLAY,
-                    out,
-                );
-            }
-            self.cull_entity_vertices(out, entity_start);
-        }
     }
 }

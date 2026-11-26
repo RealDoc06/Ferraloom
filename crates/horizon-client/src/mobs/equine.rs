@@ -3,7 +3,6 @@
 //! the ridden movement and jump, offspring stats and `AbstractEquineModel`.
 use super::{
     Mob, MobEvent, MobWorld, Species,
-    anim::{Poses, State},
     goals::{
         Breed, Cx, Float, FollowParent, Goal, LookAtPlayer, MOVE, Panic, RandomLookAround, Stroll,
         Tempt, goal_clone,
@@ -12,17 +11,6 @@ use super::{
 use horizon_core::geometry::trig::Mth;
 use horizon_core::random::RandomSource;
 use std::f32::consts::PI;
-
-pub const COLORS: [&str; 7] = [
-    "white",
-    "creamy",
-    "chestnut",
-    "brown",
-    "black",
-    "gray",
-    "darkbrown",
-];
-pub const MARKINGS: [&str; 5] = ["", "white", "whitefield", "whitedots", "blackdots"];
 
 // AnimState slots.
 pub const EAT: usize = 0;
@@ -493,171 +481,8 @@ pub fn animate(m: &mut Mob) {
     }
     v[MOUTH] = (v[MOUTH] - v[MOUTH] * 0.7 - 0.05).max(0.0);
 }
-/// `AbstractHorse.tick` on a client that is not the server: the animations
-/// follow the flags of the synched data (`set_flags`).
-pub fn client_tick(m: &mut Mob) {
-    m.anim.vo = m.anim.v;
-    animate(m);
-}
-/// `AbstractHorse.DATA_ID_FLAGS` on a client: eating 16 and standing 32.
-pub fn set_flags(m: &mut Mob, flags: u8) {
-    m.extra.flag = flags & 16 != 0;
-    m.extra.counter = i32::from(flags & 32 != 0);
-}
 /// Whether `ai_step` above runs this species' grazing and rearing, so that
 /// the server's flags 16 and 32 mean eating and standing.
 pub fn grazes(s: Species) -> bool {
     is_equine(s) && !super::camel::is_camel(s) && !super::llama::is_llama(s)
-}
-/// Body texture and the markings overlay.
-pub fn texture(m: &Mob) -> String {
-    let baby = if m.is_baby() { "_baby" } else { "" };
-    match m.species() {
-        Species::Horse => {
-            let c = COLORS[(m.extra.variant as usize).min(6)];
-            format!("entity/horse/horse_{c}{baby}")
-        }
-        Species::Donkey => format!("entity/horse/donkey{baby}"),
-        Species::Mule => format!("entity/horse/mule{baby}"),
-        Species::SkeletonHorse => format!("entity/horse/horse_skeleton{baby}"),
-        Species::Camel => format!("entity/camel/camel{baby}"),
-        Species::CamelHusk => "entity/camel/camel_husk".into(),
-        _ => format!("entity/horse/horse_zombie{baby}"),
-    }
-}
-pub fn markings(m: &Mob) -> Option<String> {
-    if m.species() != Species::Horse {
-        return None;
-    }
-    let mk = MARKINGS[(m.extra.variant2 as usize).min(4)];
-    if mk.is_empty() {
-        return None;
-    }
-    let baby = if m.is_baby() { "_baby" } else { "" };
-    Some(format!("entity/horse/horse_markings_{mk}{baby}"))
-}
-/// The model key prefix for the species.
-pub fn model_name(s: Species) -> &'static str {
-    match s {
-        Species::Horse => "horse",
-        Species::Donkey => "donkey",
-        Species::Mule => "mule",
-        Species::SkeletonHorse => "skeleton_horse",
-        // CamelHuskRenderer: the camel's model (and its saddle layer).
-        Species::Camel | Species::CamelHusk => "camel",
-        _ => "zombie_horse",
-    }
-}
-/// The saddle layer texture.
-pub fn saddle_texture(s: Species) -> &'static str {
-    match s {
-        Species::Donkey => "entity/equipment/donkey_saddle/saddle",
-        Species::Mule => "entity/equipment/mule_saddle/saddle",
-        Species::SkeletonHorse => "entity/equipment/skeleton_horse_saddle/saddle",
-        Species::ZombieHorse => "entity/equipment/zombie_horse_saddle/saddle",
-        Species::Camel => "entity/equipment/camel_saddle/saddle",
-        Species::CamelHusk => "entity/equipment/camel_husk_saddle/saddle",
-        _ => "entity/equipment/horse_saddle/saddle",
-    }
-}
-/// `AbstractEquineModel.setupAnim` with the adult and baby offsets.
-pub fn anim(m: &Mob, s: &State, p: &mut Poses) {
-    let baby = m.is_baby();
-    let donkey = matches!(m.species(), Species::Donkey | Species::Mule);
-    // Leg/tail/head parameters (getLeg*, getTailXRotOffset).
-    let (stand_angle, stand_y, stand_z, stand_x_off, tail_off) = match (baby, donkey) {
-        (false, _) => (PI / 12.0, 12.0, 4.0, -PI / 3.0, 0.0),
-        (true, false) => (PI / 12.0, 4.0, 0.0, -PI / 3.0, -PI / 2.0),
-        (true, true) => (PI / 3.0, 1.0, 0.5, 0.0, -PI / 4.0),
-    };
-    let clamped = s.y_rot.clamp(-20.0, 20.0);
-    let mut head_x = s.x_rot.to_radians();
-    let (speed, pos) = (s.speed, s.pos);
-    if speed > 0.2 {
-        head_x += (pos * 0.8).mcos() * 0.15 * speed;
-    }
-    let eating = m.anim.lerp(EAT, s.partial);
-    let standing = m.anim.lerp(STAND, s.partial);
-    let istand = 1.0 - standing;
-    let feeding = m.anim.lerp(MOUTH, s.partial);
-    let in_water = if m.fluids.in_water { 0.2 } else { 1.0 };
-    let leg1 = (in_water * pos * 0.6662 + PI).mcos();
-    let leg_x = leg1 * 0.8 * speed;
-    let base = (1.0 - standing.max(eating)) * (PI / 6.0 + head_x + feeding * s.age.msin() * 0.05);
-    p.xrot(
-        "head_parts",
-        standing * (PI / 12.0 + head_x) + eating * (2.181_661_6 + s.age.msin() * 0.05) + base,
-    );
-    p.yrot(
-        "head_parts",
-        standing * clamped.to_radians() + (1.0 - standing.max(eating)) * clamped.to_radians(),
-    );
-    // animateHeadPartsPlacement
-    {
-        let hp = p.get("head_parts");
-        let lerp = |t: f32, a: f32, b: f32| a + (b - a) * t;
-        if baby && donkey {
-            hp[1] = lerp(eating, hp[1], -1.2);
-            hp[2] = lerp(standing, hp[2], -3.6);
-        } else if baby {
-            hp[1] += lerp(eating, lerp(standing, 0.0, -2.0), 2.0);
-            hp[2] = lerp(standing, hp[2], -4.0);
-        } else {
-            hp[1] += lerp(eating, lerp(standing, 0.0, -8.0), 7.0);
-            hp[2] = lerp(standing, hp[2], -4.0);
-        }
-    }
-    let body_x = p.get("body")[3];
-    p.xrot("body", standing * (-PI / 4.0) + istand * body_x);
-    {
-        let lf = p.get("left_front_leg");
-        lf[1] -= stand_y * standing;
-        lf[2] += stand_z * standing;
-        let (y, z) = (lf[1], lf[2]);
-        let rf = p.get("right_front_leg");
-        rf[1] = y;
-        rf[2] = z;
-    }
-    let stand = stand_angle * standing;
-    let bob = (s.age * 0.6 + PI).mcos();
-    let rleg = (stand_x_off + bob) * standing + leg_x * istand;
-    let lleg = (stand_x_off - bob) * standing - leg_x * istand;
-    p.xrot("left_hind_leg", stand - leg1 * 0.5 * speed * istand);
-    p.xrot("right_hind_leg", stand + leg1 * 0.5 * speed * istand);
-    p.xrot("left_front_leg", rleg);
-    p.xrot("right_front_leg", lleg);
-    if baby && donkey {
-        let lerp = |t: f32, a: f32, b: f32| a + (b - a) * t;
-        // BabyDonkeyModel lerps the right leg from the left leg's new height.
-        let y = lerp(standing, p.get("left_hind_leg")[1], -0.3);
-        p.get("left_hind_leg")[1] = y;
-        p.get("right_hind_leg")[1] = lerp(standing, y, -0.3);
-    }
-    let age = if baby { 0.5 } else { 1.0 };
-    p.xrot("tail", tail_off + PI / 6.0 + speed * 0.75);
-    {
-        let t = p.get("tail");
-        t[1] += speed * age;
-        t[2] += speed * 2.0 * age;
-    }
-    // animateTail: the tail swings while the counter runs.
-    p.yrot(
-        "tail",
-        if m.anim.v[TAIL] > 0.0 {
-            (s.age * 0.7).mcos()
-        } else {
-            0.0
-        },
-    );
-    if baby && donkey {
-        // BabyDonkeyModel overrides the state's pitch with -30 degrees and
-        // sets the head parts again.
-        let head_x = -30.0f32 * horizon_core::geometry::trig::DEG_TO_RAD;
-        let base =
-            (1.0 - standing.max(eating)) * (PI / 6.0 + head_x + feeding * s.age.msin() * 0.05);
-        p.xrot(
-            "head_parts",
-            standing * (PI / 12.0 + head_x) + eating * (PI / 2.0 + s.age.msin() * 0.05) + base,
-        );
-    }
 }

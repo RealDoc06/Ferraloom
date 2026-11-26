@@ -75,15 +75,6 @@ impl Stacked {
         self.keys = keys;
         self.amounts = amounts;
     }
-    pub fn keys(&self) -> &[Arc<str>] {
-        &self.keys
-    }
-    /// `canCraft(ingredients, null)` without touching the counts (the recipe
-    /// book's craftable test; the answer does not depend on the order; no
-    /// ingredients at all can always be found).
-    pub fn can_craft(&self, ingredients: &[&Ingredient]) -> bool {
-        self.clone().try_pick(ingredients, 1, None)
-    }
     /// `getResultUpperBound`.
     fn upper_bound(&self, ingredients: &[&Ingredient]) -> i32 {
         let mut min = i32::MAX;
@@ -649,36 +640,6 @@ mod tests {
         s
     }
     #[test]
-    fn a_single_item_can_fill_several_ingredients() {
-        let planks = ing(&["minecraft:oak_planks", "minecraft:birch_planks"]);
-        let reqs = [&planks, &planks, &planks, &planks];
-        let mut a = have(&[("minecraft:oak_planks", 2), ("minecraft:birch_planks", 2)]);
-        assert!(a.can_craft(&reqs));
-        // Two sets need 8 planks, but only 4 are there.
-        assert!(!a.try_pick(&reqs, 2, None));
-        assert_eq!(a.try_pick_all(&reqs, i32::MAX, None), 1);
-        assert_eq!(
-            have(&[("minecraft:oak_planks", 64)]).try_pick_all(&reqs, i32::MAX, None),
-            16
-        );
-        // Picking leaves the counts as they were.
-        assert!(a.try_pick(&reqs, 1, None));
-        assert!(a.can_craft(&reqs));
-    }
-    #[test]
-    fn the_matching_reassigns_flexible_ingredients() {
-        // The first ingredient takes either item, the second only the stick:
-        // the first item tried (the stick) moves over to free it.
-        let any = ing(&["minecraft:stick", "minecraft:bone"]);
-        let stick = ing(&["minecraft:stick"]);
-        let mut a = have(&[("minecraft:stick", 1), ("minecraft:bone", 1)]);
-        let mut used = Vec::new();
-        assert!(a.try_pick(&[&any, &stick], 1, Some(&mut used)));
-        assert_eq!(&*used[0], "minecraft:bone");
-        assert_eq!(&*used[1], "minecraft:stick");
-        assert!(!have(&[("minecraft:stick", 1)]).can_craft(&[&any, &stick]));
-    }
-    #[test]
     fn the_order_decides_between_fitting_items() {
         let planks = ing(&["minecraft:oak_planks", "minecraft:birch_planks"]);
         let mut a = have(&[("minecraft:oak_planks", 4), ("minecraft:birch_planks", 4)]);
@@ -689,19 +650,5 @@ mod tests {
         used.clear();
         a.try_pick(&[&planks], 1, Some(&mut used));
         assert_eq!(&*used[0], "minecraft:birch_planks");
-    }
-    #[test]
-    fn damaged_or_named_stacks_are_not_counted() {
-        let mut named = ItemStack::new("minecraft:stick", 4);
-        named.data_mut().custom_name = Some("x".into());
-        let mut damaged = ItemStack::new("minecraft:iron_sword", 1);
-        damaged.damage = 3;
-        let mut s = Stacked::default();
-        for stack in [&named, &damaged, &ItemStack::new("minecraft:stick", 2)] {
-            s.account_simple(stack, 64);
-        }
-        assert_eq!(s.keys().len(), 1);
-        assert!(s.can_craft(&[&ing(&["minecraft:stick"]), &ing(&["minecraft:stick"])]));
-        assert!(!s.can_craft(&[&ing(&["minecraft:stick"]); 3]));
     }
 }

@@ -1103,10 +1103,6 @@ impl MeleeAttack {
         self.polar_bear = true;
         self
     }
-    pub fn interval(mut self, ticks: i32) -> Self {
-        self.interval = ticks;
-        self
-    }
 }
 impl Goal for MeleeAttack {
     goal_clone!();

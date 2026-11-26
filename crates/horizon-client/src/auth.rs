@@ -4,32 +4,12 @@
 //! through the services discovery document. The access token stays in this
 //! process's memory: it is never logged, printed or written anywhere.
 use std::{
-    path::Path,
-    sync::{Arc, Mutex, OnceLock},
-    time::{Duration, SystemTime},
+    sync::{Arc, Mutex},
+    time::Duration,
 };
 
 /// MinecraftServicesEnvironment.PROD.
 pub const DEFAULT_DISCOVERY: &str = "https://discovery.minecraftservices.com/minecraft/client";
-/// A session file older than this is refused: it can't be replayed later.
-const MAX_SESSION_FILE_AGE: Duration = Duration::from_secs(120);
-
-/// A signed-in account (vanilla's User with type msa).
-pub struct AuthSession {
-    pub name: String,
-    pub uuid: u128,
-    pub xuid: Option<String>,
-    access_token: String,
-}
-impl std::fmt::Debug for AuthSession {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("AuthSession")
-            .field("name", &self.name)
-            .field("uuid", &horizon_protocol::crypto::uuid_string(self.uuid))
-            .field("access_token", &"<hidden>")
-            .finish()
-    }
-}
 
 /// A UUID with or without dashes.
 pub fn parse_uuid(text: &str) -> Option<u128> {
@@ -37,80 +17,6 @@ pub fn parse_uuid(text: &str) -> Option<u128> {
     (hex.len() == 32)
         .then(|| u128::from_str_radix(&hex, 16).ok())
         .flatten()
-}
-
-impl AuthSession {
-    /// For tests and harnesses.
-    pub fn new(name: &str, uuid: u128, access_token: &str) -> Self {
-        Self {
-            name: name.to_owned(),
-            uuid,
-            xuid: None,
-            access_token: access_token.to_owned(),
-        }
-    }
-    /// The session file's JSON: {"name", "uuid", "access_token", "user_type": "msa", "xuid"}.
-    pub fn parse(text: &str) -> Result<Self, String> {
-        let v: serde_json::Value =
-            serde_json::from_str(text).map_err(|_| "the session file is not valid JSON")?;
-        let field = |k: &str| v.get(k).and_then(|s| s.as_str());
-        let name = field("name").ok_or("the session file has no name")?;
-        if name.is_empty() || name.chars().count() > 16 {
-            return Err("the session file's name is not a valid player name".into());
-        }
-        let uuid = field("uuid")
-            .and_then(parse_uuid)
-            .ok_or("the session file has no valid uuid")?;
-        let access_token = field("access_token")
-            .filter(|t| !t.is_empty())
-            .ok_or("the session file has no access token")?;
-        if field("user_type").is_some_and(|t| t != "msa") {
-            return Err("the session file is not a Microsoft account session".into());
-        }
-        Ok(Self {
-            name: name.to_owned(),
-            uuid,
-            xuid: field("xuid").map(str::to_owned),
-            access_token: access_token.to_owned(),
-        })
-    }
-    /// Read the session file the launcher wrote and delete it at once. It
-    /// must be fresh and, on Unix, readable by its owner only.
-    pub fn load(path: &Path) -> Result<Self, String> {
-        let meta = std::fs::metadata(path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let refuse = |why: &str| {
-            let _ = std::fs::remove_file(path);
-            Err(format!("{}: {why}", path.display()))
-        };
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            if meta.permissions().mode() & 0o077 != 0 {
-                return refuse("other users can read it");
-            }
-        }
-        let age = meta
-            .modified()
-            .ok()
-            .and_then(|m| SystemTime::now().duration_since(m).ok())
-            .unwrap_or_default();
-        if age > MAX_SESSION_FILE_AGE {
-            return refuse("it is too old (start the game from the launcher)");
-        }
-        let text = std::fs::read_to_string(path);
-        let _ = std::fs::remove_file(path);
-        Self::parse(&text.map_err(|e| format!("{}: {e}", path.display()))?)
-    }
-}
-
-static CURRENT: OnceLock<Arc<AuthSession>> = OnceLock::new();
-
-/// The account this game was started with (set once at start).
-pub fn set_current(session: AuthSession) {
-    let _ = CURRENT.set(Arc::new(session));
-}
-pub fn current() -> Option<Arc<AuthSession>> {
-    CURRENT.get().cloned()
 }
 
 /// Why joining a server through the session service failed, like the
@@ -147,17 +53,6 @@ impl JoinError {
                     .and_then(|m| m.as_str())
                     .map_or_else(|| format!("Status: {status}"), str::to_owned),
             ),
-        }
-    }
-    /// ClientHandshakePacketListenerImpl.authenticateServer's message: the
-    /// key of the reason inside "disconnect.loginFailedInfo", or its text.
-    pub fn reason(&self) -> Result<&'static str, &str> {
-        match self {
-            Self::Unavailable => Ok("disconnect.loginFailedInfo.serversUnavailable"),
-            Self::InvalidSession => Ok("disconnect.loginFailedInfo.invalidSession"),
-            Self::InsufficientPrivileges => Ok("disconnect.loginFailedInfo.insufficientPrivileges"),
-            Self::Banned => Ok("disconnect.loginFailedInfo.userBanned"),
-            Self::Other(message) => Err(message),
         }
     }
 }
@@ -201,35 +96,6 @@ pub fn endpoint(doc: &serde_json::Value, service: &str, name: &str) -> Option<St
     doc.pointer(&format!("/discovery/{service}/endpoints/{name}/uri"))
         .and_then(|u| u.as_str())
         .map(str::to_owned)
-}
-
-/// The JoinMinecraftServerRequest body; `selectedProfile` is the undashed UUID.
-pub fn join_request(session: &AuthSession, server_hash: &str) -> String {
-    serde_json::json!({
-        "accessToken": session.access_token,
-        "selectedProfile": format!("{:032x}", session.uuid),
-        "serverId": server_hash,
-    })
-    .to_string()
-}
-
-/// MinecraftServicesSessionService.joinServer: tell the session service this
-/// account is joining the server whose hash is `server_hash`.
-pub fn join_server(session: &AuthSession, server_hash: &str) -> Result<(), JoinError> {
-    let doc = discovery()?;
-    let url = endpoint(&doc, "session", "join").ok_or(JoinError::Unavailable)?;
-    match agent()
-        .post(&url)
-        .set("Content-Type", "application/json; charset=utf-8")
-        .send_string(&join_request(session, server_hash))
-    {
-        Ok(_) => Ok(()),
-        Err(ureq::Error::Status(status, response)) => Err(JoinError::from_response(
-            status,
-            &response.into_string().unwrap_or_default(),
-        )),
-        Err(ureq::Error::Transport(_)) => Err(JoinError::Unavailable),
-    }
 }
 
 /// What the session service says about a player joining this server
@@ -319,18 +185,6 @@ mod tests {
 
     const UUID: u128 = 0x069a79f444e94726a5befca90e38aaf5;
 
-    fn write(dir: &Path, text: &str, mode: u32) -> std::path::PathBuf {
-        let path = dir.join("session.json");
-        std::fs::write(&path, text).unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
-        }
-        let _ = mode;
-        path
-    }
-
     #[test]
     fn verify_answers() {
         assert_eq!(url_encode("Tester_1"), "Tester_1");
@@ -343,87 +197,6 @@ mod tests {
         assert_eq!(p.properties[0].signature.as_deref(), Some("c2ln"));
         assert_eq!(parse_joined(""), None);
         assert_eq!(parse_joined(r#"{"name":"Notch"}"#), None);
-    }
-
-    #[test]
-    fn session_files_are_read_once_and_must_be_private() {
-        let dir = std::env::temp_dir().join(format!("horizon-auth-test-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let text = r#"{"name":"Notch","uuid":"069a79f4-44e9-4726-a5be-fca90e38aaf5","access_token":"mock-token","user_type":"msa"}"#;
-        let path = write(&dir, text, 0o600);
-        let s = AuthSession::load(&path).unwrap();
-        assert_eq!((s.name.as_str(), s.uuid), ("Notch", UUID));
-        assert!(!path.exists(), "deleted after reading");
-        assert!(!format!("{s:?}").contains("mock-token"));
-        #[cfg(unix)]
-        {
-            let path = write(&dir, text, 0o644);
-            assert!(
-                AuthSession::load(&path)
-                    .unwrap_err()
-                    .contains("other users")
-            );
-            assert!(!path.exists());
-        }
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn session_file_fields() {
-        assert!(
-            AuthSession::parse(r#"{"name":"Notch","uuid":"069a79f444e94726a5befca90e38aaf5"}"#)
-                .is_err()
-        );
-        assert!(
-            AuthSession::parse(
-                r#"{"name":"","uuid":"069a79f444e94726a5befca90e38aaf5","access_token":"t"}"#
-            )
-            .is_err()
-        );
-        assert!(AuthSession::parse(r#"{"name":"A","uuid":"nope","access_token":"t"}"#).is_err());
-        assert!(AuthSession::parse(r#"{"name":"A","uuid":"069a79f444e94726a5befca90e38aaf5","access_token":"t","user_type":"legacy"}"#).is_err());
-        let s = AuthSession::parse(r#"{"name":"A","uuid":"069a79f444e94726a5befca90e38aaf5","access_token":"t","xuid":"25"}"#).unwrap();
-        assert_eq!(s.xuid.as_deref(), Some("25"));
-    }
-
-    #[test]
-    fn join_request_like_authlib() {
-        let s = AuthSession::new("Notch", UUID, "tok");
-        let v: serde_json::Value = serde_json::from_str(&join_request(&s, "-7c9d")).unwrap();
-        assert_eq!(
-            v,
-            serde_json::json!({"accessToken": "tok", "selectedProfile": "069a79f444e94726a5befca90e38aaf5", "serverId": "-7c9d"})
-        );
-    }
-
-    #[test]
-    fn errors_map_like_authlib() {
-        let e = |status, body| JoinError::from_response(status, body);
-        assert_eq!(
-            e(
-                403,
-                r#"{"error":"ForbiddenOperationException","errorMessage":"Invalid token"}"#
-            ),
-            JoinError::InvalidSession
-        );
-        assert_eq!(e(401, ""), JoinError::InvalidSession);
-        assert_eq!(
-            e(403, r#"{"error":"InsufficientPrivilegesException"}"#),
-            JoinError::InsufficientPrivileges
-        );
-        assert_eq!(
-            e(403, r#"{"error":"multiplayer.access.banned"}"#),
-            JoinError::Banned
-        );
-        assert_eq!(e(503, "down"), JoinError::Unavailable);
-        assert_eq!(
-            e(429, r#"{"errorMessage":"Too many"}"#),
-            JoinError::Other("Too many".into())
-        );
-        assert_eq!(
-            JoinError::InvalidSession.reason(),
-            Ok("disconnect.loginFailedInfo.invalidSession")
-        );
     }
 
     #[test]

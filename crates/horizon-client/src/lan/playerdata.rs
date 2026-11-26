@@ -33,11 +33,6 @@ pub fn ints_uuid(ints: [i32; 4]) -> u128 {
         .fold(0, |acc, &i| acc << 32 | u128::from(i as u32))
 }
 
-/// Whether a saved file exists for this player.
-pub fn exists(world: &Path, uuid: u128) -> bool {
-    path(world, uuid).is_file()
-}
-
 /// Load a guest's saved state, if they have been here before.
 pub fn load(guest: &mut Guest, world: &Path) -> bool {
     let Some(tag) = read_dat(&path(world, guest.uuid)) else {
@@ -238,7 +233,6 @@ mod tests {
                 name: "Alex".into(),
                 properties: Vec::new(),
                 info: ClientInformation::new(8),
-                brand: "test".into(),
                 sender: PlayerSender::new(tx, Arc::default()),
                 latency: Arc::new(AtomicI32::new(0)),
                 address: "127.0.0.1:25565".parse().unwrap(),

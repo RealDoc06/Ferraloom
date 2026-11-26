@@ -265,10 +265,6 @@ impl VariantRegistry {
         }
         Self { names, selectors }
     }
-    pub fn index(&self, name: &str) -> Option<usize> {
-        let name = name.strip_prefix("minecraft:").unwrap_or(name);
-        self.names.iter().position(|n| n == name)
-    }
     /// `VariantUtils.selectVariantToSpawn`: the entries of the highest
     /// priority whose condition holds, one of them at random.
     pub fn select<L: FinalizeLevel + ?Sized>(

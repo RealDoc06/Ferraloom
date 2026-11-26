@@ -371,12 +371,13 @@ mod tests {
         use crate::streaming::{ChunkGenerator, Proto};
         let assets = crate::assets::Assets::load(root).unwrap();
         let biomes = crate::biome::Biomes::load(root).unwrap();
-        let terrain = super::super::VanillaTerrain::for_dimension(
+        let terrain = super::super::VanillaTerrain::for_world(
             &root.join("worldgen"),
             assets.registry,
             &biomes,
             seed,
             dimension,
+            true,
         )
         .unwrap();
         let mut worker = terrain.worker();

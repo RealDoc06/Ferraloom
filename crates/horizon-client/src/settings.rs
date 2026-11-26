@@ -1,17 +1,11 @@
 //! Player settings persisted in `options.txt` with vanilla's keys and value
 //! encodings (Options.processOptions); lines Horizon does not know are kept.
 //! The option screens live in `options_ui`.
-use crate::keybinds::KeyBinds;
 use crate::options_file::{OptionsFile, V};
 use std::{fs, path::Path};
 
 pub use horizon_client_core::sound_source::SOUND_SOURCES;
 
-/// Per-source volumes for the mixer (soundCategory_* except master).
-static SOURCE_VOLUMES: std::sync::RwLock<[f32; 11]> = std::sync::RwLock::new([1.0; 11]);
-pub fn set_source_volumes(volumes: [f32; 11]) {
-    *SOURCE_VOLUMES.write().unwrap_or_else(|e| e.into_inner()) = volumes;
-}
 /// The SoundSource an event plays on. Vanilla callers pick the source; this
 /// follows their conventions by event family.
 pub fn sound_source(event: &str) -> usize {
@@ -75,14 +69,6 @@ pub fn sound_source(event: &str) -> usize {
         }
     } else {
         index("master")
-    }
-}
-/// Volume multiplier of a sound source by index.
-pub fn source_volume(i: usize) -> f32 {
-    if i == 0 {
-        1.0
-    } else {
-        SOURCE_VOLUMES.read().unwrap_or_else(|e| e.into_inner())[i]
     }
 }
 
@@ -163,7 +149,6 @@ pub struct Settings {
     pub main_hand_left: bool,
     /// Enabled resource packs, bottom first (resourcePacks).
     pub resource_packs: Vec<String>,
-    pub keys: KeyBinds,
     /// Every option in its stored form (the typed fields above mirror it).
     pub file: OptionsFile,
     pub invert_x: bool,
@@ -175,15 +160,10 @@ pub struct Settings {
     pub sprint_window: i32,
     /// Horizon's own graphics settings (`horizon-graphics.txt`, not options.txt).
     pub horizon: crate::graphics::Graphics,
-    /// Controller settings (`horizon-controller.txt`, Horizon's own).
-    pub controller: crate::gamepad::PadSettings,
     /// Horizon's optional extras (`horizon-extras.txt`), all off by default.
     pub extras: crate::extras::Extras,
     /// The Horizon mods turned on (`horizon-mods.txt`), all off by default.
     pub mods: crate::mod_list::ModList,
-    /// The packs in `shaderpacks/`, listed when the Shader Packs page opens; the pick is
-    /// `horizon.shader_pack`.
-    pub shader_packs: Vec<crate::shader_pack_list::Entry>,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -249,17 +229,14 @@ impl Default for Settings {
             notification_display_time: 1.0,
             main_hand_left: false,
             resource_packs: Vec::new(),
-            keys: KeyBinds::default(),
             file: OptionsFile::default(),
             invert_x: false,
             toggle_attack: false,
             toggle_use: false,
             sprint_window: 7,
             horizon: Default::default(),
-            controller: Default::default(),
             extras: Default::default(),
             mods: Default::default(),
-            shader_packs: Vec::new(),
         }
     }
 }
@@ -294,10 +271,6 @@ impl Settings {
             .parent()
             .map(crate::graphics::Graphics::load)
             .unwrap_or_default();
-        let controller = path
-            .parent()
-            .map(crate::gamepad::PadSettings::load)
-            .unwrap_or_default();
         let extras = path
             .parent()
             .map(crate::extras::Extras::load)
@@ -309,14 +282,12 @@ impl Settings {
         let settings = match fs::read(path) {
             Ok(bytes) => Self {
                 horizon,
-                controller,
                 extras,
                 mods,
                 ..Self::parse(&String::from_utf8_lossy(&bytes))
             },
             Err(_) => Self {
                 horizon,
-                controller,
                 extras,
                 mods,
                 ..Self::default()
@@ -367,10 +338,6 @@ impl Settings {
     }
     /// Typed view of an options file.
     pub fn from_file(f: OptionsFile) -> Self {
-        let mut keys = KeyBinds::default();
-        for (name, _, _) in crate::keybinds::MAPPINGS {
-            keys.set(name, &f.key_binding(name));
-        }
         let mut volumes = [1.0; 11];
         for (i, source) in SOUND_SOURCES.iter().enumerate() {
             volumes[i] = f.double(&format!("soundCategory_{source}")) as f32;
@@ -418,10 +385,8 @@ impl Settings {
             toggle_use: f.bool("toggleUse"),
             sprint_window: f.int("sprintWindow"),
             horizon: Default::default(),
-            controller: Default::default(),
             extras: Default::default(),
             mods: Default::default(),
-            shader_packs: Vec::new(),
             auto_jump: f.bool("autoJump"),
             language: f.string("lang"),
             force_unicode: f.bool("forceUnicodeFont"),
@@ -444,7 +409,6 @@ impl Settings {
             notification_display_time: f.double("notificationDisplayTime") as f32,
             main_hand_left: f.name("mainHand") == "left",
             resource_packs: f.list("resourcePacks"),
-            keys,
             file: f,
         }
     }
@@ -543,25 +507,7 @@ impl Settings {
         if self.resource_packs != f.list("resourcePacks") {
             f.set("resourcePacks", V::List(self.resource_packs.clone()));
         }
-        for (name, key) in self.keys.saved() {
-            put_s(&mut f, &format!("key_{name}"), &key);
-        }
         f
-    }
-    /// These settings with one `options.txt` value changed (`horizon-ctl
-    /// options-set`, as `OptionsFile::set_text` reads it). Horizon's own
-    /// files (graphics, controller, extras, the mod list) aren't in
-    /// `options.txt`, so they stay as they are.
-    pub fn with_option(&self, key: &str, value: &str) -> Result<Self, String> {
-        let mut file = self.to_file();
-        file.set_text(key, value)?;
-        Ok(Self {
-            horizon: self.horizon.clone(),
-            controller: self.controller.clone(),
-            extras: self.extras.clone(),
-            mods: self.mods.clone(),
-            ..Self::from_file(file)
-        })
     }
     /// The `options.txt` text (Options.save).
     pub fn serialize(&self) -> String {
@@ -572,207 +518,16 @@ impl Settings {
         let _ = fs::write(path, self.serialize());
         if let Some(dir) = path.parent() {
             self.horizon.save(dir);
-            self.controller.save(dir);
             self.extras.save(dir);
             self.mods.save(dir);
         }
     }
-    /// Volume of a sound source (master excluded).
-    pub fn volume(&self, source: &str) -> f32 {
-        SOUND_SOURCES
-            .iter()
-            .position(|n| *n == source)
-            .map_or(1.0, |i| {
-                if i == 0 {
-                    self.master_volume
-                } else {
-                    self.volumes[i]
-                }
-            })
-    }
-    /// `Options.getBackgroundColor(float)`: the text backdrop colour, `default`
-    /// opacity unless `backgroundForChatOnly` is off.
-    pub fn text_background(&self, default: f32) -> u32 {
-        crate::hud_layout::background_color(
-            self.file.bool("backgroundForChatOnly"),
-            f64::from(self.text_background_opacity),
-            default,
-        )
-    }
-    pub fn chat_options(&self) -> crate::chat::ChatOptions {
-        crate::chat::ChatOptions {
-            opacity: f64::from(self.chat_opacity),
-            background_opacity: f64::from(self.text_background_opacity),
-            scale: f64::from(self.chat_scale),
-            width: f64::from(self.chat_width),
-            height_focused: f64::from(self.chat_height_focused),
-            height_unfocused: f64::from(self.chat_height_unfocused),
-            line_spacing: f64::from(self.chat_line_spacing),
-            colors: self.chat_colors,
-        }
-    }
-}
-
-/// One option instance.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Opt {
-    Fov,
-    RenderDistance,
-    SimulationDistance,
-    Sensitivity,
-    WheelSensitivity,
-    DiscreteScroll,
-    InvertX,
-    InvertY,
-    AllowCursorChanges,
-    Volume(usize),
-    GuiScale,
-    ViewBobbing,
-    Gamma,
-    MaxFps,
-    Vsync,
-    Fullscreen,
-    SmoothLighting,
-    Clouds,
-    CloudRange,
-    Particles,
-    EntityDistance,
-    EntityShadows,
-    BiomeBlend,
-    Preset,
-    Mipmaps,
-    WeatherRadius,
-    ChunkFade,
-    Vignette,
-    Autosave,
-    CutoutLeaves,
-    ImprovedTransparency,
-    AttackIndicator,
-    InactivityFps,
-    ChunkBuilder,
-    MenuBlur,
-    ToggleCrouch,
-    ToggleSprint,
-    AutoJump,
-    ChatVisibility,
-    ChatColors,
-    ChatLinks,
-    ChatLinksPrompt,
-    ChatOpacity,
-    TextBackgroundOpacity,
-    ChatScale,
-    ChatWidth,
-    ChatHeightFocused,
-    ChatHeightUnfocused,
-    ChatLineSpacing,
-    AutoSuggestions,
-    HideMatchedNames,
-    ReducedDebugInfo,
-    OnlySecureChat,
-    SaveChatDrafts,
-    HighContrast,
-    ShowSubtitles,
-    MusicFrequency,
-    NotificationDisplayTime,
-    Narrator,
-    TextBackground,
-    ChatDelay,
-    DistortionEffects,
-    FovEffects,
-    DarknessPulsing,
-    DamageTilt,
-    GlintSpeed,
-    GlintStrength,
-    HideLightningFlashes,
-    MonochromeLogo,
-    PanoramaSpeed,
-    HideSplashTexts,
-    NarratorHotkey,
-    RotateWithMinecarts,
-    HighContrastBlockOutlines,
-    ForceUnicode,
-    JapaneseGlyphs,
-    /// Horizon's controller settings (`horizon-controller.txt`).
-    PadEnabled,
-    PadVibration,
-    PadAdaptiveTriggers,
-    PadLightbar,
-    PadLookSensitivity,
-    PadInvertX,
-    PadInvertY,
-    PadToggleSneak,
-    PadMoveDeadzone,
-    PadLookDeadzone,
-    PadGlyphs,
-    PadMenuNav,
-    PadKeyboard,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn an_option_set_keeps_horizon_files() {
-        let mut s = Settings::parse("fov:70\n");
-        s.mods.enabled.insert("zoom".into());
-        s.extras.minimap = true;
-        s.horizon.fog = !s.horizon.fog;
-        s.controller.vibration = !s.controller.vibration;
-        let set = s.with_option("fov", "90").unwrap();
-        assert_eq!(set.fov, 90.0);
-        assert_eq!(set.mods, s.mods);
-        assert_eq!(set.extras, s.extras);
-        assert_eq!(set.horizon, s.horizon);
-        assert_eq!(set.controller, s.controller);
-        assert!(s.with_option("fov", "200").is_err());
-    }
-    #[test]
-    fn gui_scale_survives_temporary_small_framebuffer() {
-        for requested in [0, 1, 2, 6] {
-            let settings = Settings::parse(&format!("guiScale:{requested}\n"));
-            // Hyprland's initial surface can be smaller than the fullscreen one.
-            for (framebuffer, maximum) in [([715, 860], 2), ([3400, 1913], 7)] {
-                let effective = crate::window::calculate_scale(
-                    framebuffer,
-                    settings.gui_scale as i32,
-                    settings.force_unicode,
-                );
-                assert_eq!(
-                    effective,
-                    if requested == 0 {
-                        maximum
-                    } else {
-                        (requested as i32).min(maximum)
-                    }
-                );
-                let saved = Settings::parse(&settings.serialize());
-                assert_eq!(saved.gui_scale, requested);
-            }
-        }
-    }
 
-    #[test]
-    fn round_trips_vanilla_options_txt() {
-        let text = "version:4000\nfov:0.5\nrenderDistance:16\nmaxFps:260\nrenderClouds:\"fast\"\nkey_key.jump:key.keyboard.j\nsoundCategory_music:0.25\nresourcePacks:[\"vanilla\",\"file/x.zip\"]\nlang:fr_fr\nsomeFutureOption:42\n";
-        let s = Settings::parse(text);
-        assert_eq!(s.fov, 90.0);
-        assert_eq!(s.render_distance, 16);
-        assert_eq!(s.max_fps, 260);
-        assert_eq!(s.clouds, "fast");
-        assert_eq!(s.keys.get("key.jump"), "key.keyboard.j");
-        assert_eq!(s.volume("music"), 0.25);
-        assert_eq!(s.resource_packs, ["vanilla", "file/x.zip"]);
-        assert_eq!(s.language, "fr_fr");
-        let out = s.serialize();
-        assert!(out.starts_with("version:"));
-        assert!(out.contains("\nkey_key.jump:key.keyboard.j\n"));
-        // Options.save writes only the options it knows.
-        assert!(!out.contains("someFutureOption"));
-        assert!(out.contains("\nrenderClouds:\"fast\"\n"));
-        let again = Settings::parse(&out);
-        assert_eq!(again.fov, 90.0);
-        assert_eq!(again.keys.get("key.jump"), "key.keyboard.j");
-    }
     #[test]
     fn no_options_txt_paces_frames_like_an_empty_one() {
         let (fresh, empty) = (Settings::default(), Settings::parse(""));

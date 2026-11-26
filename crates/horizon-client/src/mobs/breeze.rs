@@ -1,13 +1,8 @@
 //! Breezes (`Breeze`): the poses and their animations, the long jump's
 //! arithmetic, the sounds of `Breeze.tick` and `BreezeModel`'s layers. The
 //! brain (`BreezeAi` and its behaviours) is in `monster_brain`.
-use super::{
-    Mob, MobEvent, MobWorld, Species,
-    anim::{Poses, State},
-    keyframes::Animation,
-};
+use super::{Mob, MobEvent, MobWorld, Species};
 use horizon_core::{geometry::Vec3, jmath, random::RandomSource};
-use std::collections::HashMap;
 
 // `variant3` is the pose, `variant` the pose the animations last saw,
 // `vector[2]` `soundTick`. AnimState states: idle, shoot, slide, slide back,
@@ -40,18 +35,6 @@ pub fn pose_id(m: &Mob) -> u8 {
         SLIDING => 15,
         _ => 0,
     }
-}
-pub(super) fn set_pose_id(m: &mut Mob, id: u8) {
-    set_pose(
-        m,
-        match id {
-            16 => SHOOTING,
-            17 => INHALING,
-            6 => LONG_JUMPING,
-            15 => SLIDING,
-            _ => STANDING,
-        },
-    );
 }
 /// `Breeze.getFiringYPosition`.
 pub fn firing_y(m: &Mob) -> f64 {
@@ -225,25 +208,6 @@ pub fn ambient(m: &Mob) -> Option<&'static str> {
     } else {
         "entity.breeze.idle_air"
     })
-}
-/// `BreezeModel.setupAnim`: the six keyframe animations.
-pub fn anim(m: &Mob, s: &State, p: &mut Poses, animations: &HashMap<String, Animation>) {
-    let age = s.age;
-    for (state, name) in [
-        (&m.anim.states[0], "IDLE"),
-        (&m.anim.states[1], "SHOOT"),
-        (&m.anim.states[2], "SLIDE"),
-        (&m.anim.states[3], "SLIDE_BACK"),
-        (&m.anim.states[4], "INHALE"),
-        (&m.anim.states[5], "JUMP"),
-    ] {
-        if let (Some(ms), Some(a)) = (
-            state.millis(age),
-            animations.get(&format!("BreezeAnimation.{name}")),
-        ) {
-            a.apply(ms, 1.0, p);
-        }
-    }
 }
 #[cfg(test)]
 mod tests {

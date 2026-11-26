@@ -4,7 +4,6 @@ mod cube;
 use crate::{Result, sprites::Sprites};
 pub use catalog::StateModels;
 use catalog::descriptor;
-pub use cube::CubeStyle;
 use horizon_core::position::BlockPos;
 use horizon_world::registry::{BlockRegistry, BlockStateId};
 use serde_json::{Value, json};
@@ -50,18 +49,6 @@ pub struct PreparedModels {
     pub placements: Vec<(BlockPos, BlockStateId)>,
     pub states: Vec<Value>,
 }
-pub fn prepare(
-    root: &Path,
-    registry: &BlockRegistry,
-    sprites: &mut Sprites,
-) -> Result<PreparedModels> {
-    prepare_with_models(
-        root,
-        registry,
-        sprites,
-        &crate::model_library::ParsedModels::default(),
-    )
-}
 pub(crate) fn prepare_with_models(
     root: &Path,
     registry: &BlockRegistry,
@@ -96,18 +83,6 @@ pub(crate) fn prepare_with_models(
         placements,
         states,
     })
-}
-pub fn instance(face: &catalog::BakedFace, position: BlockPos) -> ModelInstance {
-    let origin = [position.x as f32, position.y as f32, position.z as f32];
-    ModelInstance {
-        positions: face
-            .quad
-            .positions
-            .map(|v| std::array::from_fn(|i| v[i] + origin[i])),
-        uv: face.quad.uv,
-        layer: face.layer,
-        shade: cube::shade(face),
-    }
 }
 
 pub fn load_visibility(

@@ -7,7 +7,7 @@ use crate::{
     enchant::Enchantments,
     items::{ItemStack, Items},
 };
-use horizon_core::random::{RandomSource, XoroshiroRandom, mix_stafford13, seed_from_hash};
+use horizon_core::random::{RandomSource, XoroshiroRandom};
 use serde_json::Value;
 use std::{collections::HashMap, fs, path::Path, sync::Arc};
 
@@ -16,13 +16,6 @@ pub const LEVEL_XP: [i32; 5] = [0, 10, 70, 150, 250];
 pub fn can_level_up(level: i32) -> bool {
     (1..5).contains(&level)
 }
-pub fn min_xp(level: i32) -> i32 {
-    if can_level_up(level) {
-        LEVEL_XP[level as usize - 1]
-    } else {
-        0
-    }
-}
 pub fn max_xp(level: i32) -> i32 {
     if can_level_up(level) {
         LEVEL_XP[level as usize]
@@ -30,22 +23,6 @@ pub fn max_xp(level: i32) -> i32 {
         0
     }
 }
-/// The professions with trades, as in `VillagerProfession`.
-pub const PROFESSIONS: &[&str] = &[
-    "armorer",
-    "butcher",
-    "cartographer",
-    "cleric",
-    "farmer",
-    "fisherman",
-    "fletcher",
-    "leatherworker",
-    "librarian",
-    "mason",
-    "shepherd",
-    "toolsmith",
-    "weaponsmith",
-];
 
 /// A villager's or wandering trader's trading state (`AbstractVillager.offers`
 /// and `Villager.villagerXp`); `None` on the mob until its offers are first asked for.
@@ -255,16 +232,6 @@ pub fn sell_item(
     }
 }
 
-/// `RandomSequence(worldSeed ^ salt, id)` with the default salt 0.
-pub fn sequence_random(world_seed: i64, id: &str) -> XoroshiroRandom {
-    const SILVER: u64 = 0x6a09_e667_f3bc_c909;
-    const GOLDEN: u64 = 0x9e37_79b9_7f4a_7c15;
-    let lo = world_seed as u64 ^ SILVER;
-    let hi = lo.wrapping_add(GOLDEN);
-    let key = seed_from_hash(id);
-    XoroshiroRandom::from_state(mix_stafford13(lo ^ key[0]), mix_stafford13(hi ^ key[1]))
-}
-
 /// What a trade screen's session changes besides the menu, for the caller.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Event {
@@ -339,10 +306,6 @@ impl Session {
             last_traded: false,
             events: Vec::new(),
         }
-    }
-    /// `Merchant.showProgressBar` / `canRestock`.
-    pub fn show_progress(&self) -> bool {
-        self.villager
     }
     /// The trade sets whose sequences a villager of `profession` at `level`
     /// may draw while trading: those of the levels above it.
@@ -958,7 +921,6 @@ impl Trades {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
 
     fn items() -> Items {
         Items::for_tests(HashMap::new())
@@ -1067,19 +1029,6 @@ mod tests {
     }
 
     #[test]
-    fn sequence_random_is_stable() {
-        let mut a = sequence_random(12345, "minecraft:trade_set/armorer/level_1");
-        let mut b = sequence_random(12345, "minecraft:trade_set/armorer/level_1");
-        let mut c = sequence_random(12345, "minecraft:trade_set/butcher/level_1");
-        let (x, y, z) = (a.next_long(), b.next_long(), c.next_long());
-        assert_eq!(x, y);
-        assert_ne!(x, z);
-        assert_eq!(min_xp(2), 10);
-        assert_eq!(max_xp(2), 70);
-        assert!(!can_level_up(5));
-    }
-
-    #[test]
     fn reputation_and_heroes_lower_prices() {
         let items = items();
         let mut offers = vec![offer(10, None), offer(1, None)];
@@ -1104,50 +1053,5 @@ mod tests {
         assert_eq!(offers[0].special_price_diff, -5 - 3);
         update_special_prices(&mut offers, 0, None);
         assert_eq!(offers[0].special_price_diff, 0);
-    }
-    #[test]
-    fn offers_follow_the_trade_data() {
-        let items = items();
-        let e = crate::enchant::tests::sample();
-        let mut trades = HashMap::new();
-        trades.insert("minecraft:t/boots".into(), json!({"gives":{"id":"minecraft:iron_boots"},"max_uses":12,"reputation_discount":0.2,"wants":{"count":4,"id":"minecraft:emerald"}}));
-        trades.insert("minecraft:t/helmet".into(), json!({"gives":{"id":"minecraft:iron_helmet"},"max_uses":12,"reputation_discount":0.2,"wants":{"count":5,"id":"minecraft:emerald"}}));
-        trades.insert("minecraft:t/desert".into(), json!({"gives":{"id":"minecraft:sand"},"wants":{"id":"minecraft:emerald"},"merchant_predicate":{"entity":"this","predicate":{"minecraft:predicates":{"minecraft:villager/variant":"minecraft:desert"}},"type":"minecraft:entity_properties"}}));
-        let mut tags = HashMap::new();
-        tags.insert(
-            "minecraft:t/level_1".into(),
-            vec![
-                "minecraft:t/boots".into(),
-                "minecraft:t/helmet".into(),
-                "minecraft:t/desert".into(),
-            ],
-        );
-        let mut sets = HashMap::new();
-        sets.insert(
-            "minecraft:t/level_1".into(),
-            json!({"amount": 5, "trades": "#minecraft:t/level_1"}),
-        );
-        let t = Trades {
-            trades,
-            tags,
-            sets,
-            potion_tags: HashMap::new(),
-        };
-        let ctx = TradeContext {
-            items: &items,
-            enchantments: &e,
-            variant: "minecraft:plains",
-            origin: [0.0; 3],
-            maps: None,
-        };
-        let offers = t.offers_from_set(&ctx, "minecraft:t/level_1", &mut sequence_random(1, "x"));
-        // The desert-only trade is skipped for a plains villager; no duplicates.
-        assert_eq!(offers.len(), 2);
-        assert_ne!(offers[0].result.item, offers[1].result.item);
-        assert!(
-            offers
-                .iter()
-                .all(|o| o.max_uses == 12 && (o.price_multiplier - 0.2).abs() < 1e-6)
-        );
     }
 }

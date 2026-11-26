@@ -1,4 +1,4 @@
-//! Local control socket: lets a script or `horizon-ctl` drive a running game.
+//! Local control socket: lets the `horizon-server` supervisor or a script drive a running server.
 //!
 //! Each connection sends commands as text lines and receives one JSON line per
 //! command. Commands are executed on the game thread between frames; replies
@@ -38,14 +38,6 @@ impl Stream {
             Self::Unix(s) => Self::Unix(s.try_clone()?),
             Self::Tcp(s) => Self::Tcp(s.try_clone()?),
         })
-    }
-    /// A read timeout (None waits forever).
-    pub fn set_read_timeout(&self, timeout: Option<std::time::Duration>) -> io::Result<()> {
-        match self {
-            #[cfg(unix)]
-            Self::Unix(s) => s.set_read_timeout(timeout),
-            Self::Tcp(s) => s.set_read_timeout(timeout),
-        }
     }
 }
 impl Read for Stream {
@@ -154,9 +146,6 @@ pub struct Request {
 pub struct Server {
     path: PathBuf,
     requests: mpsc::Receiver<Request>,
-    sender: mpsc::Sender<Request>,
-    /// Clients connected now (an MCP server keeps one open; horizon-ctl one per command).
-    clients: Arc<AtomicUsize>,
     /// Set when the server is dropped: the listener stops accepting and exits.
     closed: Arc<AtomicBool>,
     /// The TCP port, to wake the listener when closing.
@@ -183,7 +172,6 @@ impl Server {
             std::fs::remove_file(path)?;
         }
         let (sender, requests) = mpsc::channel();
-        let local = sender.clone();
         let clients = Arc::new(AtomicUsize::new(0));
         let counted = clients.clone();
         let closed = Arc::new(AtomicBool::new(false));
@@ -225,31 +213,9 @@ impl Server {
         Ok(Self {
             path: path.to_owned(),
             requests,
-            sender: local,
-            clients,
             closed,
             port: tcp_port,
         })
-    }
-    /// Commands from inside the process only (`--benchmark` without `--control`).
-    pub fn local() -> Self {
-        let (sender, requests) = mpsc::channel();
-        Self {
-            path: PathBuf::new(),
-            requests,
-            sender,
-            clients: Arc::default(),
-            closed: Arc::default(),
-            port: None,
-        }
-    }
-    /// How many clients are connected.
-    pub fn clients(&self) -> usize {
-        self.clients.load(Ordering::Relaxed)
-    }
-    /// Sends commands as a socket client would, from another thread.
-    pub fn sender(&self) -> mpsc::Sender<Request> {
-        self.sender.clone()
     }
     pub fn path(&self) -> &Path {
         &self.path
@@ -410,146 +376,5 @@ mod tests {
         assert_ne!(random_token(), random_token());
         assert_eq!(random_token().len(), 32);
         assert!(same_token("abc", "abc") && !same_token("abc", "abd") && !same_token("a", "ab"));
-    }
-}
-
-/// Frame durations since the last reset, summarized like the Java recorder,
-/// with the CPU part of each frame and GPU times from timestamp queries.
-#[derive(Default)]
-pub struct FrameStats {
-    millis: Vec<f32>,
-    cpu: Vec<f32>,
-    gpu: Vec<f32>,
-    /// Milliseconds per frame phase (`PHASES`), one entry per rendered frame.
-    phases: Vec<[f32; PHASES.len()]>,
-}
-
-/// The parts of a frame's CPU time: world streaming and uploads, game ticks,
-/// building the frame's geometry and HUD, and the renderer's own work.
-pub const PHASES: [&str; 4] = ["update", "tick", "prepare", "render"];
-
-fn percentiles(values: &[f32]) -> serde_json::Value {
-    let mut sorted = values.to_vec();
-    sorted.sort_by(f32::total_cmp);
-    let n = sorted.len();
-    if n == 0 {
-        return serde_json::Value::Null;
-    }
-    let total: f64 = sorted.iter().map(|&m| f64::from(m)).sum();
-    let percentile = |p: f64| sorted[((n as f64 * p).ceil() as usize).clamp(1, n) - 1];
-    serde_json::json!({
-        "avg_ms": total / n as f64,
-        "p50_ms": percentile(0.5),
-        "p95_ms": percentile(0.95),
-        "p99_ms": percentile(0.99),
-        "max_ms": sorted[n - 1],
-    })
-}
-
-impl FrameStats {
-    const LIMIT: usize = 1 << 20;
-    pub fn record(&mut self, millis: f32) {
-        if self.millis.len() < Self::LIMIT {
-            self.millis.push(millis);
-        }
-    }
-    /// The frame's own work: its duration minus waits for the GPU, the
-    /// display and the frame limiter.
-    pub fn record_cpu(&mut self, millis: f32) {
-        if self.cpu.len() < Self::LIMIT {
-            self.cpu.push(millis);
-        }
-    }
-    pub fn record_phases(&mut self, millis: [f32; PHASES.len()]) {
-        if self.phases.len() < Self::LIMIT {
-            self.phases.push(millis);
-        }
-    }
-    /// Average milliseconds per phase over the frames whose CPU time is at
-    /// least `min_cpu` (all frames for 0): where the slow frames go.
-    fn phase_average(&self, min_cpu: f32) -> serde_json::Value {
-        let mut sums = [0.0f64; PHASES.len()];
-        let mut n = 0;
-        for (i, phases) in self.phases.iter().enumerate() {
-            if self.cpu.get(i).is_some_and(|&c| c >= min_cpu) {
-                for (sum, m) in sums.iter_mut().zip(phases) {
-                    *sum += f64::from(*m);
-                }
-                n += 1;
-            }
-        }
-        PHASES
-            .iter()
-            .zip(sums)
-            .map(|(name, sum)| (name.to_string(), (sum / f64::from(n.max(1))).into()))
-            .collect::<serde_json::Map<_, _>>()
-            .into()
-    }
-    pub fn record_gpu(&mut self, millis: &[f32]) {
-        if self.gpu.len() < Self::LIMIT {
-            self.gpu.extend_from_slice(millis);
-        }
-    }
-    /// Every recorded frame time, in milliseconds, in order.
-    pub fn frame_millis(&self) -> &[f32] {
-        &self.millis
-    }
-    /// CPU time of every recorded frame, in milliseconds.
-    pub fn cpu_millis(&self) -> &[f32] {
-        &self.cpu
-    }
-    /// GPU time of every frame the GPU timed, in milliseconds.
-    pub fn gpu_millis(&self) -> &[f32] {
-        &self.gpu
-    }
-    pub fn reset(&mut self) {
-        self.millis.clear();
-        self.cpu.clear();
-        self.gpu.clear();
-        self.phases.clear();
-    }
-    pub fn summary(&self) -> serde_json::Value {
-        let mut sorted = self.millis.clone();
-        sorted.sort_by(f32::total_cmp);
-        let n = sorted.len();
-        if n == 0 {
-            return serde_json::json!({ "frames": 0 });
-        }
-        let total: f64 = sorted.iter().map(|&m| f64::from(m)).sum();
-        let percentile = |p: f64| sorted[((n as f64 * p).ceil() as usize).clamp(1, n) - 1];
-        // Average frame time of the slowest 1% (0.1%) of frames, as frames per second.
-        let low = |per: usize| {
-            let slowest = n.div_ceil(per);
-            let slow: f64 = sorted[n - slowest..]
-                .iter()
-                .map(|&m| f64::from(m))
-                .sum::<f64>()
-                / slowest as f64;
-            1000.0 / slow
-        };
-        // Where the slowest 1% of frames by CPU time go.
-        let slow_phases = {
-            let mut cpu = self.cpu.clone();
-            cpu.sort_by(f32::total_cmp);
-            let p99 = cpu
-                .get(cpu.len().saturating_sub(cpu.len().div_ceil(100)))
-                .copied();
-            p99.map_or(serde_json::Value::Null, |p| self.phase_average(p))
-        };
-        serde_json::json!({
-            "frames": n,
-            "seconds": total / 1000.0,
-            "avg_fps": n as f64 * 1000.0 / total,
-            "low_1pct_fps": low(100),
-            "low_01pct_fps": low(1000),
-            "p50_ms": percentile(0.5),
-            "p95_ms": percentile(0.95),
-            "p99_ms": percentile(0.99),
-            "max_ms": sorted[n - 1],
-            "cpu": percentiles(&self.cpu),
-            "gpu": percentiles(&self.gpu),
-            "phases_avg_ms": self.phase_average(0.0),
-            "slow_phases_avg_ms": slow_phases,
-        })
     }
 }

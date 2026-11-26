@@ -4,17 +4,15 @@
 //! (`WardenAi`) is in `warden_brain`.
 use super::{
     Damage, DamageKind, Mob, MobEvent, MobWorld, Species, Who,
-    anim::{Poses, State},
-    keyframes::Animation,
     path::PathType,
     warden_brain::{self, Brain},
 };
 use crate::sculk::{self, Context, Info};
 use horizon_core::{
-    geometry::{Vec3, trig::Mth},
+    geometry::Vec3,
     random::{LegacyRandom, RandomSource},
 };
-use std::{collections::HashMap, f32::consts::PI};
+use std::collections::HashMap;
 
 pub const EMERGE_DURATION: i64 = warden_brain::EMERGE_DURATION as i64;
 pub const DIGGING_COOLDOWN: i64 = warden_brain::DIGGING_COOLDOWN;
@@ -76,19 +74,6 @@ pub fn pose_id(m: &Mob) -> u8 {
         Pose::Emerging => 13,
         Pose::Digging => 14,
     }
-}
-/// `Entity.onSyncedDataUpdated(DATA_POSE)` on a client.
-pub(super) fn set_pose_id(m: &mut Mob, id: u8) {
-    set_pose(
-        m,
-        match id {
-            11 => Pose::Roaring,
-            12 => Pose::Sniffing,
-            13 => Pose::Emerging,
-            14 => Pose::Digging,
-            _ => Pose::Standing,
-        },
-    );
 }
 /// The warden's pose (kept in `Extra.counter` so it can be read while the
 /// brain is being ticked).
@@ -764,14 +749,6 @@ fn heartbeat(m: &mut Mob) -> bool {
     }
     beat
 }
-/// `Warden.tick` on a client that is not the server: the heart and tendril
-/// animations and the keyframes that ended. Its sounds and particles come
-/// from the server.
-pub fn client_tick(m: &mut Mob) {
-    m.anim.vo = m.anim.v;
-    heartbeat(m);
-    animate(m, &mut Vec::new());
-}
 fn animate(m: &mut Mob, events: &mut Vec<MobEvent>) {
     // The animation values count down after the sync of the last tick.
     for slot in [TENDRIL, HEART] {
@@ -820,34 +797,6 @@ fn animate(m: &mut Mob, events: &mut Vec<MobEvent>) {
         m.anim.states[SONIC_BOOM].stop();
     }
 }
-/// Test aid: the minute of calm ran out.
-pub fn expire_dig_cooldown(m: &mut Mob) {
-    if m.extra.warden.is_some() {
-        let mm = warden_brain::mem(m);
-        mm.dig_cooldown.clear();
-        mm.attack_target.clear();
-        mm.roar_target.clear();
-    }
-}
-/// The warden's state for the control socket.
-pub fn describe(m: &Mob) -> Option<serde_json::Value> {
-    let st = m.extra.warden.as_ref()?;
-    let anger: Vec<String> = st
-        .anger
-        .suspects()
-        .iter()
-        .map(|w| format!("{w:?}={}", st.anger.anger_of(*w)))
-        .collect();
-    let (activities, memories) = warden_brain::describe(m).unwrap_or_default();
-    Some(serde_json::json!({
-        "pose": format!("{:?}", pose(m)),
-        "activities": activities,
-        "memories": memories,
-        "anger_level": format!("{:?}", anger_level(m)),
-        "anger": anger,
-        "vibration": st.vibration.current.map(|i| i.event),
-    }))
-}
 /// `Warden.getHeartBeatDelay`.
 pub fn heart_beat_delay(client_anger: i32) -> i32 {
     let anger = client_anger as f32 / AngerLevel::Angry.minimum() as f32;
@@ -861,108 +810,8 @@ pub fn ambient_sound(m: &Mob) -> Option<&'static str> {
         Some(anger_level(m).ambient_sound())
     }
 }
-/// `getTendrilAnimation` / `getHeartAnimation` at the partial tick.
-pub fn tendril_animation(m: &Mob, partial: f32) -> f32 {
-    m.anim.lerp(TENDRIL, partial) / 10.0
-}
-pub fn heart_animation(m: &Mob, partial: f32) -> f32 {
-    m.anim.lerp(HEART, partial) / 10.0
-}
 
 // ---- model ----
-
-/// `WardenModel.setupAnim`.
-pub fn anim(m: &Mob, s: &State, p: &mut Poses, animations: &HashMap<String, Animation>) {
-    p.xrot("head", s.x_rot.to_radians());
-    p.yrot("head", s.y_rot.to_radians());
-    // animateWalk
-    let speed_modifier = (3.0 * s.speed).min(0.5);
-    let adjusted = s.pos * 0.8662;
-    let (cos, sin) = (adjusted.mcos(), adjusted.msin());
-    let speed_min = speed_modifier.min(0.35);
-    let head_z = p.get("head")[5] + 0.3 * sin * speed_modifier;
-    p.zrot("head", head_z);
-    let head_x = p.get("head")[3] + 1.2 * (adjusted + PI / 2.0).mcos() * speed_min;
-    p.xrot("head", head_x);
-    p.zrot("body", 0.1 * sin * speed_modifier);
-    p.xrot("body", cos * speed_min);
-    p.xrot("left_leg", cos * speed_modifier);
-    p.xrot("right_leg", (adjusted + PI).mcos() * speed_modifier);
-    p.xrot("left_arm", -(0.8 * cos * speed_modifier));
-    p.zrot("left_arm", 0.0);
-    p.xrot("right_arm", -(0.8 * sin * speed_modifier));
-    p.zrot("right_arm", 0.0);
-    for (arm, x) in [("left_arm", 13.0), ("right_arm", -13.0)] {
-        let a = p.get(arm);
-        a[4] = 0.0;
-        a[2] = 1.0;
-        a[0] = x;
-        a[1] = -13.0;
-    }
-    // animateIdlePose
-    let scaled = s.age * 0.1;
-    let (wobble_cos, wobble_sin) = (scaled.mcos(), scaled.msin());
-    let head_z = p.get("head")[5] + 0.06 * wobble_cos;
-    p.zrot("head", head_z);
-    let head_x = p.get("head")[3] + 0.06 * wobble_sin;
-    p.xrot("head", head_x);
-    let body_z = p.get("body")[5] + 0.025 * wobble_sin;
-    p.zrot("body", body_z);
-    let body_x = p.get("body")[3] + 0.025 * wobble_cos;
-    p.xrot("body", body_x);
-    // animateTendrils
-    let tendril = tendril_animation(m, s.partial)
-        * ((f64::from(s.age) * 2.25).cos() * std::f64::consts::PI * f64::from(0.1f32)) as f32;
-    p.xrot("left_tendril", tendril);
-    p.xrot("right_tendril", -tendril);
-    for (slot, name) in [
-        (ATTACK, "WARDEN_ATTACK"),
-        (SONIC_BOOM, "WARDEN_SONIC_BOOM"),
-        (DIGGING, "WARDEN_DIG"),
-        (EMERGE, "WARDEN_EMERGE"),
-        (ROAR, "WARDEN_ROAR"),
-        (SNIFF, "WARDEN_SNIFF"),
-    ] {
-        if let (Some(ms), Some(a)) = (
-            m.anim.states[slot].millis(s.age),
-            animations.get(&format!("WardenAnimation.{name}")),
-        ) {
-            a.apply(ms, 1.0, p);
-        }
-    }
-}
-/// The emissive layers of `WardenRenderer`: the bioluminescent skin, the
-/// pulsating spots, the tendrils and the heart, as (model, texture, alpha).
-pub fn emissive_layers(m: &Mob, partial: f32) -> [(&'static str, &'static str, f32); 5] {
-    let age = m.age as f32 + partial;
-    [
-        (
-            "warden#bioluminescent",
-            "entity/warden/warden_bioluminescent_layer",
-            1.0,
-        ),
-        (
-            "warden#pulsating_spots",
-            "entity/warden/warden_pulsating_spots_1",
-            ((age * 0.045).mcos() * 0.25).max(0.0),
-        ),
-        (
-            "warden#pulsating_spots",
-            "entity/warden/warden_pulsating_spots_2",
-            ((age * 0.045 + PI).mcos() * 0.25).max(0.0),
-        ),
-        (
-            "warden#tendrils",
-            "entity/warden/warden",
-            tendril_animation(m, partial),
-        ),
-        (
-            "warden#heart",
-            "entity/warden/warden_heart",
-            heart_animation(m, partial),
-        ),
-    ]
-}
 
 #[cfg(test)]
 mod tests {

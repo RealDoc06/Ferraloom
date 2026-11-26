@@ -4,7 +4,6 @@ use super::{
     commands::{R, Target, err},
 };
 use horizon_client::{
-    boss_overlay,
     bossbar::{self, BossBars},
     command::{Arg, Context},
     fast_hash::FxHashSet,
@@ -37,7 +36,7 @@ impl Game<'_> {
             .join("data/minecraft/custom_boss_events.dat")
     }
     pub(super) fn load_bossbars(&mut self) {
-        if self.bosses.loaded || self.remote.is_some() {
+        if self.bosses.loaded {
             return;
         }
         self.bosses.loaded = true;
@@ -49,7 +48,7 @@ impl Game<'_> {
         self.ui.registries.bossbars = self.bosses.bars.ids();
     }
     pub(super) fn save_bossbars(&self) {
-        if !self.bosses.loaded || self.remote.is_some() {
+        if !self.bosses.loaded {
             return;
         }
         if self.bosses.bars.bars.is_empty() && !self.bossbar_path().exists() {
@@ -410,11 +409,7 @@ impl Game<'_> {
     /// that simulates the world applies them to its own overlay; everyone
     /// else gets `ClientboundBossEventPacket`s.
     pub(super) fn publish_boss_bars(&mut self) {
-        if self.remote.is_some() {
-            return;
-        }
         self.load_bossbars();
-        let now = boss_overlay::now_millis();
         let viewers = self.boss_viewers();
         if !self.bosses.sent.is_empty() {
             let live: FxHashSet<u128> = viewers.iter().map(|v| v.uuid).collect();
@@ -443,9 +438,9 @@ impl Game<'_> {
                 continue;
             }
             for event in self.diff_boss_events(viewer, desired) {
-                if viewer.local {
-                    self.boss_overlay.apply(&event, now);
-                } else if let Some(conn) = viewer.conn {
+                if !viewer.local
+                    && let Some(conn) = viewer.conn
+                {
                     packets.push((conn, C::BossEvent(event)));
                 }
             }
@@ -655,10 +650,6 @@ impl Game<'_> {
             sent.insert(id, offer);
         }
         out
-    }
-    /// `ClientPacketListener.handleBossUpdate`.
-    pub(super) fn apply_boss_event(&mut self, packet: &play::BossEvent) {
-        self.boss_overlay.apply(packet, boss_overlay::now_millis());
     }
 }
 

@@ -412,7 +412,7 @@ impl Game<'_> {
                 Target::Player if self.lan_acting.is_some() => {
                     self.guest_packets.push(packet.clone());
                 }
-                Target::Player => self.audio.stop_sounds(sound.as_deref(), source),
+                Target::Player => {}
                 Target::Guest(conn) => {
                     if let Some(host) = self.lan.as_ref() {
                         host.hub.send_to(conn, &packet);

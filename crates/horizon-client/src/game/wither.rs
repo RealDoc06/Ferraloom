@@ -4,7 +4,7 @@ use super::Game;
 use horizon_client::{
     items::ItemStack,
     mobs::{Damage, DamageKind, Species, Who},
-    projectiles::{Projectile, ProjectileKind},
+    projectiles::Projectile,
 };
 use horizon_core::position::BlockPos;
 
@@ -177,12 +177,5 @@ impl Game<'_> {
         let result = self.with_hive_emptying_blast(|g| g.explode(at, 1.0));
         self.combat.explosion_owner = None;
         result
-    }
-}
-/// Wither skulls drawn as the skull model, blue when dangerous.
-pub(super) fn skull_kind(p: &Projectile) -> Option<bool> {
-    match p.kind {
-        ProjectileKind::WitherSkull { dangerous } => Some(dangerous),
-        _ => None,
     }
 }

@@ -58,10 +58,6 @@ impl AttackStrength {
     pub fn reset_attack(&mut self) {
         self.ticker = 0;
     }
-    /// `getAttackStrengthScale(a)` with the ATTACK_SPEED attribute value.
-    pub fn scale(&self, a: f32, attack_speed: f64) -> f32 {
-        ((self.ticker as f32 + a) / delay(attack_speed)).clamp(0.0, 1.0)
-    }
     /// `getItemSwapScale(a)`.
     pub fn swap_scale(&self, a: f32, attack_speed: f64) -> f32 {
         ((self.swap_ticker as f32 + a) / delay(attack_speed)).clamp(0.0, 1.0)
@@ -76,20 +72,6 @@ mod tests {
             item: item.into(),
             rest: rest.into(),
         })
-    }
-    #[test]
-    fn charges_over_the_attack_delay() {
-        let mut s = AttackStrength::default();
-        // A sword's 1.6 attacks per second: 12.5 ticks to full strength.
-        assert_eq!(delay(1.6), 12.5);
-        for _ in 0..6 {
-            s.tick(None);
-        }
-        assert_eq!(s.scale(0.25, 1.6), 6.25 / 12.5);
-        for _ in 0..10 {
-            s.tick(None);
-        }
-        assert_eq!(s.scale(0.0, 1.6), 1.0);
     }
     #[test]
     fn switching_items_resets_but_restacking_does_not() {

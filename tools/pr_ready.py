@@ -8,7 +8,7 @@
 
 From the files the branch changes since its merge base with --base (committed or not) it decides what to run:
 rustfmt, and clippy with warnings denied exactly as CI's verify job runs it (the whole workspace with the game's code
-mods, plus the server build when horizon-client is affected); the tests of the touched crates, with the features
+mods, plus the engine without them when horizon-client is affected); the tests of the touched crates, with the features
 CI's workspace-wide run gives them; Cargo.lock changing only with a Cargo.toml; the Python tests (always, as in CI) and the public-tree check; and the vanilla harnesses the
 changes can affect, picked as CI's parity job picks them (tools/parity.py --changed). Harnesses run where the
 vanilla data is (a prepared .local/ here, or the Mac mini); elsewhere they are listed for CI.
@@ -253,10 +253,10 @@ def parity_summary(output):
     return text
 
 
-# CI's verify job (.github/workflows/ci.yml): clippy over the whole workspace with the game's code mods, and over the
-# server build (the game without sound or controllers); tests with code mods and mod packaging.
+# CI's verify job (.github/workflows/ci.yml): clippy over the whole workspace with the engine's code mods, and over the
+# engine without them; tests with code mods and mod packaging.
 CI_CLIPPY = "cargo clippy --workspace --all-targets --locked --features horizon-client/mods -- -D warnings"
-CI_CLIPPY_SERVER = "cargo clippy -p horizon-client --all-targets --locked --no-default-features -- -D warnings"
+CI_CLIPPY_SERVER = "cargo clippy -p horizon-client --all-targets --locked -- -D warnings"
 CI_TEST_FEATURES = "horizon-client/mods,horizon-mods/pack"
 
 
@@ -400,7 +400,7 @@ def run_windows(steps, verbose):
         elif step.name == "rustfmt":
             command = ["cargo", "fmt", "--all", "--", "--check"]
         elif step.name == "clippy":
-            command = shlex.split(CI_CLIPPY)  # the server build's clippy runs in CI (Linux)
+            command = shlex.split(CI_CLIPPY)  # the engine without code mods is linted in CI
         elif step.name.startswith("tests"):
             command = shlex.split(step.command)
         elif step.name == "Parity":

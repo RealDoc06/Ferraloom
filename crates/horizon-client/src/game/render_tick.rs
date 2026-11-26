@@ -1,19 +1,15 @@
 //! Per-tick client visuals: the particle engine, `ClientLevel.animateTick`,
 //! campfire smoke and rain splashes (`ClientLevel.tickWeatherEffects`).
 use super::{Dim, Game};
-use horizon_client::fog::{FogData, FogInputs, FogType, fog_type, update_rain_fog};
+use horizon_client::fog::{FogType, fog_type, update_rain_fog};
+use horizon_client::screen_effects::lightmap_brightness;
 use horizon_client::{
-    animate_tick::{AnimateContext, animate_tick, campfire_particles, marker_particle_target},
+    animate_tick::{AnimateContext, animate_tick, marker_particle_target},
     biome::Biomes,
     blocks::{BlockFacts, Fluid},
     chunk::{HEIGHT, MIN_Y},
-    containers::BlockEntity,
     particles::{ParticleLevel, ParticleOptions, ParticleType},
     world::World,
-};
-use horizon_client::{
-    hud_overlays,
-    screen_effects::{ScreenInputs, ScreenQuad, lightmap_brightness},
 };
 use horizon_core::random::{LegacyRandom, RandomSource};
 
@@ -67,171 +63,6 @@ impl Game<'_> {
             -pitch.sin(),
             yaw.cos() * pitch.cos(),
         ]
-    }
-    /// `FogRenderer.setupFog` for the frame's camera.
-    pub(super) fn frame_fog(
-        &self,
-        camera: glam::DVec3,
-        sky: &horizon_client::environment::Sky,
-        biome: u16,
-        water_fog_color: [f32; 3],
-    ) -> FogData {
-        let forward = self.forward();
-        let at = [camera.x, camera.y, camera.z];
-        let fog_type = fog_type(&self.world, self.res.facts(), at, forward);
-        let (rain, thunder) = if self.dim == Dim::Overworld {
-            self.world.weather.levels(self.clock.fraction() as f32)
-        } else {
-            (0.0, 0.0)
-        };
-        let title_fog = horizon_client::fog::FogTables::default();
-        let tables = if self.title.is_some() {
-            &title_fog
-        } else {
-            self.res.fog()
-        };
-        horizon_client::fog::setup_fog(
-            tables,
-            &self.fog,
-            &FogInputs {
-                fog_type,
-                sky,
-                water_fog_color,
-                biome,
-                render_distance_chunks: self.terrain_distance(),
-                distant_terrain: self.lod.is_some(),
-                cloud_range_chunks: self.settings.cloud_range,
-                camera_y: camera.y,
-                min_y: self.level_min_y(),
-                flat: self.level_flat(),
-                forward: forward.map(|c| c as f32),
-                rain,
-                thunder,
-                skybox: self.dim == Dim::Overworld,
-                blindness: self
-                    .potions
-                    .effects
-                    .get("blindness")
-                    .map(|effect| (effect.duration, effect.duration == -1)),
-                darkness: self.darkness_fog(),
-                darken_world: self
-                    .boss_overlay
-                    .darken_amount(self.clock.fraction() as f32),
-                boss_world_fog: self.boss_overlay.should_create_world_fog(),
-            },
-        )
-    }
-    /// `ClientLevelData.isFlat`: on the server thread, the world-wide flag.
-    fn level_flat(&self) -> bool {
-        match self.remote.as_ref() {
-            Some(r) => r.flat,
-            None => self.world_flat,
-        }
-    }
-    /// `Level.getMinY`: the current dimension type's minimum y.
-    fn level_min_y(&self) -> i32 {
-        match self.remote.as_ref() {
-            Some(r) => r.dimension.min_y,
-            None => self.dim.min_y(),
-        }
-    }
-    /// `SkyRenderer.shouldRenderDarkDisc`: eye below the horizon and not under
-    /// water. `ClientLevelData.getHorizonHeight`: the bottom of a flat world,
-    /// otherwise y 63.
-    pub(super) fn dark_disc(&self, camera: glam::DVec3) -> bool {
-        let horizon = if self.level_flat() {
-            f64::from(self.level_min_y())
-        } else {
-            63.0
-        };
-        self.dim == Dim::Overworld
-            && camera.y < horizon
-            && fog_type(
-                &self.world,
-                self.res.facts(),
-                [camera.x, camera.y, camera.z],
-                self.forward(),
-            ) != FogType::Water
-    }
-    /// `ScreenEffectRenderer` + `Hud` camera overlays for this frame.
-    pub(super) fn screen_quads(&self, partial: f32, size: [u32; 2]) -> Vec<ScreenQuad> {
-        let Some(p) = self.player.as_ref() else {
-            return Vec::new();
-        };
-        let eye = [
-            p.position.x,
-            p.position.y + f64::from(p.dimensions.eye_height),
-            p.position.z,
-        ];
-        // LevelExtractor.getViewBlockingState: 8 points around the eye.
-        // ScreenEffectRenderer: none of it for a spectator (noPhysics).
-        let spectator = self.spectator();
-        let mut block_overlay = None;
-        let w = f64::from(p.dimensions.width) * 0.8;
-        for i in (0..8).filter(|_| !spectator) {
-            let t = [
-                p.position.x + (f64::from(i & 1) - 0.5) * w,
-                eye[1] + (f64::from((i >> 1) & 1) - 0.5) * 0.1,
-                p.position.z + (f64::from((i >> 2) & 1) - 0.5) * w,
-            ];
-            let state = self.world.block(
-                t[0].floor() as i32,
-                t[1].floor() as i32,
-                t[2].floor() as i32,
-            );
-            let f = self.res.facts().get(state);
-            if f.render_shape != horizon_client::blocks::RenderShape::Invisible
-                && f.solid_render
-                && f.full_collision
-            {
-                // ScreenEffectRenderer: the block's particle material.
-                block_overlay = Self::block_particle_sprite(&self.pack, state);
-                break;
-            }
-        }
-        let in_water =
-            fog_type(&self.world, self.res.facts(), eye, self.forward()) == FogType::Water;
-        let water =
-            (in_water && !spectator).then(|| (self.eye_brightness(eye), self.yaw, self.pitch));
-        // Hud.extractCameraOverlays; the spyglass scope (and its easing) is
-        // drawn on the HUD by draw_spyglass.
-        let fx = &self.screen_fx;
-        let overlays = hud_overlays::CameraOverlays {
-            vignette: self.settings.vignette.then_some((
-                fx.vignette_brightness,
-                self.border.warning_strength(p.position.x, p.position.z),
-            )),
-            first_person: self.camera_type.first_person(),
-            scoping: self.scoping(),
-            game_time_delta: 0.0,
-            equipment: match &self.armor[0] {
-                Some(stack) if &*stack.item == "minecraft:carved_pumpkin" => {
-                    vec!["misc/pumpkinblur".to_owned()]
-                }
-                _ => Vec::new(),
-            },
-            ticks_frozen: p.ticks_frozen,
-            percent_frozen: p.percent_frozen(),
-            partial,
-            portal: [fx.o_portal, fx.portal],
-            nausea: self.nausea_blend(partial),
-            screen_effect_scale: self.screen_effect_scale(),
-        };
-        let mut scope = self.scope_scale;
-        let gui_overlays =
-            hud_overlays::camera_overlays(size[0] as i32, size[1] as i32, &overlays, &mut scope);
-        self.screen_fx.build(&ScreenInputs {
-            sprites: &self.gui.atlas.sprites,
-            flags: &self.gui.atlas.flags,
-            aspect: size[0] as f32 / size[1].max(1) as f32,
-            partial,
-            block_overlay,
-            water,
-            on_fire: self.camera_type.first_person()
-                && !self.spectator()
-                && self.player.as_ref().is_some_and(|p| p.fire_ticks > 0),
-            gui_overlays: &gui_overlays,
-        })
     }
     /// `Lightmap.getBrightness(getMaxLocalRawBrightness(eye))`.
     fn eye_brightness(&self, eye: [f64; 3]) -> f32 {
@@ -433,18 +264,6 @@ impl Game<'_> {
                 }
             }
         }
-        if let Some(r) = &self.renderer {
-            campfire_particles(
-                self.res.animate(),
-                &mut self.particles,
-                &ctx,
-                r.block_entities(),
-                &|pos| match self.world.block_entities.get(&(pos[0], pos[1], pos[2])) {
-                    Some(BlockEntity::Campfire(c)) => c.items.each_ref().map(Option::is_some),
-                    _ => [false; 4],
-                },
-            );
-        }
         let level = ParticleLevel {
             world,
             facts,
@@ -455,7 +274,6 @@ impl Game<'_> {
                 .map(|p| ([p.position.x, p.position.y, p.position.z], p.velocity.y)),
         };
         self.particles.tick(&level);
-        self.tick_pickups();
         for (name, at, volume, pitch) in std::mem::take(&mut self.particles.sounds) {
             self.audio.play(name, Some(at), volume, pitch);
         }

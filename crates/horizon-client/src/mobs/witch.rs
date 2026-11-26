@@ -2,14 +2,12 @@
 //! `RangedAttackGoal` (also used by snow golems).
 use super::{
     Mob, MobEvent, Species, Who,
-    anim::{Poses, State},
     goals::{
         Cx, Float, Goal, HurtByTarget, LOOK, LookAtPlayer, MOVE, NearestTarget, RandomLookAround,
         Stroll, goal_clone,
     },
 };
 use crate::projectiles::{Projectile, ProjectileKind};
-use horizon_core::geometry::trig::Mth;
 use horizon_core::{geometry::Vec3, random::RandomSource};
 
 pub fn register(m: &mut Mob) {
@@ -319,26 +317,4 @@ fn drink(m: &mut Mob, cx_events: &mut Vec<MobEvent>, target_far: bool) {
             pitch,
         ));
     }
-}
-/// WitchModel.setupAnim (VillagerModel base with a wobbling nose).
-pub fn anim(m: &Mob, s: &State, p: &mut Poses) {
-    p.yrot("head", s.y_rot.to_radians());
-    p.xrot("head", s.x_rot.to_radians());
-    p.xrot("right_leg", (s.pos * 0.6662).mcos() * 1.4 * s.speed * 0.5);
-    p.xrot(
-        "left_leg",
-        (s.pos * 0.6662 + std::f32::consts::PI).mcos() * 1.4 * s.speed * 0.5,
-    );
-    let speed = 0.01 * (m.id % 10) as f32;
-    let deg = horizon_core::geometry::trig::DEG_TO_RAD;
-    p.xrot("nose", (s.age * speed).msin() * 4.5 * deg);
-    p.zrot("nose", (s.age * speed).mcos() * 2.5 * deg);
-    if m.extra.main_hand.is_some() {
-        let n = p.get("nose");
-        n[0] = 0.0;
-        n[1] = 1.0;
-        n[2] = -1.5;
-        n[3] = -0.9;
-    }
-    let _ = Species::Witch;
 }

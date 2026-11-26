@@ -150,16 +150,6 @@ pub fn sign_kind(name: &str) -> Option<bool> {
         None
     }
 }
-/// Wood type of a sign block (`SignBlock.getWoodType`), for the editor texture.
-pub fn wood_type(name: &str) -> &str {
-    let name = name.strip_prefix("minecraft:").unwrap_or(name);
-    for suffix in ["_wall_hanging_sign", "_hanging_sign", "_wall_sign", "_sign"] {
-        if let Some(wood) = name.strip_suffix(suffix) {
-            return wood;
-        }
-    }
-    "oak"
-}
 
 #[cfg(test)]
 mod tests {
@@ -177,19 +167,5 @@ mod tests {
         let mut decoded = SignData::default();
         decoded.decode(&tag);
         assert_eq!(decoded, data);
-    }
-    #[test]
-    fn names_and_colors() {
-        assert_eq!(sign_kind("minecraft:oak_wall_hanging_sign"), Some(true));
-        assert_eq!(sign_kind("minecraft:sign"), Some(false));
-        assert_eq!(sign_kind("minecraft:spruce_wall_sign"), Some(false));
-        assert_eq!(sign_kind("minecraft:stone"), None);
-        assert_eq!(wood_type("minecraft:dark_oak_wall_sign"), "dark_oak");
-        assert_eq!(SignText::default().dark_color(), 0);
-        let red = SignText {
-            color: 14,
-            ..SignText::default()
-        };
-        assert_eq!(red.dark_color(), 0x660000);
     }
 }

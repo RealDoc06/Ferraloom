@@ -210,24 +210,6 @@ impl Game<'_> {
             converted: Vec::new(),
         });
     }
-    /// `ClientLevel.addEntity` for a server's lightning bolt: on a client it
-    /// only flashes, sounds and draws (`LightningBolt.tick` off the server).
-    pub(super) fn spawn_remote_bolt(&mut self, id: u32, at: [f64; 3]) {
-        self.bolts.retain(|b| b.id != id);
-        let r = &mut self.world.random;
-        let seed = r.next_long();
-        let flashes = r.next_int_bound(3).unwrap_or(0) + 1;
-        self.lightning_seen[0] += 1;
-        self.bolts.push(Bolt {
-            id,
-            at,
-            life: 2,
-            flashes,
-            seed,
-            visual_only: true,
-            converted: Vec::new(),
-        });
-    }
     /// `spawnFire`: fire at the strike point and `extra` random neighbours,
     /// wherever `BaseFireBlock.getState` fire can survive.
     fn bolt_fire(&mut self, at: [f64; 3], extra: i32) {
@@ -288,9 +270,7 @@ impl Game<'_> {
                 // every server bolt, a skeleton trap's visual one included;
                 // a client's copy of a server bolt (spawn_remote_bolt) only
                 // flashes.
-                if self.remote.is_none() {
-                    self.bolt_clear_copper(b.at);
-                }
+                self.bolt_clear_copper(b.at);
             }
             b.life -= 1;
             if b.life < 0 {
@@ -463,15 +443,5 @@ impl Game<'_> {
             !inside([e.position.x, e.position.y, e.position.z])
                 || e.stack.item.contains("netherite")
         });
-    }
-    /// Simulation-order render inputs; seeded geometry lives in the renderer.
-    pub(super) fn bolt_instances(&self) -> Vec<horizon_client::gfx::lightning::Bolt> {
-        self.bolts
-            .iter()
-            .map(|b| horizon_client::gfx::lightning::Bolt {
-                at: b.at,
-                seed: b.seed,
-            })
-            .collect()
     }
 }

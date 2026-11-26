@@ -84,11 +84,6 @@ impl CommandTree {
         })
     }
 
-    /// The ClientboundCommandsPacket for a player with `level` permissions.
-    pub fn packet(&self, level: u8, dedicated: bool, builtin: &Builtin) -> Commands {
-        self.packet_with(level, dedicated, builtin, &Value::Null)
-    }
-
     /// [`CommandTree::packet`] with more commands after vanilla's: `extra`
     /// is a root in the report's format (server mods' commands).
     pub fn packet_with(
@@ -167,6 +162,11 @@ impl CommandTree {
             nodes: out,
             root: 0,
         }
+    }
+    /// The ClientboundCommandsPacket for a player with `level` permissions.
+    #[cfg(test)]
+    pub fn packet(&self, level: u8, dedicated: bool, builtin: &Builtin) -> Commands {
+        self.packet_with(level, dedicated, builtin, &Value::Null)
     }
 }
 

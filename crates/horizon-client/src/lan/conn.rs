@@ -437,11 +437,6 @@ impl PlayerSender {
         self.send_body(PacketBody::Slot(slot.clone()));
         SlotFiller(slot)
     }
-    /// Several packets in order, as [`Self::send`] each: under one lock
-    /// while the tick holds them.
-    pub fn send_many(&self, bodies: impl IntoIterator<Item = Vec<u8>>) {
-        self.send_bodies(bodies.into_iter().map(PacketBody::Owned));
-    }
     /// Queue shared and private packet bodies together, retaining their order.
     pub fn send_bodies(&self, bodies: impl IntoIterator<Item = PacketBody>) {
         if !HOLDING.get() {
@@ -486,6 +481,12 @@ impl PlayerSender {
             posted: self.posted.clone(),
             wake: self.wake.clone(),
         }
+    }
+    /// Several packets in order, as [`Self::send`] each: under one lock
+    /// while the tick holds them.
+    #[cfg(test)]
+    pub fn send_many(&self, bodies: impl IntoIterator<Item = Vec<u8>>) {
+        self.send_bodies(bodies.into_iter().map(PacketBody::Owned));
     }
 }
 
@@ -634,16 +635,6 @@ pub fn serve(
         return serve_legacy(stream, &shared);
     }
     serve_connection(Connection::from_stream(stream).map_err(e)?, address, shared)
-}
-
-/// `ServerConnectionListener.startMemoryChannel`: an integrated server's
-/// own player, over one end of an in-memory pipe.
-pub fn serve_local(
-    pipe: horizon_protocol::connection::Pipe,
-    shared: Arc<Shared>,
-) -> Result<(), String> {
-    let address = std::net::SocketAddr::from(([127, 0, 0, 1], 0));
-    serve_connection(Connection::local(pipe), address, shared)
 }
 
 fn serve_connection(
@@ -932,7 +923,6 @@ struct Parts {
     name: String,
     properties: Vec<login::Property>,
     info: ClientInformation,
-    brand: String,
 }
 
 fn login_and_configure(
@@ -1069,7 +1059,6 @@ fn login_and_configure(
         name: name.to_owned(),
         properties,
         info,
-        brand,
     }))
 }
 
@@ -1260,7 +1249,6 @@ fn play(c: Connection, shared: &Arc<Shared>, parts: Parts, address: std::net::So
         name: parts.name.clone(),
         properties: parts.properties,
         info: parts.info,
-        brand: parts.brand,
         sender,
         latency: latency.clone(),
         address,

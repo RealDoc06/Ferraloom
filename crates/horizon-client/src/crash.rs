@@ -1,8 +1,7 @@
 //! Crash reports, laid out like vanilla's CrashReport.getFriendlyReport: a comment, the time,
 //! a description, the error with its stack, then the details of the game and the machine.
-//! Written to `crash-reports/crash-<yyyy-MM-dd_HH.mm.ss>-client.txt` in the game folder when
-//! the main thread panics or `main` gets an error back. It leaves the machine only scrubbed, and
-//! only if the player allows crash reports (`telemetry`).
+//! Written to `crash-reports/crash-<yyyy-MM-dd_HH.mm.ss>-server.txt` in the server folder when
+//! the main thread panics or `main` gets an error back.
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -22,13 +21,6 @@ pub fn set_detail(key: &'static str, value: impl Into<String>) {
         Some(entry) => entry.1 = value,
         None => details.push((key, value)),
     }
-}
-
-pub fn clear_detail(key: &'static str) {
-    DETAILS
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .retain(|(k, _)| *k != key);
 }
 
 fn details() -> Vec<(&'static str, String)> {
@@ -294,7 +286,6 @@ fn deliver(home: &Path, report: Report) -> Option<PathBuf> {
         ),
     );
     crate::logging::flush();
-    crate::telemetry::keep_crash(home, &report);
     match report.save(home) {
         Ok(path) => {
             eprintln!("Horizon: crash report saved to {}", path.display());
@@ -382,7 +373,7 @@ pub fn stack_lines(backtrace: &str, from_panic: bool) -> String {
 }
 
 /// A source path without the build machine's folders: relative to the workspace, or from the
-/// crate's folder for dependencies (`winit-0.30.13/src/event_loop.rs:642:56`).
+/// crate's folder for dependencies (`rayon-core-1.12.1/src/registry.rs:642:56`).
 fn short_path<'a>(path: &'a str, root: &str) -> &'a str {
     if let Some(rest) = path.strip_prefix(root) {
         return rest;
@@ -433,55 +424,12 @@ pub fn install(home: PathBuf, side: &'static str) {
     }));
 }
 
-/// Vanilla's debug crash (`key.debug.crash` held for ten seconds): the error `main` gets back,
-/// with the stack where it was raised.
-#[derive(Debug)]
-pub struct DebugCrash {
-    stack: String,
-}
-
-impl DebugCrash {
-    pub const MESSAGE: &str = "Manually triggered debug crash";
-    #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
-        Self {
-            stack: stack_lines(
-                &std::backtrace::Backtrace::force_capture().to_string(),
-                false,
-            ),
-        }
-    }
-}
-
-impl std::fmt::Display for DebugCrash {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        f.write_str(Self::MESSAGE)
-    }
-}
-
-impl std::error::Error for DebugCrash {}
-
 /// A report for an error `main` got back: the game ends with it.
 pub fn report_error(
     home: &Path,
     side: &'static str,
     error: &(dyn std::error::Error + 'static),
 ) -> Option<PathBuf> {
-    if let Some(debug) = error.downcast_ref::<DebugCrash>() {
-        return deliver(
-            home,
-            Report {
-                time: Local::now(),
-                description: DebugCrash::MESSAGE.into(),
-                error: DebugCrash::MESSAGE.into(),
-                stack: debug.stack.clone(),
-                thread: thread_name(),
-                side,
-                details: system_details(),
-                log: crate::logging::recent_lines(),
-            },
-        );
-    }
     let mut message = error.to_string();
     let mut source = error.source();
     while let Some(e) = source {
@@ -501,29 +449,6 @@ pub fn report_error(
             log: crate::logging::recent_lines(),
         },
     )
-}
-
-/// Called every frame: panics once `HORIZON_DEBUG_CRASH` asks (development builds only).
-pub fn debug_crash_tick() {
-    static AT: std::sync::OnceLock<Option<(std::time::Instant, std::time::Duration)>> =
-        std::sync::OnceLock::new();
-    if let Some((first, after)) =
-        AT.get_or_init(|| debug_crash_after().map(|d| (std::time::Instant::now(), d)))
-        && first.elapsed() >= *after
-    {
-        panic!("Manually triggered debug crash");
-    }
-}
-
-/// Development builds crash on purpose when `HORIZON_DEBUG_CRASH` is set (vanilla has F3+C held
-/// for ten seconds): the number is seconds after the first frame (default 5).
-pub fn debug_crash_after() -> Option<std::time::Duration> {
-    if !cfg!(debug_assertions) {
-        return None;
-    }
-    let value = std::env::var("HORIZON_DEBUG_CRASH").ok()?;
-    let seconds = value.parse::<f64>().unwrap_or(5.0).max(0.0);
-    Some(std::time::Duration::from_secs_f64(seconds))
 }
 
 #[cfg(test)]
@@ -598,23 +523,13 @@ mod tests {
     #[test]
     fn stacks_start_at_the_panicking_frame() {
         let bt = format!(
-            "   0: horizon_client::crash::panic_report\n             at {root}/src/crash.rs:296:16\n   1: std::panicking::panic_with_hook\n             at /rustc/abc/library/std/src/panicking.rs:823:13\n   2: core::panicking::panic_fmt\n             at /rustc/abc/library/core/src/panicking.rs:80:14\n   3: horizon_client::crash::debug_crash_tick\n             at {root}/src/crash.rs:359:9\n   4: winit::dispatch\n             at /home/someone/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/winit-0.30.13/src/event_loop.rs:642:56\n   5: main\n",
+            "   0: horizon_client::crash::panic_report\n             at {root}/src/crash.rs:296:16\n   1: std::panicking::panic_with_hook\n             at /rustc/abc/library/std/src/panicking.rs:823:13\n   2: core::panicking::panic_fmt\n             at /rustc/abc/library/core/src/panicking.rs:80:14\n   3: horizon_client::crash::report_error\n             at {root}/src/crash.rs:359:9\n   4: rayon_core::registry::main_loop\n             at /home/someone/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rayon-core-1.12.1/src/registry.rs:642:56\n   5: main\n",
             root = env!("CARGO_MANIFEST_DIR")
         );
         assert_eq!(
             stack_lines(&bt, true),
-            "horizon_client::crash::debug_crash_tick (crates/horizon-client/src/crash.rs:359:9)\nwinit::dispatch (winit-0.30.13/src/event_loop.rs:642:56)\nmain\n"
+            "horizon_client::crash::report_error (crates/horizon-client/src/crash.rs:359:9)\nrayon_core::registry::main_loop (rayon-core-1.12.1/src/registry.rs:642:56)\nmain\n"
         );
-    }
-
-    #[test]
-    fn the_debug_crash_is_reported_as_vanillas() {
-        let error: Box<dyn std::error::Error> = DebugCrash::new().into();
-        assert_eq!(error.to_string(), "Manually triggered debug crash");
-        let debug = error.downcast_ref::<DebugCrash>().unwrap();
-        // The stack starts where the crash was raised (DebugCrash::new, in this file).
-        let first = debug.stack.lines().next().unwrap();
-        assert!(first.contains("crash.rs"), "{}", debug.stack);
     }
 
     #[test]

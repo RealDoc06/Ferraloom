@@ -6,8 +6,7 @@
 //! keeps 7 archives a day, the newest with the highest index.
 //!
 //! Messages go through the `log` facade. Horizon's own still print their plain text on stderr,
-//! as they did before the log existed; other crates' errors only reach the file (their
-//! warnings are mostly the Vulkan loader's startup chatter).
+//! as they did before the log existed; other crates' errors only reach the file.
 use std::collections::VecDeque;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
@@ -45,8 +44,8 @@ pub fn data_dir() -> PathBuf {
     std::env::temp_dir()
 }
 
-/// Where the launcher runs the game and keeps its saves: `HORIZON_HOME`, else `horizon` in the
-/// platform data folder (launcher/src/backend.rs `game_home`).
+/// The game folder of a run without `--dedicated` (the component harnesses): `HORIZON_HOME`, else
+/// `horizon` in the platform data folder.
 pub fn game_home() -> PathBuf {
     match std::env::var_os("HORIZON_HOME").filter(|h| !h.is_empty()) {
         Some(h) => PathBuf::from(h),

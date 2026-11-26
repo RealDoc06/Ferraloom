@@ -53,6 +53,11 @@ pub enum Kind {
     Other(String),
 }
 
+/// A shader pack's file extension and manifest (`horizon_shader_api::EXTENSION`
+/// and `MANIFEST`), known without the `shader-packs` feature.
+const SHADER_EXTENSION: &str = "hshader";
+const SHADER_MANIFEST: &str = "horizon-shaders.toml";
+
 impl Kind {
     pub fn name(&self) -> &str {
         match self {
@@ -70,7 +75,7 @@ impl Kind {
             Kind::Mod => Some("hmod"),
             Kind::Modpack => Some("hpack"),
             Kind::ResourcePack => Some("zip"),
-            Kind::Shader => Some(horizon_shader_api::EXTENSION),
+            Kind::Shader => Some(SHADER_EXTENSION),
             Kind::Other(_) => None,
         }
     }
@@ -536,7 +541,7 @@ impl Facts {
             Kind::Modpack => format!("its {} isn't what the index lists", modpack::MANIFEST),
             Kind::Shader => format!(
                 "its {} ({} {}, shader API {}) isn't what the index lists",
-                horizon_shader_api::MANIFEST,
+                SHADER_MANIFEST,
                 self.id.as_deref().unwrap_or("?"),
                 self.version.as_deref().unwrap_or("?"),
                 self.api
@@ -587,6 +592,9 @@ pub fn inspect(kind: &Kind, path: &Path) -> Result<Facts, String> {
             api: check_resource_pack(path)?,
             ..Facts::default()
         }),
+        #[cfg(not(feature = "shader-packs"))]
+        Kind::Shader => Err("shader packs are checked with the `shader-packs` feature".into()),
+        #[cfg(feature = "shader-packs")]
         Kind::Shader => {
             let pack = horizon_shader_api::Pack::read(path)?;
             if let Err(problems) = horizon_shader_api::check(&pack) {

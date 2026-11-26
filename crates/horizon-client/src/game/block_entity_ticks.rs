@@ -72,7 +72,6 @@ impl Game<'_> {
         // Items move between passes: the columns hold for this one only.
         self.item_columns = None;
         self.block_entity_players = None;
-        self.update_song_volumes();
         self.scan_for_hearts();
         // The client ticks (particles, sounds, the turning mob) are for a
         // window; a dedicated or integrated server has none.

@@ -87,7 +87,6 @@ pub struct Guest {
     pub sender: PlayerSender,
     pub latency: Arc<AtomicI32>,
     pub info: ClientInformation,
-    pub brand: String,
     /// The chunk radius this client is sent.
     pub view_distance: i32,
     pub position: [f64; 3],
@@ -294,7 +293,6 @@ impl Guest {
             latency: j.latency,
             view_distance: (i32::from(j.info.view_distance)).clamp(2, view_distance),
             info: j.info,
-            brand: j.brand,
             position,
             previous_position: position,
             yaw: 0.0,
@@ -544,17 +542,7 @@ pub fn firework_components(
     out
 }
 
-/// The off hand slot is conventionally 40 in saves and 45 in the menu.
-/// `synced_id` names an entry of a synced registry (enchantments, trim
-/// materials and patterns) by its id on this connection.
-pub fn stack_to_network(
-    item_id: impl Fn(&str) -> i32,
-    synced_id: impl Fn(&str, &str) -> Option<i32>,
-    s: &Option<ItemStack>,
-) -> Option<Stack> {
-    network_stack(&item_id, &synced_id, s.as_ref()?)
-}
-/// `stack_to_network` of a stack in place.
+/// A stack as the protocol writes it (`ItemStack.OPTIONAL_STREAM_CODEC`).
 pub fn stack_ref_to_network(
     item_id: impl Fn(&str) -> i32,
     synced_id: impl Fn(&str, &str) -> Option<i32>,
@@ -768,7 +756,7 @@ mod tests {
             _ => None,
         };
         let potion = ItemStack::new("minecraft:splash_potion", 1).with_potion("swiftness");
-        let stack = stack_to_network(|_| 7, synced_id, &Some(potion)).unwrap();
+        let stack = stack_ref_to_network(|_| 7, synced_id, &potion).unwrap();
         assert_eq!(
             stack.component(component::POTION_CONTENTS),
             Some(&Component::Potion {
@@ -788,7 +776,7 @@ mod tests {
             ("minecraft:trim_pattern", "minecraft:coast") => Some(1),
             _ => None,
         };
-        let stack = stack_to_network(|_| 7, synced_id, &Some(chestplate.clone())).unwrap();
+        let stack = stack_ref_to_network(|_| 7, synced_id, &chestplate).unwrap();
         assert_eq!(
             stack.component(component::TRIM),
             Some(&Component::Trim {
@@ -798,7 +786,7 @@ mod tests {
         );
         // A name the connection's registry lacks sends no trim.
         chestplate.data_mut().trim = Some(("minecraft:x".into(), "coast".into()));
-        let stack = stack_to_network(|_| 7, synced_id, &Some(chestplate)).unwrap();
+        let stack = stack_ref_to_network(|_| 7, synced_id, &chestplate).unwrap();
         assert_eq!(stack.component(component::TRIM), None);
     }
 }
