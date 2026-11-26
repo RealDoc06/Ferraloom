@@ -487,6 +487,23 @@ def check_plugins(engine, bot_binary, built, out, scratch):
         bot.out.wait_for(r'^chat hand 3 true$', start=mark)
         print('chest GUI: open, names and lore, cancelled and uncancelled clicks, close; held item mirror: ok')
 
+        # A cancelled click in the inventory whose listener opens the GUI: the client's
+        # inventory is resent as its own, never filled with the GUI's slots.
+        bot.send('command ftest guiclick')
+        bot.out.wait_for(r'^chat guiclick true$', start=mark)
+        mark, log_mark = len(bot.out.lines), len(log.lines)
+        bot.send('click 0 9 0 0')
+        log.wait_for(r'event: click \S+ raw=9 LEFT ', start=log_mark)
+        _, opened = bot.out.wait_for(r'^open (\d+) Ferraloom GUI$', start=mark)
+        window = opened.split()[1]
+        _, content = bot.out.wait_for(r'^content 0 ', start=mark)
+        if 'name=Buy' in content:
+            raise Failed(f'inventory resent with the GUI: {content}')
+        bot.out.absent(r'^slot 0 ', mark)
+        bot.send(f'close {window}')
+        log.wait_for(r'event: close \S*Ferraloom GUI gui=true', start=log_mark)
+        print('cancelled inventory click opening a GUI keeps the inventory: ok')
+
         # A cancelled PlayerMoveEvent sends the player back; uncancelled, the move stands.
         bot.send('command ftest freeze on')
         bot.out.wait_for(r'^chat freeze true$')

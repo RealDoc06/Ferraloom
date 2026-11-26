@@ -628,7 +628,7 @@ impl Game<'_> {
         let cancelled =
             ferraloom_plugins::inventory_click(&mut GameHost::new(self, Some(host)), &event);
         if cancelled {
-            host.hub.inventory_clicked(conn, p, &self.world, &[]);
+            self.resync_cancelled(host, conn, p);
         }
         cancelled
     }
@@ -718,13 +718,27 @@ impl Game<'_> {
                     m.drag = None;
                 }
             }
-            if host.hub.guest(conn).is_some_and(|g| {
-                p.container == 0 || g.menu.as_ref().is_some_and(|m| m.window == p.container)
-            }) {
-                host.hub.inventory_clicked(conn, p, &self.world, &[]);
-            }
+            self.resync_cancelled(host, conn, p);
         }
         denied
+    }
+
+    /// After a cancelled click or drag, corrects the client's view of the window
+    /// it clicked if that window is still the open one. A listener that opened
+    /// another menu has sent it already; under it the inventory is resent whole.
+    fn resync_cancelled(&self, host: &mut LanHost, conn: u32, p: &play::ContainerClick) {
+        let Some(i) = host.hub.guest_index(conn) else {
+            return;
+        };
+        match (
+            p.container,
+            host.hub.guests[i].menu.as_ref().map(|m| m.window),
+        ) {
+            (0, None) => host.hub.inventory_clicked(conn, p, &self.world, &[]),
+            (0, Some(_)) => host.hub.send_inventory(i),
+            (w, Some(open)) if w == open => host.hub.inventory_clicked(conn, p, &self.world, &[]),
+            _ => {}
+        }
     }
 
     /// InventoryOpenEvent as a guest's container is about to open

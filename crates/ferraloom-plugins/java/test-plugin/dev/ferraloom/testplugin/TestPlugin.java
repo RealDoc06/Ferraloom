@@ -69,6 +69,8 @@ public final class TestPlugin extends JavaPlugin implements Listener {
             List.of("ping", "protect", "where", "tp", "stub", "lists", "pardon", "bar", "stall");
     private volatile boolean protect;
     private volatile boolean freeze;
+    /** Set by `ftest guiclick`: the next click on raw slot 9 outside a GUI is cancelled and opens the GUI. */
+    private boolean guiOnClick;
     /** The next BlockPhysicsEvent is logged (then this goes false again). */
     private boolean watchPhysics;
     private int timerRuns;
@@ -267,6 +269,11 @@ public final class TestPlugin extends JavaPlugin implements Listener {
         if (!(event.getView().getTopInventory().getHolder() instanceof Gui)) {
             getLogger().info("event: click " + event.getView().getType() + " raw=" + event.getRawSlot() + " " + event.getClick()
                     + " " + event.getAction());
+            if (guiOnClick && event.getRawSlot() == 9) {
+                guiOnClick = false;
+                event.setCancelled(true);
+                openGui((Player) event.getWhoClicked());
+            }
             return;
         }
         ItemStack current = event.getCurrentItem();
@@ -443,6 +450,10 @@ public final class TestPlugin extends JavaPlugin implements Listener {
             case "run" -> ((Player) sender).performCommand("list");
             case "kickme" -> ((Player) sender).kickPlayer("FerraloomTest kicked you");
             case "gui" -> openGui((Player) sender);
+            case "guiclick" -> {
+                guiOnClick = true;
+                sender.sendMessage("guiclick true");
+            }
             case "cursor" -> {
                 ItemStack cursor = ((Player) sender).getItemOnCursor();
                 sender.sendMessage("cursor " + cursor.getType() + " " + cursor.getAmount());

@@ -413,9 +413,11 @@ impl Hub {
         }
     }
 
-    fn view_slot(&self, i: usize, world: &World, slot: usize) -> Option<ItemStack> {
+    /// What the guest's view of raw `slot` holds: of the open menu when `in_menu`,
+    /// else of the inventory menu (window 0).
+    fn view_slot(&self, i: usize, world: &World, in_menu: bool, slot: usize) -> Option<ItemStack> {
         let g = &self.guests[i];
-        match &g.menu {
+        match g.menu.as_ref().filter(|_| in_menu) {
             Some(m) if slot < m.size => m.slots.get(world, g, slot),
             Some(m) => g
                 .inventory
@@ -571,7 +573,7 @@ impl Hub {
         };
         let mut resend: Vec<usize> = Vec::new();
         for slot in 0..total {
-            let mine = self.view_slot(i, world, slot);
+            let mine = self.view_slot(i, world, in_menu, slot);
             let agreed = match claimed.get(&slot) {
                 Some(c) => self.hashed_matches(c, &mine),
                 None => !changed.contains(&slot),
@@ -581,7 +583,7 @@ impl Hub {
             }
         }
         for slot in resend {
-            let mine = self.view_slot(i, world, slot);
+            let mine = self.view_slot(i, world, in_menu, slot);
             let net = self.stack(&mine);
             let g = &mut self.guests[i];
             let state = if in_menu {
@@ -606,7 +608,9 @@ impl Hub {
             self.guests[i].send(&C::SetCursorItem(play::SetCursorItem { item: net }));
         }
         // What the client now believes equals the server's state.
-        let items: Vec<_> = (0..total).map(|s| self.view_slot(i, world, s)).collect();
+        let items: Vec<_> = (0..total)
+            .map(|s| self.view_slot(i, world, in_menu, s))
+            .collect();
         if in_menu {
             if let Some(m) = self.guests[i].menu.as_mut() {
                 m.sent = items;
@@ -687,7 +691,7 @@ impl Hub {
                 continue;
             }
             for slot in 0..size + 36 {
-                let now = self.view_slot(i, world, slot);
+                let now = self.view_slot(i, world, true, slot);
                 let sent = self.guests[i]
                     .menu
                     .as_ref()
