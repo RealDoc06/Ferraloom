@@ -92,8 +92,13 @@ def run_side(label, command):
     try:
         server.wait_for(r'Done \(', timeout=600)
         console(server, 'forceload add -48 -48 111 111', timeout=600)
-        console(server, 'fill 0 200 0 2 200 2 minecraft:stone')
-        console(server, 'summon minecraft:minecart 1.5 201 1.5')
+        deadline = time.time() + 300
+        while not any('Test passed' in line for line in console(server, 'execute if loaded 1 200 1')):
+            if time.time() > deadline:
+                raise AssertionError(f'{label}: chunk 0 0 did not load')
+            time.sleep(1)
+        for command in ('fill 0 200 0 2 200 2 minecraft:stone', 'summon minecraft:minecart 1.5 201 1.5'):
+            print(f'{label}: {command} ->', [line.split(']: ', 1)[-1] for line in console(server, command)])
         expected = carts(server)
         console(server, 'save-all flush', timeout=600)
     finally:
