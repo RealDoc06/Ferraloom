@@ -65,9 +65,11 @@ impl Game<'_> {
             return false;
         }
         // The packet's location less Vec3.atCenterOf(pos), as floats from the block corner.
-        if p.cursor
+        // Written as vanilla's `abs < limit` must hold, so NaN is refused.
+        if !p
+            .cursor
             .iter()
-            .any(|&c| (f64::from(c) - 0.5).abs() >= HIT_LIMIT)
+            .all(|&c| (f64::from(c) - 0.5).abs() < HIT_LIMIT)
         {
             return false;
         }
