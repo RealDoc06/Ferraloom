@@ -608,8 +608,8 @@ impl PlayerHost for GameHost<'_, '_> {
                 let Some(hub) = self.hub() else {
                     return false;
                 };
-                hub.hub.resend_commands();
-                return true;
+                // CraftPlayer.updateCommands: this player's tree only.
+                return hub.hub.resend_plugin_commands(player);
             }
         };
         self.send(player, &packet)

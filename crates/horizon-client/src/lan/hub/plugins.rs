@@ -21,15 +21,17 @@ impl Hub {
     }
 
     /// One player's command tree again, as their plugin permissions now
-    /// filter it (they joined; `Player.updateCommands`).
-    pub fn resend_plugin_commands(&self, player: u128) {
-        if let Some(i) = self
+    /// filter it (they joined; `Player.updateCommands`). False when they are
+    /// not placed.
+    pub fn resend_plugin_commands(&self, player: u128) -> bool {
+        let i = self
             .guests
             .iter()
-            .position(|g| g.uuid == player && g.placed)
-        {
+            .position(|g| g.uuid == player && g.placed);
+        if let Some(i) = i {
             self.send_commands(i);
         }
+        i.is_some()
     }
 
     /// [`Self::extra_commands`] for one player: without the plugin commands

@@ -234,7 +234,7 @@ Audit numbers first, then gaps found on the way. Harness names are `tools/test_<
 | | `/transfer` sends the named players, not the sender; an unknown command's error no longer carries an empty context | `eb5a048a8` | `server_ops_feedback` `admin` |
 | | A ban's source is the player's name; operators hear about a ban before the kick; a player's `/save-all` saves after their turn | `cd15d45f4` (branch) | `server_ops_feedback` `admin` |
 | | Functions compile at `function-permission-level` at load and `/reload`; failing functions and the tags needing them drop with vanilla's messages; macro lines checked at call | `8ec12d527`, `3bf600a37` | `server_function_permission`, 33 lines |
-| | `Player.updateCommands` resends command trees (to every player, where vanilla sends only that player's) | players area, `game/plugins/players.rs:607` | `plugins_e2e.py` |
+| | `Player.updateCommands` resends the player's command tree | players area, `game/plugins/players.rs:607` | `plugins_e2e.py` |
 
 ## Protocol coverage at HEAD
 

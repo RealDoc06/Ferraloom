@@ -330,7 +330,7 @@ health scaling are not bridged; `PlayerLoginEvent.getHostname` is the address, n
 Known differences from CraftBukkit, each for its area to remove: join/quit messages are sent as plain
 translations (no hover); `AsyncPlayerChatEvent`'s lines go out unsigned;
 `PlayerChatEvent` (the deprecated sync one) is not fired; a player's command tree follows their permissions
-when it is sent (join, op changes, `Player.updateCommands`, which resends it to every player); legacy plugins
+when it is sent (join, op changes, `Player.updateCommands`); legacy plugins
 (no `api-version`) load without legacy-material support. The tracked list of what is still open is
 [`vanilla-client-gaps.md`](vanilla-client-gaps.md).
 
