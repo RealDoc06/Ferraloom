@@ -1,7 +1,7 @@
 //! The agents port-pack's downloads go through: the jars of an imported modpack come from the same
 //! places as everything else, so they take the same proxy — and leave the same hosts alone.
 //!
-//! The launcher hands its own setting over (`set_proxy`, from `proxy.rs`); a run of the
+//! A caller hands its own setting over (`set_proxy`; Horizon's launcher did); a run of the
 //! `horizon-port-pack` command reads `HTTPS_PROXY`, `HTTP_PROXY` and `ALL_PROXY` instead (`env_for`),
 //! taking the one that matches the address's scheme the way the launcher does. Either way a host in
 //! `NO_PROXY`, or on this computer, is reached directly: a host that only answers without the proxy
