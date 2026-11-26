@@ -306,7 +306,7 @@ def long_messages(m):
 def show(m):
     """A mismatch's two records, or the lines that differ for long replies (/help)."""
     if long_messages(m):
-        lines = [[''.join(span[0] for span in message) for message in side['messages']] for side in (m['vanilla'], m['rust'])]
+        lines = [[''.join(span[0] for span in message) for message in json.loads(masked(side))] for side in (m['vanilla'], m['rust'])]
         for line in difflib.unified_diff(*lines, 'vanilla', 'ferraloom', n=0, lineterm=''):
             print('   ', line[:300])
         return
