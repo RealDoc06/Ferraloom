@@ -551,8 +551,9 @@ impl Hub {
         }
     }
 
-    /// After a click: tell the client about every slot it got wrong, or that
-    /// it did not claim, and the carried stack.
+    /// After a click (`broadcastChanges` with the client's claims as the remote
+    /// slots): tell the client about every slot it got wrong, every slot it did
+    /// not claim that differs from what it was last sent, and the carried stack.
     fn answer_click(
         &mut self,
         i: usize,
@@ -576,7 +577,15 @@ impl Hub {
             let mine = self.view_slot(i, world, in_menu, slot);
             let agreed = match claimed.get(&slot) {
                 Some(c) => self.hashed_matches(c, &mine),
-                None => !changed.contains(&slot),
+                None => {
+                    let g = &self.guests[i];
+                    let sent = if in_menu {
+                        g.menu.as_ref().and_then(|m| m.sent.get(slot))
+                    } else {
+                        g.menu_sent.get(slot)
+                    };
+                    !changed.contains(&slot) && sent == Some(&mine)
+                }
             };
             if !agreed {
                 resend.push(slot);
