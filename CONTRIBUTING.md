@@ -4,8 +4,7 @@ Thanks for helping. Horizon is Minecraft: Java Edition 26.3 rewritten in Rust, a
 everything is that **it plays exactly like vanilla**. This page is the short version of how we work; questions are
 welcome on [Discord](https://discord.gg/HcTeMZxe5E).
 
-This repository holds the game and the launcher, plus the tools, tests and docs that build, check and release them.
-The website (playhorizon.dev) is built in a separate repository from this one's README, `docs/api/` and roadmap. Anything else (videos, Discord and other community material) lives elsewhere.
+This repository holds the server, plus the tools, tests and docs that build, check and release it.
 
 **Where to start: [playhorizon.dev/hub](https://playhorizon.dev/hub).** It shows what is being done now and next
 ([ROADMAP.md](ROADMAP.md) in the repository), the work board, good first tasks, and the forms to report a bug or
@@ -14,16 +13,13 @@ queue (the hub, or `/suggest` on Discord) rather than to issues, which are for b
 
 ## Build it
 
-You need Rust (stable), Python 3.10+, JDK 25, and on Linux the ALSA and udev headers (`libasound2-dev libudev-dev`).
-Horizon never downloads the game: it prepares its resources from your own copy of Minecraft 26.3, as described in
-[Build from source](README.md#build-from-source).
+You need Rust (stable), Python 3.10+ and JDK 25. Horizon never downloads the game: it prepares its resources from
+your own copy of Minecraft 26.3, then runs the engine headless ([Host a server](docs/hosting.md)).
 
 ```sh
 cargo run --release -p horizon-prepare -- --prepare --server-jar ~/Downloads/server.jar
-cargo run --release -p horizon-client
+cargo build --release -p horizon-client --no-default-features -p horizon-server
 ```
-
-The launcher is its own Cargo workspace in `launcher/` (`cd launcher && cargo run`; on NixOS, `nix-shell` first).
 
 ## Vanilla first
 
@@ -37,8 +33,6 @@ probe against Horizon, and compares their outputs. There are about 290 of them.
   Say in your pull request which vanilla classes and methods you followed.
 - **Gameplay changes come with a harness**, new or extended, so the next change can't silently break them.
   [The parity workflow](docs/parity-workflow.md) shows how harnesses run; copy a nearby one.
-- **Horizon's own features** (the launcher, the new menus) follow [the design system](docs/design-system.md) and are
-  off by default wherever they would change the vanilla look.
 - **Everything players run is Rust.** Python and Java are fine for dev tools and harness drivers in `tools/`, never
   for player-facing code.
 
@@ -52,9 +46,7 @@ The pre-push hook checks the full history reachable from the branches and tags b
 Horizon's code is written from Minecraft 26.3 itself and from public documentation, never from another mod, loader
 or renderer. Don't read, copy, translate or paraphrase the source of Iris, OptiFine, Sodium or any other project,
 and don't send code an AI tool wrote from it. Their user documentation and file formats are fine to read, and their
-packs and mods are fine to run and observe. Shader packs were removed on 24 October 2026 (#1561) because their code
-had been written from another project's source; they come back only as a clean-room rewrite from a written
-description of the pack format.
+packs and mods are fine to run and observe.
 
 ## Before asking for review
 
@@ -65,7 +57,7 @@ python3 tools/pr_ready.py --base upstream/main   # or origin/main if you work on
 ```
 
 It looks at what your branch changes and runs what matters: rustfmt, clippy with warnings denied, the tests of the
-crates you touched (and the launcher's), generated files, `Cargo.lock`, the Python tests, and the vanilla harnesses
+crates you touched, generated files, `Cargo.lock`, the Python tests, and the vanilla harnesses
 your change can affect. Without the vanilla data on your machine it lists those harnesses instead; CI runs them.
 `--quick` skips the harnesses. It exits non-zero when something fails.
 
@@ -87,7 +79,7 @@ configuration and toolchain changes select the whole workspace; CI also keeps it
   `release-now` is for crash fixes that shouldn't wait. pr_ready suggests one.
 
 Who reviews and merges: the Horizon Team, on CI for ordinary pull requests; risky ones (saves, network, world
-generation, the launcher's updates) wait for a local proof first ([merging](docs/release-flow.md#merging)).
+generation, `horizon-server update`) wait for a local proof first ([merging](docs/release-flow.md#merging)).
 
 Every merge to main is released automatically ([release flow](docs/release-flow.md)), so main always stays playable.
 How agents, checks, releases and signed updates keep this safe: [security](docs/security.md).

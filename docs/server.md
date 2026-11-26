@@ -182,7 +182,7 @@ prepared on their own computer to the server (`scp -r`). Planned wrappers:
 - **On this machine:** `horizon-server prepare --server-jar PATH` runs `horizon-prepare` on the owner's own
   server jar plus their launcher install.
 - **Prepared elsewhere:** `horizon-server import-resources DIR` copies a folder prepared on the owner's own
-  computer, for example by the launcher, to a headless machine.
+  computer, for example by `horizon-prepare`, to a headless machine.
 
 A server-only `prepare` (from `server.jar` alone, without the client jar or a JDK) is the follow-up that
 removes the last Java step. It needs a list of which prepared files the server really reads, and that list
@@ -307,8 +307,7 @@ a typed key set again under `[properties]` and values vanilla would refuse. Plan
   After it stops, the supervisor compares the file with what it wrote and copies any changed keys back into
   `server.toml`, so an in-game change survives the next start. Edits go through `toml_edit`, so the owner's
   comments and order are kept.
-- **Changes without opening the file.** `horizon-server config set KEY=VALUE...` (the launcher's Servers
-  page uses it) writes through `toml_edit`, checks the result as `server.toml` is checked, and writes nothing
+- **Changes without opening the file.** `horizon-server config set KEY=VALUE...` writes through `toml_edit`, checks the result as `server.toml` is checked, and writes nothing
   if a value is wrong. On a running server it sends what vanilla changes live through its console:
   `difficulty`, `defaultgamemode` and `whitelist on|off`; the backup settings apply at once because the
   supervisor reads them each time. Everything else waits for the next start, and the command says which. A

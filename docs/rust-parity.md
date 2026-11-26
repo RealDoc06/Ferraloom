@@ -2,7 +2,7 @@
 
 The behavior target is the repository's pinned **Minecraft Java Edition 26.3**.
 One-to-one vanilla gameplay parity is the acceptance criterion. It has **not**
-been reached, but the Rust game is now playable: the [native client](native-client.md)
+been reached, but the Rust game is now playable: the native client
 has a title screen and world management. It generates vanilla terrain with
 decoration and streams, lights and renders it. Survival play works: mining,
 placing, crafting, chests and furnaces, items, mobs, combat, hunger, health,
@@ -33,7 +33,7 @@ integration remain unfinished. The linked subsystem documents and hashed reports
 record the exact tested scope and remaining gaps.
 The `horizon-assets` crate now decodes pinned cuboid models, with all 2,883 bundled
 block-model JSON files and 2,457 synthetic cases compared against the actual
-client parser. [Decoder scope and validation](native-client.md#validation)
+client parser. Decoder scope and validation
 also include parent/texture resolution over 5,648 roots and cuboid baking over
 7,100 roots with identity blockstate transforms. Blockstate resource decoding now
 matches all 1,288 bundled definitions and 1,351 synthetic cases; registry
@@ -49,7 +49,7 @@ yet simulated gameplay blocks. Resident chunk meshing now preserves weighted
 variants and UV orientation when greedily merging matching cube faces, and uses
 native-checked neighbor visibility. Full block-catalog material support, lighting
 and chunk streaming remain unfinished.
-[Neighbor face visibility](face-visibility.md) now matches both reference JARs
+Neighbor face visibility now matches both reference JARs
 across 1,441,816 state pairs, including all pinned suppression-rule families.
 Animation metadata, frame sequences and tick-state selection now have native
 differential coverage, including all bundled animated texture metadata. GPU
