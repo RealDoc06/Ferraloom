@@ -119,7 +119,7 @@ def compile_java(build, lock, classpath, source):
 
 
 def run_side(label, server_command, client_command, build, script_path):
-    """One server running the script: its records."""
+    """One server running the script: its records, and the client's notes of `tick` steps that ended short."""
     directory = build / label
     port = server_dir(directory, PROPERTIES, [PLAYER])
     out = build / f'{label}.jsonl'
@@ -137,7 +137,8 @@ def run_side(label, server_command, client_command, build, script_path):
                                  + f'\n{label} server:\n' + '\n'.join(server_tail))
     finally:
         server.stop()
-    return [json.loads(line) for line in out.open(encoding='utf-8')]
+    notes = Path(f'{out}.notes').read_text(encoding='utf-8').splitlines()
+    return [json.loads(line) for line in out.open(encoding='utf-8')], notes
 
 
 def main():
@@ -166,8 +167,8 @@ def main():
     script_path = build / 'script.jsonl'
     script_path.write_text(''.join(json.dumps(op, ensure_ascii=False) + '\n' for op in script), encoding='utf-8')
 
-    vanilla = run_side('vanilla', vanilla_server, client, build, script_path)
-    rust = run_side('ferraloom', ferraloom_server, client, build, script_path)
+    vanilla, vanilla_notes = run_side('vanilla', vanilla_server, client, build, script_path)
+    rust, rust_notes = run_side('ferraloom', ferraloom_server, client, build, script_path)
     if len(vanilla) != len(rust):
         sys.exit(f'record count differs: vanilla {len(vanilla)} ferraloom {len(rust)}')
     commands_by_group = []
@@ -183,6 +184,12 @@ def main():
         if kind:
             (known if v['cmd'] in KNOWN else mismatches).append({'kind': kind, 'cmd': v['cmd'], 'vanilla': v, 'rust': r})
             fixed.discard(v['cmd'])
+    # A `tick` whose step ended short on one server only (vanilla's step them all).
+    for note in sorted(set(vanilla_notes) ^ set(rust_notes)):
+        side = 'vanilla' if note in vanilla_notes else 'ferraloom'
+        record = {'cmd': note, 'messages': [], 'results': [], 'side': side}
+        (known if note in KNOWN else mismatches).append({'kind': 'ticks', 'cmd': note, 'vanilla': record, 'rust': record})
+        fixed.discard(note)
     (build / 'mismatches.jsonl').write_text(''.join(json.dumps(m, ensure_ascii=False) + '\n' for m in mismatches + known),
                                             encoding='utf-8')
     summary = []
@@ -197,7 +204,7 @@ def main():
         print('  ferraloom', render(m['rust'])[:400])
     for m in known:
         print(f'known: {m["cmd"]!r} ({KNOWN[m["cmd"]]})')
-    for command in sorted(fixed & {rec['cmd'] for rec in vanilla}):
+    for command in sorted(fixed):
         print(f'matches now, leave KNOWN: {command!r}')
     total = len(vanilla)
     print(f'total: {total - len(mismatches) - len(known)}/{total} commands match ({len(known)} known)', flush=True)

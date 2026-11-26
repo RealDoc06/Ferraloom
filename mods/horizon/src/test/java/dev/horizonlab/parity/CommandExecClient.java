@@ -89,7 +89,8 @@ import net.minecraft.world.phys.Vec3;
  *     every player or disguised chat message, decorated by its chat type, as
  *     styled spans (as VanillaCommandExecOracle did), and the last result.</li>
  *   <li>{@code tick N}: {@code tick step N}, then waits until the game time
- *     moved N ticks.</li>
+ *     moved N ticks. A step whose clock stops short is written to
+ *     OUT.jsonl.notes (vanilla's never does), and the rest stepped.</li>
  *   <li>{@code settle}: waits until the 5x5 chunks around the player are
  *     loaded and entity-ticking ({@code execute if loaded}), then 5 ticks.</li>
  *   <li>{@code portal}: with {@code at}, teleports into the portal there;
@@ -109,6 +110,8 @@ public final class CommandExecClient {
     private static final String WRAP = "execute store success storage " + STORAGE + " s byte 1 store result storage "
         + STORAGE + " r int 1 run ";
     private static final long TIMEOUT_NANOS = 300_000_000_000L;
+    /** How long the game time may stand still while a step is due before the step counts as ended. */
+    private static final long STALL_NANOS = 30_000_000_000L;
 
     public static void main(String[] args) throws Exception {
         ParityData.init();
@@ -126,6 +129,7 @@ public final class CommandExecClient {
             if (line.isBlank()) continue;
             JsonObject op = JsonParser.parseString(line).getAsJsonObject();
             if (System.getenv("PARITY_TRACE") != null) System.err.println("op " + line);
+            if (!op.get("op").getAsString().equals("tick")) player.context = line.strip();
             boolean record = !op.has("record") || op.get("record").getAsBoolean();
             switch (op.get("op").getAsString()) {
                 case "cmd" -> {
@@ -157,6 +161,7 @@ public final class CommandExecClient {
             }
         }
         Files.writeString(output, out.toString(), StandardCharsets.UTF_8);
+        Files.write(Path.of(output + ".notes"), player.notes, StandardCharsets.UTF_8);
         player.close();
         System.exit(0);
     }
@@ -250,6 +255,9 @@ public final class CommandExecClient {
         private int respawns;
         private int markers;
         volatile String failure;
+        /** Steps that ended short, for the harness to compare; and the operation running, to name them by. */
+        final List<String> notes = new ArrayList<>();
+        String context = "the start";
 
         Player(String name) {
             this.name = name;
@@ -354,11 +362,22 @@ public final class CommandExecClient {
             messages.addAll(withoutBookkeeping(step.get(0)));
             messages.addAll(withoutBookkeeping(step.get(1)));
             long deadline = System.nanoTime() + TIMEOUT_NANOS;
+            long from = until - n, last = from, moved = System.nanoTime();
             while (true) {
                 List<Component> poll = batch(List.of("time query gametime")).get(0);
                 String time = argument(poll, "commands.time.query.gametime", 0);
                 messages.addAll(withoutBookkeeping(poll));
-                if (time != null && Long.parseLong(time) >= until) return messages;
+                long now = time == null ? last : Long.parseLong(time);
+                if (now >= until) return messages;
+                if (now != last) {
+                    last = now;
+                    moved = System.nanoTime();
+                } else if (System.nanoTime() - moved > STALL_NANOS) {
+                    // The step ended short: noted (vanilla always steps them all), and the rest stepped.
+                    notes.add("after " + context + ": tick step " + n + " moved the game time " + (now - from) + " tick(s)");
+                    batch(List.of("tick step " + (until - now)));
+                    moved = System.nanoTime();
+                }
                 if (System.nanoTime() > deadline) {
                     throw new IllegalStateException("the game time did not reach " + until + "; the last reply: "
                         + poll.stream().map(Component::getString).toList() + ", to `tick step`: "
