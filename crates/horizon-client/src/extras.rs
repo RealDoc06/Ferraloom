@@ -1,7 +1,7 @@
 //! Horizon's optional extras (minimap, lighting, inventory tools): their
 //! settings, kept in `horizon-extras.txt` next to `options.txt` so that file
 //! stays exactly vanilla's, and the logic behind them. Every extra is off by
-//! default; see `docs/extras.md`. Horizon's own switches outside the Extras page
+//! default. Horizon's own switches outside the Extras page
 //! (No AI, Agent Control, Discord Rich Presence) are kept here too.
 use std::{fs, path::Path};
 
@@ -89,7 +89,7 @@ pub struct Extras {
     pub sort: bool,
     /// A vanilla key name: sorts the part under the cursor.
     pub sort_key: String,
-    /// No AI: every AI feature hidden and off (`horizon_core::no_ai`; the launcher writes it too).
+    /// No AI: every AI feature hidden and off (`horizon_core::no_ai`).
     pub no_ai: bool,
     /// Opens the control socket for scripts (off by default; `--control-socket` always opens it).
     pub agent_control: bool,

@@ -7,7 +7,7 @@ section has one page per surface, plus the rules every surface follows:
 
 | Surface | For | API today | Stability | Reference |
 | --- | --- | --- | --- | --- |
-| [Mods](mods.md) | mod authors | WIT `horizon:mods@0.1.0`, manifest `api` 0.1 (code) and 0.2 (content) | preview | [mods-reference.md](mods-reference.md) (generated) |
+| [Mods](mods.md) | mod authors | WIT `horizon:mods@0.1.0`, manifest `api` 0.2 (content) and 0.3 (server mods, experimental) | preview | [mods-reference.md](mods-reference.md) (generated) |
 | [Servers](server.md) | hosts, panels, bots | `horizon-server` commands, `server.toml`, control API `/api/v1` | stable | [server-reference.md](server-reference.md) (generated) |
 | [Data formats](data-formats.md) | tools that read Horizon's files | benchmark reports, mod packages, server settings, signed checksums | stable or preview, per format | on that page |
 
@@ -15,18 +15,16 @@ section has one page per surface, plus the rules every surface follows:
 
 - **From the people who use them.** Each API starts from what a mod author, a pack author, a server host or an agent
   needs to do, written down as tasks ("a host backs up the world from a script"), and from how Horizon is built:
-  Rust, wgpu, WebAssembly components and a server thread that runs every world. A function exists because a task
+  Rust, WebAssembly components and one server that runs every world. A function exists because a task
   needs it.
 - **Our own design.** Horizon's APIs are not modelled on any other project's. Contributors may know other mod
-  loaders, renderers and server platforms exist, but their source and API references are never read, copied or
+  loaders and server platforms exist, but their source and API references are never read, copied or
   paraphrased here, and our names, shapes and docs are not taken from theirs. Vanilla Minecraft 26.3 is the reference for game
   concepts: ids, commands, `server.properties`, data packs and resource packs.
 - **Safe by default.** Mods run in a sandbox and can only use the capabilities their manifest declares; the control
   sockets listen on this computer only, behind a token; nothing here is on by default where it would change vanilla's
-  look or behaviour.
-- **Free when unused.** An API nobody uses costs nothing per tick or per frame: no engine, no thread, no allocation.
-- **One contract for every mode.** In-frame single player, the server thread, LAN and the dedicated server run the
-  same gameplay code ([AGENTS.md](../../AGENTS.md)), so a server-side API serves all of them.
+  behaviour.
+- **Free when unused.** An API nobody uses costs nothing per tick: no engine, no thread, no allocation.
 
 ## References are generated
 
@@ -45,7 +43,3 @@ reference's diff. The guides (overview, how-to, examples) are written by hand.
 Every page has the same parts: **Overview** (what you can build), **Guide** (where to start), **Reference**,
 **Examples**, **Stability** (the level of each part, per [stability.md](stability.md)), **Changelog** and
 **Not there yet** (what is planned, so nobody builds on a guess).
-
-The website shows these pages at [playhorizon.dev/docs/api](https://playhorizon.dev/docs/api), built from this
-folder, and a summary for players and authors at [playhorizon.dev/docs/apis](https://playhorizon.dev/docs/apis)
-(in the website's repository, horizon-rust/horizon-site).

@@ -1,9 +1,8 @@
 //! Repository tasks, run with `cargo run -p xtask -- TASK`.
 //!
-//! `package-server ENGINE OUTDIR`: a server folder (docs/server.md): the server build of the game
-//! (`cargo build --release -p horizon-client --no-default-features`, without sound or controllers)
-//! as horizon-engine, with horizon-prepare and horizon-server from beside it, the exporters
-//! horizon-prepare compiles and its sources. It holds none of Minecraft's files: hosts prepare those
+//! `package-server ENGINE OUTDIR`: a server folder (docs/server.md): the engine
+//! (`cargo build --release -p horizon-client`) as horizon-engine, with horizon-prepare and
+//! horizon-server from beside it, the exporters horizon-prepare compiles and its sources. It holds none of Minecraft's files: hosts prepare those
 //! from their own copy. .github/workflows/game-build.yml makes the release folder with it.
 
 use std::fs;

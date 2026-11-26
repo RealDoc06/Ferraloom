@@ -1,4 +1,4 @@
-//! `horizon-shaders.toml`, a shader pack's manifest (schema 1, docs/shaders.md).
+//! `horizon-shaders.toml`, a shader pack's manifest (schema 1).
 use serde::Deserialize;
 
 /// The manifest's file name at the root of a pack.

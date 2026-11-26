@@ -4,7 +4,7 @@
 //! A mod needs the level of the newest function it imports, so a mod that
 //! calls a function this Horizon doesn't have is refused with "update
 //! Horizon" instead of a linking error, and the registry lists each
-//! version's level so the launcher can tell before it installs.
+//! version's level so an installer can tell before it installs.
 
 /// The newest level this Horizon serves.
 pub const LEVEL: u32 = 7;
@@ -62,7 +62,7 @@ pub const FUNCTIONS: [(&str, u32); 46] = [
     ("render.set-far-terrain", 7),
 ];
 
-/// What the game's program carries so the launcher can read its level
+/// What the game's program carries so a tool can read its level
 /// without running it: `horizon-mod-api-level:0001;` (four digits). A
 /// program from before the mark serves level 0.
 pub const MARK: [u8; 27] = {

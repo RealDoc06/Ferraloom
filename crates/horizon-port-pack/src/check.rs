@@ -1,4 +1,4 @@
-//! One mod jar on its own, as the launcher's mod browser installs it: what
+//! One mod jar on its own: what
 //! of it Horizon runs, said before install (Works, Partly, Doesn't run),
 //! from the jar itself. The jar is carried over ([`crate::carry`]) into a
 //! folder content mod, and its classes are read ([`crate::classes`]) for

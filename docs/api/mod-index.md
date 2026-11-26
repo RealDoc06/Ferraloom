@@ -1,9 +1,9 @@
 # The registry index and `.hpack`
 
-Horizon's registry lists what is made for Horizon and reviewed: mods (`.hmod`), modpacks (`.hpack`), resource packs
-and Horizon shader packs (`.hshader`). Submissions are pull requests in
-[horizon-rust/horizon-mods](https://github.com/horizon-rust/horizon-mods); merging one publishes it. The launcher and the
-website read one file, `index.json`, which that repository's CI builds. The Rust types and every check below are
+Horizon's registry listed what was made for Horizon and reviewed: mods (`.hmod`), modpacks (`.hpack`), resource
+packs and Horizon shader packs (`.hshader`). Submissions were pull requests in `horizon-rust/horizon-mods`, which
+went with upstream; its CI built one file, `index.json`, which Horizon's launcher and website read. The engine
+still reads an index to install the official mods that replaced extras (`moved_extras.rs`). The Rust types and every check below are
 `horizon_mods::index` and `horizon_mods::modpack` (feature `index`); the sample is
 `crates/horizon-mods/tests/index/index-v1.json`, read by the tests with the files it lists.
 
@@ -48,7 +48,7 @@ Level: preview ([stability.md](stability.md)). Schema 1.
 | `game` | The Minecraft version it is for. |
 | `requires` | A modpack's mods: `{ id, version, sha256 }`, each a version in this index with that hash. |
 | `file` | A plain name with the kind's extension (`.hmod`, `.hpack`, `.zip`), an `https://` URL, the size (at most 64 MiB), the lowercase hex SHA-256, and the `.minisig` text when the project has a key. |
-| `revoked` | Files taken down: one file by `sha256`, or every version of `id` without it. The launcher refuses to install them and turns installed copies off with the reason. |
+| `revoked` | Files taken down: one file by `sha256`, or every version of `id` without it. An installer refuses to install them and turns installed copies off with the reason. |
 
 Readers ignore fields they don't know, so an optional field can be added to schema 1. Renaming or removing a field, or
 changing what one means, makes schema 2.
@@ -70,7 +70,7 @@ The game still checks a mod's component imports against its capabilities when it
 
 ## `.hpack`
 
-A zip holding `horizon-modpack.toml` and, optionally, `overrides/`. The mods are not inside: the launcher downloads
+A zip holding `horizon-modpack.toml` and, optionally, `overrides/`. The mods are not inside: an installer downloads
 each from the index and checks it as above.
 
 ```toml
@@ -91,12 +91,12 @@ on = true                   # optional, default true: turned on in the profile's
 
 Unknown keys are refused. `overrides/` may hold only `options.txt`, `horizon-graphics.txt`, `horizon-extras.txt`,
 `resourcepacks/<name>.zip` and `horizon-mods/.horizon-mod-data/<a listed mod>/...` (a mod's own saved settings,
-capability `storage`), each at most 64 MiB and 256 MiB in all; anything else refuses the pack. The launcher copies
-them into the profile's game folder.
+capability `storage`), each at most 64 MiB and 256 MiB in all; anything else refuses the pack. An installer copies
+them into the game folder.
 
 ## The registry repository
 
-[horizon-rust/horizon-mods](https://github.com/horizon-rust/horizon-mods) holds one `mods/<id>.toml` per project, written by
+`horizon-rust/horizon-mods` held one `mods/<id>.toml` per project, written by
 the submission form or by hand, and `revoked.toml`. What an entry can't vouch for is read from its file by the kind's
 own check (`index::inspect`): a mod's API, side and capabilities, a modpack's mods, the size. Types and rules:
 `horizon_mods::index::registry`.

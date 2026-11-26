@@ -4,8 +4,8 @@
 //! animation steps vanilla runs on the client (`Entity.onSyncedDataUpdated`,
 //! `handleEntityEvent` and the per tick animation states). The server's half
 //! is `game/lan.rs` (`mob_meta`, with `pose_id` here for index 6) and
-//! `MobEvent::EntityEvent`; the client's half is `game/remote_mob_data.rs`,
-//! `game/remote.rs` (`C::EntityEvent`) and `client_tick` here.
+//! `MobEvent::EntityEvent`; the client's half is `client_tick` here (the
+//! client that played it was removed with the rest of the client).
 //!
 //! To animate another species for a client:
 //! - send its synched data in `mob_meta` and read it in

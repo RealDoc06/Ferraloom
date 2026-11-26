@@ -1,4 +1,4 @@
-//! The steps on a work folder, as the command line and the launcher run
+//! The steps on a work folder, as the command line runs
 //! them. Each one reads what the earlier steps wrote and says what it did
 //! through `log`, one line at a time.
 use crate::{carry, fetch, import, inventory, modrinth, oracle, report};
@@ -8,7 +8,7 @@ use std::{
     path::Path,
 };
 
-/// Where a step's lines go: the terminal, or the launcher's log.
+/// Where a step's lines go: the terminal, or a caller's log.
 pub type Log<'a> = &'a dyn Fn(String);
 
 pub fn write_json(path: &Path, value: &impl serde::Serialize) -> Result<(), String> {

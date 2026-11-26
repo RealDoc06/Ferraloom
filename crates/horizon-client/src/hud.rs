@@ -500,7 +500,7 @@ impl HudAtlas {
         if full {
             Self::slots(&mut images, crate::trims::slot_size(root));
         }
-        // Blurred sprites are sampled linearly in the atlas (screen.wgsl): a
+        // Blurred sprites are sampled linearly in the atlas: a
         // border wrapped from their own edges keeps the filter off their
         // neighbours, as repeat addressing of their own texture would.
         let mut bordered = std::collections::HashSet::new();

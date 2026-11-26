@@ -4,8 +4,8 @@ mod game;
 
 use horizon_client::{crash, logging};
 
-/// The mod API level this game serves, kept in the program for the launcher
-/// to read without running it (`horizon_mods::api_level::MARK`). `main`
+/// The mod API level this engine serves, kept in the program so a tool can
+/// read it without running it (`horizon_mods::api_level::read_mark`). `main`
 /// reads it, so the linker keeps it.
 static MOD_API_LEVEL: [u8; 27] = horizon_mods::api_level::MARK;
 
@@ -48,11 +48,11 @@ fn main() {
         std::process::exit(2);
     }
     // The dedicated server logs in its own folder, as vanilla's does; a
-    // component harness in the game home.
+    // fixture (HORIZON_DISPENSE_FIXTURE, HORIZON_SCULK_FIXTURE) in the game home.
     let (home, side, thread) = if dedicated {
         (std::path::PathBuf::from("."), "server", "Server thread")
     } else {
-        (logging::game_home(), "client", "Render thread")
+        (logging::game_home(), "fixture", "Main thread")
     };
     if !help {
         logging::init(&home, thread);

@@ -155,7 +155,8 @@ class ParityRunnerTests(unittest.TestCase):
     def test_named_only_harnesses_are_listed_from_the_host_config(self):
         self.assertEqual(parity.named_only({"named_only": {"lan_integration": "slow"}}), {"lan_integration": "slow"})
         self.assertEqual(parity.named_only({}), {})
-        self.assertIn("lan_integration", parity.named_only(parity.host_config()))
+        named = parity.named_only(parity.host_config())
+        self.assertLessEqual(set(named), {parity.base_name(name) for name in parity.harnesses()})
 
     def test_a_pass_from_another_worktree_counts_only_for_the_same_content(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -435,7 +436,7 @@ class SoloTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"PARITY_SOLO": ""}), mock.patch.object(parity, "SOLO_CPUS", 10 ** 6):
             self.assertEqual(parity.solo_harnesses(config), {"remote_fireworks"})
         solo = parity.host_config().get("solo", {})
-        self.assertTrue(solo and set(solo) <= {parity.base_name(name) for name in parity.harnesses()})
+        self.assertLessEqual(set(solo), {parity.base_name(name) for name in parity.harnesses()})
 
 
 if __name__ == "__main__":

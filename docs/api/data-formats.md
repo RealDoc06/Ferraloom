@@ -9,7 +9,7 @@ worlds. Each entry names its version field, its documentation and its level ([st
 | --- | --- | --- | --- | --- |
 | Benchmark report | the benchmark's output, the local log, uploads | `"format": "horizon-benchmark-report"`, `"version": 1` | stable | [benchmark-report.md](../benchmark-report.md) |
 | Mod package | `.hmod`: a zip with `horizon-mod.toml`, `mod.wasm`, `assets/`, `data/` | the manifest's `api` | preview | [mods.md](../mods.md#the-manifest), [mods-reference.md](mods-reference.md) |
-| Mods turned on | `horizon-mods.txt` | none | preview | [mods.md](../mods.md#playing-with-mods) |
+| Mods turned on | `horizon-mods.txt` | none | preview | [mods.md](../mods.md#running-mods-on-a-server) |
 | Server settings | `server.toml` | its keys | stable | [server-reference.md](server-reference.md) |
 | Control endpoints | `.horizon/api.json` | none | preview | [server-reference.md](server-reference.md) |
 | Release checksums | `SHA256SUMS`, `SHA256SUMS.sig` on releases since signing began (#1011) | the signed text names the tag | stable | [security.md](../security.md) |

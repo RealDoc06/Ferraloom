@@ -14,8 +14,8 @@ const LAUNCHER_HINT: &str =
     "Horizon does not download the game: play {version} once in the launcher you play \
 Minecraft Java Edition with so it downloads the game's files, then rerun. Horizon reads the \
 official launcher's folder, ATLauncher's and the CurseForge app's; for Prism Launcher, MultiMC, \
-the Modrinth App or GDLauncher, prepare from the Horizon launcher, which finds their files. If your launcher keeps \
-them in another folder, pass --minecraft-dir or set HORIZON_MINECRAFT_DIR.";
+the Modrinth App, GDLauncher or a launcher that keeps them in another folder, pass --minecraft-dir or set \
+HORIZON_MINECRAFT_DIR.";
 const SERVER_HINT: &str = "Horizon does not download the game: download the {version} server jar yourself (minecraft.net/download/server \
 while {version} is the current release, otherwise the downloads.server.url in your launcher's \
 versions/{version}/{version}.json), then pass --server-jar PATH or set HORIZON_SERVER_JAR.";
@@ -191,7 +191,6 @@ fn layouts(folder: &Path, version: &str) -> [GameFiles; 2] {
 /// packages and Flatpak start it in.
 fn launcher_folders() -> Vec<(&'static str, PathBuf)> {
     let mut folders = vec![("the official launcher", minecraft_dir(None))];
-    // The same folders as the Horizon launcher's (launcher/src/sources.rs `known_folders`).
     let atlauncher: Vec<PathBuf> = if cfg!(target_os = "macos") {
         let app = Path::new("Applications/ATLauncher.app/Contents/Java");
         vec![
@@ -316,8 +315,7 @@ pub(crate) fn import_manifest(lock: &Lock, files: &GameFiles) -> Result<Value, S
             if !(destination.exists() && lock.manifest_accepted(&digest(&destination, "sha1")?)) {
                 return Err(format!(
                     "{} is not a {version} version file Horizon knows (sha1 {checksum}): your \
-                     launcher may have rewritten it, or Mojang republished it. Prepare from the \
-                     Horizon launcher, which downloads Mojang's own, or save \
+                     launcher may have rewritten it, or Mojang republished it. Save \
                      https://piston-meta.mojang.com/v1/packages/{pinned}/{version}.json as {} \
                      and prepare again.",
                     source.display(),

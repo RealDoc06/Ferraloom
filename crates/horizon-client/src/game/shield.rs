@@ -289,7 +289,7 @@ impl Game<'_> {
             0
         };
         if ticks > 0 {
-            // `shield_cooldown` keeps the raise gate (and lan_e2e's view);
+            // `shield_cooldown` keeps the raise gate;
             // the item cooldown is vanilla's, and what the client is sent.
             self.shield_cooldown = ticks;
             self.add_item_cooldown(blocking_with, ticks as i32);

@@ -45,6 +45,8 @@ PROPERTIES = {
     'simulation-distance': '2',
     'max-players': '5',
     'pause-when-empty-seconds': '-1',
+    # No watchdog: vanilla kills a server whose tick (a slow "Saving the game") passes 60 s.
+    'max-tick-time': '-1',
 }
 # The URL is never fetched: the servers only offer it.
 URL = 'http://127.0.0.1:9/horizon-test-pack.zip'

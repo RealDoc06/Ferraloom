@@ -55,6 +55,8 @@ PROPERTIES = {
     'max-players': '8',
     'allow-flight': 'true',
     'pause-when-empty-seconds': '-1',
+    # No watchdog: vanilla kills a server whose tick (a slow "Saving the game") passes 60 s.
+    'max-tick-time': '-1',
 }
 # Commands Ferraloom still gets wrong (the command as in the corpus, or "COMMAND #N" for its Nth occurrence -> why).
 # Their mismatches are reported, and do not fail the run. TICKS_SHORT covers every `tick` whose step ended short.

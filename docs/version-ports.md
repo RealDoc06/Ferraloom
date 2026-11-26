@@ -7,7 +7,7 @@ work items, each a GitHub issue and a Kira card. This page is the design; `tools
 (status at the end).
 
 The downloads are for development only, on the Mac mini: nothing from them is ever committed, published or shipped
-to players. Players still prepare their own copy from their official launcher (`horizon-prepare`), as today.
+to anyone. Hosts still prepare their own copy from their Minecraft files (`horizon-prepare`), as today.
 
 ## How Horizon pins and prepares 26.3 today
 
@@ -280,9 +280,8 @@ been switched to NEW (the version store's files are copied in, then `lab.py deco
 sources), and a playtest shows a world loads and a vanilla NEW client can join a Horizon LAN world.
 
 A Horizon release then ships as usual (`docs/release-flow.md`), labelled `feature` with "Minecraft NEW" in its
-title. Its `research-lock.json` makes `horizon-prepare` ask for NEW, so players must have played NEW once in the
-official launcher; the launcher already reads each release's game version from its `research-lock.json`, so players
-who haven't can keep the previous Horizon release. Supporting two Minecraft versions in one build is out of scope.
+title. Its `research-lock.json` makes `horizon-prepare` ask for NEW, so hosts must have NEW's files; a host who
+hasn't can keep the previous release. Supporting two Minecraft versions in one build is out of scope.
 
 ## Turning on the daily agent
 
@@ -303,17 +302,17 @@ on each run (`tools/ci/version-port-daily.sh`):
 It never runs `publish --yes`, never pushes and never changes `shared-local/`. `HORIZON_PORT_VERSION=V` ports V at
 once (by hand, or to replay a version); `HORIZON_PORT_REF` checks out another ref than `origin/main`.
 
-To turn it on, on the Mac mini (as Ludovic, once approved):
+To turn it on, on a Mac (upstream ran it on its Mac mini):
 
 ```sh
 # 1. The label publish files issues under (once):
-gh label create version-port --repo horizon-rust/horizon --color 5319e7 \
+gh label create version-port --repo RealDoc06/Ferraloom --color 5319e7 \
   --description "Work to port Horizon to a new Minecraft release (tools/version_port.py publish)"
 # 2. The script, as a copy from main (it updates its own worktree, so it never runs from a checkout):
-curl -fsSL https://raw.githubusercontent.com/horizon-rust/horizon/main/tools/ci/version-port-daily.sh \
+curl -fsSL https://raw.githubusercontent.com/RealDoc06/Ferraloom/main/tools/ci/version-port-daily.sh \
   -o ~/code/horizon-parity/version-port-daily.sh
 # 3. The agent:
-curl -fsSL https://raw.githubusercontent.com/horizon-rust/horizon/main/tools/ci/dev.horizon.version-port.plist \
+curl -fsSL https://raw.githubusercontent.com/RealDoc06/Ferraloom/main/tools/ci/dev.horizon.version-port.plist \
   | sed "s|@HOME@|$HOME|g" > ~/Library/LaunchAgents/dev.horizon.version-port.plist
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.horizon.version-port.plist
 # A run now, to see it work (log: ~/Library/Logs/horizon-version-port.log):

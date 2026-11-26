@@ -113,8 +113,8 @@ pub fn version() -> String {
 }
 
 /// The release this binary came with: the version release.yml built in (docs/versioning.md), else
-/// the folder the launcher installed it in, named after the tag (releases from before 0.2). A
-/// nightly is its version as the launcher installs it (`nightly-2026-10-28-0c02067`).
+/// the release folder it was installed in, named after the tag (releases from before 0.2). A
+/// nightly is `nightly-<date>-<commit>` (`nightly-2026-10-28-0c02067`).
 pub fn release_tag() -> Option<String> {
     if let Some(nightly) = horizon_core::release::nightly_version() {
         return Some(nightly);

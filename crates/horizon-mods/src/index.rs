@@ -1,8 +1,8 @@
 //! The mod registry's index, `index.json` (docs/api/mod-index.md): every
 //! reviewed mod and modpack, its versions, the file of each with its size,
-//! SHA-256 and minisign signature, and the files taken down. The launcher
-//! reads it to browse and install, the website to show it, and the
-//! registry's CI writes it.
+//! SHA-256 and minisign signature, and the files taken down. The engine
+//! reads it to install the official mods that replaced extras
+//! (`moved_extras.rs`), and the registry's CI writes it.
 //!
 //! [`check_file`] is what a file must pass before it is installed: its size
 //! and hash are the ones the index lists, its signature verifies against the
@@ -48,7 +48,7 @@ pub enum Kind {
     /// A resource pack (`.zip` with `pack.mcmeta`) made or tested for Horizon.
     ResourcePack,
     /// A Horizon shader pack (`.hshader`, the native WGSL format of
-    /// docs/shaders.md; not the shaders/-folder packs, which stay on Modrinth).
+    /// crates/horizon-shader-api; not the shaders/-folder packs, which stay on Modrinth).
     Shader,
     Other(String),
 }
@@ -184,7 +184,7 @@ pub struct File {
 }
 
 /// A file taken down: by hash, or every version of `id` when `sha256` is
-/// None. The launcher refuses to install it and turns installed copies off.
+/// None. An installer refuses to install it and turns installed copies off.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Revoked {
     pub id: String,
@@ -493,8 +493,8 @@ pub fn check_file(
 }
 
 /// What a file says about itself, read by its kind's own check
-/// ([`inspect`]). The registry's CI writes these into the index; the
-/// launcher compares them with the index before it installs.
+/// ([`inspect`]). The registry's CI writes these into the index; an
+/// installer compares them with the index before it installs.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Facts {
     /// A mod's or a modpack's manifest id; None for a resource pack.

@@ -46,9 +46,8 @@ hooks become consumers of owned effects, never dependencies of the server.
 
 Separate immutable gameplay resources from `Resources`/`PackResources`: block
 facts, registries, recipes and collision data remain shared `Arc` values;
-renderers, baked models, audio, input, HUD and shaders stay client-only. The
-current `--no-default-features` build disables audio/controllers but still links
-client libraries; that is an interim build requirement, not the final boundary.
+renderers, baked models, audio, input, HUD and shaders were client-only and
+were removed with the client in November 2026.
 
 ## Live ownership
 
@@ -165,7 +164,7 @@ there previously prevented progress forever. Real single-player play was not
 affected: its loop renews the allowance every server tick, startup precedes the
 first budget, and saving already drains independently.
 
-On Linux, `horizon-threads` captures the launcher's allowed CPU mask before
+On Linux, `horizon-threads` captures the process's inherited CPU mask before
 workers start. The tick chooses its lowest logical CPU; streaming, save, encode
 and network helper lanes exclude that CPU and its SMT siblings. All masks stay
 inside the original `taskset`/cgroup intersection. Pool sizes also respect the

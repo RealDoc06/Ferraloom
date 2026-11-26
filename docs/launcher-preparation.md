@@ -1,4 +1,4 @@
-# Launcher resource preparation
+# Release exporters for resource preparation
 
 Release folders include `exporters/server`, `exporters/client` and an integrity manifest.
 These contain only Horizon's original Java exporter classes. Minecraft jars, libraries,

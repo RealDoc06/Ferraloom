@@ -1,5 +1,5 @@
-//! The Microsoft account the launcher signed in, handed over in a session
-//! file (docs/microsoft-account.md), and the Minecraft services call
+//! A Microsoft account's session, handed over in a session file, and the
+//! Minecraft services call
 //! online-mode servers need: authlib's MinecraftServicesSessionService.joinServer
 //! through the services discovery document. The access token stays in this
 //! process's memory: it is never logged, printed or written anywhere.

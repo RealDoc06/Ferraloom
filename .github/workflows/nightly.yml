@@ -71,7 +71,7 @@ jobs:
         run: |
           echo "since=$(date +%Y-%m-%dT%H:%M:%S)" >> "$GITHUB_OUTPUT"
           set +e
-          # lan_integration (the whole lan_e2e suite) takes ~2,400 s under load, past the usual 1,800.
+          # A slow harness under load can pass the usual 1,800 s.
           python3 tools/parity.py --all --timeout 3000 2>&1 | tee "$RUNNER_TEMP/audit.log"
           echo "exit=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
           { echo '```'; tail -40 "$RUNNER_TEMP/audit.log"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

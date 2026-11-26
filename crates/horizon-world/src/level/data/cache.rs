@@ -3,8 +3,7 @@
 //! The source resources remain authoritative. Failed reads, unsupported
 //! versions, corrupt payloads and write failures always use the normal loader.
 //! The snapshot lives in the game's own cache folder ([`set_dir`]), never in the
-//! resource folder: that one is shared by worktrees and copied between installed
-//! versions by the launcher. Its key includes the running executable, so a build
+//! resource folder: that one is shared by worktrees and installed versions. Its key includes the running executable, so a build
 //! that resolves the tables differently never reads another build's snapshot.
 use super::*;
 use serde::{Deserialize, Serialize};

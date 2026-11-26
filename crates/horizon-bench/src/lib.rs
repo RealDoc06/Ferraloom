@@ -1,6 +1,6 @@
 //! The benchmark report format, version 1 (docs/benchmark-report.md).
 //!
-//! One JSON file per run, the same for the game, the launcher and `tools/perf_bench.py`: the local log
+//! One JSON file per run, the same for every program that writes one: the local log
 //! a player can attach, and, with consent, what the telemetry upload sends ([`Report::for_upload`]).
 //! It holds summaries and fixed-edge histogram counts, never raw frame streams.
 

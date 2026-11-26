@@ -37,6 +37,8 @@ PROPERTIES = {
     'simulation-distance': '4',
     'spawn-protection': '0',
     'pause-when-empty-seconds': '-1',
+    # No watchdog: vanilla kills a server whose tick (a slow "Saving the game") passes 60 s.
+    'max-tick-time': '-1',
 }
 KINDS = ['minecart', 'chest_minecart', 'furnace_minecart', 'hopper_minecart', 'tnt_minecart', 'spawner_minecart',
          'command_block_minecart']

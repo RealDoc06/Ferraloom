@@ -1,6 +1,5 @@
-//! The check a pack passes before it runs: in the game when it loads (a pack
-//! that fails keeps the last good one drawing), in the launcher before it
-//! installs, in the registry's CI, and in `horizon-shader check`.
+//! The check a pack passes before it is published: in the registry's CI,
+//! `cargo horizon-mod` and `horizon-shader check`.
 //!
 //! Each stage is built as the renderer builds it, parsed and validated by
 //! naga, checked against its signature and the API's rules (no bindings, no

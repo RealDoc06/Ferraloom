@@ -109,8 +109,8 @@ range futures must not be deleted to improve a benchmark.
 Sources: `world/level/chunk/status/ChunkPyramid.java:11-45`;
 `ChunkStep.java:75-144`; `ChunkDependencies.java:11-51`;
 `server/level/ChunkMap.java:128,296-318,362-364,680-715`;
-`server/level/ChunkHolder.java:273-325`. Ferraloom's committed
-`crates/ferraloom-game/src/level/generation/pyramids.tsv` captures these arrays.
+`server/level/ChunkHolder.java:273-325`. The pre-fork port's
+`pyramids.tsv` (crate `ferraloom-game` on branch `restart`) captures these arrays.
 
 Preserve the native queue behavior: lower queue level first, insertion order
 between chunk batches at the same priority, and insertion order inside each

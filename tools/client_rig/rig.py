@@ -464,7 +464,7 @@ def server_start(args):
         os.mkfifo(fifo)
     scratch = RIG / 'server-home'
     env = dict(os.environ, HORIZON_HOME=str(scratch / 'home'), XDG_DATA_HOME=str(scratch / 'data'),
-               XDG_CONFIG_HOME=str(scratch / 'config'), HORIZON_NO_AUDIO='1', HORIZON_LAUNCHER_NO_SELF_UPDATE='1',
+               XDG_CONFIG_HOME=str(scratch / 'config'),
                JAVA_HOME=str(JDK))
     (RUN / 'server.out').unlink(missing_ok=True)
     console = os.open(fifo, os.O_RDWR)  # read-write: the server never sees EOF between commands
