@@ -75,8 +75,9 @@ def main():
     parser.add_argument('--engine', type=Path, help='an already-built engine instead of compiling the fast profile')
     parser.add_argument('--keep', action='store_true', help='keep the run folder')
     args = parser.parse_args()
-    shutil.rmtree(RUN, ignore_errors=True)
-    RUN.mkdir(parents=True)
+    RUN.mkdir(parents=True, exist_ok=True)
+    for folder in ('v0', 'vv', 'h'):
+        shutil.rmtree(RUN / folder, ignore_errors=True)
     _, _, engine, _ = servers(RUN, args.engine)
     world = vanilla_world()
     expected = rolled(RUN / 'vv', world)

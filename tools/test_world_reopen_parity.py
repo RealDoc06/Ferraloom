@@ -114,8 +114,7 @@ def main():
     parser.add_argument('--engine', type=Path, help='an already-built engine instead of compiling the fast profile')
     parser.add_argument('--keep', action='store_true', help='keep the run folder')
     args = parser.parse_args()
-    shutil.rmtree(RUN, ignore_errors=True)
-    RUN.mkdir(parents=True)
+    RUN.mkdir(parents=True, exist_ok=True)  # each side's folder starts afresh (server_dir)
     _, vanilla, ferraloom, _ = servers(RUN, args.engine)
     failures = 0
     sides = {}
