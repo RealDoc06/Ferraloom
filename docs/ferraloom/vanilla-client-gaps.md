@@ -1,222 +1,234 @@
-# Vanilla client gaps
+# Vanilla gaps
 
-What a vanilla 26.3 client sees differently on Ferraloom's dedicated server than on Mojang's. Audited on
-`ferraloom/next` at `9981c0b55` (2026-11-25), read-only.
+The one tracked list of known differences between Ferraloom and the vanilla 26.3 dedicated server, as a
+vanilla client, a Spigot plugin, an operator or a server admin sees them. Anything that only concerns
+Horizon's own client is out of scope.
 
-## Method and evidence
+Verified against `ferraloom/next` at `5d5371c7b` (2026-11-26): every **Fixed** row's commit is an ancestor of
+that head, and every **Open** row was checked in the code unless it says otherwise.
 
-- **Serverbound.** Every `handle*` of `ServerGamePacketListenerImpl`, `ServerCommonPacketListenerImpl` and
-  `ServerConfigurationPacketListenerImpl` was matched to its path: `lan/conn.rs` (`Player::receive`), the
-  hub's `process_inbox` (`lan/hub.rs:2451`), then `Game::lan_guest_packet` (`game/lan_actions.rs:1331`),
-  whose last arm `_ => {}` (`lan_actions.rs:1836`) drops whatever is left. Ids with no `Serverbound` variant
-  decode as `Unknown` and fall through to that arm too.
-- **Clientbound.** Every id in `horizon-protocol/src/ids.rs` was searched for construction (`C::Name(`,
-  `raw(ids::NAME`) in the server code, skipping the client's `remote*.rs` and `net.rs`. 23 ids are never sent.
-- **Entity data.** The player's synced data (`hub.rs:1876 player_state`, `hub.rs:2217 sync_player_state`)
-  was checked index by index against `Entity`, `LivingEntity`, `Avatar` and `Player`'s `defineId` list.
-- **server.properties.** Each field of `horizon-server-files/src/properties.rs` was searched for a reader.
-- **Confirmed** below means both sides were read: the vanilla trigger in the decompiled 26.3 server and the
-  missing or different Ferraloom path. **Inferred** means the client-side effect comes from knowledge of the
-  vanilla client, since only the server is decompiled. No harness was run (see the end).
-- Combat gaps are listed but owned by **fix-combat**, and were not investigated further.
+**Adding a gap.** Give it the next free number (the first free one is **#118**), put it in its area, ranked by how
+visible it is to players, and fill every column: what is seen and how vanilla differs, the vanilla
+reference (`Class#method` from `.cache/decompiled/26.3/`), where it lives in our code, a size and who found
+it. When it is fixed, move it to **Fixed** with the commit and the harness case that proves it. Numbers are
+never reused: #1 to #32 are the original audit's (`9b35c1726`), so old references still resolve.
 
-## Ranked gaps
+Sizes: S under a day, M a few days, L a week or more. Sources: *audit* (the original audit), *combat*
+(sword cooldown), *A*, *B*, *C*, *D* (the fix clusters), *fperm* (function permission level), *found*
+(plugin foundation), *p-server*, *p-players*, *p-blocks*, *p-entities*, *p-inv* (the plugin areas), *orch*
+(the orchestrator's integration), *docs* (an existing doc).
 
-Size: S under a day, M a few days, L a week or more. "Harness" is the existing one to extend.
+## Open
 
-| # | Gap | What the player sees | Vanilla source | Ferraloom location | Evidence | Size | Harness |
-|---|---|---|---|---|---|---|---|
-| 1 | Server admin commands don't run in game | An op typing `/op`, `/deop`, `/ban`, `/ban-ip`, `/pardon`, `/banlist`, `/whitelist`, `/stop`, `/save-all`, `/save-on`, `/save-off`, `/transfer`, `/perf` or `/setidletimeout` gets "Unknown or incomplete command", though the command tree sent to the client offers them | `Commands#<init>` (`CommandSelection.DEDICATED` registers `OpCommand`, `BanPlayerCommands`, `StopCommand`, `TransferCommand`...) | Tree sends them: `lan/commands.rs:24` `DEDICATED_ONLY`. Executor lacks them: `horizon-command/src/vanilla.rs:46` `registered`. Guests reach only that: `lan_actions.rs:2140` `guest_command` → `run_command`. Only the console runs them: `game/dedicated.rs:892` | Confirmed (reading) | M | `test_server_ops_feedback_parity.py` (players are ops already) |
-| 2 | Hurt players don't flash for others | No red tint, hurt tilt or walk-animation kick on another player taking any damage (fall, fire, mobs, PvP) | `LivingEntity#hurtServer` → `ServerLevel#broadcastDamageEvent` (`sendToTrackingPlayersAndSelf`) | `damage_event` only for mobs: `game/lan.rs:2085`. The hurt guest gets `HurtAnimation` only: `lan_actions.rs:1011` | Confirmed (reading). Client effect inferred | S | `test_server_player_combat_parity.py`, `KnockbackClient` (two clients). Coordinate with fix-combat |
-| 3 | Player-stat scoreboard criteria never update for remote players | Objectives on `health`, `food`, `air`, `armor`, `xp`, `level` (health under names, in the tab list) stay empty or stale for every server player | `ServerPlayer#doTick` (`updateScoreForCriteria`) | `game/scoreboard.rs:359` `tick_scoreboard` reads only `self.player` as `PLAYER_NAME`, which on a dedicated server is nobody. `air` is hardcoded to 300 even for the host | Confirmed (reading) | S | `test_server_ops_feedback_parity.py` (its `LocatorBarClient` records `SetScore`) |
-| 4 | Spectators are sent to non-spectators | Survival players see spectating players (as floating heads) and learn where they are. Vanilla never pairs them | `ServerPlayer#broadcastToPlayer` | `lan/hub.rs:2027` `track_entities` adds every guest's state with no per-viewer game-mode filter. `lan/entity.rs` has none either | Confirmed (server). Client render inferred | S | `test_server_entities_parity.py` (EntityTranscript pairing) |
-| 5 | Spectators can't spectate entities | Left-clicking a mob in spectator mode does nothing, and `/spectate <target>` on a remote player says it succeeded but the camera doesn't move | `handleSpectatorAction`, `ServerPlayer#setCamera` (sends `ClientboundSetCameraPacket`), `SpectateCommand` | No `SpectatorAction` variant (falls to `lan_actions.rs:1836`). `SET_CAMERA` never sent. `commands/extra.rs:159` `set_camera` moves only the local `Game` camera | Confirmed (reading) | M | `lan_e2e.py` (add a check) |
-| 6 | Held-item attribute modifiers not applied or synced (attack speed) | No attack cooldown indicator, and sword or axe timing feels instant. This is Doc's example | `LivingEntity#collectEquipmentChanges` → `UpdateAttributes` | No equipment modifiers in `game/lan_attributes.rs`, `lan/attributes.rs` or `player_on_equip` | Inferred | M | **Owned by fix-combat** |
-| 7 | No floating kick (`allow-flight` ignored) | Survival players with a fly hack never get "Flying is not enabled on this server". Vehicles too | `ServerGamePacketListenerImpl#tickPlayer` (`aboveGroundTickCount`, `getMaximumFlyingTicks`) | `properties.rs:29` `allow_flight` has no reader. No floating counter in `hub.rs:2659` `position_change` | Confirmed (reading) | S | `test_dedicated_server_parity.py` |
-| 8 | Freezing never synced | In powder snow: no frost vignette on your own screen, and other players don't shake or turn blue. The damage still happens | `LivingEntity#aiStep` (freezing, server-only) → `Entity.DATA_TICKS_FROZEN` (7) | Server simulates `ticks_frozen` (`motion.rs:364`) but neither `player_state` nor `sync_player_state` sends index 7. Mobs do: `game/lan.rs:935` | Confirmed (reading) | S | `test_server_entities_parity.py` |
-| 9 | Riding jump ignored | Horses and llamas don't rear or play their jump sound, and a camel's dash has no sound or dash pose for anyone. The jump itself works, since the client drives it | `handlePlayerCommand` `START/STOP_RIDING_JUMP` → `AbstractHorse#handleStartJump`, `Camel#handleStartJump`, `AbstractNautilus` | `lan/hub.rs:2571`: actions 3 and 4 hit `_ => {}`. The host-only version is `game/mounts.rs:275` | Confirmed (reading) | S | `lan_e2e.py` |
-| 10 | No chat or command spam kick | Spammers are never kicked with "disconnect.spam". `chat-spam-threshold-seconds` and `command-spam-threshold-seconds` are ignored | `#detectRateSpam`, `chatSpamThrottler`, `commandSpamThrottler` | `properties.rs:63-64` fields with no reader. Nothing in `lan/hub/chat.rs:185` `handle_chat`. Only the creative-drop throttler exists (`lan_actions.rs:1580`) | Confirmed (reading) | S | `test_secure_chat_parity.py` |
-| 11 | Stuck arrows and bee stingers never shown | No arrows sticking out of players or mobs after hits, and no stingers | `AbstractArrow#onHitEntity` → `LivingEntity#setArrowCount`, `Bee#doHurtTarget` → `setStingerCount`, `DATA_ARROW_COUNT_ID` (12), `DATA_STINGER_COUNT_ID` (13) | No arrow or stinger count anywhere (`projectiles.rs`, `arrows.rs`, `mobs/bee.rs`). Indices 12 and 13 never sent for living entities | Confirmed (reading) | M | `test_server_entities_parity.py` |
-| 12 | Shoulder parrots invisible | A tamed parrot that lands on a player vanishes from the world and shows on nobody's shoulder, the player's own included | `Player.DATA_SHOULDER_PARROT_LEFT/RIGHT` (19, 20), `ServerPlayer#setEntityOnShoulder` | `game/shoulders.rs:19` stores it in `player_extra`. Indices 19 and 20 never sent (`hub.rs:1876`) | Confirmed (reading) | S | `test_server_entities_parity.py` |
-| 13 | `/dialog` doesn't reach remote players | `/dialog show @a ...` reports success but no dialog opens, and `/dialog clear` does nothing | `ServerPlayer#openDialog` (`ClientboundShowDialogPacket`), `DialogCommand` | `commands/extra.rs:426` `cmd_dialog` opens it on the server's own `Game`. `SHOW_DIALOG` and `CLEAR_DIALOG` never sent | Confirmed (reading) | S | `server_e2e.py --check dialog` (reverse it: vanilla client, Ferraloom server) |
-| 14 | `/fillbiome` invisible until chunks reload | Grass, foliage and water colours and fog stay as before | `ChunkMap#resendBiomesForChunks` → `ClientboundChunksBiomesPacket` | `commands/terrain_cmds.rs:229` marks only local mesh sections dirty. `CHUNKS_BIOMES` never sent | Confirmed (reading) | S | `test_dedicated_server_parity.py` |
-| 15 | No reach or sanity checks on block use and digging | A modified client can place, use and mine blocks at any distance. The `block_interaction_range` attribute is ignored (a fixed 4.5 or 5) | `handleUseItemOn` (`isWithinBlockInteractionRange(pos, 1.0)`, hit within 1.0000001 of the block), `ServerPlayerGameMode#handleBlockBreakAction` | `lan_actions.rs:1473` builds a `forced_hit` that `game.rs:2237` `pick` trusts. `lan_actions.rs:1348` has no range check. Reach is hardcoded at `game.rs:2170` | Confirmed (reading) | S | `test_dedicated_server_parity.py` |
-| 16 | No build-limit message | Placing above Y 319 or below the floor fails silently instead of showing "Height limit for building is 320" | `handleUseItemOn` → `ServerPlayer#sendBuildLimitMessage` | No `build.tooHigh` or `build.tooLow` anywhere | Confirmed (reading) | S | `test_dedicated_server_parity.py` |
-| 17 | Code of conduct never shown | `enable-code-of-conduct=true` and its texts do nothing, so players never get the screen to accept | `ServerCodeOfConductConfigurationTask`, `DedicatedServer#readCodeOfConducts` | `properties.rs:31` with no reader. The configuration phase (`lan/conn.rs:1020`) sends no `CodeOfConduct` | Confirmed (reading) | S | `test_dedicated_server_parity.py` (login and config sequence) |
-| 18 | Death-screen score always 0 | "Score: 0" on the death screen whatever XP was earned | `Player#increaseScore` (from `giveExperiencePoints`), `DATA_SCORE_ID` (18) | Index 18 never sent | Confirmed (server). Client screen inferred | S | `test_dedicated_server_parity.py` (death sequence) |
-| 19 | "Allow Server Listings" off is ignored | Your name still shows in the server list hover. Vanilla shows "Anonymous Player" | `MinecraftServer#buildPlayerStatus` (`allowsListing`) | `lan/mod.rs:316` `status_json` samples every online name | Confirmed (reading) | S | `test_dedicated_server_parity.py` (status) |
-| 20 | Recipe-book highlights never clear | Recipes keep their "new" highlight on every join | `handleRecipeBookSeenRecipePacket` → `ServerRecipeBook#removeHighlight` | No variant, so it is dropped. `toBeDisplayed` (`src/recipe_book.rs:772`) is saved with the highlights still set | Confirmed (reading) | S | `test_dedicated_server_parity.py` |
-| 21 | Structure, jigsaw and test blocks and command-block minecarts can't be edited | Save, Load, Detect and Done in those screens change nothing | `handleSetStructureBlock`, `handleSetJigsawBlock`, `handleJigsawGenerate`, `handleSetTestBlock`, `handleTestInstanceBlockAction`, `handleSetCommandMinecart` | No variants. Dropped at `lan_actions.rs:1836`. `TEST_INSTANCE_BLOCK_STATUS` never sent | Confirmed (reading) | M | `lan_e2e.py` |
-| 22 | F3+I copies no NBT | With cheats, F3+I on an entity or block entity copies without its data | `handleEntityTagQuery`, `handleBlockEntityTagQuery` → `ClientboundTagQueryPacket` | No variants. `TAG_QUERY` never sent | Confirmed (reading) | S | `test_dedicated_server_parity.py` |
-| 23 | F3 ping chart empty | The debug network and ping chart never fills | `handlePingRequest` (play) | Play `PingRequest` reaches `lan_actions.rs:1836` unanswered. Only the status phase answers (`conn.rs:714`) | Confirmed (reading) | S | `test_dedicated_server_parity.py` |
-| 24 | Advancements screen forgets its tab | Reopening advancements doesn't return to the last tab | `handleSeenAdvancements` → `PlayerAdvancements#setSelectedTab` → `ClientboundSelectAdvancementsTabPacket` | No variant. `SELECT_ADVANCEMENTS_TAB` never sent | Confirmed (reading) | S | `test_dedicated_server_parity.py` |
-| 25 | Hat layer in the tab list | The hat layer always shows in the tab list, and toggling it mid-game isn't seen | `handleClientInformation` (`UPDATE_HAT` broadcast) | `hub.rs:896` `show_hat: Some(true)`. `hub.rs:2551` never broadcasts `UPDATE_HAT` | Confirmed (reading) | S | `test_dedicated_server_parity.py` |
-| 26 | Entity-bound sounds play at a point | Sounds vanilla binds to a moving entity (`Level#playSound(Player, Entity, ...)`, for example a trident's riptide or a firework) stay where they started | `ServerLevel#playSeededSound` (entity form) → `ClientboundSoundEntityPacket` | Every sound goes through `lan/containers.rs:52` as positional `Sound`. `SOUND_ENTITY` never sent | Confirmed (server). Audible difference inferred | S | `test_server_entities_parity.py` |
-| 27 | Teleported items and vehicles interpolate | `/tp` of an item, XP orb, projectile, End crystal or area effect cloud glides instead of snapping, and a teleported vehicle may be pulled back by the rider's client. Mobs (endermen, shulkers, `/tp`'d mobs) are not affected: vanilla moves them by `teleportTo` or leaves them to ServerEntity's position sync too | `Entity#sendTeleportTransitionToPlayers` → `ClientboundTeleportEntityPacket`: to riding players always (the controller gets the transition's relatives), to trackers only for no-update-interval types and `MoveSimulationType.SERVER_AND_CLIENT` movers | Fixed by fix-entity-data for `/tp` (`game/lan.rs` `lan_teleport_entity`). Other teleports (ender pearls, portals, `/rotate` on entities) still don't send it | Confirmed (server). Client motion inferred | S | `test_server_entity_data_parity.py` |
-| 28 | `/rotate` and `facing` teleport the player | `/rotate` and `tp ... facing` on a player send a full position teleport, so the client snaps position and loses velocity | `ServerPlayer#forceSetRotation` (`ClientboundPlayerRotationPacket`), `ServerPlayer#lookAt` (`ClientboundPlayerLookAtPacket`) | `commands/world_cmds.rs:210` → `teleport_to`. `PLAYER_ROTATION` and `PLAYER_LOOK_AT` never sent | Confirmed (server). Client effect inferred | S | `test_dedicated_server_parity.py` |
-| 29 | Landing falling blocks flicker | A landing sand or anvil can vanish for a frame before its block update shows | `FallingBlockEntity#tick` → `ClientboundAddTransientBlockPacket` | `ADD_TRANSIENT_BLOCK` never sent (not even decoded) | Confirmed (server). Flicker inferred | S | `test_server_entities_parity.py` (it already drops sand) |
-| 30 | RCON, Query and the management server missing | `enable-rcon`, `enable-query` and `management-server-*` do nothing, so owners' tools can't connect | `RconThread`, `QueryThreadGs4`, `ManagementServer` | `properties.rs:41-55` fields with no reader | Confirmed (reading) | L | `test_server_files_parity.py` |
-| 31 | Other ignored properties | `rate-limit` (packet-rate kick), `max-world-size`, `function-permission-level`, `max-chained-neighbor-updates`, `max-tick-time` (watchdog), `broadcast-rcon-to-ops`, `initial-enabled-packs` and `initial-disabled-packs`, `region-file-compression`, `sync-chunk-writes` | `DedicatedServerProperties` readers | `properties.rs` fields with no reader outside the crate | Confirmed (reading) | M | `test_server_files_parity.py` |
-| 32 | Own potion swirls missing in first person | A player's own effect particles aren't drawn around them | `LivingEntity` `DATA_EFFECT_PARTICLES` (10) and `DATA_EFFECT_AMBIENCE_ID` (11) sent to self (`sendDirtyEntityData`) | `sync_player_state` sends 10 and 11 to others only (`hub.rs:1930`) | Inferred | S | `test_server_entities_parity.py` |
+### Combat and entities
 
-Never sent, and not worth a fix now: `TAB_LIST` (no vanilla trigger), `CUSTOM_CHAT_COMPLETIONS`, `DELETE_CHAT`,
-`PLAYER_COMBAT_ENTER` and `PLAYER_COMBAT_END` (narration and telemetry only), `DEBUG_*`, `GAME_TEST_HIGHLIGHT_POS`,
-`LOW_DISK_SPACE_WARNING`, `CUSTOM_REPORT_DETAILS`, `MOVE_MINECART_ALONG_TRACK` (experimental minecarts),
-`START_CONFIGURATION`, `COOKIE_REQUEST`, `STORE_COOKIE`, `RESOURCE_PACK_POP`, `PING`, `SET_PLAYER_INVENTORY`
-(the slots it would carry go out as `ContainerSetSlot` on window 0, which the client applies the same way).
+| # | Gap | Vanilla | Ferraloom | Size | Source |
+|---|---|---|---|---|---|
+| 33 | `/damage <player> ...` on a server player fails with "Target is invulnerable to the given damage type" (console and players). Harnesses work around it by having the player damage itself | `DamageCommand#damage` → `Entity#hurtServer` | `game/commands/world_cmds.rs:130` `cmd_damage`: no `Target::Guest` arm, falls to `_ => false` | S | B, A |
+| 34 | A shield-blocked hit plays no hurt sound to others | `LivingEntity#hurtServer` (blocked branch) | `health.rs` plays it only with the damage broadcast. `pvp-shield` in `KNOWN` of `tools/test_server_knockback_parity.py` | S | B |
+| 35 | A mace smash on a player runs none of the mace's effects (the attacker's fall goes on) | `MaceItem#hurtEnemy` | PvP path in `game/lan_pvp.rs`. `pvp-mace` in `KNOWN` of `test_server_knockback_parity.py` | S | combat, B |
+| 36 | The velocity packet after fall damage differs from vanilla's (0.42 up) | `ServerPlayer` `hurtMarked` → `ClientboundSetEntityMotionPacket` | Guest hurt path, `game/lan_actions.rs` | S | B |
+| 37 | Donkeys and mules never rear | `AbstractHorse#canPerformRearing` (true; only `Llama` and `Camel` override it) | `mobs/equine.rs:74` `can_rear` lists horse, skeleton and zombie horse only | S | B |
+| 38 | A parrot that drops off a server player's shoulder never lands again; vanilla re-lands it within seconds | `LandOnOwnersShoulderGoal`, `ShoulderRidingEntity` | Mobs see only the nearest player, not their owner (`game/shoulders.rs`, mob AI). Not re-verified | M | A |
+| 39 | Attacks are not checked like vanilla's: a PvP hit has no `isWithinAttackRange` check, no hit checks the world border, and attacking an item, an XP orb or oneself doesn't kick with `multiplayer.disconnect.invalid_entity_attacked` (mob hits do check interaction range) | `ServerGamePacketListenerImpl#handleAttack` | `game/lan_actions.rs:2151` `guest_attack` | S | audit |
+| 40 | `DamageEvent` for players carries no causing or direct entity (the client's flash works; its damage-direction tilt and anything reading the ids don't) | `ClientboundDamageEventPacket` (`sourceCauseId`, `sourceDirectId`) | `game/lan_actions.rs:3187` passes `None, None` | S | B |
+| 41 | Duplicate UUIDs: summoning with the UUID of an entity still in its death animation succeeds; vanilla refuses | `SummonCommand#createEntity` (`commands.summon.failed.uuid`), `ServerLevel#tryAddFreshEntityWithPassengers` | Summon path in `game/commands`. Not re-verified | S | D |
+| 42 | TNT and falling blocks are not command targets, so `/tp`, `/kill`, `/data` can't reach them | `EntitySelector#findEntities` | `Target` has no variant for them (`game/commands.rs`) | M | D |
+| 43 | Two mobs riding one boat push each other | `Entity#isPassengerOfSameVehicle` in `LivingEntity#pushEntities` | `Seen` carries no vehicle id; the same-vehicle check covers only a mob's own rider and mount (`mobs/ai.rs`) | S | D |
+| 44 | `NoAI` mobs skip their species' own `aiStep` (the generic part now runs) | Each species' `aiStep` override runs without AI too | `mobs/ai.rs` `tick_entity`, after `fca21704f` | M | D |
+| 45 | A bee's anger target is not loaded from saved data | `Bee#readAdditionalSaveData` → `NeutralMob#readPersistentAngerSaveData` | `entity_nbt.rs` reads no anger target; `mobs/bee.rs` `angry_at` | S | D |
+| 46 | A spectator's camera isn't reset by `/tp`, and a camera entity changing dimension resets the camera instead of taking the spectator along | `ServerPlayer#teleport` (`setCamera(this)`), `ServerPlayer#tick` camera follow | `game/lan_spectate.rs`; teleports in `game/commands.rs` | S | B |
+| 47 | A camel or nautilus dash emits no `ENTITY_ACTION` game event, so sculk doesn't hear it | `Camel#handleStartJump` → `gameEvent(GameEvent.ENTITY_ACTION)` | `game/mounts.rs` riding-jump handler (`bfb5b4a89`) | S | B |
+| 48 | A player newly joined sees players standing still only after they send a move (hidden in practice: clients send one every 20 ticks) | `ChunkMap#playerLoadedChunk`, `ChunkMap.TrackedEntity#updatePlayer` | Pairing in `lan/hub.rs` `track_entities` runs on moves | S | A |
 
-### Combat, owned by fix-combat
+### Commands
 
-Seen while reading, not investigated: #6 (attribute modifiers, attack cooldown) and the combat side of #2.
-`handleAttack` (`lan_actions.rs:1538` → `guest_attack`) checks neither `isWithinAttackRange` nor the world
-border, and doesn't kick for attacking item entities, experience orbs or oneself
-(`multiplayer.disconnect.invalid_entity_attacked`).
+| # | Gap | Vanilla | Ferraloom | Size | Source |
+|---|---|---|---|---|---|
+| 49 | Absolute `/tp` keeps a non-player entity's velocity; vanilla zeroes it. The packet already says zero, so the client and server disagree until the next sync | `Entity#teleportSetPosition` (`PositionMoveRotation.calculateAbsolute`) | `game/commands.rs:1266` `teleport_to_in_level`: only `Target::Player` zeroes `velocity` | S | D |
+| 50 | `/kick`'s success message names the player as plain text; vanilla uses the display name (hover, click to suggest, insertion) | `KickCommand#kickPlayers` (`player.getDisplayName()`) | `game/commands/extra.rs:752` `Text::literal(name)` | S | C |
+| 51 | `/ride <player> mount <vehicle>` fails for server players | `RideCommand#mount` | `game/commands/world_cmds.rs:1120` `cmd_ride` | S | D |
+| 52 | `say` from a function or the server logs `System chat: [Server] ...`; vanilla logs `[Not Secure] [Server] ...` (the console's own `say` is right) | `PlayerList#broadcastChatMessage`, `MinecraftServer#logChatMessage` | `game/commands.rs:3125` `cmd_say` → the system-chat log in `game/dedicated.rs:917` | S | fperm |
+| 53 | `/perf` answers "Unknown or incomplete command" though the dedicated tree offers it to level-4 players | `PerfCommand` (`MinecraftServer#startRecordingMetrics`) | Left out of `horizon-command/src/tree_server.rs`; still listed in `lan/commands.rs:32` `DEDICATED_ONLY`. No metrics recorder | M | C |
+| 54 | A player's command keeps the permission level they had when it was queued, so a `/deop` in the same tick can come too late | `Commands#performCommand` checks at execution | Guest command queue, `game/lan_actions.rs` `guest_command` | S | C |
+| 55 | `/help` inside a function lists commands at the function's compile level, not the caller's | `HelpCommand` (source's permissions) | `game/functions.rs` runs lines at the compiled level | S | fperm |
+| 56 | `@e` without a distance or volume reads only the source's level; vanilla reads every level | `EntitySelector#findEntities` | Selectors in `game/commands.rs`. From `docs/server-levels.md`, not re-verified | M | docs |
 
-### Stale docs
+### World and blocks
 
-- `docs/server.md:94` "Left:" is out of date. Guest arrows hit players (`game/lan_pvp.rs:20`), and a guest's kills
-  are theirs (`game/creatures.rs:888`).
-- `docs/server-levels.md`, "Not done yet": entities already go through portals between levels
-  (`game/nether_portal.rs:603` `handle_entity_portals`), and the End poem is handled (`won_game`,
-  `lan_actions.rs:1795`).
-- The docstring of `tools/test_dedicated_server_parity.py` says guests' death messages aren't Horizon's yet.
-  They are now (`lan_actions.rs:2649`).
+| # | Gap | Vanilla | Ferraloom | Size | Source |
+|---|---|---|---|---|---|
+| 21 | Structure, jigsaw and test blocks and command-block minecarts can't be edited: Save, Load, Detect and Done change nothing. Ferraloom has no structure, jigsaw or test block entity, and command minecarts hold no command | `handleSetStructureBlock`, `handleSetJigsawBlock`, `handleJigsawGenerate`, `handleSetTestBlock`, `handleTestInstanceBlockAction`, `handleSetCommandMinecart` | No serverbound variants (dropped by `lan_guest_packet`'s last arm). Needs block-entity variants and saves in `chunk/block_entity.rs`, `save.rs`, `game/minecarts.rs:33` | L (audit said M) | audit, B |
+| 57 | Advancement reward functions don't exist | `AdvancementRewards#grant` (runs the function at level 2) | `game/advancements.rs`; should go through `run_function` (`game/functions.rs`) | S | fperm |
 
-## Clusters for parallel fixing
+### Inventory and items
 
-Each cluster owns its files. A cluster that needs a line in another's file sends a message instead of
-editing it. New code goes in new modules, with one-line hooks in the busy upstream files.
+| # | Gap | Vanilla | Ferraloom | Size | Source |
+|---|---|---|---|---|---|
+| 58 | `attribute_modifiers` set on an individual stack are ignored; only the item type's defaults apply | `ItemStack#forEachModifier` (`DataComponents.ATTRIBUTE_MODIFIERS`) | `game/lan_attributes.rs` `apply_equipment` | S | combat |
+| 59 | A broken item (`isBroken`) still applies its modifiers | `LivingEntity#collectEquipmentChanges` (`ItemStack#isBroken`) | `game/lan_attributes.rs` | S | combat |
 
-| Cluster | Gaps | Files it owns |
-|---|---|---|
-| **A. Hub: player sync and protocol hygiene** | 3 (criteria), 4, 7, 8, 10, 12 (emit 19 and 20), 17, 18, 19, 20, 23, 24, 25, 32, and the hub side of 9 (forward actions 3 and 4 to the game, as 5 and 6 already are, at `hub.rs:2568`) | `lan/hub.rs`, `lan/guest.rs`, `lan/hub/chat.rs`, `lan/conn.rs`, `lan/mod.rs`, `lan/advancements.rs`, new `lan/hub/player_meta.rs`, `game/scoreboard.rs` (criteria per guest), `game/shoulders.rs` (shoulder state per player) |
-| **B. Game: serverbound actions as the guest** | 2 (`DamageEvent` for players beside `HurtAnimation`, coordinated with fix-combat), 5, 9 (the handler), 13, 15, 16, 21, 22 | `game/lan_actions.rs` (match arms only), `game/mounts.rs`, `game/commands/extra.rs` (`set_camera` and `cmd_dialog` per guest), new `game/lan_spectate.rs`, new `game/lan_editors.rs` (structure, jigsaw, test block, command minecart, tag queries), `horizon-protocol/src/packets/play.rs` (new serverbound variants and `SetCamera`, `ShowDialog` use) |
-| **C. Operator commands** | 1 (with `/transfer` sending `Transfer`) | `horizon-command/src/vanilla.rs`, a new `horizon-command/src/tree_server.rs`, `horizon-command/src/vanilla_order.rs`, `game/commands.rs` (one dispatch arm), new `game/commands/server_cmds.rs`, `game/dedicated.rs` (share the console handlers) |
-| **D. Entity data the world owns** | 11, 14, 26, 27, 29 | `projectiles.rs`, `arrows.rs`, `mobs/bee.rs`, `game/lan.rs` (`mob_meta` for 12 and 13), `lan/entity.rs`, `game/commands/terrain_cmds.rs`, `lan/containers.rs` (`sound`), `game/falling_*` or wherever landing lives |
-| **E. Server properties and remote admin** | 30, 31 (also 28 if wanted, it is small) | `horizon-server-files/`, `crates/horizon-server/`, `game/dedicated.rs` after C lands, new modules for RCON and Query, `game/commands/world_cmds.rs` (28) |
+### Networking and protocol
 
-Conflicts left: D's arrow counts on players reach A's `player_state` (D sends A the counts as a field on
-`Guest`). B and fix-combat both touch `lan_actions.rs` near `HurtAnimation` (`:1011`). E waits for C on
-`dedicated.rs`.
+| # | Gap | Vanilla | Ferraloom | Size | Source |
+|---|---|---|---|---|---|
+| 26 | Entity-bound sounds play at a point: riptide, goat horns while walking, shearing, frog, goat ram, allay, breeze deflect, copper golem, sniffer and about 15 more call sites stay where they started. Audible only for long sounds on fast movers | `ServerLevel#playSeededSound` (entity form) → `ClientboundSoundEntityPacket` | Every sound goes out positional (`lan/containers.rs`). `SOUND_ENTITY` never sent. Needs an entity-aware capture in `audio.rs` and tagging each site | M | audit, D |
+| 28 | `/rotate` and `tp ... facing` on a player send a full position teleport, so the client snaps position and loses velocity | `ServerPlayer#forceSetRotation` (`ClientboundPlayerRotationPacket`), `ServerPlayer#lookAt` (`ClientboundPlayerLookAtPacket`) | `game/commands/world_cmds.rs:210` `cmd_rotate` → `teleport_to`. `PLAYER_ROTATION` and `PLAYER_LOOK_AT` never sent | S | audit |
+| 27 | Teleports other than `/tp` (ender pearls, portals, `/rotate` on entities) send no `ClientboundTeleportEntityPacket`, so items, projectiles and ridden vehicles glide or get pulled back. `/tp` is fixed (`6385ae8ea`) | `Entity#sendTeleportTransitionToPlayers` (riders always; trackers for no-update-interval types and `SERVER_AND_CLIENT` movers) | `Hub::teleport_entity` (`lan/containers.rs`) is called only from `game/commands.rs` `teleport_to_in_level` | S | audit, D |
+| 60 | Trackers get attribute changes but not vanilla's identical re-sends of a dirty instance (a hit wearing the sword). The client ends in the same state; the snapshot is also rebuilt for every guest every tick | `ServerEntity#sendDirtyEntityData` | `lan/hub.rs`, `lan/entity.rs` diff full snapshots | M | combat |
+| 61 | Equipment changes apply at once, not in the next player tick, so two changes in one tick split into packets differently | `LivingEntity#detectEquipmentUpdates` (in `tick`) | `game/lan_attributes.rs` `apply_equipment` on each guest turn | S | combat |
+| 62 | Invisibility doesn't apply its `waypoint_transmit_range` modifier, so an invisible player still shows on the locator bar at full range | `MobEffects.INVISIBILITY` attribute modifier | `effects.rs`, `lan/waypoints.rs` | S | combat |
+| 63 | Never sent, low impact: `TEST_INSTANCE_BLOCK_STATUS` (with #21), `TAB_LIST` (no vanilla trigger), `CUSTOM_CHAT_COMPLETIONS`, `DELETE_CHAT`, `PLAYER_COMBAT_ENTER`/`END` (narration, telemetry), `DEBUG_*`, `GAME_TEST_HIGHLIGHT_POS`, `LOW_DISK_SPACE_WARNING`, `CUSTOM_REPORT_DETAILS`, `MOVE_MINECART_ALONG_TRACK` (experimental minecarts), `START_CONFIGURATION`, `COOKIE_REQUEST`, `STORE_COOKIE`, `RESOURCE_PACK_POP`, `PING`, `SET_PLAYER_INVENTORY` (its slots go out as `ContainerSetSlot` on window 0). Serverbound `DebugSubscriptionRequest` is dropped (debug renderers only) | | | S each | audit |
 
-## Appendix A: serverbound coverage
+### Server administration
 
-Handled = like vanilla as far as read. Path abbreviations: `hub` = `lan/hub.rs`, `act` = `game/lan_actions.rs`.
+| # | Gap | Vanilla | Ferraloom | Size | Source |
+|---|---|---|---|---|---|
+| 30 | RCON, Query and the management server are missing: `enable-rcon`, `rcon.*`, `enable-query`, `query.port`, `management-server-*` and `status-heartbeat-interval` do nothing, so owners' tools can't connect | `RconThread`, `QueryThreadGs4`, `ManagementServer` | `horizon-server-files/src/properties.rs` fields with no reader outside the crate (only `examples/probe/server_files_probe.rs`) | L | audit |
+| 31 | Other ignored properties: `rate-limit` (packet-rate kick), `max-world-size`, `max-chained-neighbor-updates`, `max-tick-time` (watchdog), `broadcast-rcon-to-ops`, `initial-enabled-packs` and `initial-disabled-packs`, `region-file-compression`, `sync-chunk-writes`, `enable-jmx-monitoring`, `text-filtering-config`/`-version`. `function-permission-level` is fixed (`8ec12d527`) | `DedicatedServerProperties` readers | `properties.rs` fields with no reader | M | audit, fperm |
+| 64 | Data packs load on the first tick, so their load errors are logged after `Done`; vanilla logs them before. Content is identical | `MinecraftServer` loads `ReloadableServerResources` before the server starts | `game/dedicated.rs`, `datapack.rs` `DataStore::load` | S | fperm |
+| 65 | The floating kick departs from vanilla in two small ways: a block in a chunk the server doesn't have counts as solid (nobody is kicked over chunks the server can't see), and the fly counter also resets on the hub's correction teleports (vanilla only in `teleportTo`) | `ServerGamePacketListenerImpl#tickPlayer`, `#noBlocksAround` | `lan/hub/player_meta.rs:315` `update_floating` | S | A |
 
-| Vanilla handler | Ferraloom | Status |
-|---|---|---|
-| Common `handleKeepAlive` | `lan/conn.rs:1248` | Handled |
-| Common `handlePong` | `act:1836` | Ignored (vanilla only uses it for its own pings, which Ferraloom never sends) |
-| Common `handleCustomPayload` | `act:1689` (quiet channel), `conn.rs:1022` (brand) | Handled |
-| Common `handleCustomClickAction` | `act:1836` | Ignored (vanilla hands it to `MinecraftServer#handleCustomClickAction`, which only logs it) |
-| Common `handleResourcePackResponse` | `conn.rs:1131`, `conn.rs:1249` | Handled |
-| Common `handleCookieResponse` | `conn.rs:970` | Ignored (no cookies are ever requested) |
-| Config `handleClientInformation` | `conn.rs:1021`, `conn.rs:1059` | Handled |
-| Config `handleSelectKnownPacks` | `conn.rs:1027` | Handled |
-| Config `handleAcceptCodeOfConduct` | none | Missing with #17 |
-| Config `handleConfigurationFinished` | `conn.rs:1058` | Handled |
-| `handlePlayerInput` | `hub:2558` | Handled |
-| `handleMoveVehicle` | `act:1559` → `game/lan_vehicles.rs` | Partly: no floating-vehicle kick (#7) |
-| `handleAcceptTeleportPacket` | `hub:2488` | Handled |
-| `handleAcceptPlayerLoad` | `hub:2526` | Handled |
-| `handleRecipeBookSeenRecipePacket` | none | Ignored (#20) |
-| `handleBundleItemSelectedPacket` | `act:1649` | Handled |
-| `handleRecipeBookChangeSettingsPacket` | `hub:2543` | Handled |
-| `handleSeenAdvancements` | none | Ignored (#24) |
-| `handleCustomCommandSuggestions` | `act:1787` | Handled |
-| `handleSetCommandBlock` | `act:1632` | Handled |
-| `handleSetCommandMinecart` | none | Ignored (#21) |
-| `handlePickItemFromBlock` | `act:1812` | Partly: fixed reach, not the `block_interaction_range` attribute |
-| `handlePickItemFromEntity` | `act:1828` | Handled |
-| `handleRenameItem` | `act:1630` | Handled |
-| `handleSetBeaconPacket` | `act:1637` | Handled |
-| `handleSetGameRule` | `act:1733` | Handled |
-| `handleSetStructureBlock` | none | Ignored (#21) |
-| `handleSetTestBlock` | none | Ignored (#21) |
-| `handleTestInstanceBlockAction` | none | Ignored (#21) |
-| `handleSetJigsawBlock` | none | Ignored (#21) |
-| `handleJigsawGenerate` | none | Ignored (#21) |
-| `handleSelectTrade` | `act:1638` | Handled |
-| `handleEditBook` | `act:1633` | Handled |
-| `handleEntityTagQuery` | none | Ignored (#22) |
-| `handleContainerSlotStateChanged` | `act:1634` | Handled |
-| `handleBlockEntityTagQuery` | none | Ignored (#22) |
-| `handleMovePlayer` | `hub:2513-2525`, `hub:2601`, `hub:2659` | Partly: no floating kick (#7) |
-| `handlePlayerAction` | `act:1348` | Partly: no reach check (#15). `CHANGE_DESTROY_DIRECTION` (1) isn't acked (harmless) |
-| `handleUseItemOn` | `act:1473` | Partly: no range or hit-location check (#15), no build-limit message (#16) |
-| `handleUseItem` | `act:1518` | Handled |
-| `handleTeleportToEntityPacket` | `act:1759` | Handled |
-| `handlePaddleBoat` | `act:1560` | Handled |
-| `handleSetCarriedItem` | `act:1455` | Handled |
-| `handleChat` | `hub/chat.rs:185` | Partly: no spam kick (#10) |
-| `handleChatCommand` | `act:1688` → `lan_chat.rs:59` | Partly: no spam kick (#10). Admin commands fail (#1) |
-| `handleSignedChatCommand` | `act:1692` → `lan_chat.rs:87` | As above |
-| `handleChatAck` | `hub:2579` | Handled |
-| `handleChatSessionUpdate` | `hub:2580` | Handled |
-| `handlePunch` | `act:1467` | Handled |
-| `handlePlayerCommand` | `hub:2568-2577`, `act:1621-1626` | Partly: `START_RIDING_JUMP` and `STOP_RIDING_JUMP` dropped (#9) |
-| `handlePingRequest` (play) | `act:1836` | Ignored (#23) |
-| `handleAttack` | `act:1538` | fix-combat's |
-| `handleInteract` | `act:1539` | Handled |
-| `handleSpectatorAction` | none | Ignored (#5) |
-| `handleClientCommand` | `act:1719`, `act:1795-1808` | Handled |
-| `handleContainerClose` | `act:1639-1648`, `act:1677` | Handled |
-| `handleContainerClick` | `act:1612-1676` | Handled |
-| `handlePlaceRecipe` | `act:1792` | Handled |
-| `handleContainerButtonClick` | `act:1627` | Handled |
-| `handleSetCreativeModeSlot` | `act:1563`, `act:1590` | Handled |
-| `handleSignUpdate` | `act:1631` | Handled |
-| `handlePlayerAbilities` | `hub:2509` | Handled |
-| `handleClientInformation` (play) | `hub:2551` | Partly: no `UPDATE_HAT` broadcast (#25) |
-| `handleChangeDifficulty` | `act:1693` | Handled |
-| `handleChangeGameMode` | `act:1760` | Handled |
-| `handleLockDifficulty` | `act:1711` | Handled |
-| `handleChatSessionUpdate` | `hub:2580` | Handled |
-| `handleConfigurationAcknowledged` | none | Not needed (the server never sends `StartConfiguration`) |
-| `handleChunkBatchReceived` | `hub:2528` | Handled |
-| `handleDebugSubscriptionRequest` | none | Ignored (debug renderers only) |
-| `handleClientTickEnd` | `hub:2541` | Handled |
+### Plugins API
 
-## Appendix B: clientbound coverage
+Everything here is a Spigot API call or event a plugin can observe. Coverage at HEAD by the bridge's own
+count was 729 of 1,392 stubbed-interface methods (52%) on the server-area branch before the final merge;
+`build.py` prints the current figure.
 
-"Sent" names one file that constructs the packet. The triggers were spot-checked, not proven complete.
+**Players** (`FerraloomPlayer extends StubPlayer`, so `LivingEntity` methods the entities area implements
+don't reach players)
 
-| Packet | Status |
-|---|---|
-| `ADD_ENTITY`, `BUNDLE_DELIMITER`, `MOVE_ENTITY_POS`, `MOVE_ENTITY_POS_ROT`, `MOVE_ENTITY_ROT`, `ENTITY_POSITION_SYNC`, `ROTATE_HEAD`, `SET_ENTITY_LINK`, `SET_ENTITY_MOTION`, `SET_EQUIPMENT`, `SET_PASSENGERS`, `UPDATE_ATTRIBUTES`, `PROJECTILE_POWER` | Sent: `lan/entity.rs` |
-| `SET_ENTITY_DATA` | Sent: `lan/hub.rs`, `lan/entity.rs`. Player indices 7, 12, 13, 18, 19 and 20 never (#8, #11, #12, #18), 10 and 11 not to self (#32) |
-| `ANIMATE`, `BLOCK_EVENT`, `CONTAINER_SET_SLOT`, `DAMAGE_EVENT` (mobs only, #2), `ENTITY_EVENT`, `LEVEL_EVENT`, `MOUNT_SCREEN_OPEN`, `OPEN_SCREEN`, `SET_CURSOR_ITEM`, `SOUND`, `SWING_ANIMATION`, `TAKE_ITEM_ENTITY` | Sent: `lan/containers.rs` |
-| `BLOCK_CHANGED_ACK`, `BLOCK_ENTITY_DATA`, `CHANGE_DIFFICULTY`, `CHUNK_BATCH_START`, `CHUNK_BATCH_FINISHED`, `COMMANDS`, `DISGUISED_CHAT`, `FORGET_LEVEL_CHUNK`, `GAME_EVENT`, `INITIALIZE_BORDER`, `LOGIN`, `PLACE_GHOST_RECIPE`, `PLAYER_ABILITIES`, `PLAYER_INFO_REMOVE`, `PLAYER_INFO_UPDATE` (no `UPDATE_HAT`, #25), `PLAYER_POSITION`, `REMOVE_ENTITIES`, `REMOVE_MOB_EFFECT`, `RESPAWN`, `SECTION_BLOCKS_UPDATE`, `SERVER_DATA`, `SET_CHUNK_CACHE_CENTER`, `SET_CHUNK_CACHE_RADIUS`, `SET_DEFAULT_SPAWN_POSITION`, `SET_EXPERIENCE`, `SET_HEALTH`, `SET_HELD_SLOT`, `SET_SIMULATION_DISTANCE`, `SET_TIME`, `TICKING_STEP`, `UPDATE_MOB_EFFECT` | Sent: `lan/hub.rs` |
-| `AWARD_STATS`, `RECIPE_BOOK_ADD`, `RECIPE_BOOK_SETTINGS`, `UPDATE_ADVANCEMENTS`, `UPDATE_RECIPES`, `TICKING_STATE`, `POST_EFFECTS`, `COMMAND_SUGGESTIONS`, `WAYPOINT`, `LEVEL_CHUNK_WITH_LIGHT` | Sent, written by hand (`raw(ids::...)`, `lan/hub.rs`, `lan/chunks.rs`, `lan/waypoints.rs`, `lan_actions.rs:2327`) |
-| `LIGHT_UPDATE` | Sent: `lan/chunks.rs` |
-| `SET_BORDER_CENTER`, `SET_BORDER_LERP_SIZE`, `SET_BORDER_SIZE`, `SET_BORDER_WARNING_DELAY`, `SET_BORDER_WARNING_DISTANCE` | Sent: `lan/border.rs` |
-| `RESET_SCORE`, `SET_DISPLAY_OBJECTIVE`, `SET_OBJECTIVE`, `SET_PLAYER_TEAM`, `SET_SCORE` | Sent: `lan/scoreboard.rs` (player-stat criteria never update, #3) |
-| `PLAYER_CHAT`, `SYSTEM_CHAT` | Sent: `lan/hub/chat.rs`, `lan_actions.rs` |
-| `CUSTOM_PAYLOAD`, `DISCONNECT`, `KEEP_ALIVE`, `PONG_RESPONSE` (status only, #23), `RESOURCE_PACK_PUSH`, `SERVER_LINKS`, `UPDATE_TAGS` | Sent: `lan/conn.rs` |
-| `BLOCK_DESTRUCTION`, `BLOCK_UPDATE`, `COOLDOWN`, `GAME_RULE_VALUES`, `HURT_ANIMATION`, `PLAYER_COMBAT_KILL` | Sent: `game/lan_actions.rs` |
-| `CONTAINER_CLOSE`, `CONTAINER_SET_CONTENT`, `CONTAINER_SET_DATA` | Sent: `game/lan_stations.rs` and the other menu files |
-| `EXPLODE`, `LEVEL_PARTICLES` | Sent: `game/lan_particles.rs` |
-| `BOSS_EVENT` (`game/bossbars.rs`), `MAP_ITEM_DATA` (`game/maps.rs`), `MERCHANT_OFFERS` (`game/lan_trading.rs`), `MOVE_VEHICLE` (`game/lan_vehicles.rs`), `OPEN_BOOK` (`game/books.rs`), `OPEN_SIGN_EDITOR` (`game/sign_edit.rs`), `RECIPE_BOOK_REMOVE`, `STOP_SOUND` (`game/commands/world_cmds.rs`), `CLEAR_TITLES`, `SET_ACTION_BAR_TEXT`, `SET_SUBTITLE_TEXT`, `SET_TITLE_TEXT`, `SET_TITLES_ANIMATION` (`game/commands/text_commands.rs`) | Sent |
-| `SET_CAMERA` | **Never** (#5) |
-| `SHOW_DIALOG`, `CLEAR_DIALOG` | **Never** (#13) |
-| `CHUNKS_BIOMES` | **Never** (#14) |
-| `TAG_QUERY` | **Never** (#22) |
-| `SELECT_ADVANCEMENTS_TAB` | **Never** (#24) |
-| `SOUND_ENTITY` | **Never** (#26) |
-| `TELEPORT_ENTITY` | **Never** (#27) |
-| `PLAYER_ROTATION`, `PLAYER_LOOK_AT` | **Never** (#28) |
-| `ADD_TRANSIENT_BLOCK` | **Never** (#29) |
-| `TRANSFER` | **Never** (#1, `/transfer`) |
-| `TEST_INSTANCE_BLOCK_STATUS` | **Never** (#21) |
-| `TAB_LIST`, `CUSTOM_CHAT_COMPLETIONS`, `DELETE_CHAT`, `PLAYER_COMBAT_ENTER`, `PLAYER_COMBAT_END`, `DEBUG_BLOCK_VALUE`, `DEBUG_CHUNK_VALUE`, `DEBUG_ENTITY_VALUE`, `DEBUG_EVENT`, `DEBUG_SAMPLE`, `GAME_TEST_HIGHLIGHT_POS`, `LOW_DISK_SPACE_WARNING`, `CUSTOM_REPORT_DETAILS`, `MOVE_MINECART_ALONG_TRACK`, `START_CONFIGURATION`, `COOKIE_REQUEST`, `STORE_COOKIE`, `RESOURCE_PACK_POP`, `PING`, `SET_PLAYER_INVENTORY` | **Never**, low impact (see the end of "Ranked gaps") |
+| # | Gap | Size | Source |
+|---|---|---|---|
+| 66 | `Player.getAttribute`, `getVehicle`, `getArrowsInBody` are stubs (the `FerraloomLivingEntity` versions exist but `FerraloomPlayer` doesn't use them) | S | p-players, p-entities |
+| 67 | `PlayerDeathEvent.getDamageSource` and `getDrops` throw ("does not implement ... yet"); keepLevel and new experience from the event are not applied | S | p-players |
+| 68 | `PlayerDropItemEvent` not fired (bit to go in the entities overflow word 256-319) | S | p-players, p-entities |
+| 69 | `hidePlayer`/`showPlayer` not bridged (`canSee` answers true); needs a per-viewer filter in the tracker's hot loop | M | p-players |
+| 70 | `setWalkSpeed`/`setFlySpeed`, `setPlayerTime`/`setPlayerWeather` (getters answer the world's), health scaling, `getStatistic` not bridged | M | p-players |
+| 71 | Bucket events, `FoodLevelChangeEvent`, particles with data not bridged | M | p-players |
+| 72 | `PlayerTeleportEvent` doesn't fire for portals, spectate and gateways; a pearl's event can't change where it lands | S | p-players |
+| 73 | A custom player list name is not sent to players who join later | S | p-players |
+| 74 | `PlayerMoveEvent` sees the position from the tick's start; a `PlayerRespawnEvent` place is reached as a teleport at the next tick; `PlayerLoginEvent.getHostname` is the address, not the handshake host | S | p-players |
+| 75 | `AsyncPlayerChatEvent` lines go out unsigned; the deprecated sync `PlayerChatEvent` is not fired | M | found |
+| 76 | Join and quit messages lose their hover text | S | found |
+| 77 | `Player.openBook`, opening another player's inventory (invsee) or an ender chest are not supported | M | p-inv |
 
-## Not checked
+**Entities**
 
-- Nothing was run. The builder queue is shared, and the scenarios that would show these gaps (two vanilla-codec
-  clients, ops, spectators) aren't in any existing harness, so they need new harness code, which this audit
-  doesn't own. Each row names the harness to extend.
-- The vanilla client isn't decompiled here (`minecraft.jar` in the cache holds server classes only), so every
-  "what the player sees" for the client's rendering is inferred.
-- The handlers marked "Handled" were checked for routing and their main side effects, not line by line. Their
-  replies (state ids, resyncs) were trusted where Horizon cites the vanilla method.
-- Plugins and Java plugins were out of scope.
+| # | Gap | Size | Source |
+|---|---|---|---|
+| 78 | Only mobs, dropped items and players are entity handles: projectiles, armor stands, boats (and so `Projectile.getShooter`, `strikeLightning`'s returned entity) are not | L | p-entities, p-blocks |
+| 79 | Entities in a dimension that isn't in place are unreachable: `World.getEntities` and chunk lists come back empty, `spawnEntity`/`dropItem` there throw. Needs an accessor in `game/levels.rs` for a parked level's mobs and items | M | p-entities |
+| 80 | Not bridged: potion effects on mobs, `LivingEntity.getEquipment`, `AttributeInstance`, passengers (always empty), `createExplosion` with a source entity | M | p-entities |
+| 81 | Events not fired: `EntityPickupItemEvent`, `InventoryPickupItemEvent`, `EntityRegainHealthEvent`, `ProjectileLaunchEvent`/`ProjectileHitEvent`, `PotionSplashEvent`, `VehicleEnterEvent`/`ExitEvent`, `HangingBreakEvent`, `ExplosionPrimeEvent` | L | p-entities, p-inv |
+| 82 | Player `EntityDamageEvent` fires before the hurt cooldown and armor, so plugins see a different amount than on CraftBukkit | S | p-entities |
+| 83 | A cancelled `EntityTargetEvent` is undone only after one tick with the new target | S | p-entities |
+| 84 | `CreatureSpawnEvent` reasons beyond NATURAL, CHUNK_GEN, CUSTOM and DEFAULT (summons and spawn eggs say DEFAULT) | S | p-entities |
+| 85 | Entity UUIDs seen by plugins aren't kept across restarts | M | p-entities |
+
+**Blocks and worlds** (CraftBukkit differences also in [plugins-blocks-worlds.md](plugins-blocks-worlds.md))
+
+| # | Gap | Size | Source |
+|---|---|---|---|
+| 86 | Tags (`Tag.isTagged`, `Tag.getValues`; 4 of 16 corpus plugins) not bridged | M | p-blocks |
+| 87 | Not bridged: `spawnParticle`, `isFlammable`, `isInteractable`, `setBiome`, redstone power queries | M | p-blocks |
+| 88 | Events not fired: `BlockDamageEvent`, `BlockFertilizeEvent`, `BlockDispenseEvent`, `StructureGrowEvent`, `PortalCreateEvent`; `ThunderChangeEvent` from the natural weather cycle is untested | M | p-blocks |
+| 89 | `BlockExplodeEvent` fires only for `World.createExplosion` (not beds or respawn anchors) and its yield is not applied | S | p-blocks |
+| 90 | Chunks load asynchronously: `getChunkAt`, `loadChunk` and plugin tickets load over the next ticks and an unloaded block reads as air (CraftBukkit loads on the spot) | L | p-blocks |
+| 91 | A behaviour event's host refuses block writes; a plugin changing `BlockGrowEvent`'s (fade, form, spread) new state is not applied | M | p-blocks |
+| 92 | `BlockBreakEvent.setDropItems(false)` also withholds the experience; `BlockPhysicsEvent`'s source block is the updated block itself; `BlockPlaceEvent.getItemInHand` is a plain stack of the placed block's item; multi-block places fire one event | S | p-blocks |
+| 93 | `World.getSeaLevel` answers 63 (32 in the Nether) whatever the generator; spawn, time, weather, rules and border are shared by every world | S | p-blocks |
+| 94 | Block-entity states other than signs throw on their own methods; `Block.getDrops`, `breakNaturally(ItemStack)` and container state methods are stubs; a block container's `getHolder()` is null | M | p-blocks, p-inv |
+
+**Inventory**
+
+| # | Gap | Size | Source |
+|---|---|---|---|
+| 95 | Menus the game runs itself (crafting table, anvil, furnace, enchanting, trading, stations) fire no click events, which blocks `CraftItemEvent`, `PrepareItemCraftEvent`, `FurnaceSmeltEvent`, `EnchantItemEvent`, `PrepareAnvilEvent` | L | p-inv |
+| 96 | `PlayerItemDamageEvent` not fired: items wear in about eight separate places, with no single site | M | p-inv |
+| 97 | `createInventory` for furnace, workbench and similar types, `ItemFactory.createItemStack`, `ItemMeta` component objects (food, tool, equippable) and `ItemType.getCompostChance` not supported | M | p-inv |
+| 98 | `InventoryOpenEvent` on a double chest reports one half; `InventoryDragEvent` ignores a cursor the plugin sets; `PlayerItemConsumeEvent` ignores a replacement item | S | p-inv |
+| 99 | `Items.isAir` stays a constant check instead of `Material.isAir()` (the block table is now off-thread safe after `2466e3e14`); behaviour is the same | S | p-inv, p-blocks |
+
+**Server and bridge**
+
+| # | Gap | Size | Source |
+|---|---|---|---|
+| 100 | Not bridged: keyed boss bars and `getBossBar(key)`, the scoreboard API, recipes, `PlayerProfile` textures, advancements, `ProxiedCommandSender`/`BlockCommandSender` (mostly `instanceof`-guarded in the corpus) | L | p-server |
+| 101 | Events not fired: `ServerListPingEvent`, `ServerCommandEvent`, `RemoteServerCommandEvent` (with #30), `ServerLoadEvent` | S | p-server |
+| 102 | `libraries:` in `plugin.yml` doesn't work (the shaded API lacks commons-lang3 and the Maven resolver); only HuskHomes in the corpus uses it | M | found, p-server |
+| 103 | Teleports and vanilla commands for a player other than the one acting run at the next tick's start; a listener registered mid-tick takes effect next tick | M | found |
+| 104 | Not isolated: a JVM crash takes the server down, and a plugin looping on the main thread stalls the tick (the watchdog only logs its stack after 10 s) | L | found, p-server |
+| 105 | Legacy plugins (no `api-version`) load without legacy-material support | M | docs |
+| 106 | Paper and Folia API (region and async schedulers, `teleportAsync`, `getChunkAtAsync`, Adventure `Component`) is not provided; 7 of 16 corpus plugins reach for some of it. Outside Spigot, listed so it isn't lost | L | p-server |
+| 107 | Licence of the Java bridge undecided (Bukkit API GPL-3.0, server MIT; options in [plugins.md](plugins.md)). Nothing with the bridge ships before Doc decides | decision | found |
+
+### Test and harness debt
+
+| # | Gap | Where | Size | Source |
+|---|---|---|---|---|
+| 108 | `riding-jump-horse` and `riding-jump-camel` are still in `KNOWN` though cluster A's forward (`5ef828579`) and B's handler (`bfb5b4a89`) are both in; confirm they match and take them out | `tools/test_server_player_handlers_parity.py:100` | S | B, orch |
+| 109 | The `standing` case ("held 3 blocks up") is timing-sensitive: on a loaded builder vanilla kicked the player and Ferraloom didn't, one run in three. Make it deterministic or drop it | `tools/test_hub_sync_parity.py:116` | S | orch |
+| 110 | Vanilla reference servers stall in "Saving the game" on the builder's disk and their watchdog kills them, failing harnesses that never reached Ferraloom (`server_ops_feedback`, `server_entity_data`, `server_items`, `server_entities`, `server_combat`, `datafix`, `locator_bar`, `cursor_death`). Workaround: output dirs on `/dev/shm` (cleared on reboot). Durable fix: `sync-chunk-writes=false` on the reference servers (several harnesses set it to `true`) | `tools/test_*_parity.py` | S | orch, A |
+| 111 | About half the parity suite can't build on the builder (default features need `libudev-dev` and `libasound2-dev`); `mob_ai` times out at 3600 s, so the `NoAI` change (#44, `fca21704f`) has no `mob_ai` evidence; `save_roundtrip` and `lan_e2e.py` need a window. About 225 harnesses had no result on `5d5371c7b` | builder CT107 | M (Doc's: packages, disk) | orch, D, combat |
+| 112 | `tools/parity.py --changed-files` selects about every harness for any lib change, so agents pick harnesses by hand | `tools/parity.py` | M | combat, B, found |
+| 113 | `server_player_handlers` takes about 30 minutes, the slowest harness added this run | `tools/test_server_player_handlers_parity.py` | S | orch |
+| 114 | `hub_sync` was never shown failing before its fixes (the job never left the queue) | `tools/test_hub_sync_parity.py` | S | A |
+| 115 | Plugin e2e timing: it sleeps 1 s between two digs (Horizon's creative destroy delay), and the scheduler's exact tick counts were checked in one run only | `tools/plugins_e2e.py` | S | found |
+| 116 | No benchmark with plugins loaded (move, hopper, physics and combust listener costs are estimates or disassembly); no corpus plugin has been started on the server; no live check from a Prism client | `tools/server_bench.py` | M | orch, p-players, p-entities |
+| 117 | Stale docs: `docs/server.md:94` "Left:" (guest arrows hit players, guests' kills are theirs); `docs/server-levels.md` "Not done yet" (entities do go through portals, the End poem is handled); the docstring of `tools/test_dedicated_server_parity.py:41` (guests' death messages are Horizon's now); `docs/ferraloom/plugins.md` says `setDropItems` is ignored, `Block.getType` reads only the level in place, `updateCommands` doesn't resend, and death drops are an empty list (all now wrong); `docs/architecture.md` lists none of this run's six new harnesses | docs | S | audit, fperm, orch |
+
+## Fixed in this run
+
+Audit numbers first, then gaps found on the way. Harness names are `tools/test_<name>_parity.py`.
+
+| # | Fixed | Commit | Proof |
+|---|---|---|---|
+| 1 | Operators run the dedicated-server commands in game at vanilla's levels (3: `op`, `deop`, `ban`, `ban-ip`, `banlist`, `pardon`, `pardon-ip`, `whitelist`, `setidletimeout`, `transfer`; 4: `save-all`, `save-off`, `save-on`, `stop`); `/seed` and `/version` at 2, `/publish` gone. `/perf` stays open as #53 | `cd15d45f4` (branch), `horizon-command/src/tree_server.rs`, `game/commands/server_cmds.rs` | `server_ops_feedback` case `admin`; unit test `dedicated_tree_has_the_server_commands_at_vanilla_levels` |
+| 2 | Other players see a player's hurt flash and tilt (`DamageEvent`); the hurt sound leaves out the hurt player, as vanilla. Entity ids open as #40 | `a726d718a`, `fd5824fb4`, `c5752b504` | `server_knockback` damage and fall cases |
+| 3 | Player-stat criteria update for every server player; the host's `air` reads the body | `5264ba001` | `hub_sync` `criteria`, `criteria-change` |
+| 4 | Spectators hidden from non-spectators | `8d766dc98` | `hub_sync` `spectator*`; unit test `hidden_entities_are_not_paired` |
+| 5 | Spectating through entities and `/spectate` for any player. Leftovers #46 | `ae0ab67dd`, `d94fb949b` | `server_player_handlers`, 5 cases |
+| 6 | Held-item attribute modifiers synced (sword attack cooldown), both hands, enchantment modifiers | `52ca49fc6` | `server_combat`, 11 of 11 |
+| 7 | `allow-flight=false` kicks floating players; plugin-granted flight exempt | `ce841fb18`, `2c013dd9e` | `hub_sync` `standing`, `floating` |
+| 8 | Ticks frozen synced to the player and trackers | `d7d3849d2` | `hub_sync` `freeze`, `thaw` |
+| 9 | Riding jump: hub forwards actions 3 and 4, horses rear, camels and nautili dash. Leftovers #37, #47, #108 | `5ef828579`, `bfb5b4a89` | `server_player_handlers` (cases still in `KNOWN`, #108) |
+| 10 | Chat and command spam kick; ops exempt | `ce841fb18` | `hub_sync` `chat-spam`, `command-spam`; unit throttle test |
+| 11 | Stuck arrows and bee stingers on mobs and players; stings use the `sting` damage type and poison mobs | `914d93c8e`, `75c9337a8` | `server_entity_data` `arrow-mob`, `sting-mob`, `arrow-player`; unit `arrows::tests` |
+| 12 | Shoulder parrots shown (indices 19, 20) | `d7d3849d2` | `hub_sync` snapshots |
+| 13 | `/dialog show` and `/dialog clear` reach remote players | `672b8620b` | `server_player_handlers` |
+| 14 | `/fillbiome` sends `ChunksBiomes` | `efe40ad9d` | `server_entity_data` `fillbiome` |
+| 15 | Reach (`block_interaction_range` + 1) and click-location checks on block use, reach and height checks on digging | `c68ba828b` | `server_player_handlers`, 4 cases |
+| 16 | "Height limit for building" overlay, sent twice on the top face as vanilla | `aecba7beb`, `d31bbcb53` | `server_player_handlers`, 2 cases |
+| 17 | Code of conduct shown and accepted during configuration | `1bcb835b7` | `hub_sync` (every join) |
+| 18 | Death-screen score | `3bbec62a2`, `6a79890b5` | `hub_sync` snapshots (`18=30`) |
+| 19 | "Anonymous Player" in the status sample for unlisted players | `8488bb48e` | `hub_sync` status |
+| 20 | Recipe-book highlights clear | `191be6e14`, `80a08878f` | `hub_sync` `recipe-seen`, `alice-rejoins` |
+| 22 | F3+I tag queries for entities, players and block entities | `7ebf03205` | `server_player_handlers`, 2 cases |
+| 23 | Play-state ping answered | `02e9f2d4f` | `hub_sync` `ping` |
+| 24 | Advancements screen keeps its tab | `191be6e14`, `80a08878f` | `hub_sync` `tabs` |
+| 25 | Hat layer in the tab list at join and on change | `8488bb48e` | `hub_sync` `bob-joins`, `bob-hat-on` |
+| 27 | `/tp` of items, orbs, projectiles, crystals, clouds and player-ridden vehicles sends `TeleportEntity` (the audit's "mobs glide" was wrong). Other teleports open as #27 | `6385ae8ea` | `server_entity_data` `tp-item`, `tp-boat-rider` |
+| 29 | A landing falling block sends its block to trackers | `94cc8ff28` | `server_entity_data` `falling-sand` |
+| 31 | `function-permission-level` honoured (rest of #31 open) | see below | |
+| 32 | Own effect swirls sent to self | `d7d3849d2` | `hub_sync` `after-criteria` |
+| | `NoAI` mobs burn in daylight, push, age and tick their love timer; the push skips the mob's own rider and mount | `fca21704f` | `server_entity_data` `noai-sunburn` |
+| | Full-strength sword hits by server players sweep | `d55ac126a` | `server_combat` |
+| | An axe on a raised shield puts it on cooldown | `c3652796f` | `server_combat` |
+| | Speed, Slowness, Haste and Mining Fatigue use vanilla's float-widened amounts | `b99a8e690` | `server_combat` |
+| | Item components the server doesn't model (lore, custom data, unbreakable, custom model data, tooltip display, profile, item model, rarity, glint) reach clients, and styled custom names keep their colours in saves, commands and the wire | `5e90d2e68` | `server_items`, 13 of 13; `horizon-items` `item_data` tests |
+| | `/transfer` sends the named players, not the sender; an unknown command's error no longer carries an empty context | `eb5a048a8` | `server_ops_feedback` `admin` |
+| | A ban's source is the player's name; operators hear about a ban before the kick; a player's `/save-all` saves after their turn | `cd15d45f4` (branch) | `server_ops_feedback` `admin` |
+| | Functions compile at `function-permission-level` at load and `/reload`; failing functions and the tags needing them drop with vanilla's messages; macro lines checked at call | `8ec12d527`, `3bf600a37` | `server_function_permission`, 33 lines |
+| | `Player.updateCommands` resends command trees (to every player, where vanilla sends only that player's) | players area, `game/plugins/players.rs:607` | `plugins_e2e.py` |
+
+## Protocol coverage at HEAD
+
+The full serverbound and clientbound tables are in the audit commit `9b35c1726`. What is still not handled:
+
+- **Serverbound dropped:** `SetStructureBlock`, `SetJigsawBlock`, `JigsawGenerate`, `SetTestBlock`,
+  `TestInstanceBlockAction`, `SetCommandMinecart` (#21), `DebugSubscriptionRequest` (#63). `Pong` and
+  `CookieResponse` are ignored as vanilla effectively does (no pings or cookies are sent).
+  `ConfigurationAcknowledged` isn't needed (no `StartConfiguration` is sent).
+- **Clientbound never sent:** `SOUND_ENTITY` (#26), `PLAYER_ROTATION`, `PLAYER_LOOK_AT` (#28) and the
+  low-impact list in #63. `TELEPORT_ENTITY` is sent only from `/tp` (#27).
