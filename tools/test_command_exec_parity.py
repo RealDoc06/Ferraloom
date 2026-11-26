@@ -93,6 +93,8 @@ KNOWN = {
     '/execute if dimension minecraft:overworld run say back through the portal': CHAT,
     '/perf stop': 'Ferraloom has no /perf (a dedicated command)',
     '/help': 'lists no /perf',
+    '/waypoint list #6': "a mob's new waypoint transmit range counts at once, not from its next tick "
+                         '(LivingEntity.refreshDirtyAttributes)',
     TICKS_SHORT: 'tick step N moves the game time fewer than N ticks after the player changed dimension or chunks loaded',
 }
 
@@ -244,15 +246,11 @@ def main():
         print(f'{name}: {hi - lo - failed}/{hi - lo} commands match', flush=True)
     for m in mismatches[:args.limit]:
         print(m['kind'], repr(m['cmd']), '' if m['at'] is None else f'(#{m["occurrence"]}, record {m["at"]})')
-        if m['kind'] == 'messages' and max(len(m['vanilla']['messages']), len(m['rust']['messages'])) > 3:
-            lines = [[''.join(span[0] for span in message) for message in side['messages']] for side in (m['vanilla'], m['rust'])]
-            for line in difflib.unified_diff(*lines, 'vanilla', 'ferraloom', n=0, lineterm=''):
-                print('   ', line[:300])
-            continue
-        print('  vanilla  ', render(m['vanilla'])[:400])
-        print('  ferraloom', render(m['rust'])[:400])
+        show(m)
     for m in known:
         print(f'known: {m["cmd"]!r} ({KNOWN[m["key"]]})')
+        if long_messages(m):
+            show(m)
     for key in sorted(fixed):
         print(f'matches now, leave KNOWN: {key!r}')
     total = len(vanilla)
@@ -299,6 +297,21 @@ def compare(v, r):
             return None
         return 'results'
     return None
+
+
+def long_messages(m):
+    return m['kind'] == 'messages' and max(len(m['vanilla']['messages']), len(m['rust']['messages'])) > 3
+
+
+def show(m):
+    """A mismatch's two records, or the lines that differ for long replies (/help)."""
+    if long_messages(m):
+        lines = [[''.join(span[0] for span in message) for message in side['messages']] for side in (m['vanilla'], m['rust'])]
+        for line in difflib.unified_diff(*lines, 'vanilla', 'ferraloom', n=0, lineterm=''):
+            print('   ', line[:300])
+        return
+    print('  vanilla  ', render(m['vanilla'])[:400])
+    print('  ferraloom', render(m['rust'])[:400])
 
 
 def render(record):
