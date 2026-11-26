@@ -22,11 +22,14 @@ static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 fn raise_open_file_limit() {
     use rustix::process::{Resource, Rlimit, getrlimit, setrlimit};
     let limit = getrlimit(Resource::Nofile);
-    if limit.current == limit.maximum {
+    // An unlimited hard limit (macOS reports one) is refused as the soft one: ask for macOS's
+    // `OPEN_MAX` then.
+    let wanted = limit.maximum.unwrap_or(10240);
+    if limit.current.is_none_or(|current| current >= wanted) {
         return;
     }
     let raised = Rlimit {
-        current: limit.maximum,
+        current: Some(wanted),
         maximum: limit.maximum,
     };
     if let Err(error) = setrlimit(Resource::Nofile, raised) {
