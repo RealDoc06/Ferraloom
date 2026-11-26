@@ -304,6 +304,8 @@ impl InventoryHost for GameHost<'_, '_> {
             };
             let conn = hub.hub.guests[gi].conn;
             let open = hub.hub.guests[gi].menu.is_some();
+            // A menu the game runs itself closes with nothing told: its client is.
+            let shown = engine_window(hub, conn);
             if open {
                 game.guest_container_closed(hub, conn);
                 hub.hub.close_container(conn);
@@ -315,6 +317,10 @@ impl InventoryHost for GameHost<'_, '_> {
                 || game.lan_mount_closed(hub, conn, None);
             if closed {
                 game.guest_carried_back(hub, gi);
+            }
+            if let Some(container) = shown.filter(|_| !open) {
+                hub.hub
+                    .send_to(conn, &C::ContainerClose(play::ContainerClose { container }));
             }
             closed
         })
@@ -357,6 +363,20 @@ impl InventoryHost for GameHost<'_, '_> {
             }
         });
     }
+}
+
+/// The window of the menu the game runs itself that the guest has open (a
+/// crafting table, a station or lectern, trading, a mount's), if any.
+fn engine_window(host: &LanHost, conn: u32) -> Option<i32> {
+    let p = host.play.get(&conn)?;
+    p.crafting
+        .table
+        .as_ref()
+        .map(|t| t.0)
+        .or(p.station.as_ref().map(|s| s.window))
+        .or(p.lectern.as_ref().map(|l| l.window))
+        .or(p.merchant.as_ref().map(|m| m.window))
+        .or(p.mount_window.as_ref().map(|m| m.window))
 }
 
 /// The `InventoryType` of a menu's top.

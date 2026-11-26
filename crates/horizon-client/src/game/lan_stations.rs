@@ -20,7 +20,7 @@ use horizon_protocol::packets::play::{self, Clientbound as C};
 
 /// A guest's open workstation menu.
 pub(super) struct GuestStation {
-    window: i32,
+    pub(super) window: i32,
     state: i32,
     kind: StationKind,
     pos: [i32; 3],
@@ -34,7 +34,7 @@ pub(super) struct GuestStation {
 /// A guest's open lectern: `LecternMenu` over the block entity, made on the
 /// menu engine for each click (`Game::lectern_menu`).
 pub(super) struct GuestLectern {
-    window: i32,
+    pub(super) window: i32,
     state: i32,
     key: (i32, i32, i32),
     /// The book and page the client was last sent (`broadcastChanges`).
