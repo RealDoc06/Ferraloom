@@ -70,7 +70,11 @@ fn network(id: &str, tag: &Tag) -> Option<(i32, Component)> {
             component::ENCHANTMENT_GLINT_OVERRIDE,
             Component::Bool(int(tag)? != 0),
         ),
-        "minecraft:enchantable" => (ENCHANTABLE, Component::Int(int(tag.get("value")?)?)),
+        // Enchantable's codec rejects a value below 1: the client would disconnect.
+        "minecraft:enchantable" => (
+            ENCHANTABLE,
+            Component::Int(int(tag.get("value")?).filter(|v| *v >= 1)?),
+        ),
         // DamageResistant: a holder set of damage types (ByteBufCodecs.holderSet).
         // Only a tag crosses: 0, then the tag's id. Vanilla's items name
         // tags; a list of types would need the registry's ids.
