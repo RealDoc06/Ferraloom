@@ -142,7 +142,7 @@ Unknown keys are refused. Its CI runs `cargo-horizon-mod` (`crates/cargo-horizon
 | `cargo horizon-mod check <file> [--json]` | A submission's checks: its kind's (above), its signature with `--key` and `--signature`, and for a mod a trial run in the sandbox (40 ticks, 120 frames, a chat line, each command). |
 | `cargo horizon-mod registry check <base> <head> --files <dir>` | `check` on each file `head` lists and `base` doesn't: a pull request's new files. |
 | `cargo horizon-mod registry list <checkout>` | `<sha256> <id> <version> <file>` per version: the files to download. |
-| `cargo horizon-mod registry build <checkout> --files <dir> --out index.json` | Reads every entry and its file (`<dir>/<sha256>`), lists every problem, and writes the index with URLs `<release><id>-<version>/<file>` (`--release`, ending in `/`, defaults to the repository's releases). |
+| `cargo horizon-mod registry build <checkout> --files <dir> --out index.json --release <url> --site <url>` | Reads every entry and its file (`<dir>/<sha256>`), lists every problem, and writes the index with URLs `<release><id>-<version>/<file>` (`--release`, ending in `/`: the registry's release assets) and icons under `--site`. Neither has a default. |
 | `cargo horizon-mod registry review <base> <head> --author <login>` | A pull request's changes: a published file never changes and is never removed (take it down in `revoked.toml`), a kind never changes; changes by a non-owner and to owners or keys are pointed out for the reviewers. |
 
 How the repository runs (its workflows are in `.github/workflows/`):

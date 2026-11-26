@@ -122,7 +122,7 @@ impl Scratch {
         build(&Sources {
             registry: &repo,
             files: &files,
-            release: super::super::FILE_HOST,
+            release: "https://github.com/example/mods/releases/download/",
             site: "https://horizon-rust.github.io/horizon-mods/",
             generated: "2026-10-24T18:00:00Z".into(),
         })
@@ -254,7 +254,7 @@ fn only_open_kinds_are_taken() {
     let src = Sources {
         registry: &dir,
         files: &dir,
-        release: super::super::FILE_HOST,
+        release: "https://github.com/example/mods/releases/download/",
         site: "https://x.test/",
         generated: String::new(),
     };

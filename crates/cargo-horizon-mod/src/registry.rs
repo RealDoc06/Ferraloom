@@ -1,16 +1,11 @@
-//! `cargo horizon-mod registry build|review|check|list`: the registry repository's CI
-//! (`horizon-rust/horizon-mods`, docs/api/mod-index.md). Network-free: the
-//! workflow downloads the files and publishes what this writes.
-use horizon_mods::index::{
-    FILE_HOST,
-    registry::{self, Sources},
-};
+//! `cargo horizon-mod registry build|review|check|list`: a mod registry
+//! repository's CI (docs/api/mod-index.md). Network-free: the workflow
+//! downloads the files and publishes what this writes. There is no default
+//! registry: `build` takes where the files and the site are published.
+use horizon_mods::index::registry::{self, Sources};
 use std::path::Path;
 
-/// Where the registry's site is published (its icons).
-const SITE: &str = "https://horizon-rust.github.io/horizon-mods/";
-
-const USAGE: &str = "usage: cargo horizon-mod registry build <checkout> --files <dir> --out <index.json> [--release <url>] [--site <url>] [--generated <time>]
+const USAGE: &str = "usage: cargo horizon-mod registry build <checkout> --files <dir> --out <index.json> --release <url> --site <url> [--generated <time>]
        cargo horizon-mod registry review <base checkout> <head checkout> --author <login> [--json]
        cargo horizon-mod registry check <base checkout> <head checkout> --files <dir>
        cargo horizon-mod registry list <checkout>";
@@ -48,7 +43,9 @@ pub fn main(args: &[String]) -> Result<(), String> {
                 return Err(USAGE.into());
             };
             let (files, out) = (flag(rest, "--files"), flag(rest, "--out"));
-            let (Some(files), Some(out)) = (files, out) else {
+            let (release, site) = (flag(rest, "--release"), flag(rest, "--site"));
+            let (Some(files), Some(out), Some(release), Some(site)) = (files, out, release, site)
+            else {
                 return Err(USAGE.into());
             };
             let generated = flag(rest, "--generated")
@@ -58,8 +55,8 @@ pub fn main(args: &[String]) -> Result<(), String> {
             let index = registry::build(&Sources {
                 registry: Path::new(checkout),
                 files: Path::new(files),
-                release: flag(rest, "--release").unwrap_or(FILE_HOST),
-                site: flag(rest, "--site").unwrap_or(SITE),
+                release,
+                site,
                 generated,
             })
             .map_err(lines)?;
