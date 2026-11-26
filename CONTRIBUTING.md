@@ -1,8 +1,8 @@
-# Contributing to Horizon
+# Contributing to Ferraloom
 
-Thanks for helping. Horizon is Minecraft: Java Edition 26.3 rewritten in Rust, and the one rule that shapes
-everything is that **it plays exactly like vanilla**. This page is the short version of how we work; questions are
-welcome on [Discord](https://discord.gg/HcTeMZxe5E).
+Thanks for helping. Ferraloom is a Minecraft: Java Edition 26.3 server written in Rust, built on Horizon, and the
+one rule that shapes everything is that **it behaves exactly like vanilla's server**. This page is the short
+version of how we work. The code still says "Horizon" in crate, binary and file names.
 
 This repository holds the server, plus the tools, tests and docs that build, check and release it.
 
@@ -88,5 +88,4 @@ new pushes, we add it again.
 
 ## Talk to us
 
-[Discord](https://discord.gg/HcTeMZxe5E) for questions and ideas, [issues](https://github.com/horizon-rust/horizon/issues)
-for bugs. If you want to take something on, say so in its issue so nobody else starts the same work.
+[Issues](https://github.com/RealDoc06/Ferraloom/issues) for bugs, questions and ideas. If you want to take something on, say so in its issue so nobody else starts the same work.

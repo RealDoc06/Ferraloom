@@ -1,28 +1,29 @@
 # Ferraloom development
 
 Ferraloom is a Minecraft Java Edition 26.3 server in Rust (protocol 777, data
-version 5023), built on the dedicated server of
-[Horizon](https://github.com/horizon-rust/horizon). The goal is unchanged:
-everything vanilla does works, the world ticks across many cores, chunk
-generation and loading never cost TPS, and plugins run on top. Java `.jar`
-plugin support still comes only after vanilla parity.
+version 5023), built on the dedicated server of Horizon, a Rust rewrite of
+Minecraft 26.3. The goal is unchanged: everything vanilla does works, the world
+ticks across many cores, chunk generation and loading never cost TPS, and
+plugins run on top.
 
 ## Horizon base
 
 - This branch starts from Horizon v0.2.93 (`b6c936f8`) with its full history.
-  The `horizon` remote is upstream: merge its releases, never rebase over them,
-  and name the upstream tag in the merge commit.
+  Upstream's repository was taken down in November 2026, so there is nothing
+  left to merge: the code is ours to reshape.
 - Horizon is MIT. Keep its `LICENSE` and `THIRD_PARTY_NOTICES.md`.
-- Ferraloom is the server only. Horizon's dedicated server is its game binary
-  run headless: the `horizon-server` supervisor starts `horizon-client
-  --dedicated`, and the one `Game` in `crates/horizon-client/src/game.rs` holds
-  client and server state together. Carving the server out of the client is a
-  standing goal: remove or feature-gate client-only crates and code
-  (rendering, audio, input, HUD, launcher, shaders, client mods) and never add
-  new client coupling. Until that is done, build the engine with
-  `--no-default-features` (no audio or controller libraries).
-- Where things are: `docs/horizon-agents.md` (upstream's agent map: crates,
-  files, harnesses), `docs/server.md`, `docs/server-levels.md`, `docs/mods.md`.
+- Ferraloom is the server only. Horizon was a whole game; its client, launcher
+  and client mods were removed in November 2026. Never add client code back
+  (rendering, audio, input, HUD, screens).
+- The names stayed: the `horizon-server` supervisor starts the engine,
+  `horizon-client --dedicated`, and the one `Game` in
+  `crates/horizon-client/src/game.rs` holds the server's state. Players are
+  "guests" swapped into it (`as_guest`); the hub is `lan/hub.rs`.
+  `--no-default-features` no longer changes the engine build; the commands keep
+  it so old scripts work.
+- Where things are: `docs/horizon-agents.md` (the agent map: crates, files,
+  harnesses), `docs/server.md`, `docs/server-levels.md`, `docs/mods.md`,
+  `docs/ferraloom/`.
 - The pre-fork Ferraloom port (branch `restart`, crates `ferraloom-*`) is
   reference material. Port a piece from it only where Horizon lacks a feature
   or gets it wrong, and bring a harness with it. Its design notes on threading
@@ -42,8 +43,11 @@ plugin support still comes only after vanilla parity.
   between vanilla's phase barriers, anything crossing regions parks for an
   exclusive lane, and single-region mode stays the exact vanilla reference
   (`docs/ferraloom/game-core.md`).
-- **Plugins.** Horizon has sandboxed WebAssembly server mods (API 0.3,
-  `docs/mods.md`). Ferraloom's plugin API grows from there.
+- **Plugins.** Spigot plugins run on the real Bukkit API through an in-process
+  JVM (`crates/ferraloom-plugins`, `docs/ferraloom/plugins.md`). The JVM loads
+  only when `plugins/` holds a jar, and an event nobody listens to costs one
+  branch: keep it that way. Horizon's sandboxed WebAssembly server mods
+  (`docs/mods.md`) still work.
 - **Server performance in general**, measured, never guessed.
 
 ## Vanilla is the spec
@@ -72,6 +76,11 @@ plugin support still comes only after vanilla parity.
   names the harnesses a change can affect. A change that can alter gameplay
   passes them before it merges. Multi-core work passes them in single-region
   and parallel-region modes.
+- `tools/plugins_e2e.py` checks the plugin bridge end to end with a scripted
+  player. `tools/client_rig/rig` runs the real vanilla client headless on the
+  builder for live checks (`docs/ferraloom/client-rig.md`).
+- Known differences from vanilla are tracked in one list,
+  `docs/ferraloom/vanilla-client-gaps.md`. Add what you find; move what you fix.
 - Unit tests live next to the code. Tests must be focused: no smoke-test spam,
   receipts, evidence ledgers or hash-pinned logs. A test passes or it fails.
 
@@ -111,8 +120,6 @@ Do not alter Proxmox, other containers or live services.
 - Conventional commits, for example `perf(streaming): budget chunk integration per tick`.
 - Keep commits small and focused. Work on your own branch; the parent agent
   merges it.
-- Keep upstream merges cheap: prefer new modules over rewrites of busy upstream
-  files, and keep edits to upstream code small and commented.
 - Add external dependencies in your crate's own `Cargo.toml`, not in
   `[workspace.dependencies]`, so parallel branches merge cleanly.
 - Stay inside the paths your brief assigns you. Ask the parent before touching
