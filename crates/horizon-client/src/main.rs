@@ -23,8 +23,13 @@ fn raise_open_file_limit() {
     use rustix::process::{Resource, Rlimit, getrlimit, setrlimit};
     let limit = getrlimit(Resource::Nofile);
     // An unlimited hard limit (macOS reports one) is refused as the soft one: ask for macOS's
-    // `OPEN_MAX` then.
-    let wanted = limit.maximum.unwrap_or(10240);
+    // `OPEN_MAX` then. macOS also refuses a finite hard limit above `OPEN_MAX`.
+    let hard = limit.maximum.unwrap_or(10240);
+    let wanted = if cfg!(target_os = "macos") {
+        hard.min(10240)
+    } else {
+        hard
+    };
     if limit.current.is_none_or(|current| current >= wanted) {
         return;
     }
