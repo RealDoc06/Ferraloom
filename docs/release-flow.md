@@ -4,6 +4,10 @@ How a change gets from a pull request to a server release: the checks a pull req
 the automatic releases that follow. There is one channel ([One channel](#one-channel)): each release is published as
 the release and GitHub's *latest* once no `release-blocker` is open, and servers install it at once.
 
+The workflows are upstream Horizon's. The runners, hosts and people this page names (the maintainer's Mac mini and
+desktop, playhorizon, the trusted reviewers) were upstream's infrastructure; Ferraloom builds on its own builder
+([AGENTS.md](../AGENTS.md)) until its CI is set up again.
+
 ## Pull request checks
 
 The `checks` workflow (`.github/workflows/ci.yml`) runs two jobs on every pull request (opened, pushed to or
@@ -51,8 +55,8 @@ alone, with a warning. The check is still reported on the head.
    prepares `.local/horizon-client` with the pull request's own `horizon-prepare` once per preparer version
    (its sources, the exporters in `mods/horizon/src/test/java` and `research-lock.json`). The game's sounds, which
    depend only on the Minecraft version, are kept once in `shared-local/sounds/<version>/` (copied from a folder
-   `horizon-prepare sounds` made from the maintainer's own game; the Mac mini has no official launcher of its own)
-   and cloned into each preparation (not linked: vanilla's packs refuse symbolic links), for the audio harnesses.
+   `horizon-prepare sounds` made from the maintainer's own game) and cloned into each preparation (not linked:
+   vanilla's packs refuse symbolic links).
    `tools/prepare_output.py check` then compares what was prepared with `crates/horizon-prepare/output-versions.txt`:
    servers keep their prepared resources across releases whose preparer declares the same `OUTPUT_VERSION`
    (`crates/horizon-prepare/src/lib.rs`), so a change to the prepared files fails here until it bumps the number
@@ -262,12 +266,12 @@ notes.
 
 `.github/workflows/game-build.yml` compiles the exporters `horizon-prepare` needs on the Mac mini (which holds the
 pinned jars; only our classes leave it), then builds one server folder per platform with
-`cargo run -p xtask -- package-server`: the engine (`horizon-client` built with `--no-default-features --features
-mods`, as `horizon-engine`), `horizon-prepare`, `horizon-server`, the exporters and the preparer's sources.
+`cargo run -p xtask -- package-server`: the engine (`horizon-client` built with `--features mods`, as
+`horizon-engine`), `horizon-prepare`, `horizon-server`, the exporters and the preparer's sources.
 
 | Archive | Runs on | Checks |
 | --- | --- | --- |
-| `horizon-server-linux-x86_64.tar.gz` | GitHub `ubuntu-22.04` (an older glibc, so it runs on any recent distribution) | the standard loader and libraries only, neither `libasound.so.2` nor `libudev.so.1` (`tools/check_imports.py --server`) |
+| `horizon-server-linux-x86_64.tar.gz` | GitHub `ubuntu-22.04` (an older glibc, so it runs on any recent distribution) | the standard loader and libraries only (`tools/check_imports.py --server`) |
 | `horizon-windows-x64.zip` | GitHub `windows-latest`, C runtime linked in | system DLLs only (`tools/check_imports.py --server`) |
 | `horizon-macos-arm64.zip` | The Mac mini's runner (`vars.MAC_RUNNER=macos-latest` sends it to GitHub) | system libraries only (`otool -L`) |
 
