@@ -258,12 +258,8 @@ impl Shared {
         uuid: u128,
         name: &str,
     ) -> Option<horizon_world::nbt::Tag> {
-        let full = {
-            let online = self.online.lock().unwrap();
-            let bypass = self.config.bypasses_limit.as_ref().is_some_and(|b| b(uuid));
-            let taken = online.len() + self.reserved.lock().unwrap().len();
-            taken >= self.max_players() && !bypass
-        };
+        let bypass = self.config.bypasses_limit.as_ref().is_some_and(|b| b(uuid));
+        let full = !bypass && self.online() >= self.max_players();
         if let Some(gate) = &self.config.gate
             && let Some(reason) = gate(address, uuid, name, full)
         {
@@ -286,7 +282,15 @@ impl Shared {
                 std::thread::sleep(Duration::from_millis(10));
             }
         }
-        self.online.lock().unwrap().push((uuid, name.to_owned()));
+        // Recount under the lock: another login may have taken the last place
+        // while the gate ran. A gate that let a full server's login through
+        // overrode the limit, so only a login seen with room is refused here.
+        let mut online = self.online.lock().unwrap();
+        let taken = online.len() + self.reserved.lock().unwrap().len();
+        if !full && !bypass && taken >= self.max_players() {
+            return Some(translatable("multiplayer.disconnect.server_full", &[]));
+        }
+        online.push((uuid, name.to_owned()));
         None
     }
     fn is_online(&self, uuid: u128) -> bool {
