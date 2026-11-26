@@ -2,8 +2,8 @@
 
 Horizon's registry listed what was made for Horizon and reviewed: mods (`.hmod`), modpacks (`.hpack`), resource
 packs and Horizon shader packs (`.hshader`). Submissions were pull requests in `horizon-rust/horizon-mods`, which
-went with upstream; its CI built one file, `index.json`, which Horizon's launcher and website read. The engine
-still reads an index to install the official mods that replaced extras (`moved_extras.rs`). The Rust types and every check below are
+went with upstream; its CI built one file, `index.json`, which Horizon's launcher and website read. The engine reads
+no index. The Rust types and every check below are
 `horizon_mods::index` and `horizon_mods::modpack` (feature `index`); the sample is
 `crates/horizon-mods/tests/index/index-v1.json`, read by the tests with the files it lists.
 

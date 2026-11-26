@@ -1,8 +1,7 @@
 //! The mod registry's index, `index.json` (docs/api/mod-index.md): every
 //! reviewed mod and modpack, its versions, the file of each with its size,
 //! SHA-256 and minisign signature, and the files taken down. The engine
-//! reads it to install the official mods that replaced extras
-//! (`moved_extras.rs`), and the registry's CI writes it.
+//! reads none; `cargo horizon-mod` checks entries against it.
 //!
 //! [`check_file`] is what a file must pass before it is installed: its size
 //! and hash are the ones the index lists, its signature verifies against the

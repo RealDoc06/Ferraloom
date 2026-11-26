@@ -36,10 +36,9 @@ wit-parser = "0.254"
 # game's tests and probes) skip wasmtime and cranelift.
 runtime = ["dep:wasmtime", "dep:wasmparser"]
 pack = ["dep:wit-component", "dep:wit-parser"]
-# The mod registry's index (docs/api/mod-index.md): the engine (moved_extras.rs) and the registry's CI.
+# The mod registry's index (docs/api/mod-index.md), for `cargo horizon-mod`.
 index = ["dep:sha2", "dep:minisign-verify", "dep:wasmparser"]
 # The index's check of shader packs (horizon-shader-api, which compiles their shaders with naga).
-# The server engine reads the index without it: it loads no shader pack.
 shader-packs = ["index", "dep:horizon-shader-api"]
 
 # Runs real mods: `cargo test -p horizon-mods --features runtime,pack`.
