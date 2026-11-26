@@ -43,6 +43,7 @@ import org.bukkit.event.player.PlayerToggleSneakEvent;
 import org.bukkit.event.player.PlayerToggleSprintEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.messaging.ChannelNameTooLongException;
 import org.bukkit.plugin.messaging.StandardMessenger;
 import org.bukkit.util.Vector;
 
@@ -587,7 +588,7 @@ public final class PlayerEvents {
                         String valid;
                         try {
                             valid = StandardMessenger.validateAndCorrectChannel(name);
-                        } catch (IllegalArgumentException invalid) {
+                        } catch (IllegalArgumentException | ChannelNameTooLongException invalid) {
                             continue;
                         }
                         if (!channel.endsWith(":register")) {

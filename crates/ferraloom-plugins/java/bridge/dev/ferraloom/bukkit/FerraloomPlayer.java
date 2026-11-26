@@ -628,12 +628,13 @@ final class FerraloomPlayer extends StubPlayer {
 
     // Plugin messages.
 
-    /** CraftPlayer.sendPluginMessage: only on a channel the client registered. */
+    /** CraftPlayer.sendPluginMessage: only on a channel the client registered, both by the corrected name. */
     @Override
     public void sendPluginMessage(Plugin source, String channel, byte[] message) {
         StandardMessenger.validatePluginMessage(server.getMessenger(), source, channel, message);
-        if (online && channels.contains(channel)) {
-            PlayerNative.pluginMessage(most, least, StandardMessenger.validateAndCorrectChannel(channel), message);
+        String corrected = StandardMessenger.validateAndCorrectChannel(channel);
+        if (online && channels.contains(corrected)) {
+            PlayerNative.pluginMessage(most, least, corrected, message);
         }
     }
 
