@@ -771,8 +771,9 @@ impl Game<'_> {
     /// After a cancelled click or drag, CraftBukkit's resend: whatever the client
     /// predicted (moves, swaps, renamed stacks) is undone by sending whole the
     /// player's inventory when no menu is open or the click was in it, else the
-    /// clicked window and the cursor if it is still the open one. A listener that
-    /// opened another menu has sent it already.
+    /// clicked window and the cursor if it is still the open one, and the
+    /// inventory too after an off-hand swap (key F), whose off hand the menu
+    /// does not show. A listener that opened another menu has sent it already.
     fn resync_cancelled(&self, host: &mut LanHost, conn: u32, p: &play::ContainerClick) {
         let Some(i) = host.hub.guest_index(conn) else {
             return;
@@ -782,7 +783,12 @@ impl Game<'_> {
             host.hub.guests[i].menu.as_ref().map(|m| m.window),
         ) {
             (0, _) | (_, None) => host.hub.send_inventory(i),
-            (w, Some(open)) if w == open => host.hub.resend_menu(i, &self.world),
+            (w, Some(open)) if w == open => {
+                host.hub.resend_menu(i, &self.world);
+                if p.input == input::SWAP && p.button == 40 {
+                    host.hub.send_inventory(i);
+                }
+            }
             _ => {}
         }
     }
