@@ -87,7 +87,7 @@ import net.minecraft.world.phys.Vec3;
  *     the wrapper would change its error's context line (parsing has no side
  *     effects). Recorded: every system message that is not an overlay and
  *     every player or disguised chat message, decorated by its chat type, as
- *     styled spans (as VanillaCommandExecOracle did), and the last result.</li>
+ *     styled spans, and the last result.</li>
  *   <li>{@code tick N}: {@code tick step N}, then waits until the game time
  *     moved N ticks. A step whose clock stops short is written to
  *     OUT.jsonl.notes (vanilla's never does), and the rest stepped.</li>
@@ -172,7 +172,7 @@ public final class CommandExecClient {
         return all;
     }
 
-    /** The message's text as spans of one resolved style, merged where neighbours share it (VanillaCommandExecOracle). */
+    /** The message's text as spans of one resolved style, merged where neighbours share it. */
     static JsonArray spans(Component message) {
         JsonArray out = new JsonArray();
         message.visit((style, text) -> {

@@ -13,8 +13,8 @@
 # folder) keeps one checkout there, ~/remote-work/<name>, with its own target/: the next run checks out the new
 # commit over it, so only what changed rebuilds (sccache shares the registry crates between names). One run per
 # name at a time. The command runs in bash at the checkout's root, niced in the host's CI slice, with the host's
-# toolchains, a virtual screen and scratch homes for the game and launcher. .local/ links to the host's vanilla
-# data; a command that runs harnesses (it names parity, lan_e2e or horizon-prepare) also gets .local/horizon-client,
+# toolchains, a virtual screen and scratch homes for the engine. .local/ links to the host's vanilla
+# data; a command that runs harnesses (it names parity or horizon-prepare) also gets .local/horizon-client,
 # prepared as CI prepares it (tools/ci/vanilla-data.sh). Output streams back and is kept in ~/remote-work/<name>.logs/.
 # What the command leaves running is stopped when it ends; stopping this script stops the command on the host.
 # The exit status is the command's.
@@ -97,7 +97,7 @@ git checkout -q --force --detach "$sha"
 git clean -qfd -e /target -e /.local
 # The host's vanilla data, linked as CI's runner links it; for harnesses also .local/horizon-client, prepared by
 # this commit's own preparer (once per preparer version, kept beside the data and shared by every name).
-if [[ $command =~ parity|lan_e2e|horizon-prepare ]]; then
+if [[ $command =~ parity|horizon-prepare ]]; then
   RUNNER_WORKSPACE=$(dirname "$HORIZON_SHARED_SOURCE") RUNNER_TEMP=$(mktemp -d) bash tools/ci/vanilla-data.sh >&2 8>&- 9>&-
 else
   mkdir -p .local
