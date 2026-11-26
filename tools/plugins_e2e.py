@@ -116,8 +116,7 @@ class Lines:
 class Server:
     def __init__(self, engine, directory, out, name, scratch):
         env = dict(os.environ, HORIZON_HOME=str(scratch / 'home'), XDG_DATA_HOME=str(scratch / 'data'),
-                   XDG_CONFIG_HOME=str(scratch / 'config'), HORIZON_NO_AUDIO='1',
-                   HORIZON_LAUNCHER_NO_SELF_UPDATE='1')
+                   XDG_CONFIG_HOME=str(scratch / 'config'))
         self.process = subprocess.Popen([str(engine), '--resources', str(RESOURCES), '--dedicated', '--nogui'],
                                         cwd=directory, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                         stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace')
