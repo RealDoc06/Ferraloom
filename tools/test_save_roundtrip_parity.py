@@ -22,6 +22,7 @@
 Run files stay under .local/save-roundtrip/run.
 """
 import argparse
+import atexit
 import collections
 import json
 import queue
@@ -128,6 +129,8 @@ class Vanilla:
         self.process = subprocess.Popen(
             [str(c) for c in command or ['java', '-Xmx2G', '-jar', SERVER, '--nogui']], cwd=directory, env=env,
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        # A harness that fails between start and stop must not leave its server running.
+        atexit.register(self.kill)
         self.lines = []
         self.queue = queue.Queue()
         self.counter = 0
@@ -163,6 +166,11 @@ class Vanilla:
         self.process.stdin.flush()
         out = self.wait(marker, timeout)
         return [re.sub(r'^\[[0-9:]+\] \[[^\]]*\]: (System chat: )?', '', l) for l in out[:-1]]
+
+    def kill(self):
+        if self.process.poll() is None:
+            self.process.kill()
+            self.process.wait()
 
     def stop(self):
         try:
@@ -259,45 +267,47 @@ def build_world(directory):
     """Fill a fresh vanilla world; returns the failed scene commands."""
     server = Vanilla(directory)
     failed = []
-    # A bot joins first so the player file exists and the chunks around spawn are loaded.
-    server.run('forceload add 0 0 63 63')
-    for rule in ('spawn_mobs', 'spawn_monsters', 'spawn_wandering_traders', 'spawn_patrols', 'spawn_phantoms',
-                 'spawn_wardens', 'raids'):
-        server.run(f'gamerule {rule} false')
-    server.run('gamerule random_tick_speed 0')
-    time.sleep(3)
-    server.run('fill 0 -61 0 47 -61 47 minecraft:stone')
-    for i, (block, nbt) in enumerate(scene.BLOCK_ENTITIES):
-        x, y, z = block_position(i)
-        command = f'setblock {x} {y} {z} minecraft:{block}{nbt}'
-        out = server.run(command)
-        if command_failed(out):
-            failed.append((command, out))
-    for i, (kind, extra) in enumerate(scene.ENTITIES):
-        command = entity_command(i, kind, extra)
-        out = server.run(command)
-        if command_failed(out):
-            failed.append((command, out))
-    # A scoreboard with every kind of saved field (scoreboard.dat). No criteria that
-    # Horizon's own player (not the bot) would update while it runs.
-    for command in SCOREBOARD:
-        out = server.run(command.replace('{uuid0}', entity_uuid_text(0)))
-        if command_failed(out):
-            failed.append((command, out))
-    server.run('time set 6000')
-    server.run('gamerule advance_time false')
-    server.run('gamerule advance_weather false')
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    import vanilla_login
-    threading.Thread(target=lambda: vanilla_login.join('127.0.0.1', server.port, 'RoundTrip', 25), daemon=True).start()
-    time.sleep(6)
-    server.run('item replace entity RoundTrip container.0 with minecraft:iron_sword[damage=3]')
-    server.run('give RoundTrip minecraft:apple 7')
-    server.run('xp set RoundTrip 5 levels')
-    time.sleep(20)
-    server.run('save-all flush')
-    time.sleep(2)
-    server.stop()
+    try:
+        # A bot joins first so the player file exists and the chunks around spawn are loaded.
+        server.run('forceload add 0 0 63 63')
+        for rule in ('spawn_mobs', 'spawn_monsters', 'spawn_wandering_traders', 'spawn_patrols', 'spawn_phantoms',
+                     'spawn_wardens', 'raids'):
+            server.run(f'gamerule {rule} false')
+        server.run('gamerule random_tick_speed 0')
+        time.sleep(3)
+        server.run('fill 0 -61 0 47 -61 47 minecraft:stone')
+        for i, (block, nbt) in enumerate(scene.BLOCK_ENTITIES):
+            x, y, z = block_position(i)
+            command = f'setblock {x} {y} {z} minecraft:{block}{nbt}'
+            out = server.run(command)
+            if command_failed(out):
+                failed.append((command, out))
+        for i, (kind, extra) in enumerate(scene.ENTITIES):
+            command = entity_command(i, kind, extra)
+            out = server.run(command)
+            if command_failed(out):
+                failed.append((command, out))
+        # A scoreboard with every kind of saved field (scoreboard.dat). No criteria that
+        # Horizon's own player (not the bot) would update while it runs.
+        for command in SCOREBOARD:
+            out = server.run(command.replace('{uuid0}', entity_uuid_text(0)))
+            if command_failed(out):
+                failed.append((command, out))
+        server.run('time set 6000')
+        server.run('gamerule advance_time false')
+        server.run('gamerule advance_weather false')
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import vanilla_login
+        threading.Thread(target=lambda: vanilla_login.join('127.0.0.1', server.port, 'RoundTrip', 25), daemon=True).start()
+        time.sleep(6)
+        server.run('item replace entity RoundTrip container.0 with minecraft:iron_sword[damage=3]')
+        server.run('give RoundTrip minecraft:apple 7')
+        server.run('xp set RoundTrip 5 levels')
+        time.sleep(20)
+        server.run('save-all flush', 300)
+        time.sleep(2)
+    finally:
+        server.stop()
     return failed, server.problems()
 
 

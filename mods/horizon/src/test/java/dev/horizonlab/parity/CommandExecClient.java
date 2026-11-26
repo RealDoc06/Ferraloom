@@ -107,7 +107,7 @@ public final class CommandExecClient {
     private static final String STORAGE = "parity:exec";
     private static final String WRAP = "execute store success storage " + STORAGE + " s byte 1 store result storage "
         + STORAGE + " r int 1 run ";
-    private static final long TIMEOUT_NANOS = 600_000_000_000L;
+    private static final long TIMEOUT_NANOS = 300_000_000_000L;
 
     public static void main(String[] args) throws Exception {
         ParityData.init();

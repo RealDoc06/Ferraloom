@@ -129,7 +129,7 @@ def run_side(label, server_command, client_command, build, script_path):
         server.wait_for(r'Done \(', timeout=600)
         with (build / f'{label}-client.log').open('w') as log:
             result = subprocess.run([*map(str, client_command), '127.0.0.1', str(port), PLAYER, script_path, out],
-                                    cwd=lab.ROOT, stdout=log, stderr=subprocess.STDOUT, timeout=3600)
+                                    cwd=lab.ROOT, stdout=log, stderr=subprocess.STDOUT, timeout=900)
         if result.returncode:
             tail = (build / f'{label}-client.log').read_text(errors='replace').splitlines()[-30:]
             server_tail = server.lines[-15:]
