@@ -43,6 +43,7 @@ import org.bukkit.event.player.PlayerToggleSneakEvent;
 import org.bukkit.event.player.PlayerToggleSprintEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.messaging.StandardMessenger;
 import org.bukkit.util.Vector;
 
 /**
@@ -62,6 +63,8 @@ public final class PlayerEvents {
     /** Players between PlayerLoginEvent and their join, whose join reuses the object (CraftBukkit does). */
     private static final Map<UUID, FerraloomPlayer> LOGGING_IN = new ConcurrentHashMap<>();
     private static final double[] CANCELLED = new double[0];
+    /** CraftPlayer's limit on the channels a player registers. */
+    private static final int MAX_CHANNELS = 128;
     /** Vanilla's Direction ids (down, up, north, south, west, east) as BlockFaces. */
     private static final BlockFace[] FACES = {BlockFace.DOWN, BlockFace.UP, BlockFace.NORTH, BlockFace.SOUTH,
             BlockFace.WEST, BlockFace.EAST};
@@ -570,14 +573,18 @@ public final class PlayerEvents {
         try {
             switch (channel) {
                 case "minecraft:register", "minecraft:unregister" -> {
+                    // As CraftPlayer.addChannel: at most MAX_CHANNELS, each a valid channel name (anything else ignored).
                     for (String name : new String(data, StandardCharsets.UTF_8).split("\0")) {
-                        if (name.isEmpty()) {
+                        String valid;
+                        try {
+                            valid = StandardMessenger.validateAndCorrectChannel(name);
+                        } catch (IllegalArgumentException invalid) {
                             continue;
                         }
-                        if (channel.endsWith(":register")) {
-                            player.channels.add(name);
-                        } else {
-                            player.channels.remove(name);
+                        if (!channel.endsWith(":register")) {
+                            player.channels.remove(valid);
+                        } else if (player.channels.size() < MAX_CHANNELS) {
+                            player.channels.add(valid);
                         }
                     }
                 }
