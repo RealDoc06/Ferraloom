@@ -1,80 +1,24 @@
 # Horizon Rust rewrite status
 
-The behavior target is the repository's pinned **Minecraft Java Edition 26.3**.
-One-to-one vanilla gameplay parity is the acceptance criterion. It has **not**
-been reached, but the Rust game is now playable: the native client
-has a title screen and world management. It generates vanilla terrain with
-decoration and streams, lights and renders it. Survival play works: mining,
-placing, crafting, chests and furnaces, items, mobs, combat, hunger, health,
-sounds, and Anvil saves.
-The Rust workspace implements core arithmetic/random streams, world data and
-resident sections, scheduled tick ordering, geometry, contained fluid states,
-noise/density evaluation, biome and terrain generation kernels, material rules,
-and parts of feature placement and decoration. Movement/fluid interactions,
-registered attributes, hunger storage/ticks, synchronized player health and
-absorption, damage reduction, outer hurt gates, blocking-item damage, item
-durability and item-use start/tick/release/completion have scoped native comparisons.
-Shared inventory/equipment storage now binds item-use flags and lifecycle, while
-item templates, remainders, checked bundle weights and cooldown expiry have
-native comparisons. Item completion composes stack copies with remainder and
-cooldown effects and server inventory delivery. Consumable start/completion now
-composes food storage, native random streams and eating particles, with exact
-sound parameters and effect ordering checked against both pinned JARs. Consume
-effect bodies now cover status application/removal/clearing, sounds and random
-teleport attempts. Shared status instances implement hidden-chain updates,
-server/client countdown and client blending with native comparisons. Entity
-effect storage now binds consumable status changes and the effect tick loop,
-including expiration, periodic refresh and client particle selection. Registered
-effect behavior, notification side effects and full entity/world lifecycle
-bindings remain unfinished. All pinned block-survival
-families now have native differential coverage. Full simulation callbacks,
-complete chunk generation, entity behavior, networking, rendering and playable
-integration remain unfinished. The linked subsystem documents and hashed reports
-record the exact tested scope and remaining gaps.
-The `horizon-assets` crate now decodes pinned cuboid models, with all 2,883 bundled
-block-model JSON files and 2,457 synthetic cases compared against the actual
-client parser. Decoder scope and validation
-also include parent/texture resolution over 5,648 roots and cuboid baking over
-7,100 roots with identity blockstate transforms. Blockstate resource decoding now
-matches all 1,288 bundled definitions and 1,351 synthetic cases; registry
-binding now also matches native selection across registered and special
-item-frame states. Weighted selection and multipart random draw consumption
-also match native traces. Transformed baking now checks every bundled
-model/rotation/UV-lock tuple and all XYZ quarter-turn combinations against native
-geometry by exact float bits. The native renderer now draws its controlled
-resident chunks from registry-bound, selected and transformed models, including binary
-cutouts, multipart connections, weighted stone variants and stepped lantern
-animation. All 16 scene selections match native model collection. These are not
-yet simulated gameplay blocks. Resident chunk meshing now preserves weighted
-variants and UV orientation when greedily merging matching cube faces, and uses
-native-checked neighbor visibility. Full block-catalog material support, lighting
-and chunk streaming remain unfinished.
-Neighbor face visibility now matches both reference JARs
-across 1,441,816 state pairs, including all pinned suppression-rule families.
-Animation metadata, frame sequences and tick-state selection now have native
-differential coverage, including all bundled animated texture metadata. GPU
-interpolation and game-loop synchronization remain unfinished.
+The behavior target is the repository's pinned **Minecraft Java Edition 26.3**. One-to-one vanilla gameplay
+parity is the acceptance criterion, and it has **not** been reached. This page began as Horizon's log of the
+rewrite when it was a whole game (client and server); since November 2026 the repository is Ferraloom's
+dedicated server only, so client parts (rendering, screens, HUD, sound, input) and their harnesses were
+removed, and the sections about them with them. What stays is the record of what the engine's libraries port
+and how each port is checked.
 
-## Completion criteria and playable builds
+The Rust workspace implements core arithmetic and random streams, world data and resident sections, scheduled
+tick ordering, geometry, fluid states, noise and density evaluation, biome and terrain generation, material
+rules, feature placement and decoration, and the dedicated server on top: login, chunks, entities, mobs,
+combat, inventories, crafting, commands, saves. The linked subsystem documents and the harnesses
+(`python3 tools/parity.py --all --list`) record the exact tested scope and remaining gaps.
 
-The final deliverable is the complete Horizon Rust game with one-to-one parity
-with pinned Java Edition 26.3, plus a playable **Linux** build that the user can
-download and test. The target platform is a Linux x86-64 desktop with an NVIDIA
-GPU (Vulkan) on Wayland. macOS and Windows are out of scope. The build must include a packaged native
-executable, required runtime resources, launch instructions, artifact checksums,
-and the tested OS/CPU/GPU configuration.
+## Completion criteria
 
-The build is complete only after its packaged Rust game is launched and tested on the target machine:
-create/load a world, render terrain, use keyboard/mouse controls, move and interact,
-break/place blocks, use inventory/crafting, save, quit and reload. These launch
-checks accompany the full gameplay-parity suite; they do not replace it. Record
-failures and test limits. Compiler success, library comparisons
-and the existing Java packs do not establish a playable Rust build.
-
-Optimize FPS, frame pacing, memory use and render distance using matched scenes,
-worlds, settings and hardware after behavior is validated. Package and test on
-the target machine before declaring the rewrite complete. Commit and push
-verified development checkpoints regularly.
+The deliverable is a dedicated server with one-to-one gameplay parity with the pinned 26.3 server, checked by
+the parity harnesses against vanilla's own classes and, for whole-server behaviour, against vanilla's
+dedicated server with clients built from vanilla's protocol code. Performance work follows validated
+behaviour and is measured on equal work (`tools/server_bench.py`, [AGENTS.md](../AGENTS.md)).
 
 ## Implemented foundation
 
@@ -120,8 +64,8 @@ Negative lengths and the complete Java object/API surface are not supported.
 
 ## Reproduce validation
 
-The core/world libraries require Rust 1.85 or newer; the native client's locked
-dependencies require Rust 1.90 or newer. Use current stable Rust, Python 3.10 or
+The core/world libraries require Rust 1.85 or newer; the engine (`horizon-client`)
+requires Rust 1.90 or newer. Use current stable Rust, Python 3.10 or
 newer, and JDK 25 for the complete workspace. From the checkout:
 
 ```sh
@@ -330,7 +274,7 @@ The [block-state JSON codec suite](block-state-codecs.md) matches **221,261 outp
 lines per reference JAR**, covering every registered state and compact/full
 encoding plus malformed-property fallback. Block gameplay remains pending.
 
-## Work required for a playable rewrite
+## Work remaining (as first written)
 
 | Subsystem | Current Rust status | Required parity evidence |
 | --- | --- | --- |
@@ -342,15 +286,14 @@ encoding plus malformed-property fallback. Block gameplay remains pending.
 | Survival, inventory, crafting and progression | Hunger ticks/storage and synchronized health/absorption implemented and checked; inventory/crafting/progression absent | Recipes, item transitions, hunger/health, effects, experience and advancement behavior |
 | Dimensions, portals, weather and game rules | Not implemented | Cross-dimension state, transitions, time/weather and rule-dependent behavior |
 | Multiplayer, protocol, authentication and commands | Not implemented | Packet/codec fixtures, vanilla interoperability, reconnects and command behavior |
-| Rendering, resources, sound, UI and input | Native inspection client with selected block models, neighbor visibility, greedy meshing and a free camera; gameplay rendering/audio/UI incomplete | Resource compatibility, render/culling correctness, controls and playable interaction tests |
+| Rendering, resources, sound, UI and input | Removed with the client (November 2026) | Resource compatibility, render/culling correctness, controls and playable interaction tests |
 | Performance and platform support | Registered-attribute allocation reduction measured on Linux; whole-game performance and playable platform packages pending | Repeated matched gameplay workloads, frame/tick distributions, memory and physical GPU tests |
 
 The next simulation milestone is integrating the checked scheduler and
 registry-backed sections with actual block behavior and neighbor updates. World
 generation now has noise-stage filling, aquifers and surface-stage application;
 biome assignment and remaining generation stages need work,
-followed by complete seeded-world comparisons. The inspection renderer needs
-complete material/lighting support, chunk streaming and a simulated world.
+followed by complete seeded-world comparisons.
 Movement, health and combat kernels need shared live player/entity state and
 world services. Scoped comparisons alone cannot establish complete gameplay parity. Performance tuning must preserve the
 validated simulation and use measured workloads; changing render distance,
@@ -1324,7 +1267,7 @@ Linux gameplay remain unfinished. In this pinned version,
 `LivingEntity.updateDataBeforeSync` invokes dirty effect synchronization; it is a
 separate phase from `tickEffects`.
 
-## Scoreboards, teams and subtitles
+## Scoreboards and teams
 
 `tools/test_scoreboard_parity.py` runs vanilla's own `Scoreboard` (what
 `ServerScoreboard` extends) and `horizon_client::scoreboard` on 500 scripted
@@ -1360,23 +1303,11 @@ own death message out of chat. The criteria that follow the player (health,
 food, armor, xp, level, air) update as `ServerPlayer.doTick` does, and deaths,
 kills, team kills and statistics update their objectives.
 
-`tools/test_subtitle_parity.py` runs vanilla's `SubtitleOverlay` with a
-stand-in client on 1,500 scripted cases of sounds reported by the sound engine
-(subtitles from sounds.json, positions, ranges, looping) at controlled times,
-and frames that render it for a listener transform, the subtitle options (shown
-or not, notification display time, text background opacity) and a GUI size.
-Every frame's fills and texts, with their pose, must match the overlay in
-`hud_overlays`: which captions show and in what order, merging of repeats,
-expiry, the fade by age, the direction arrows and the box width. The overlay
-listens to the sound engine from the frame that renders it with the option on
-until one renders with it off, as vanilla's does.
-
 Not covered yet: the player's air supply (Horizon does not track drowning, so
 the `air` criteria stays at 300); displays auto-updated with the player's name
 carry the team formatting but not the click, hover and insertion of
 `Player.getDisplayName`; there is no attack sweep for allies to be spared from;
-scores below other players' names need the multiplayer scoreboard packets,
-which the client does not handle yet.
+scores below other players' names need the multiplayer scoreboard packets.
 
 ## Loom, crafter and recipe book
 
@@ -1389,8 +1320,7 @@ vanilla's own classes, and the game uses that code:
   the grid, `setSlotState`, a filled disabled slot enabling itself) besides the
   other menus. `tools/test_menu_click_parity.py` compares 8,000 random click
   sequences over 19 menus, with pattern button and slot state packets, with
-  vanilla's menu classes. The game's loom and crafter screens click through
-  `Game::menu_session` on the same engine.
+  vanilla's menu classes.
 - **Crafter block.** `tools/test_crafter_parity.py` runs `CrafterBlock.dispenseFrom`
   and `CrafterBlockEntity.serverTick` over the block update oracle's level:
   4,000 crafts of datapack recipes (remainders and special recipes included)
@@ -1403,139 +1333,13 @@ vanilla's own classes, and the game uses that code:
   identity hash codes, an order that changes between runs and decides which
   of several fitting items fills an ingredient; `tools/test_place_recipe_parity.py`
   hands the oracle's order to the Rust side and compares 6,000 placements.
-- **The book's contents.** `recipe_book::ClientBook` keeps the displays as
-  `ClientRecipeBook`'s `HashMap` of display ids does (on the verified Java
-  `HashMap` port), whose order is the order of the buttons;
-  `tools/test_recipe_book_view_parity.py` runs the client's `ClientRecipeBook`,
-  `RecipeCollection` selection and the tab and page logic over 1,200 cases.
 - **The player's book.** `recipe_book::Settings` with a `RecipeIndex` is
   `ServerRecipeBook`: awards (advancements, `/recipe`, crafting) never learn
   special recipes and count displays, and loading drops unknown recipes;
   `tools/test_recipe_book_parity.py` compares 1,500 operation sequences and the
   saved compound.
-- **Screens.** `screen_layout` holds `LoomScreen.extractBackground` and
-  `CrafterScreen`'s decorations as draw calls the game paints;
-  `tools/test_screen_layout_parity.py` runs vanilla's screens on stand-in
-  menus and compares 1,600 call lists.
-- **The book's drawing.** `recipe_book_screen` lays out
-  `RecipeBookComponent`'s background, search `EditBox`, tab buttons, filter
-  `CycleButton`, the page of `RecipeButton`s with its number and arrows, the
-  `OverlayRecipeComponent`, the tooltips and `GhostSlots` as GUI calls with
-  their poses (squeeze animations, the overlay's 3/8 scale items); the game
-  paints them. `tools/test_recipe_book_render_parity.py` builds vanilla's
-  widgets for 600 states (`VanillaRecipeBookScreenOracle`) and compares every
-  call. Ingredients cycle in their `HolderSet` order (tags in `TagLoader` order).
-- **The book's text search.** `recipe_book_view` also searches: the oracle
-  builds `SessionSearchTrees`' `FullTextSearchTree` over the tooltip lines and
-  ids of every result a display can show, and `item_tooltip` writes those
-  lines (attribute modifiers, smithing template, potion, dyed, pot, rocket and
-  disc lines; the names of potions, templates and banner patterns). Displays
-  with several results (map copies, tipped arrows, dyed armour) keep them in
-  `Entry::variants`.
-- **The ghost recipe.** `Book::ghost` is the one place that fills a recipe's
-  ingredients into the grid or furnace slots (`PlaceRecipeHelper`'s centring,
-  the first slots for shapeless recipes, every fuel for an empty fuel slot, in
-  the registry's component-lookup order); `tools/test_ghost_recipe_parity.py`
-  runs `fillGhostRecipe` against the real menus for all 2,698 recipe and menu
-  pairs.
-- **The loom's banner preview.** `item_render::gui::draw_banner_result` draws
-  `GuiBannerResultRenderer`'s flag model and layers in the 20x40 picture in
-  picture, lit with `ITEMS_FLAT`; the block entity render harness compares its
-  quads under the picture-in-picture pose.
-
 Not compared yet: furnaces awarding their recipes and experience when their
-output is taken, and the limited crafting game rule. Tooltips in general lack
-the lines `item_tooltip` writes for recipe results (the game's hover tooltips
-do not show attribute modifiers yet).
-
-`horizon_client::hotbar` reads the creative toolbars of an older `hotbar.nbt`
-through the `HOTBAR` data fixers (`EmptyItemInHotbarFix`, every item stack
-fixer): `tools/test_hotbar_parity.py` loads generated files of 34 versions with
-the real `HotbarManager`. The toolbar screen (save and load keys) is not wired
-to it yet.
-
-## Player list and world border rendering
-
-`horizon_client::tab_list` lays out vanilla's `PlayerTabOverlay` as draw calls:
-the listed players in `PLAYER_COMPARATOR` order (higher list order first,
-spectators last, team name, profile name ignoring case), at most 80 of them in
-columns of 20 rows; heads with the default skin for the UUID, flipped for
-Dinnerbone and Grumm in the level, only in online mode; team prefix, suffix and
-colour; italic, translucent spectator names (italic at the component root);
-ping bars; the `list` objective as scores in their number format (the score's,
-the objective's, or yellow) or as hearts with `HealthState`'s change blink and
-the `hp` text when they no longer fit; and the header and footer wrapped by
-`Font::split_lines`, which now follows `StringSplitter.splitLines`, with legacy
-`§` codes applied by `Text::resolve_legacy`. `Hud.extractTabList`'s rule hides
-the list in single player unless a `list` objective is set.
-`tools/test_tab_list_parity.py` runs vanilla's own `extractRenderState` frame
-after frame (`VanillaTabListOracle`: stand-in connection, level and options,
-real `Scoreboard`) against `examples/probe/tab_list_fixture.rs` and compares every fill,
-styled text run, sprite and face blit (as `hud_layout::GuiDraw` calls, painted
-like the rest of the HUD): **1,000 cases, 3,476 frames and 844,758
-calls match**. The game draws the same layout while the player-list key is
-held, from the local player and scoreboard in single player and from
-`PlayerInfoUpdate`, the tab list header and footer, `onlineMode` and the
-objective, score, display-slot and team packets on a server (checked live
-against the 26.3 server jar). Real skins are not downloaded: every head uses
-its default skin. Horizon has no "chat background only" option, so the row
-background is vanilla's default.
-
-The client `WorldBorder` wraps `horizon_core::geometry::border` (checked by
-`test_world_border_parity.py`) and `horizon_client::border_render` ports
-`WorldBorderRenderer`: `extract`'s fade (`(1 - distance / render distance)^4`)
-and status colour (growing, shrinking, stationary), the wall buffer that is only
-rebuilt when the border moves, the model offset and the texture scroll of
-`prepareDynamicTransforms`, and `draw`'s walls within the render distance,
-nearest first. `WorldBorder::warning_strength` feeds `hud_overlays::vignette`
-the border's warning strength at the camera. `tools/test_world_border_render_parity.py` drives vanilla's border,
-renderer and vignette (`VanillaWorldBorderRenderOracle`, with a stand-in GPU
-device, dynamic-uniform writer and render pass) against
-`examples/probe/world_border_render_fixture.rs`: **1,500 cases and 16,859 frames match
-bit for bit** (8,513 with the wall drawn). The game draws the wall with
-`RenderPipelines.WORLD_BORDER`'s overlay blend and the mipmapped forcefield
-texture, and follows the server's border packets. One border is kept for all
-dimensions.
-
-## Resource pack screen and chat input
-
-`horizon_client::pack_screen` is `PackSelectionScreen` as a state machine: the
-header, the two `TransferableSelectionList`s (rows, header entries, scroll,
-selection outline, focus, the hover overlay and its arrows, incompatible packs'
-tint and text), the search box filtering both lists, the footer buttons and
-their tooltip, and the `ConfirmScreen` an incompatible pack opens, all as GUI
-calls (`screen_draw`, which also ports `StringWidget`, `MultiLineTextWidget`,
-`Button`, `EditBox` with its scrolling, and `StringSplitter`'s line splitting
-with legacy formatting codes, whose split remainder takes the style found at
-the break). `tools/test_pack_screen_parity.py` drives a real
-`PackSelectionScreen` (`VanillaPackScreenOracle`) through 3,000 random sessions
-of clicks, typing and the mouse wheel and compares every call.
-
-`horizon_client::chat::ChatScreen` ports `ChatScreen`, its `EditBox` and
-`CommandSuggestions`: argument colouring, usage lines and parse errors, the
-suggestion list (sorting, hover, Tab and Shift+Tab, clicks), history and the
-input's editing keys. `tools/test_chat_screen_parity.py` runs a real
-`ChatScreen` (`VanillaChatScreenOracle`) on the client command tree an operator
-receives (`Commands.sendCommands`, `ClientboundCommandsPacket`), whose custom
-suggestions the server's dispatcher answers as
-`handleCustomCommandSuggestions` does, over 3,000 sessions, and compares the
-input's state and every call. Not compared: the mouse wheel over the
-suggestion list and clipboard keys.
-
-`horizon_client::creative` is the creative inventory. Its tabs come from
-`creative-inventory.json`, which `VanillaCreativeTabsExporter` writes from
-vanilla's own `CreativeModeTabs.tryRebuildTabContents` over the vanilla data
-pack's registries: every stack with its components, and for each stack of the
-search tab the creative tooltip lines and item tags that the client's search
-trees index. The search ports `refreshSearchResults` and `SessionSearchTrees`
-(substring matches over tooltip lines; after a colon the item id's namespace,
-then its path or a line; tags after `#`), and the scrollbar follows
-`mouseClicked`/`mouseDragged`/`mouseScrolled`. `tools/test_creative_parity.py`
-compares every shown tab's stacks, the search tab and 6,793 searches (fixed
-queries, then every stack's item path and tooltip lines and every tag, whole
-and halved) with the vanilla client's own search trees
-(`VanillaCreativeSearchOracle`). Not compared: the operator tab (off by
-default, `operatorItemsTab`) and the saved hotbars tab.
+output is taken, and the limited crafting game rule.
 
 ## Pillager patrols and raids
 
