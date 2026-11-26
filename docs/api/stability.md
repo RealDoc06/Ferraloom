@@ -103,9 +103,8 @@ Deprecations and breaking changes are in bold. The release notes of the game rel
 | Content mods (`registries`: data-driven blocks and items) | preview | manifest `api = "0.2"` |
 | Server mods: world `horizon-server-mod`, `players`, `server-events`, `world`, typed `server-command`s | experimental | manifest `api = "0.3"` |
 | Script mods (Lua run by an interpreter mod, [mods.md](mods.md#ways-in)) | not started | |
-| `cargo horizon-mod` (`new`, `build`, `test`, `check`; `run` needs the removed `--dev-mod`), `horizon-mod-sdk` | preview | 0.1.0 |
+| `cargo horizon-mod` (`new`, `build`, `test`, `check`), `horizon-mod-sdk` | preview | 0.1.0 |
 | `horizon-server` commands, `server.toml` | stable | `horizon-server --version` |
 | Server control API | stable | `/api/v1` |
-| Benchmark report | stable | `"version": 1` |
 | `horizon-graphics.txt`, `horizon-extras.txt`, `horizon-mods.txt` | preview | none |
 | `SHA256SUMS` and `SHA256SUMS.sig` | stable | |

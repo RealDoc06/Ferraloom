@@ -153,9 +153,8 @@ cargo horizon-mod build             # target/horizon-mod/<id>.hmod
 cargo horizon-mod test              # build, then run tests/*.toml with no game
 ```
 
-`cargo horizon-mod run` starts `horizon-client` with `--dev-mod <file>` (an always-on mod, reloaded when
-rebuilt). The engine no longer accepts that flag since the client was removed, so `run` fails today: copy the
-built `.hmod` into a server's `horizon-mods/` instead.
+To try it, copy the built `.hmod` into a server's `horizon-mods/` and turn it on
+([Running mods on a server](#running-mods-on-a-server)).
 
 Before you submit it to the registry, run what its CI runs:
 

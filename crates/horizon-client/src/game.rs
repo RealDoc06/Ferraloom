@@ -97,13 +97,11 @@ mod maps;
 mod minecarts;
 mod mob_blocks;
 mod mob_gear;
-mod mod_browser;
 #[cfg(feature = "mods")]
 mod mod_input;
 mod mods;
 mod mount_menu;
 mod mounts;
-mod moved_extras;
 mod music;
 mod names;
 mod natural_spawning;
@@ -5441,7 +5439,6 @@ impl Game<'_> {
         self.last_inv_click = None;
     }
     pub(super) fn close_container(&mut self) {
-        self.mod_browser_closed();
         self.reset_inventory_clicks();
         self.close_station();
         self.mount_closed();
@@ -8823,7 +8820,6 @@ fn start_game(
         game.settings.save(&Game::options_path());
     }
     game.apply_settings();
-    game.start_moved_extras();
     game.start_mods();
     game.start_agent_control()?;
     if let Ok(spec) = std::env::var("HORIZON_DISPENSE_FIXTURE") {

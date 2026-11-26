@@ -30,8 +30,7 @@ the owner before the mod is turned on, and checked against the component's real 
 2. Implement `ServerMod` for your type, list the capabilities you import in `horizon-mod.toml`
    ([The manifest](../mods.md#the-manifest)).
 3. `cargo horizon-mod build` writes the `.hmod`; copy it into a server's `horizon-mods/` and turn it on
-   ([Running mods on a server](../mods.md#running-mods-on-a-server)). `cargo horizon-mod run` passes `--dev-mod`,
-   which the engine no longer accepts.
+   ([Running mods on a server](../mods.md#running-mods-on-a-server)).
 4. `cargo horizon-mod test` runs the mod's `tests/*.toml` scripts in the sandbox, with no game: ticks, commands,
    chat lines and the player's position in, chat, feedback and the HUD panel checked
    ([Testing a mod](../mods.md#testing-a-mod)).

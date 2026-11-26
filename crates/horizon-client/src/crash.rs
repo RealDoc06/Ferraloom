@@ -258,10 +258,12 @@ pub fn system_details() -> Vec<(String, String)> {
     out
 }
 
+/// The panicking thread as the log names it: the main thread is the log's
+/// (`Server thread` on the dedicated server, as vanilla's crash reports say).
 fn thread_name() -> String {
     let current = std::thread::current();
     match current.name() {
-        Some("main") | None => "Render thread".into(),
+        Some("main") | None => crate::logging::main_thread().into(),
         Some(name) => name.into(),
     }
 }
@@ -478,22 +480,22 @@ mod tests {
             description: "Unexpected error".into(),
             error: "panicked at src/game.rs:10:5:\nboom".into(),
             stack: "horizon_client::game::frame (src/game.rs:10:5)\n".into(),
-            thread: "Render thread".into(),
-            side: "client",
+            thread: "Server thread".into(),
+            side: "server",
             details: vec![
                 ("Horizon Version".into(), "0.1.0".into()),
                 ("Minecraft Version".into(), "26.3".into()),
                 ("Graphics".into(), "Test GPU (Vulkan), driver 1.0".into()),
             ],
-            log: vec!["[09:05:06] [Render thread/INFO]: load assets: 1.20s".into()],
+            log: vec!["[09:05:06] [Server thread/INFO]: Preparing level \"world\"".into()],
         }
     }
 
     #[test]
     fn file_names_are_vanillas() {
         assert_eq!(
-            file_name(&report().time, "client"),
-            "crash-2026-10-14_09.05.07-client.txt"
+            file_name(&report().time, "server"),
+            "crash-2026-10-14_09.05.07-server.txt"
         );
     }
 
@@ -511,12 +513,12 @@ mod tests {
             lines[8],
             "\tat horizon_client::game::frame (src/game.rs:10:5)"
         );
-        assert!(text.contains("-- Head --\nThread: Render thread\n"));
+        assert!(text.contains("-- Head --\nThread: Server thread\n"));
         assert!(text.contains(
             "-- System Details --\nDetails:\n\tHorizon Version: 0.1.0\n\tMinecraft Version: 26.3\n\tGraphics: Test GPU (Vulkan), driver 1.0\n"
         ));
         assert!(text.ends_with(
-            "-- Last 1 log lines --\n[09:05:06] [Render thread/INFO]: load assets: 1.20s\n"
+            "-- Last 1 log lines --\n[09:05:06] [Server thread/INFO]: Preparing level \"world\"\n"
         ));
     }
 

@@ -1,4 +1,4 @@
-//! The registry repository (`horizon-rust/horizon-mods`, docs/api/mod-index.md):
+//! A mod registry repository (docs/api/mod-index.md):
 //! one `mods/<id>.toml` per project, written by the submission form or by
 //! hand and reviewed in a pull request, plus `revoked.toml`. Its CI turns
 //! them into `index.json` with [`build`], reading every listed file, and
@@ -78,8 +78,8 @@ pub struct Sources<'a> {
     pub registry: &'a Path,
     /// Every listed file, named by its SHA-256 (CI downloads them there).
     pub files: &'a Path,
-    /// Where the files are published: `<files>/<id>-<version>/<file>`
-    /// ([`super::FILE_HOST`]; `file:///` for a local test registry).
+    /// Where the files are published: `<release><id>-<version>/<file>`
+    /// (a registry's release assets; `file:///` for a local test registry).
     pub release: &'a str,
     /// Where the registry's site is (its icons): `https://.../horizon-mods/`.
     pub site: &'a str,

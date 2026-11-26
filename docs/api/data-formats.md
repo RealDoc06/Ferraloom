@@ -1,13 +1,12 @@
 # Data formats
 
-The files Horizon writes that other tools may read: benchmark reports, mods, server settings, release checksums and
-worlds. Each entry names its version field, its documentation and its level ([stability.md](stability.md)).
+The files Horizon writes that other tools may read: mods, server settings, release checksums and worlds. Each
+entry names its version field, its documentation and its level ([stability.md](stability.md)).
 
 ## Overview
 
 | Format | Where | Version | Level | Documented in |
 | --- | --- | --- | --- | --- |
-| Benchmark report | the benchmark's output, the local log, uploads | `"format": "horizon-benchmark-report"`, `"version": 1` | stable | [benchmark-report.md](../benchmark-report.md) |
 | Mod package | `.hmod`: a zip with `horizon-mod.toml`, `mod.wasm`, `assets/`, `data/` | the manifest's `api` | preview | [mods.md](../mods.md#the-manifest), [mods-reference.md](mods-reference.md) |
 | Mods turned on | `horizon-mods.txt` | none | preview | [mods.md](../mods.md#running-mods-on-a-server) |
 | Server settings | `server.toml` | its keys | stable | [server-reference.md](server-reference.md) |
@@ -29,9 +28,7 @@ Worlds are vanilla's format, so any tool that reads a 26.3 world reads a Horizon
 
 - Versions for the settings files and the control endpoint files (a `version` line or field).
 - Sample files and reader tests for every versioned format.
-- A generated schema for the benchmark report from its Rust types, checked by a test like
-  the references.
 
 ## Changelog
 
-- Benchmark report version 1.
+- Benchmark report version 1, removed with `horizon-bench` in November 2026.

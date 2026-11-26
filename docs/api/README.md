@@ -9,7 +9,7 @@ section has one page per surface, plus the rules every surface follows:
 | --- | --- | --- | --- | --- |
 | [Mods](mods.md) | mod authors | WIT `horizon:mods@0.1.0`, manifest `api` 0.2 (content) and 0.3 (server mods, experimental) | preview | [mods-reference.md](mods-reference.md) (generated) |
 | [Servers](server.md) | hosts, panels, bots | `horizon-server` commands, `server.toml`, control API `/api/v1` | stable | [server-reference.md](server-reference.md) (generated) |
-| [Data formats](data-formats.md) | tools that read Horizon's files | benchmark reports, mod packages, server settings, signed checksums | stable or preview, per format | on that page |
+| [Data formats](data-formats.md) | tools that read Horizon's files | mod packages, server settings, signed checksums | stable or preview, per format | on that page |
 
 ## How these APIs are designed
 

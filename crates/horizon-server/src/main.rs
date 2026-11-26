@@ -18,6 +18,7 @@ mod settings;
 mod signals;
 mod supervisor;
 mod update;
+mod usage;
 
 use std::{path::PathBuf, process::ExitCode};
 

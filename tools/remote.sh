@@ -87,7 +87,7 @@ elif ! flock -s -n 8; then
   flock -s 8
 fi
 if [ ! -d "$name/.git" ]; then
-  git clone -q --filter=blob:none --no-checkout https://github.com/horizon-rust/horizon "$name" 8>&- 9>&-
+  git clone -q --filter=blob:none --no-checkout https://github.com/RealDoc06/Ferraloom "$name" 8>&- 9>&-
 fi
 cd "$name"
 # The lock's descriptor stays out of everything started here (8>&- 9>&-): a daemon one of them starts (sccache's server,
@@ -107,8 +107,7 @@ else
 fi
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
-export HORIZON_HOME=$scratch/game XDG_DATA_HOME=$scratch/data XDG_CONFIG_HOME=$scratch/config \
-  HORIZON_TELEMETRY_URL=off
+export HORIZON_HOME=$scratch/game XDG_DATA_HOME=$scratch/data XDG_CONFIG_HOME=$scratch/config
 mkdir -p "$HORIZON_HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" ../"$name.logs"
 log=../"$name.logs/$(date -u +%Y%m%dT%H%M%SZ)-${sha:0:9}.log"
 echo "remote.sh: $(hostname) at ${sha:0:9} in ~/remote-work/$name, CPUs $cpus, -j $jobs; log ~/remote-work/${log#../}" >&2
