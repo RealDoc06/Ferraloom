@@ -183,19 +183,23 @@ final class FerraloomInventories {
             }
         }
 
-        /** InventoryCloseEvent for the open menu, which is then forgotten. */
+        /** InventoryCloseEvent for the open menu, which the server then closes and which is forgotten. */
         private void closeOpen() {
             FerraloomInventoryView view = open;
             if (view != null) {
                 open = null;
                 Bridge.server.pluginManager.callEvent(new InventoryCloseEvent(view));
+                InventoryNative.close(most(), least());
             }
         }
 
-        /** HumanEntity.closeInventory: the close event, then the server closes the menu. */
+        /** HumanEntity.closeInventory: the close event, then the server closes the menu, even one it alone knows. */
         void closeInventory() {
-            closeOpen();
-            InventoryNative.close(most(), least());
+            if (open != null) {
+                closeOpen();
+            } else {
+                InventoryNative.close(most(), least());
+            }
         }
 
         /** The server tells: the client closed {@code (kind, a, b)}. */
