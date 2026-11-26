@@ -36,9 +36,9 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-REPO = os.environ.get("GITHUB_REPOSITORY", "horizon-rust/horizon")
-# The maintainer, left out of the notes' thanks (the repository's owner is the horizon-rust organization).
-MAINTAINER = "ludovic111"
+REPO = os.environ.get("GITHUB_REPOSITORY", "RealDoc06/Ferraloom")
+# The maintainer, left out of the notes' thanks.
+MAINTAINER = "RealDoc06"
 # Releases ship in batches, so players get a few releases a day rather than one per merge: BATCH player-facing pull
 # requests, settled for DEBOUNCE, or whatever is waiting once the oldest has waited MAX_WAIT.
 BATCH = 5

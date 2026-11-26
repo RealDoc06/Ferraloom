@@ -9,8 +9,8 @@
 //! refuses it otherwise.
 //!
 //! Releases published before signing began carry no SHA256SUMS. Their archives' SHA-256s are
-//! pinned in `legacy-releases.txt` (taken from GitHub when signing began, by
-//! tools/ci/legacy_releases.py), so they stay installable for a rollback without trusting
+//! pinned in `legacy-releases.txt` (taken from GitHub once, when signing
+//! began), so they stay installable for a rollback without trusting
 //! whatever GitHub serves for them later.
 
 use base64::{Engine, engine::general_purpose::STANDARD};
