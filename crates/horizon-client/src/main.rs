@@ -79,13 +79,17 @@ fn main() {
                 if !help {
                     crash::report_error(&home, side, &*error);
                 }
+                logging::flush();
                 std::process::exit(1);
             }
         });
     match engine.map(std::thread::JoinHandle::join) {
         Ok(Ok(())) => logging::flush(),
         // A panic was reported by the crash hook; 101 as a panic on the first thread exits.
-        Ok(Err(_)) => std::process::exit(101),
+        Ok(Err(_)) => {
+            logging::flush();
+            std::process::exit(101)
+        }
         Err(error) => {
             eprintln!("Horizon: could not start the {thread}: {error}");
             std::process::exit(1);
