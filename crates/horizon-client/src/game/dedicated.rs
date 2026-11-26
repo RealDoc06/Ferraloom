@@ -773,10 +773,6 @@ impl Game<'_> {
                 );
                 self.save_game()?;
             }
-            if !paused && !admin(|a| a.autosave).unwrap_or(true) {
-                // `save-off`: the periodic save inside the tick is skipped.
-                self.ticks = self.ticks.max(1);
-            }
             // Ferraloom: logins waiting for PlayerLoginEvent, paused or not (game/plugins/players.rs).
             self.plugin_logins();
             // Ferraloom: the plugins' scheduler heartbeat (tickChildren's, so not while paused).

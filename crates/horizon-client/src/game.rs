@@ -4848,7 +4848,9 @@ impl Game<'_> {
             self.world.weather.tick_levels();
             self.tick_weather_effects();
         }
-        self.autosaving = self.ticks.is_multiple_of(6000);
+        // `save-off` skips the periodic save (`ServerLevel.noSave`).
+        self.autosaving =
+            self.ticks.is_multiple_of(6000) && dedicated::admin(|a| a.autosave).unwrap_or(true);
         if let Some(serving) = &self.serving {
             serving.set_saving(self.autosaving);
         }

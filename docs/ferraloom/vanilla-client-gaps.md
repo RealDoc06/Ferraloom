@@ -7,7 +7,7 @@ Horizon's own client is out of scope.
 Verified against `ferraloom/next` at `5d5371c7b` (2026-11-26): every **Fixed** row's commit is an ancestor of
 that head, and every **Open** row was checked in the code unless it says otherwise.
 
-**Adding a gap.** Give it the next free number (the first free one is **#127**), put it in its area, ranked by how
+**Adding a gap.** Give it the next free number (the first free one is **#128**), put it in its area, ranked by how
 visible it is to players, and fill every column: what is seen and how vanilla differs, the vanilla
 reference (`Class#method` from `.cache/decompiled/26.3/`), where it lives in our code, a size and who found
 it. When it is fixed, move it to **Fixed** with the commit and the harness case that proves it. Numbers are
@@ -97,6 +97,7 @@ Sizes: S under a day, M a few days, L a week or more. Sources: *audit* (the orig
 | 31 | Other ignored properties: `rate-limit` (packet-rate kick), `max-world-size`, `max-chained-neighbor-updates`, `max-tick-time` (watchdog), `broadcast-rcon-to-ops`, `initial-enabled-packs` and `initial-disabled-packs`, `region-file-compression`, `sync-chunk-writes`, `enable-jmx-monitoring`, `text-filtering-config`/`-version`. `function-permission-level` is fixed (`8ec12d527`) | `DedicatedServerProperties` readers | `properties.rs` fields with no reader | M | audit, fperm |
 | 119 | The console prints command feedback with a `System chat: ` prefix, and debug lines (`mobs: ... speculative ticks ...`, `dropped items: N`) on stdout; vanilla prints the feedback bare and no such lines | `MinecraftServer#sendSystemMessage` (logs the plain text) | `game/dedicated.rs:917` (the system-chat log) and the debug prints. Seen live with the client rig | S | rig |
 | 64 | Data packs load on the first tick, so their load errors are logged after `Done`; vanilla logs them before. Content is identical | `MinecraftServer` loads `ReloadableServerResources` before the server starts | `game/dedicated.rs`, `datapack.rs` `DataStore::load` | S | fperm |
+| 127 | With `save-off` the periodic save is skipped whole, players included; vanilla's autosave still saves the online players and skips only the chunks. (The periodic save does not save online players even with `save-on`: they save when they leave and at stop) | `MinecraftServer#autoSave` → `PlayerList#saveAll`, chunks skipped by `ServerLevel.noSave` | `game.rs` `autosaving` in the tick | S | review |
 | 65 | The floating kick departs from vanilla in two small ways: a block in a chunk the server doesn't have counts as solid (nobody is kicked over chunks the server can't see), and the fly counter also resets on the hub's correction teleports (vanilla only in `teleportTo`) | `ServerGamePacketListenerImpl#tickPlayer`, `#noBlocksAround` | `lan/hub/player_meta.rs:315` `update_floating` | S | A |
 
 ### Plugins API
