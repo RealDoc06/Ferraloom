@@ -97,6 +97,7 @@ fn main() {
         }
         Err(error) => {
             eprintln!("Horizon: could not start the {thread}: {error}");
+            logging::flush();
             std::process::exit(1);
         }
     }
