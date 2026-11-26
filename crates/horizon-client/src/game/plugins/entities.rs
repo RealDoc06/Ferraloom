@@ -37,8 +37,8 @@ thread_local! {
     static ACTING: Cell<Option<(PlayerId, usize)>> = const { Cell::new(None) };
     /// The level in place, as of its tick's start.
     static IN_PLACE: Cell<usize> = const { Cell::new(0) };
-    /// The game time and time of day, as of the level tick's start.
-    static TIME: Cell<(i64, i64)> = const { Cell::new((0, 0)) };
+    /// The day time, as of the level tick's start.
+    static DAY_TIME: Cell<i64> = const { Cell::new(0) };
     /// Each loaded mob's type by id, while a plugin listens to damage.
     static KINDS: RefCell<FxHashMap<u32, &'static str>> = RefCell::new(FxHashMap::default());
     /// The mob dying now and the guest who killed it, for `EntityDeathEvent`.
@@ -386,12 +386,10 @@ impl PlayerHost for SiteHost<'_, '_> {
 }
 
 impl WorldHost for SiteHost<'_, '_> {
+    /// As [`GameHost`]'s: the day time, whole or within its day.
     fn world_time(&mut self, _: usize, full: bool) -> i64 {
-        let (game, day) = match self.pass {
-            Some(w) => (w.game_time, w.day_time),
-            None => TIME.get(),
-        };
-        if full { game } else { day }
+        let day = self.pass.map_or_else(|| DAY_TIME.get(), |w| w.day_time);
+        if full { day } else { day.rem_euclid(24_000) }
     }
 }
 
@@ -652,7 +650,7 @@ impl Game<'_> {
             return;
         }
         IN_PLACE.set(world_index(self.dim));
-        TIME.set((self.world.game_time, self.world.day_time));
+        DAY_TIME.set(self.world.day_time);
         KINDS.with_borrow_mut(|k| {
             k.clear();
             if listens(Event::EntityDamage) {

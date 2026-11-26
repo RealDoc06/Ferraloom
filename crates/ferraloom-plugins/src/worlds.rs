@@ -215,7 +215,8 @@ pub struct Sound<'a> {
 /// "cannot" (none, false, nothing): a restricted host implements what it
 /// can reach.
 pub trait WorldHost {
-    /// The world's game time (`full`) or time of day.
+    /// `World.getFullTime` (`full`: the day time) or `getTime` (the day time
+    /// within its day, 0 to 23999).
     fn world_time(&mut self, world: usize, full: bool) -> i64;
     /// A numeric reading; none when the world cannot answer it.
     fn query(&mut self, _world: usize, _query: Query) -> Option<i64> {

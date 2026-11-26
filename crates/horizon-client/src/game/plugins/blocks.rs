@@ -606,12 +606,10 @@ impl BlockHost for LevelHost<'_, '_> {
 }
 
 impl WorldHost for LevelHost<'_, '_> {
+    /// As [`GameHost`]'s: the day time, whole or within its day.
     fn world_time(&mut self, _world: usize, full: bool) -> i64 {
-        if full {
-            self.0.world.game_time
-        } else {
-            self.0.world.day_time
-        }
+        let day = self.0.world.day_time;
+        if full { day } else { day.rem_euclid(24_000) }
     }
 }
 
