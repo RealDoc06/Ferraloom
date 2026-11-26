@@ -106,7 +106,8 @@ What real mods need next, in the order modpacks and servers need it:
   `command` gets their values. SDK `Registration::command_with`, `Argument`, `Args`.
 - API 0.3: capability `world` (`get-block`, `get-biome`, `set-blocks`); example `beacons`; test scripts' `blocks` and
   `expect.blocks`.
-- Server mods run in the game: single player (server thread and in-frame), LAN hosts, the dedicated server.
+- Server mods run in the game: single player (server thread and in-frame), LAN hosts, the dedicated server (all
+  but the dedicated server removed with the client since).
 - API 0.3 (server mods, experimental): world `horizon-server-mod`, capability `players`, the `server-events`
   hooks; SDK `server::ServerMod`; example `welcome`.
 - SDK: `cargo horizon-mod test` and `horizon_mods::testing`, test scripts in TOML; the template has one.

@@ -3,7 +3,7 @@ name = "horizon-bench"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-description = "The benchmark report format (docs/benchmark-report.md), shared by the game, the launcher and the upload"
+description = "The benchmark report format (docs/benchmark-report.md) and process RAM and CPU readers"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

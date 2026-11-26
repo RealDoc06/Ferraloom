@@ -4,6 +4,11 @@ How Horizon keeps its code and its downloads safe while most of the work is done
 by themselves, including when Ludovic isn't at his computer. In plain words: what someone could have done before,
 what stops them now, and what still needs Ludovic.
 
+This is upstream Horizon's design as of October 2026: the people, accounts and machines it names are
+upstream's. Ferraloom ships `horizon-server` and the engine only; Horizon's launcher, which also checked
+signatures, was removed. The signing code (`crates/horizon-release-sign`, `tools/ci/sign_release.sh`) and the
+checks in `horizon-server update` remain.
+
 ## Who does what
 
 - **Agents** (Claude sessions run by Ludovic) write most pull requests, review them, merge them and answer
@@ -53,16 +58,16 @@ and some are waiting for Ludovic:
 - **`verify` always runs.** Labels no longer start the checks, and the required `verify` job has no condition, so
   the only `verify` a change can have is one that ran. Main requires it, from GitHub Actions only, for everyone,
   admins included.
-- **Checked before it is published.** Every release is published as the latest, which launchers and servers
+- **Checked before it is published.** Every release is published as the latest, which servers
   install by themselves, so the release run publishes it only after its smoke test passed (the game started and
   drew a world on the Mac mini) and only while no issue labelled `release-blocker` is open; otherwise nothing is
   published.
-- **Signed updates.** Each release carries a list of its files' checksums, signed with Horizon's release key. The
-  launcher (for the game and for itself) and `horizon-server update` check that signature against the public key
+- **Signed updates.** Each release carries a list of its files' checksums, signed with Horizon's release key.
+  `horizon-server update` checks that signature against the public key
   built into them, then check the download against the list. Anything unsigned, signed with another key, signed
   for another version, or changed in any way is refused with a message saying why. Releases from before signing
   stay installable, for going back to an older version, but only with the exact files they had when signing
-  began: their checksums are built into the launcher and the server too. The private key exists only as
+  began: their checksums are built into the server too. The private key exists only as
   a secret of GitHub's `release` environment, which only real releases from main can use. The job that signs runs
   nothing from the repository but a short script calling OpenSSL, so no pull request can read the key by changing
   the code that gets built. Nobody, Ludovic included, ever needs to see it.
@@ -82,8 +87,8 @@ and some are waiting for Ludovic:
 - **Creating the GitHub App**: one link, "Create GitHub App", then "Install". His login, his clicks.
 - **Fork pull requests**: their checks run only after a maintainer approves them, and they run on the Mac mini only
   after a maintainer has read them and added `run-parity`.
-- **A leaked key**: rotate it (docs/release-flow.md, "Signed checksums"). Launchers older than the new key then
-  refuse new versions until players download the launcher again.
+- **A leaked key**: rotate it (docs/release-flow.md, "Signed checksums"). Servers older than the new key then
+  refuse new versions until their owners install `horizon-server` again.
 
 ## What this doesn't solve
 

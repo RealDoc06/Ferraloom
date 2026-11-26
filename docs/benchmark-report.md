@@ -1,10 +1,10 @@
 # Benchmark report format (version 1)
 
-Every benchmark Horizon writes uses this one JSON format: `horizon-client --benchmark`, the launcher's own
-measurements, and `tools/perf_bench.py` (which also writes it for vanilla and vanilla with mods). The same
-file is the local log a player can attach to an issue and, only with the player's consent, what the
-telemetry upload sends (minus the local-only fields below). The types, the statistics and the hardware
-detection are in `crates/horizon-bench`; nothing else builds a report by hand.
+Horizon's game benchmark (`horizon-client --benchmark`), its launcher and its `perf_bench.py` tool wrote this JSON
+format. All three were removed with the client in November 2026; the format stays in `crates/horizon-bench`
+(the types, the statistics and the hardware detection), and `horizon-server` uses only its process RAM and CPU
+readers. Server benchmarks are `tools/server_bench.py`'s own `horizon-server-benchmark` report. The rest of
+this page is the format as it was defined.
 
 A report holds summaries and histogram counts, never raw frame streams: a 10-minute run is a few
 kilobytes whatever the frame rate. Measured numbers are rounded to 3 decimals.
@@ -50,7 +50,7 @@ kilobytes whatever the frame rate. Measured numbers are rounded to 3 decimals.
 newer versions. Adding an optional field keeps the version; renaming, removing or changing the meaning of
 one (histogram edges included) makes it 2.
 
-**`kind`.** `"game"` (a game run: Horizon, or vanilla from `tools/perf_bench.py`) or `"launcher"`.
+**`kind`.** `"game"` (a game run: Horizon, or vanilla) or `"launcher"`.
 
 **`created`.** When the run ended, UTC, `YYYY-MM-DDTHH:MM:SSZ`.
 
@@ -118,10 +118,3 @@ report) stay on the machine: the upload removes them and dates the report to the
 telemetry item is (`Report::for_upload`). The upload is `horizon-telemetry`'s `benchmark` item: this
 report, as it is, only with the player's consent to benchmark uploads (`crates/horizon-telemetry`). Nothing in a report
 identifies the player, the machine's name or the world: no host name, user name, path or address.
-
-## Where reports go
-
-- The game: `benchmarks/<kind>-<created>-<scenario>.json` in the game folder.
-- The launcher: `benchmarks/` in the launcher's data folder.
-- `tools/perf_bench.py`: one report per game and render distance, `benchmarks/perf/<label>-rd<N>.json` in the
-  repository checkout.

@@ -1,5 +1,5 @@
 //! The machine a report was measured on. CPU, RAM and OS are detected here; the GPU and the display
-//! come from the program that rendered (the game knows its adapter, the launcher its window).
+//! came from the program that rendered (Horizon's game and launcher, both removed).
 
 use horizon_telemetry::system::command_output as output;
 use serde::{Deserialize, Serialize};

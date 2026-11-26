@@ -142,8 +142,8 @@ request doesn't wait for them.
 Never merge your own pull request: another Team member reviews and merges it. Never force-push or rebase a
 contributor's branch; push a fixup commit, or merge main into it.
 
-**A risky pull request gets the `needs-proof` label** and waits for an agent's local proof (both single-player
-paths, `lan_e2e`, a screenshot for anything visible) before it merges. Risky means any of:
+**A risky pull request gets the `needs-proof` label** and waits for an agent's local proof (the affected
+harnesses, a vanilla client joining the server for anything players see) before it merges. Risky means any of:
 
 - it changes what is saved or loaded (`save.rs`, `entity_nbt.rs`, `block_entity_nbt.rs`, `region.rs`, `datafix/`):
   a bug there damages players' worlds;
@@ -159,7 +159,7 @@ Unsure? Add `needs-proof`: it costs a few hours, a broken release costs more.
 `parity` becomes required once it has run green on pull requests for a while (a week without a false failure):
 
 ```sh
-gh api -X POST repos/horizon-rust/horizon/branches/main/protection/required_status_checks/contexts -f 'contexts[]=parity / parity'
+gh api -X POST repos/RealDoc06/Ferraloom/branches/main/protection/required_status_checks/contexts -f 'contexts[]=parity / parity'
 ```
 
 A skipped `parity` (a fork's pull request without the label) counts as passed, so requiring it never blocks a
@@ -442,4 +442,4 @@ Releases ship often, so nothing they leave behind may grow without bound.
   stops its own harnesses on SIGTERM and SIGHUP (a cancelled job), so these come only from a SIGKILL or a harness run
   by hand. Runner builds go through the machine's sccache (`tools/ci/runner-env.sh`), so what it removes
   comes back from the cache. Update the copy after changing the script:
-  `ssh macmini 'curl -fsSL https://raw.githubusercontent.com/horizon-rust/horizon/main/tools/ci/runner-gc.sh -o ~/.actions-runners/runner-gc.sh'`.
+  `ssh macmini 'curl -fsSL https://raw.githubusercontent.com/RealDoc06/Ferraloom/main/tools/ci/runner-gc.sh -o ~/.actions-runners/runner-gc.sh'`.
