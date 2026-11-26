@@ -385,16 +385,35 @@ The coordinator tracks this table per area, plus events bridged (bits set in `Br
 Bukkit's event classes. A method overridden only to throw differently does not count as implemented: review
 checks overrides.
 
-## Licensing (for Doc to decide)
+## Licensing
 
-The Bukkit and Spigot API is GPL-3.0; Ferraloom is MIT. The Java bridge implements GPL interfaces and is
-compiled against them, which the FSF and Bukkit's history treat as a derivative work: the bridge
-(`crates/ferraloom-plugins/java/`) should be licensed GPL-3.0 (MIT code may be combined into it) and offered
-with its source. The open question is the Rust server, which loads that bridge into its own process through
-JNI: under the FSF's reading of in-process combination, a distribution that ships the server together with the
-bridge is a combined work under the GPL's terms; shipping them separately (the server MIT, the bridge a
-separate GPL download the server finds at run time, as today: the server never bundles or requires it) keeps
-the server MIT. The API jar is fetched, never redistributed by us (it also carries a Mojang translation file).
-Options: (a) license `java/` GPL-3.0, keep everything else MIT, distribute the bridge separately; (b) license
-the whole of Ferraloom GPL-3.0; (c) get a lawyer's view before the first release that includes the bridge.
-Until decided, nothing here is released. The bridge's files carry no license header yet.
+Decided 2026-11-26: **everything Ferraloom writes stays MIT, the Java bridge included.** This is the
+project's reading of the licenses, not legal advice.
+
+- The Bukkit and Spigot API is GPL-3.0. The bridge (`crates/ferraloom-plugins/java/`) implements its
+  interfaces and is compiled against it, which the FSF and Bukkit's history treat as a work based on the API.
+  The GPL asks that such a work be conveyed under terms the GPL allows; it does not ask that our own files
+  carry the GPL. MIT is GPL-compatible and permits exactly this: our files stay MIT, and a compiled bridge is
+  conveyed under the GPL-3.0's terms with this repository as its complete corresponding source.
+- The Rust server loads the bridge into its own process through JNI. Under the FSF's reading of in-process
+  combination, a running server with the bridge and the API is one combined program, so every part must be
+  GPL-compatible. It is: Ferraloom is MIT and every crate the server links is under a permissive or
+  GPL-compatible license (MIT, Apache-2.0, BSD, ISC, Zlib, MPL-2.0, Unicode-3.0, BSL-1.0, CDLA-Permissive-2.0;
+  checked from `cargo metadata` on 2026-11-26). Keep it that way: a dependency under a GPL-incompatible license
+  (the old OpenSSL license, SSPL, BUSL, a proprietary SDK) may not enter the server's tree.
+- Ferraloom contains no Mojang code, so the conflict that ended CraftBukkit's distribution (GPL code shipped
+  in one binary with Mojang's proprietary server) does not arise.
+
+Release rules that follow:
+
+1. **The API jar is never redistributed.** `build.py` fetches the build pinned in `java/api.lock.json` from
+   Spigot's own repository and checks its SHA-256. It is Spigot's work under the GPL, and it carries a Mojang
+   translation file we have no right to ship.
+2. **A server release does not bundle the bridge.** The server is a plain MIT binary that runs without a JVM;
+   the bridge is a separate artifact (built by `build.py`, or a separate download) that the server finds at
+   run time, and only when `plugins/` holds a jar.
+3. **A published bridge jar is offered under the GPL-3.0's terms**, names the commit it was built from, and
+   links this repository as its source. Its source files remain MIT.
+4. Plugins are their authors' works under their own licenses. We ship none; the usage corpus and the jars used
+   in tests stay out of the repository. The test plugins under `java/test-plugin` and `java/nms-plugin` are our
+   own, MIT.
