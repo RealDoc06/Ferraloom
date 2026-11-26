@@ -4,10 +4,10 @@
     python3 tools/ci/legacy_releases.py           # rewrite crates/horizon-release-sign/legacy-releases.txt
     python3 tools/ci/legacy_releases.py --check   # exit 1 if the file is out of date
 
-Releases from before signing carry no SHA256SUMS.sig, so the launcher and `horizon-server update` can't check them
+Releases from before signing carry no SHA256SUMS.sig, so `horizon-server update` can't check them
 against Horizon's key. Their archives' SHA-256s, as GitHub computed them at upload, are built into the binaries
 instead, so a rollback to one stays possible and nobody can swap its files later. Every release with a
-SHA256SUMS.sig is left out: its signature is what counts. Run it once, just before the launcher starts refusing
+SHA256SUMS.sig is left out: its signature is what counts. Run it once, just before horizon-server starts refusing
 unsigned releases, when every release since the first signed one is signed; after that the file never changes.
 """
 
@@ -23,8 +23,8 @@ OUT = ROOT / "crates" / "horizon-release-sign" / "legacy-releases.txt"
 REPO = "horizon-rust/horizon"
 HEADER = """\
 # Releases published before signing began, with their archives' SHA-256 as GitHub computed them at upload:
-# `<tag> <asset> <sha256>` per line, written by tools/ci/legacy_releases.py. The launcher and horizon-server
-# install these releases only with exactly these files (docs/security.md, "Signed updates"); every later release
+# `<tag> <asset> <sha256>` per line, written by tools/ci/legacy_releases.py. horizon-server
+# installs these releases only with exactly these files (docs/security.md, "Signed updates"); every later release
 # is checked against its signed SHA256SUMS instead. Changing this file needs Ludovic's review (.github/CODEOWNERS).
 """
 

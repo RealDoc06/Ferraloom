@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The prepared output's version: what keeps `OUTPUT_VERSION` (crates/horizon-prepare/src/lib.rs) honest.
 
-The launcher copies a prepared version's resources (`.local/horizon-client/<version>`) to a newly installed
+A prepared version's resources (`.local/horizon-client/<version>`) can be reused for a newly installed
 one when both pin the same Minecraft jars and their preparers declare the same `OUTPUT_VERSION`, so a release
 that changes the preparer's code without changing what it makes asks nobody to prepare again. The number is
 bumped by hand; this tool catches a change to the output without a bump.

@@ -1,6 +1,5 @@
 """Per-process scratch data for game integration tests (never a player's home)."""
 from pathlib import Path
-from contextlib import contextmanager
 import os
 import subprocess
 import tempfile
@@ -22,23 +21,10 @@ def game_environment(base, root):
 
 
 def run_game(command, **kwargs):
-    """Run a headless game fixture with the same isolation as real-client tests."""
+    """Run an engine fixture (HORIZON_DISPENSE_FIXTURE, HORIZON_SCULK_FIXTURE) in fresh scratch homes."""
     with tempfile.TemporaryDirectory(prefix='hz-fixture-') as root:
         kwargs['env'] = game_environment(kwargs.pop('env', os.environ), root)
-        if any(key in kwargs['env'] for key in
-               ('HORIZON_DISPENSE_FIXTURE', 'HORIZON_SCULK_FIXTURE')):
-            # These compare seeded rule/callback traces, not the client/server boundary.
-            command = [*command, '--in-frame']
         return subprocess.run(command, **kwargs)
-
-
-@contextmanager
-def suite_lock():
-    """Real-client CI suites share a GPU, even when parity.py runs harnesses in parallel."""
-    import fcntl
-    with (Path(tempfile.gettempdir()) / 'horizon-integration-gpu.lock').open('a') as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        yield
 
 
 def require_server_reports(resources):

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare private pinned resources for Horizon's native development client.
+"""Prepare the private pinned resources the engine and the harnesses read.
 
 The preparation itself is horizon-prepare (crates/horizon-prepare), the Rust port of what this
 script did; this wrapper keeps its command line for the development tools that call it. It runs
