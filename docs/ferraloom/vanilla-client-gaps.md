@@ -7,7 +7,7 @@ Horizon's own client is out of scope.
 Verified against `ferraloom/next` at `5d5371c7b` (2026-11-26): every **Fixed** row's commit is an ancestor of
 that head, and every **Open** row was checked in the code unless it says otherwise.
 
-**Adding a gap.** Give it the next free number (the first free one is **#120**), put it in its area, ranked by how
+**Adding a gap.** Give it the next free number (the first free one is **#125**), put it in its area, ranked by how
 visible it is to players, and fill every column: what is seen and how vanilla differs, the vanilla
 reference (`Class#method` from `.cache/decompiled/26.3/`), where it lives in our code, a size and who found
 it. When it is fixed, move it to **Fixed** with the commit and the harness case that proves it. Numbers are
@@ -17,7 +17,7 @@ Sizes: S under a day, M a few days, L a week or more. Sources: *audit* (the orig
 (sword cooldown), *A*, *B*, *C*, *D* (the fix clusters), *fperm* (function permission level), *found*
 (plugin foundation), *p-server*, *p-players*, *p-blocks*, *p-entities*, *p-inv* (the plugin areas), *orch*
 (the orchestrator's integration), *rig* (live checks through the vanilla client rig,
-`docs/ferraloom/client-rig.md`), *docs* (an existing doc).
+`docs/ferraloom/client-rig.md`), *harness* (the command_exec, save and loot harnesses ported to the dedicated server), *docs* (an existing doc).
 
 ## Open
 
@@ -54,6 +54,9 @@ Sizes: S under a day, M a few days, L a week or more. Sources: *audit* (the orig
 | 54 | A player's command keeps the permission level they had when it was queued, so a `/deop` in the same tick can come too late | `Commands#performCommand` checks at execution | Guest command queue, `game/lan_actions.rs` `guest_command` | S | C |
 | 55 | `/help` inside a function lists commands at the function's compile level, not the caller's | `HelpCommand` (source's permissions) | `game/functions.rs` runs lines at the compiled level | S | fperm |
 | 118 | From the console, `attribute <player> <attribute> get` answers "is not a valid entity for this command" and `execute as <player> run attribute @s ...` prints nothing; vanilla returns the value. Mobs work, and so does the player typing it in the client | `AttributeCommand#getLivingEntity` (a `ServerPlayer` is a `LivingEntity`) | The `attribute` command's target lookup for server players when the source is not that player, `game/commands*`. Seen live with the client rig, not traced | S | rig |
+| 120 | A player's command that ends in `say`, `me` or `msg`/`tell`/`w` runs as that player's own chat: whatever `execute` put before it is ignored (`as`, `on`, `in`, forks that match nothing, an unknown dimension), selectors in the message stay as typed and no result is reported. `/execute as @e[tag=h] run say mob` prints `[Player] mob`, vanilla `[Daisy] mob` | `SayCommand`, `EmoteCommands`, `MsgCommand` under `ExecuteCommand` (`MessageArgument#resolveChatMessage`) | The chat-command path for signed message commands (`game/lan_actions.rs` `guest_command`, `game/commands.rs` `cmd_say`); 32 records `KNOWN` in `tools/test_command_exec_parity.py` | M | harness |
+| 121 | `tick step N` advances fewer than N ticks after a dimension change or chunk loading (after a portal trip, `tick step 5` moved 3) | `ServerTickRateManager#stepGameIfPaused`, `MinecraftServer#tickServer` | `game/tick_rate*`; noted and stepped over by `CommandExecClient` | S | harness |
+| 122 | A mob's new waypoint transmit range counts at once in `/waypoint list`; vanilla waits for the mob's next tick | `ServerWaypointManager`, `LivingEntity#tick` | waypoints in `game/`; `KNOWN` in `tools/test_command_exec_parity.py` | S | harness |
 | 56 | `@e` without a distance or volume reads only the source's level; vanilla reads every level | `EntitySelector#findEntities` | Selectors in `game/commands.rs`. From `docs/server-levels.md`, not re-verified | M | docs |
 
 ### World and blocks
@@ -62,6 +65,8 @@ Sizes: S under a day, M a few days, L a week or more. Sources: *audit* (the orig
 |---|---|---|---|---|---|
 | 21 | Structure, jigsaw and test blocks and command-block minecarts can't be edited: Save, Load, Detect and Done change nothing. Ferraloom has no structure, jigsaw or test block entity, and command minecarts hold no command | `handleSetStructureBlock`, `handleSetJigsawBlock`, `handleJigsawGenerate`, `handleSetTestBlock`, `handleTestInstanceBlockAction`, `handleSetCommandMinecart` | No serverbound variants (dropped by `lan_guest_packet`'s last arm). Needs block-entity variants and saves in `chunk/block_entity.rs`, `save.rs`, `game/minecarts.rs:33` | L (audit said M) | audit, B |
 | 57 | Advancement reward functions don't exist | `AdvancementRewards#grant` (runs the function at level 2) | `game/advancements.rs`; should go through `run_function` (`game/functions.rs`) | S | fperm |
+| 123 | `execute if items` (and any command read) counts an untouched loot chest's rolled items but never unpacks them into the chest, so its `Items` stay empty until a player opens it | `RandomizableContainer#unpackLootTable` (called by `getItem`) | block-entity loot in `game/`; `KNOWN` in `tools/test_spawn_loot_parity.py` | S | harness |
+| 124 | `save-all` rewrites the player file of a player who never joined this session, and the rewritten file loses its `Pos` | `PlayerList#saveAll` (only online players) | player saves in `game/dedicated.rs`; `KNOWN` in `tools/test_save_roundtrip_parity.py` | S | harness |
 
 ### Inventory and items
 
