@@ -131,6 +131,9 @@ pub struct Guest {
     /// Pending ClientboundPlayerPositionPacket id; movement is ignored until
     /// the client accepts it (ServerGamePacketListenerImpl.awaitingPositionFromClient).
     pub awaiting_teleport: Option<(i32, [f64; 3])>,
+    /// Ferraloom: a plugin cancelled a move this tick; once the hub has
+    /// handled the moves before it, it teleports the player to where they are.
+    pub correct_move: bool,
     pub teleport_counter: i32,
     /// The hub tick the pending teleport was (re)sent on (awaitingTeleportTime).
     pub teleport_tick: u64,
@@ -317,6 +320,7 @@ impl Guest {
             spawn: None,
             respawn_elsewhere: None,
             awaiting_teleport: None,
+            correct_move: false,
             teleport_counter: 0,
             teleport_tick: 0,
             first_good: position,

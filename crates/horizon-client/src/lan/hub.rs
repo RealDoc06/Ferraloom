@@ -1476,6 +1476,11 @@ impl Hub {
             for i in 0..self.guests.len() {
                 if self.here(&self.guests[i]) {
                     self.process_inbox(i, ctx, &mut events);
+                    // Ferraloom: a cancelled PlayerMoveEvent's correction
+                    // (game/plugins/players.rs), to where the moves before it left them.
+                    if std::mem::take(&mut self.guests[i].correct_move) {
+                        self.teleport(i, None);
+                    }
                 }
             }
         });

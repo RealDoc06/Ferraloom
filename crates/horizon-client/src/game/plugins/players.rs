@@ -1298,10 +1298,12 @@ impl Game<'_> {
     /// in place sent this tick, before the hub handles them: PlayerMoveEvent
     /// (CraftBukkit's thresholds: moved more than 1/256 of a block squared
     /// or turned more than 10 degrees since the last one), the sneak, sprint
-    /// and flight toggles. A cancelled move sends the player back where the
-    /// last event saw them (the hub then ignores their moves until the
-    /// client accepts); a cancelled toggle is dropped (a flight's client is
-    /// told its abilities again). Only while a plugin listens to one.
+    /// and flight toggles. A cancelled move is dropped with the moves after
+    /// it this tick, and the hub, once it has handled the moves before it,
+    /// sends the player back to where they left them (CraftBukkit's
+    /// teleport to `from`); a move a listener changed teleports at once. A
+    /// cancelled toggle is dropped (a flight's client is told its abilities
+    /// again). Only while a plugin listens to one.
     pub(in crate::game) fn plugin_inbox(&mut self, host: &mut LanHost) {
         for i in 0..host.hub.guests.len() {
             if host.hub.here(&host.hub.guests[i]) && !host.hub.guests[i].inbox.is_empty() {
@@ -1326,9 +1328,6 @@ impl Game<'_> {
             yaw: g.yaw,
             pitch: g.pitch,
         };
-        // Where the server has the player: a cancelled move sends them here,
-        // not to the last event's `to`, which the hub may yet reject.
-        let mut held = at;
         let (mut sneaking, mut sprinting, mut flying) = (g.sneaking, g.sprinting, g.flying);
         // As the hub's handlePlayerAbilities: a plugin's allow-flight counts.
         let may_fly = g.creative() || g.spectator() || g.allow_flight;
@@ -1336,7 +1335,11 @@ impl Game<'_> {
         while k < host.hub.guests[i].inbox.len() {
             let (pos, rot) = match &host.hub.guests[i].inbox[k] {
                 S::AcceptTeleportation(p) => {
-                    if let Some((_, to)) = awaiting.filter(|(t, _)| *t == p.id) {
+                    // An invalid one stays for the hub, which kicks for it.
+                    let finite = [p.x, p.y, p.z].iter().all(|v| v.is_finite())
+                        && p.yaw.is_finite()
+                        && p.pitch.is_finite();
+                    if let Some((_, to)) = awaiting.filter(|(t, _)| *t == p.id && finite) {
                         awaiting = None;
                         (at.x, at.y, at.z) = (to[0], to[1], to[2]);
                         (at.yaw, at.pitch) = (p.yaw, p.pitch);
@@ -1429,7 +1432,26 @@ impl Game<'_> {
             let gh = &mut GameHost::new(self, Some(&mut *host));
             let back = match ferraloom_plugins::player_move(gh, id, from, to) {
                 Moved::Unchanged => continue,
-                Moved::Cancelled => held,
+                Moved::Cancelled => {
+                    // The hub handles the moves before this one, then corrects.
+                    let g = &mut host.hub.guests[i];
+                    k -= 1;
+                    g.inbox.remove(k);
+                    let mut later = g.inbox.split_off(k);
+                    later.retain(|p| {
+                        !matches!(
+                            p,
+                            S::MovePlayerPos(_)
+                                | S::MovePlayerPosRot(_)
+                                | S::MovePlayerRot(_)
+                                | S::MovePlayerStatus(_)
+                        )
+                    });
+                    g.inbox.append(&mut later);
+                    g.correct_move = true;
+                    LAST_MOVE.with_borrow_mut(|m| m.insert(id, from));
+                    continue;
+                }
                 Moved::To(other) => other,
             };
             // The move is dropped and the client sent where the event left it.
@@ -1441,7 +1463,7 @@ impl Game<'_> {
                 (g.yaw, g.pitch) = (back.yaw, back.pitch);
                 host.hub.teleport(i, Some([back.x, back.y, back.z]));
                 awaiting = host.hub.guests[i].awaiting_teleport;
-                (at, held) = (back, back);
+                at = back;
             } else {
                 pend(Pending::Teleport(id, back));
                 return;
