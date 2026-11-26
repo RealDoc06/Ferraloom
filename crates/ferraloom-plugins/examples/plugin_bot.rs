@@ -395,7 +395,12 @@ fn read(
                             .filter(|(_, s)| s.is_some())
                             .map(|(i, s)| format!("{i}={}", describe(s)))
                             .collect();
-                        say(format!("content {} {}", p.container, filled.join(" ")));
+                        say(format!(
+                            "content {} {} cursor {}",
+                            p.container,
+                            filled.join(" "),
+                            describe(&p.carried)
+                        ));
                         w.slots.insert(p.container, (p.state, p.items));
                         w.cursor = p.carried;
                     }

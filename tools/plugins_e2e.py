@@ -466,13 +466,13 @@ def check_plugins(engine, bot_binary, built, out, scratch):
         emerald = re.search(r'\b13=(\d+)x1 name=Buy lore=1\b', content)
         if not emerald or not re.search(r'\b0=\d+x2\b', content):
             raise Failed(f'GUI content: {content}')
-        # A cancelled click on the priced emerald: the plugin sees it, nothing moves, the client is corrected.
+        # A cancelled click on the priced emerald: the plugin sees it, nothing moves, the window is resent whole.
         mark, log_mark = len(bot.out.lines), len(log.lines)
         bot.send(f'click {window} 13 0 0')
         log.wait_for(r'event: click gui raw=13 LEFT PICKUP_ALL CONTAINER current=EMERALD price=5 '
                      r'title=\S*Ferraloom GUI cancelled=true', start=log_mark)
-        bot.out.wait_for(rf'^slot {window} 13 {emerald.group(1)}x1 name=Buy lore=1$', start=mark)
-        bot.out.wait_for(r'^cursor empty$', start=mark)
+        bot.out.wait_for(rf'^content {window} .*\b13={emerald.group(1)}x1 name=Buy lore=1 .*cursor empty$',
+                         start=mark)
         # An uncancelled click takes the diamonds onto the cursor.
         log_mark = len(log.lines)
         bot.send(f'click {window} 0 0 0')

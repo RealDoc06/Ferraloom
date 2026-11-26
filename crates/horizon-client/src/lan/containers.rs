@@ -377,6 +377,15 @@ impl Hub {
         g.send(&packet);
     }
 
+    /// The open menu's whole contents and the carried stack again, as after a
+    /// denied click (`AbstractContainerMenu.sendAllDataToRemote`).
+    pub fn resend_menu(&mut self, i: usize, world: &World) {
+        let g = &self.guests[i];
+        if let Some(items) = g.menu.as_ref().and_then(|m| m.slots.read(world, g)) {
+            self.send_menu_content(i, items);
+        }
+    }
+
     fn close_container_at(&mut self, i: usize) {
         let g = &mut self.guests[i];
         if let Some(menu) = g.menu.take() {

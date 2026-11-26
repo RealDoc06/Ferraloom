@@ -613,8 +613,8 @@ impl Game<'_> {
 
     /// CraftBukkit's InventoryClickEvent in handleContainerClick, before
     /// `AbstractContainerMenu.clicked`: true when a plugin cancelled the
-    /// click, which then changes nothing and the client is corrected
-    /// (every slot it claims and the cursor, as after any click). Drags
+    /// click, which then changes nothing and the client is sent the clicked
+    /// window again (`resync_cancelled`). Drags
     /// (`QUICK_CRAFT`) fire InventoryDragEvent instead; menus the game runs
     /// itself (crafting table, anvil, trading...) fire nothing yet.
     pub(in crate::game) fn plugin_click(
@@ -744,9 +744,11 @@ impl Game<'_> {
         denied
     }
 
-    /// After a cancelled click or drag, corrects the client's view of the window
-    /// it clicked if that window is still the open one. A listener that opened
-    /// another menu has sent it already; under it the inventory is resent whole.
+    /// After a cancelled click or drag, CraftBukkit's resend: whatever the client
+    /// predicted (moves, swaps, renamed stacks) is undone by sending whole the
+    /// player's inventory when no menu is open or the click was in it, else the
+    /// clicked window and the cursor if it is still the open one. A listener that
+    /// opened another menu has sent it already.
     fn resync_cancelled(&self, host: &mut LanHost, conn: u32, p: &play::ContainerClick) {
         let Some(i) = host.hub.guest_index(conn) else {
             return;
@@ -755,9 +757,8 @@ impl Game<'_> {
             p.container,
             host.hub.guests[i].menu.as_ref().map(|m| m.window),
         ) {
-            (0, None) => host.hub.inventory_clicked(conn, p, &self.world, &[]),
-            (0, Some(_)) => host.hub.send_inventory(i),
-            (w, Some(open)) if w == open => host.hub.inventory_clicked(conn, p, &self.world, &[]),
+            (0, _) | (_, None) => host.hub.send_inventory(i),
+            (w, Some(open)) if w == open => host.hub.resend_menu(i, &self.world),
             _ => {}
         }
     }
