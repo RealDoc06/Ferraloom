@@ -2,13 +2,14 @@ package dev.ferraloom.bukkit;
 
 import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -61,8 +62,11 @@ public final class PlayerEvents {
         t.setDaemon(true);
         return t;
     });
-    /** Players between PlayerLoginEvent and their join, whose join reuses the object (CraftBukkit does). */
-    private static final Map<UUID, FerraloomPlayer> LOGGING_IN = new ConcurrentHashMap<>();
+    /**
+     * Players between PlayerLoginEvent and their join, whose join reuses the object (CraftBukkit does): a profile's
+     * attempts in arrival order, since a later one is admitted only once the earlier ones are gone. Guarded by itself.
+     */
+    private static final Map<UUID, ArrayDeque<FerraloomPlayer>> LOGGING_IN = new HashMap<>();
     /** A pending player older than this lost its join (a path that never abandoned it): the next login drops it. */
     private static final long STALE_NANOS = TimeUnit.MINUTES.toNanos(5);
     private static final double[] CANCELLED = new double[0];
@@ -140,8 +144,11 @@ public final class PlayerEvents {
             FerraloomPlayer player = new FerraloomPlayer(Bridge.server, id, name, op);
             player.attempt = attempt;
             player.attemptNanos = System.nanoTime();
-            LOGGING_IN.values().removeIf(p -> player.attemptNanos - p.attemptNanos > STALE_NANOS);
-            LOGGING_IN.put(id, player);
+            synchronized (LOGGING_IN) {
+                LOGGING_IN.values().forEach(q -> q.removeIf(p -> player.attemptNanos - p.attemptNanos > STALE_NANOS));
+                LOGGING_IN.values().removeIf(ArrayDeque::isEmpty);
+                LOGGING_IN.computeIfAbsent(id, k -> new ArrayDeque<>()).addLast(player);
+            }
             InetAddress address = InetAddress.getByName(ip);
             PlayerLoginEvent event = new PlayerLoginEvent(player, hostname, address,
                     PlayerLoginEvent.Result.values()[result], message, address);
@@ -149,7 +156,7 @@ public final class PlayerEvents {
             if (event.getResult() == PlayerLoginEvent.Result.ALLOWED) {
                 return null;
             }
-            LOGGING_IN.remove(id, player);
+            abandon(most, least, attempt);
             return event.getKickMessage() == null ? "" : event.getKickMessage();
         } catch (Throwable ex) {
             abandon(most, least, attempt);
@@ -160,7 +167,13 @@ public final class PlayerEvents {
 
     /** A login attempt that ended before its join: its pending player is dropped, not another attempt's. */
     public static void abandon(long most, long least, long attempt) {
-        LOGGING_IN.computeIfPresent(new UUID(most, least), (id, p) -> p.attempt == attempt ? null : p);
+        UUID id = new UUID(most, least);
+        synchronized (LOGGING_IN) {
+            ArrayDeque<FerraloomPlayer> pending = LOGGING_IN.get(id);
+            if (pending != null && pending.removeIf(p -> p.attempt == attempt) && pending.isEmpty()) {
+                LOGGING_IN.remove(id);
+            }
+        }
     }
 
     /** PlayerList.placeNewPlayer's PlayerJoinEvent: the join message to send, or null for none. */
@@ -168,7 +181,16 @@ public final class PlayerEvents {
             boolean playedBefore, long firstPlayed, long lastPlayed) {
         try {
             UUID id = new UUID(most, least);
-            FerraloomPlayer player = LOGGING_IN.remove(id);
+            FerraloomPlayer player = null;
+            synchronized (LOGGING_IN) {
+                ArrayDeque<FerraloomPlayer> pending = LOGGING_IN.get(id);
+                if (pending != null) {
+                    player = pending.pollFirst();
+                    if (pending.isEmpty()) {
+                        LOGGING_IN.remove(id);
+                    }
+                }
+            }
             if (player == null) {
                 player = new FerraloomPlayer(Bridge.server, id, name, op);
             }
