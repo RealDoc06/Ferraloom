@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -188,13 +189,15 @@ public final class PlayerEvents {
             synchronized (LOGGING_IN) {
                 ArrayDeque<FerraloomPlayer> pending = LOGGING_IN.get(id);
                 if (pending != null) {
-                    for (FerraloomPlayer p : pending) {
+                    // The matched entry itself: equals compares UUIDs, which every entry here shares.
+                    for (Iterator<FerraloomPlayer> it = pending.iterator(); it.hasNext();) {
+                        FerraloomPlayer p = it.next();
                         if (p.attempt == attempt) {
                             player = p;
+                            it.remove();
                             break;
                         }
                     }
-                    pending.remove(player);
                     if (pending.isEmpty()) {
                         LOGGING_IN.remove(id);
                     }
