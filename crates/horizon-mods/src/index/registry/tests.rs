@@ -122,7 +122,8 @@ impl Scratch {
         build(&Sources {
             registry: &repo,
             files: &files,
-            release: "https://github.com/example/mods/releases/download/",
+            // The sample index's own URLs (tests/index/index-v1.json).
+            release: "https://github.com/horizon-rust/horizon-mods/releases/download/",
             site: "https://horizon-rust.github.io/horizon-mods/",
             generated: "2026-10-24T18:00:00Z".into(),
         })
