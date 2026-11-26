@@ -152,7 +152,6 @@ PARITY_MACHINE_JOBS=$jobs
 PARITY_LOCAL_JOBS=$jobs
 JAVA_HOME=$java
 HORIZON_SHARED_SOURCE=$source
-HORIZON_TELEMETRY_URL=off
 EOF
     [ -n "$platform_env" ] && echo "$platform_env"
     command -v vscreen > /dev/null && echo "VSCREEN=ci-horizon"

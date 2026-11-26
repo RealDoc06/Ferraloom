@@ -111,8 +111,8 @@ space; CI runs it on every pull request.
 ```
 
 `horizon-server` (`crates/horizon-server`) is the only program an owner runs. It depends on
-`horizon-server-files`, `horizon-bench` (process RAM and CPU) and `horizon-release-sign`, plus `serde`, `toml`,
-`toml_edit`, `ureq` and `zip`, and no game code. It runs the engine as a child process.
+`horizon-server-files` and `horizon-release-sign`, plus `serde`, `toml`, `toml_edit`, `ureq` and `zip`, and no
+game code. It runs the engine as a child process.
 
 The supervisor/engine split stays, for these reasons:
 
@@ -463,7 +463,7 @@ reproducible by anyone, and show the same gameplay on both sides.
   - TPS and MSPT (average, P50/P95/P99), from each server's own `/tick query` (vanilla's
     `ServerTickRateManager`; Horizon implements the same command and clock), so every server measures itself
     the same way;
-  - RSS and CPU (process tree, `horizon_bench::rss_bytes`/`cpu_seconds`);
+  - RSS and CPU (process tree, from `ps`);
   - chunk generation: chunks per second while the `explore` bots run, and time until each new bot has its
     full view loaded;
   - start time: cold and warm, to `Done`;

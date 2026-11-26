@@ -36,7 +36,6 @@ One workspace (root `Cargo.toml`).
 | `horizon-mods`, `horizon-mod-sdk`, `cargo-horizon-mod` | Sandboxed WebAssembly mods: runtime, SDK + WIT, `cargo horizon-mod` ([mods.md](mods.md)) |
 | `horizon-port-pack` | Porting the data-driven content of Java modpacks ([modpacks.md](modpacks.md)) |
 | `horizon-shader-api` | Horizon's WGSL shader-pack format and its check; only the mod index's optional `shader-packs` feature uses it |
-| `horizon-bench`, `horizon-telemetry` | The benchmark report format; `horizon-server` uses its process CPU and RSS readers |
 | `horizon-bots`, `horizon-release-sign`, `xtask` | Load-test bots, signed release checksums, `package-server` |
 
 Other top-level folders: `tools/` (harnesses and dev scripts), `tests/` (Python unit tests: `python3 -m unittest

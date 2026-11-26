@@ -10,7 +10,7 @@ from tools.integration_env import game_environment, run_game, require_server_rep
 
 
 class IntegrationEnvironmentTests(unittest.TestCase):
-    def test_all_data_homes_and_network_settings_are_overridden(self):
+    def test_all_data_homes_are_overridden(self):
         keys = ('HORIZON_HOME', 'XDG_DATA_HOME', 'XDG_CONFIG_HOME')
         with tempfile.TemporaryDirectory() as root:
             env = game_environment({**dict.fromkeys(keys, '/real/player'), 'DISPLAY': ':123'}, root)
@@ -18,7 +18,6 @@ class IntegrationEnvironmentTests(unittest.TestCase):
             self.assertEqual(len(set(homes)), 3)
             self.assertTrue(all(p.is_dir() and p.is_relative_to(root) for p in homes))
             self.assertEqual(env['DISPLAY'], ':123')
-            self.assertEqual(env['HORIZON_TELEMETRY_URL'], 'off')
 
     def test_each_fixture_process_gets_fresh_homes_and_cleanup(self):
         script = ('import json, os; from pathlib import Path; '

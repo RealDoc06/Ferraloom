@@ -26,7 +26,7 @@ developers and hosts.
 - [Horizon APIs](api/README.md): mods, servers and data formats, each with its guide, generated reference,
   stability and changelog, and the [stability and versioning policy](api/stability.md).
 - [Release flow](release-flow.md) and [versioning](versioning.md): how a change gets from a pull request to a release.
-- [Benchmark report format](benchmark-report.md), [profiling](profiling.md).
+- [Profiling](profiling.md).
 
 ## Parity
 

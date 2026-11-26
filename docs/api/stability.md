@@ -106,6 +106,5 @@ Deprecations and breaking changes are in bold. The release notes of the game rel
 | `cargo horizon-mod` (`new`, `build`, `test`, `check`), `horizon-mod-sdk` | preview | 0.1.0 |
 | `horizon-server` commands, `server.toml` | stable | `horizon-server --version` |
 | Server control API | stable | `/api/v1` |
-| Benchmark report | stable | `"version": 1` |
 | `horizon-graphics.txt`, `horizon-extras.txt`, `horizon-mods.txt` | preview | none |
 | `SHA256SUMS` and `SHA256SUMS.sig` | stable | |
