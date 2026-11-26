@@ -1326,6 +1326,9 @@ impl Game<'_> {
             yaw: g.yaw,
             pitch: g.pitch,
         };
+        // Where the server has the player: a cancelled move sends them here,
+        // not to the last event's `to`, which the hub may yet reject.
+        let mut held = at;
         let (mut sneaking, mut sprinting, mut flying) = (g.sneaking, g.sprinting, g.flying);
         // As the hub's handlePlayerAbilities: a plugin's allow-flight counts.
         let may_fly = g.creative() || g.spectator() || g.allow_flight;
@@ -1397,7 +1400,10 @@ impl Game<'_> {
                 }
             };
             k += 1;
-            if awaiting.is_some() || !listens(Event::PlayerMove) {
+            // A move with an invalid value stays for the hub, which kicks for it.
+            let finite = pos.is_none_or(|p| p.iter().all(|v| v.is_finite()))
+                && rot.is_none_or(|(yaw, pitch)| yaw.is_finite() && pitch.is_finite());
+            if !finite || awaiting.is_some() || !listens(Event::PlayerMove) {
                 continue;
             }
             let mut to = at;
@@ -1423,7 +1429,7 @@ impl Game<'_> {
             let gh = &mut GameHost::new(self, Some(&mut *host));
             let back = match ferraloom_plugins::player_move(gh, id, from, to) {
                 Moved::Unchanged => continue,
-                Moved::Cancelled => from,
+                Moved::Cancelled => held,
                 Moved::To(other) => other,
             };
             // The move is dropped and the client sent where the event left it.
@@ -1435,7 +1441,7 @@ impl Game<'_> {
                 (g.yaw, g.pitch) = (back.yaw, back.pitch);
                 host.hub.teleport(i, Some([back.x, back.y, back.z]));
                 awaiting = host.hub.guests[i].awaiting_teleport;
-                at = back;
+                (at, held) = (back, back);
             } else {
                 pend(Pending::Teleport(id, back));
                 return;
