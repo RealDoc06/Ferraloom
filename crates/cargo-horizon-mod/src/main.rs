@@ -4,13 +4,11 @@
 //!   a mod from a template: a Rust crate, or a content mod (no code).
 //! - `build [--debug]`: the `.hmod` in `target/horizon-mod/`, with the mod's
 //!   `assets/` and `data/`; a folder without `Cargo.toml` is content only.
-//! - `run [--game <horizon-client>] [-- <game args>]`: build, then play with
-//!   the mod; run `build` again and the game reloads it.
 //! - `test [--debug] [--hmod <file>] [<name>]`: build, then run the mod's
 //!   `tests/*.toml` scripts in the sandbox, with no game.
 //! - `check <file> [--json]`: what the registry checks of a submission
 //!   (`.hmod`, `.hpack`, resource pack `.zip`), with a trial run for a mod.
-//! - `registry build|review|check|list`: the registry repository's CI.
+//! - `registry build|review|check|list`: a mod registry repository's CI.
 use horizon_mods::{
     Capability, Content, Manifest, Package,
     manifest::{MANIFEST, component_imports, componentize},
@@ -25,7 +23,7 @@ use std::{
 };
 
 const TARGET: &str = "wasm32-unknown-unknown";
-const SDK_GIT: &str = "{ git = \"https://github.com/horizon-rust/horizon\" }";
+const SDK_GIT: &str = "{ git = \"https://github.com/RealDoc06/Ferraloom\" }";
 
 fn main() -> ExitCode {
     // Cargo runs `cargo-horizon-mod horizon-mod <args>`.
@@ -38,11 +36,10 @@ fn main() -> ExitCode {
         Some("build") => build(!args.iter().any(|a| a == "--debug")).map(|p| {
             println!("Built {}", p.display());
         }),
-        Some("run") => run(&args[1..]),
         Some("test") => test(&args[1..]),
         Some("check") => check(&args[1..]),
         Some("registry") => registry::main(&args[1..]),
-        _ => Err("usage: cargo horizon-mod new <path> [--template code|content] | build [--debug] | run [--game <horizon-client>] [-- <game args>] | test [--debug] [--hmod <file>] [<name>] | check <file> [--kind <kind>] [--key <public key> --signature <file.minisig>] [--json] | registry build|review|check|list".into()),
+        _ => Err("usage: cargo horizon-mod new <path> [--template code|content] | build [--debug] | test [--debug] [--hmod <file>] [<name>] | check <file> [--kind <kind>] [--key <public key> --signature <file.minisig>] [--json] | registry build|review|check|list".into()),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -163,7 +160,7 @@ fn new(args: &[String]) -> Result<(), String> {
         Manifest::parse(&std::fs::read_to_string(dir.join(MANIFEST)).map_err(|e| e.to_string())?)?;
     Content::read(dir, &manifest)?;
     println!(
-        "Created {} (mod id {id}). Next: cd {path} && cargo horizon-mod run",
+        "Created {} (mod id {id}). Next: cd {path} && cargo horizon-mod build",
         dir.display()
     );
     Ok(())
@@ -333,31 +330,6 @@ fn test(args: &[String]) -> Result<(), String> {
     }
     println!("test result: ok. {passed} passed");
     Ok(())
-}
-
-fn run(args: &[String]) -> Result<(), String> {
-    let path = build(true)?;
-    let game = flag(args, "--game")
-        .map(str::to_string)
-        .or_else(|| std::env::var("HORIZON_CLIENT").ok())
-        .unwrap_or_else(|| "horizon-client".into());
-    let extra = args.iter().skip_while(|a| *a != "--").skip(1);
-    println!(
-        "Starting {game} with {} (rebuild with `cargo horizon-mod build` to reload it)",
-        path.display()
-    );
-    let status = Command::new(&game)
-        .arg("--dev-mod")
-        .arg(&path)
-        .args(extra)
-        .status()
-        .map_err(|e| {
-            format!("{game}: {e} (pass --game <path to horizon-client> or set HORIZON_CLIENT)")
-        })?;
-    status
-        .success()
-        .then_some(())
-        .ok_or_else(|| format!("the game exited with {status}"))
 }
 
 #[cfg(test)]
