@@ -286,6 +286,10 @@ impl Shared {
         // while the gate ran. A gate that let a full server's login through
         // overrode the limit, so only a login seen with room is refused here.
         let mut online = self.online.lock().unwrap();
+        // Another attempt for this profile may have passed the wait too.
+        if online.iter().any(|(u, _)| *u == uuid) {
+            return Some(translatable("multiplayer.disconnect.duplicate_login", &[]));
+        }
         let taken = online.len() + self.reserved.lock().unwrap().len();
         if !full && !bypass && taken >= self.max_players() {
             return Some(translatable("multiplayer.disconnect.server_full", &[]));
