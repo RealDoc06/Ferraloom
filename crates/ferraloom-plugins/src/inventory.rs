@@ -128,7 +128,16 @@ pub trait InventoryHost {
     fn drop_container(&mut self, _id: u32) {}
     /// Shows a container to a player (`ServerPlayer.openMenu`): `menu` a
     /// `minecraft:menu` id, `title` a text component. False when it could not.
-    fn open_container(&mut self, _player: PlayerId, _at: Holder, _menu: &str, _title: Tag) -> bool {
+    /// A `retitle` shows the open menu again under a new title
+    /// (`InventoryView.setTitle`): nothing closes and the cursor stays.
+    fn open_container(
+        &mut self,
+        _player: PlayerId,
+        _at: Holder,
+        _menu: &str,
+        _title: Tag,
+        _retitle: bool,
+    ) -> bool {
         false
     }
     /// Closes the player's open menu (`closeContainer`); false when none was open.
@@ -205,7 +214,7 @@ pub(crate) fn load(env: &mut JNIEnv) -> jni::errors::Result<()> {
             ("dropContainer", "(I)V", drop_container as *mut c_void),
             (
                 "open",
-                "(JJIJJLjava/lang/String;[B)Z",
+                "(JJIJJLjava/lang/String;[BZ)Z",
                 open_container as *mut c_void,
             ),
             ("close", "(JJ)Z", close_container as *mut c_void),
@@ -670,6 +679,7 @@ extern "system" fn open_container(
     b: jlong,
     menu: JString,
     title: JByteArray,
+    retitle: jboolean,
 ) -> jboolean {
     guard(&mut env, JNI_FALSE, |env| {
         let at = holder(kind, a, b)?;
@@ -678,8 +688,9 @@ extern "system" fn open_container(
         let title = nbt::read_network(&title, Limits::default())
             .map(|(t, _)| t)
             .unwrap_or_else(|_| Tag::String("".into()));
-        let opened = with_host(|h| h.open_container(player_id(most, least), at, &menu, title))
-            .ok_or(Fail::NoHost("Player.openInventory"))?;
+        let opened =
+            with_host(|h| h.open_container(player_id(most, least), at, &menu, title, retitle != 0))
+                .ok_or(Fail::NoHost("Player.openInventory"))?;
         Ok(jbool(opened))
     })
 }

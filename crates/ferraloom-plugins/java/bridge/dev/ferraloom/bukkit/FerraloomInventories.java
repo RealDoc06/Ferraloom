@@ -168,7 +168,7 @@ final class FerraloomInventories {
             if (event.isCancelled()) {
                 return null;
             }
-            if (!InventoryNative.open(most(), least(), top.kind, top.a, top.b, menu, title(view.getTitle()))) {
+            if (!InventoryNative.open(most(), least(), top.kind, top.a, top.b, menu, title(view.getTitle()), false)) {
                 return null;
             }
             open = view;
@@ -179,7 +179,7 @@ final class FerraloomInventories {
         void reopen(FerraloomInventoryView view) {
             String menu = view.top.menu();
             if (menu != null) {
-                InventoryNative.open(most(), least(), view.top.kind, view.top.a, view.top.b, menu, title(view.getTitle()));
+                InventoryNative.open(most(), least(), view.top.kind, view.top.a, view.top.b, menu, title(view.getTitle()), true);
             }
         }
 

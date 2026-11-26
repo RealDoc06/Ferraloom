@@ -241,7 +241,14 @@ impl InventoryHost for GameHost<'_, '_> {
         plugin_containers::remove(id);
     }
 
-    fn open_container(&mut self, player: PlayerId, at: Holder, menu: &str, title: Tag) -> bool {
+    fn open_container(
+        &mut self,
+        player: PlayerId,
+        at: Holder,
+        menu: &str,
+        title: Tag,
+        retitle: bool,
+    ) -> bool {
         let dim = super::world_index(self.game.dim);
         self.split(|game, hub| {
             let Some(gi) = hub
@@ -265,15 +272,18 @@ impl InventoryHost for GameHost<'_, '_> {
             let Some(items) = slots.read(&game.world, g) else {
                 return false;
             };
-            // ServerPlayer.openMenu closes the menu that was open, as close_container.
-            game.guest_container_closed(hub, conn);
-            let closed = open
-                || game.lan_station_closed(hub, conn, None)
-                || game.lan_crafting_closed(hub, conn, None)
-                || game.lan_merchant_closed(hub, conn, None)
-                || game.lan_mount_closed(hub, conn, None);
-            if closed {
-                game.guest_carried_back(hub, gi);
+            // ServerPlayer.openMenu closes the menu that was open, as close_container;
+            // a retitle (CraftInventoryView.setTitle) keeps it and its cursor.
+            if !retitle {
+                game.guest_container_closed(hub, conn);
+                let closed = open
+                    || game.lan_station_closed(hub, conn, None)
+                    || game.lan_crafting_closed(hub, conn, None)
+                    || game.lan_merchant_closed(hub, conn, None)
+                    || game.lan_mount_closed(hub, conn, None);
+                if closed {
+                    game.guest_carried_back(hub, gi);
+                }
             }
             hub.hub.open_container(conn, menu, title, pos, slots, items);
             true

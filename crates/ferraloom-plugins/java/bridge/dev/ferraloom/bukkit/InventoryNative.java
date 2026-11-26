@@ -36,8 +36,11 @@ final class InventoryNative {
     /** Frees a plugin container; from any thread (its object's cleaner). */
     static native void dropContainer(int id);
 
-    /** Shows the inventory to the player in a {@code menu} ({@code minecraft:generic_9x3}) titled {@code title} (a text component's NBT). */
-    static native boolean open(long most, long least, int kind, long a, long b, String menu, byte[] title);
+    /**
+     * Shows the inventory to the player in a {@code menu} ({@code minecraft:generic_9x3}) titled {@code title} (a text
+     * component's NBT). A {@code retitle} shows the open menu again: nothing closes and the cursor stays.
+     */
+    static native boolean open(long most, long least, int kind, long a, long b, String menu, byte[] title, boolean retitle);
 
     /** Closes the player's open menu; false when none was open. */
     static native boolean close(long most, long least);
