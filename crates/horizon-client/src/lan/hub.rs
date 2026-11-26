@@ -1477,9 +1477,19 @@ impl Hub {
                 if self.here(&self.guests[i]) {
                     self.process_inbox(i, ctx, &mut events);
                     // Ferraloom: a cancelled PlayerMoveEvent's correction
-                    // (game/plugins/players.rs), to where the moves before it left them.
-                    if std::mem::take(&mut self.guests[i].correct_move) {
-                        self.teleport(i, None);
+                    // (game/plugins/players.rs), to where the moves before it left
+                    // them, once none is left for a later tick. Not for a guest who
+                    // died or mounted since.
+                    let g = &mut self.guests[i];
+                    if g.correct_move.is_some() {
+                        if g.dead || g.vehicle.is_some() {
+                            g.correct_move = None;
+                        } else if g.inbox.is_empty() {
+                            g.correct_move = None;
+                            self.teleport(i, None);
+                        } else {
+                            g.correct_move = Some(g.inbox.len());
+                        }
                     }
                 }
             }

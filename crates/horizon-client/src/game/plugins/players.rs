@@ -1299,8 +1299,8 @@ impl Game<'_> {
     /// (CraftBukkit's thresholds: moved more than 1/256 of a block squared
     /// or turned more than 10 degrees since the last one), the sneak, sprint
     /// and flight toggles. A cancelled move is dropped with the moves after
-    /// it this tick, and the hub, once it has handled the moves before it,
-    /// sends the player back to where they left them (CraftBukkit's
+    /// it until the correction, which the hub sends once it has handled the
+    /// packets before it: the player goes back to where they left them (CraftBukkit's
     /// teleport to `from`); a move a listener changed teleports at once. A
     /// cancelled toggle is dropped (a flight's client is told its abilities
     /// again). Only while a plugin listens to one.
@@ -1314,10 +1314,21 @@ impl Game<'_> {
 
     fn plugin_guest_inbox(&mut self, host: &mut LanHost, i: usize) {
         use horizon_protocol::packets::play::Serverbound as S;
-        let g = &host.hub.guests[i];
+        let g = &mut host.hub.guests[i];
         if g.dead || g.sleeping || g.vehicle.is_some() {
             return;
         }
+        // A cancelled move's correction is still to come: what the client moved
+        // since, behind the packets that pass kept, is dropped unseen.
+        let correcting = g.correct_move.is_some();
+        if let Some(kept) = g.correct_move {
+            let mut n = 0;
+            g.inbox.retain(|p| {
+                n += 1;
+                n <= kept || !is_move(p)
+            });
+        }
+        let g = &host.hub.guests[i];
         let (id, world) = (g.uuid, world_index(Dim::from_id(&g.dimension)));
         let mut awaiting = g.awaiting_teleport;
         let mut at = Location {
@@ -1406,7 +1417,7 @@ impl Game<'_> {
             // A move with an invalid value stays for the hub, which kicks for it.
             let finite = pos.is_none_or(|p| p.iter().all(|v| v.is_finite()))
                 && rot.is_none_or(|(yaw, pitch)| yaw.is_finite() && pitch.is_finite());
-            if !finite || awaiting.is_some() || !listens(Event::PlayerMove) {
+            if !finite || awaiting.is_some() || correcting || !listens(Event::PlayerMove) {
                 continue;
             }
             let mut to = at;
@@ -1438,17 +1449,10 @@ impl Game<'_> {
                     k -= 1;
                     g.inbox.remove(k);
                     let mut later = g.inbox.split_off(k);
-                    later.retain(|p| {
-                        !matches!(
-                            p,
-                            S::MovePlayerPos(_)
-                                | S::MovePlayerPosRot(_)
-                                | S::MovePlayerRot(_)
-                                | S::MovePlayerStatus(_)
-                        )
-                    });
+                    later.retain(|p| !is_move(p));
                     g.inbox.append(&mut later);
-                    g.correct_move = true;
+                    // The hub counts what is left once it has handled this tick's.
+                    g.correct_move = Some(usize::MAX);
                     LAST_MOVE.with_borrow_mut(|m| m.insert(id, from));
                     continue;
                 }
@@ -1470,6 +1474,15 @@ impl Game<'_> {
             }
         }
     }
+}
+
+/// A movement packet (handleMovePlayer's).
+fn is_move(p: &play::Serverbound) -> bool {
+    use play::Serverbound as S;
+    matches!(
+        p,
+        S::MovePlayerPos(_) | S::MovePlayerPosRot(_) | S::MovePlayerRot(_) | S::MovePlayerStatus(_)
+    )
 }
 
 /// The events [`Game::plugin_inbox`] fires.
