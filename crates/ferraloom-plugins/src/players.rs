@@ -134,7 +134,8 @@ pub struct PlayerState {
 /// reads from other threads (a plugin's async task), which Spigot answers
 /// from its entity fields. Kept only once such a read happened: from then on
 /// the game stores them at each tick's start ([`snapshots_wanted`]).
-static SNAPSHOTS: Mutex<Vec<(PlayerId, PlayerState, Location)>> = Mutex::new(Vec::new());
+/// None until the game first stores them.
+static SNAPSHOTS: Mutex<Option<Vec<(PlayerId, PlayerState, Location)>>> = Mutex::new(None);
 static SNAPSHOTS_WANTED: AtomicBool = AtomicBool::new(false);
 static SNAPSHOTS_STORED: Condvar = Condvar::new();
 
@@ -146,23 +147,23 @@ pub fn snapshots_wanted() -> bool {
 
 /// The players' state and location for this tick's reads from other threads.
 pub fn store_snapshots(snapshots: Vec<(PlayerId, PlayerState, Location)>) {
-    *SNAPSHOTS.lock().unwrap_or_else(|e| e.into_inner()) = snapshots;
+    *SNAPSHOTS.lock().unwrap_or_else(|e| e.into_inner()) = Some(snapshots);
     SNAPSHOTS_STORED.notify_all();
 }
 
-/// A player's snapshot off the server thread. The first such read waits
-/// for the next tick's start to store them (once, at most a tick or two).
+/// A player's snapshot when no host is lent. The reads before the first
+/// store wait for the next tick's start to store them (at most a tick or
+/// two), except on the server thread, which stores them itself.
 fn snapshot(player: PlayerId) -> Option<(PlayerState, Location)> {
-    let find = |all: &[(PlayerId, PlayerState, Location)]| {
-        all.iter().find(|s| s.0 == player).map(|s| (s.1, s.2))
-    };
+    SNAPSHOTS_WANTED.store(true, Ordering::Relaxed);
     let mut all = SNAPSHOTS.lock().unwrap_or_else(|e| e.into_inner());
-    if !SNAPSHOTS_WANTED.swap(true, Ordering::Relaxed) {
+    if all.is_none() && !bridge::on_server_thread() {
         all = SNAPSHOTS_STORED
-            .wait_timeout(all, Duration::from_millis(200))
+            .wait_timeout_while(all, Duration::from_millis(200), |all| all.is_none())
             .map_or_else(|e| e.into_inner().0, |(g, _)| g);
     }
-    find(&all)
+    let found = all.as_ref()?.iter().find(|s| s.0 == player);
+    found.map(|s| (s.1, s.2))
 }
 
 /// The length of [`PlayerState::to_array`]: `PlayerNative.state`'s answer.

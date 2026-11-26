@@ -116,6 +116,13 @@ struct Runtime {
 }
 
 static RUNTIME: OnceLock<Runtime> = OnceLock::new();
+/// The thread that started the plugins: the server thread.
+static SERVER_THREAD: OnceLock<std::thread::ThreadId> = OnceLock::new();
+
+/// Whether the calling thread is the server thread.
+pub(crate) fn on_server_thread() -> bool {
+    SERVER_THREAD.get() == Some(&std::thread::current().id())
+}
 
 /// Whether plugins run in this process (a JVM was started).
 pub fn running() -> bool {
@@ -203,6 +210,7 @@ pub fn start(config: &Config, host: &mut dyn PluginHost) -> Result<bool, String>
             });
         loaded.map_err(|e| describe(&mut env, e))?
     };
+    let _ = SERVER_THREAD.set(std::thread::current().id());
     if RUNTIME.set(Runtime { vm, bridge }).is_err() {
         return Err("plugins were started twice".into());
     }
