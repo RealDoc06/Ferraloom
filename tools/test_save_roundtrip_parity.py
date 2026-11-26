@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Save-format differential test: vanilla 26.3 world -> Horizon -> vanilla.
+"""Save-format differential test: vanilla 26.3 world -> Ferraloom -> vanilla.
 
 1. A headless vanilla server (flat world, offline) is filled with one of every block
    entity type and many entity types (tools/save_roundtrip_scene.py), a bot player
    joins so a player file exists, and the world is saved (world V0).
-2. Horizon opens a copy of V0 under a virtual screen, rewrites every resident chunk and
-   entity section (`save-all`) and quits; this is world H.
+2. Ferraloom's dedicated server (`horizon-client --dedicated --nogui`) opens a copy of
+   V0, its console changes a game rule and rewrites every resident chunk and entity
+   section (`save-all flush`), and it stops; this is world H.
 3. The NBT of V0 and H is compared: chunks (block states and biomes decoded, so palette
    order does not matter), block entities, entities, heightmaps, light, ticks, structure
    data, level.dat, data/*.dat, players/data/*.dat. Differences must be explained by
@@ -15,24 +16,20 @@
    activity, and `data get` of every block entity and entity must print the same
    data as the server that loaded V0 (so vanilla reads Horizon's files as it reads its own).
 
-  test_save_roundtrip_parity.py [--keep] [--skip-horizon] [--bin-dir DIR] [--stage gen|resave|compare|all]
-                                [--world DIR] (compare an existing V0/H pair: --vanilla DIR --horizon DIR)
+  test_save_roundtrip_parity.py [--keep] [--engine PATH] [--gen-only] [--skip-vanilla-load]
+                                (compare an existing V0/H pair: --vanilla DIR --horizon DIR)
 
-Run files stay under .local/save-roundtrip/run. On Linux the Horizon client runs on the
-virtual screen (`vscreen`), never on a real monitor, with a null ALSA device; on macOS it
-renders offscreen (`--offscreen`, no window) without audio, from the logged-in session.
+Run files stay under .local/save-roundtrip/run.
 """
 import argparse
+import atexit
 import collections
 import json
-import os
 import queue
 import re
 import shutil
-import socket
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 from pathlib import Path
@@ -43,16 +40,17 @@ import save_roundtrip_scene as scene  # noqa: E402
 
 try:
     from . import lab
+    from .test_command_exec_parity import servers
 except ImportError:
     import lab
+    from test_command_exec_parity import servers
 
 ROOT = Path(__file__).resolve().parent.parent
 LOCAL = ROOT / '.local'
-RESOURCES = lab.RESOURCES
 SERVER = lab.GAME / 'jars' / 'server.jar'
 RUN = LOCAL / 'save-roundtrip' / 'run'
 
-# Game rules Horizon's player changes before saving: rule -> (vanilla's value, Horizon's).
+# Game rules Horizon's console changes before saving: rule -> (vanilla's value, Horizon's).
 # The new value must be in Horizon's save, and nothing else may differ (#74).
 HORIZON_RULES = {'max_entity_cramming': (24, 30)}
 
@@ -62,22 +60,20 @@ IGNORED = {
     r'^chunk\.LastUpdate$': 'game time of the save (Horizon saves at its own time)',
     r'^chunk\.InhabitedTime$': 'ticks the chunk was loaded; differs by the time Horizon ran',
     r'^chunk\.isLightOn$': 'light is recomputed by vanilla when absent',
-    # Vanilla's server (view distance 4) leaves a border of proto chunks; Horizon's
-    # render distance 6 may finish some, as vanilla does when it loads the world at
-    # that distance. Their blocks are still compared; only what a full chunk saves
+    # Vanilla's server (view distance 4) leaves a border of proto chunks; Horizon may
+    # finish some it loads, as vanilla does when it loads the world at a larger
+    # distance. Their blocks are still compared; only what a full chunk saves
     # differently (no worldgen heightmaps, entities in entities/) is accepted.
     r'^chunk\.promoted\.(Status|Heightmaps\.(OCEAN_FLOOR_WG|WORLD_SURFACE_WG)|entities)$':
         'a proto chunk vanilla left at its view distance, finished by Horizon',
-    # Single player's server thread sends the chunks its player tracks (view distance 6
-    # and its outer ring), as vanilla's integrated server does, so it finishes some that
-    # vanilla's server (view distance 4) left before their terrain: those had no blocks,
-    # light or heightmaps to compare yet.
+    # Chunks Horizon finishes that vanilla's server (view distance 4) left before their
+    # terrain: those had no blocks, light or heightmaps to compare yet.
     r'^chunk\.blank\.':
         'a chunk vanilla left before its terrain (no blocks yet), finished by Horizon',
     r'^chunk\.unlit\.':
         'a chunk vanilla left before its light, finished (and lit) by Horizon',
-    # Horizon keeps simulating between loading and saving (it needs a few seconds of
-    # chunk generation first), so counters and positions of live things move on.
+    # Horizon keeps simulating between loading and saving, so counters and positions of
+    # live things move on.
     r'^chunk\.block_entities\.\(2, -60, 5\)\.(cooking_time_spent|lit_time_remaining|Items\[\]\.count)$':
         'the lit furnace keeps smelting',
     r'^chunk\.block_entities\.\(14, -60, 5\)\.CookingTimes$':
@@ -99,6 +95,7 @@ IGNORED = {
 # Real differences that are known and not fixed yet: (pattern -> what is wrong). They are
 # reported, and do not fail the run, so that new differences still do.
 KNOWN_GAPS = {
+    r'^players/data/.*\.dat\.Pos$': "Ferraloom's save rewrites the file of a player who never joined it, without Pos",
 }
 
 SUSPICIOUS = re.compile(
@@ -112,7 +109,9 @@ BENIGN = re.compile(r'(Unpacking |OFFLINE/INSECURE|online-mode|authenticate user
 # ---------------------------------------------------------------- vanilla server
 
 class Vanilla:
-    def __init__(self, directory, port=None, world='world', extra=None):
+    """A dedicated server with its console on stdin: vanilla's server.jar, or `command` (Horizon's)."""
+
+    def __init__(self, directory, port=None, world='world', extra=None, command=None):
         port = port or lab.free_port()
         directory.mkdir(parents=True, exist_ok=True)
         (directory / 'eula.txt').write_text('eula=true\n')
@@ -127,14 +126,17 @@ class Vanilla:
         props.update(extra or {})
         (directory / 'server.properties').write_text(''.join(f'{k}={v}\n' for k, v in props.items()))
         self.port = port
+        env = lab.game_env() if command else None
         self.process = subprocess.Popen(
-            ['java', '-Xmx2G', '-jar', str(SERVER), '--nogui'], cwd=directory, stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            [str(c) for c in command or ['java', '-Xmx2G', '-jar', SERVER, '--nogui']], cwd=directory, env=env,
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        # A harness that fails between start and stop must not leave its server running.
+        atexit.register(self.kill)
         self.lines = []
         self.queue = queue.Queue()
         self.counter = 0
         threading.Thread(target=self._pump, daemon=True).start()
-        self.wait('Done (', 240)
+        self.wait('Done (', 600)
 
     def _pump(self):
         for line in self.process.stdout:
@@ -165,6 +167,11 @@ class Vanilla:
         self.process.stdin.flush()
         out = self.wait(marker, timeout)
         return [re.sub(r'^\[[0-9:]+\] \[[^\]]*\]: (System chat: )?', '', l) for l in out[:-1]]
+
+    def kill(self):
+        if self.process.poll() is None:
+            self.process.kill()
+            self.process.wait()
 
     def stop(self):
         try:
@@ -261,45 +268,47 @@ def build_world(directory):
     """Fill a fresh vanilla world; returns the failed scene commands."""
     server = Vanilla(directory)
     failed = []
-    # A bot joins first so the player file exists and the chunks around spawn are loaded.
-    server.run('forceload add 0 0 63 63')
-    for rule in ('spawn_mobs', 'spawn_monsters', 'spawn_wandering_traders', 'spawn_patrols', 'spawn_phantoms',
-                 'spawn_wardens', 'raids'):
-        server.run(f'gamerule {rule} false')
-    server.run('gamerule random_tick_speed 0')
-    time.sleep(3)
-    server.run('fill 0 -61 0 47 -61 47 minecraft:stone')
-    for i, (block, nbt) in enumerate(scene.BLOCK_ENTITIES):
-        x, y, z = block_position(i)
-        command = f'setblock {x} {y} {z} minecraft:{block}{nbt}'
-        out = server.run(command)
-        if command_failed(out):
-            failed.append((command, out))
-    for i, (kind, extra) in enumerate(scene.ENTITIES):
-        command = entity_command(i, kind, extra)
-        out = server.run(command)
-        if command_failed(out):
-            failed.append((command, out))
-    # A scoreboard with every kind of saved field (scoreboard.dat). No criteria that
-    # Horizon's own player (not the bot) would update while it runs.
-    for command in SCOREBOARD:
-        out = server.run(command.replace('{uuid0}', entity_uuid_text(0)))
-        if command_failed(out):
-            failed.append((command, out))
-    server.run('time set 6000')
-    server.run('gamerule advance_time false')
-    server.run('gamerule advance_weather false')
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    import vanilla_login
-    threading.Thread(target=lambda: vanilla_login.join('127.0.0.1', server.port, 'RoundTrip', 25), daemon=True).start()
-    time.sleep(6)
-    server.run('item replace entity RoundTrip container.0 with minecraft:iron_sword[damage=3]')
-    server.run('give RoundTrip minecraft:apple 7')
-    server.run('xp set RoundTrip 5 levels')
-    time.sleep(20)
-    server.run('save-all flush')
-    time.sleep(2)
-    server.stop()
+    try:
+        # A bot joins first so the player file exists and the chunks around spawn are loaded.
+        server.run('forceload add 0 0 63 63')
+        for rule in ('spawn_mobs', 'spawn_monsters', 'spawn_wandering_traders', 'spawn_patrols', 'spawn_phantoms',
+                     'spawn_wardens', 'raids'):
+            server.run(f'gamerule {rule} false')
+        server.run('gamerule random_tick_speed 0')
+        time.sleep(3)
+        server.run('fill 0 -61 0 47 -61 47 minecraft:stone')
+        for i, (block, nbt) in enumerate(scene.BLOCK_ENTITIES):
+            x, y, z = block_position(i)
+            command = f'setblock {x} {y} {z} minecraft:{block}{nbt}'
+            out = server.run(command)
+            if command_failed(out):
+                failed.append((command, out))
+        for i, (kind, extra) in enumerate(scene.ENTITIES):
+            command = entity_command(i, kind, extra)
+            out = server.run(command)
+            if command_failed(out):
+                failed.append((command, out))
+        # A scoreboard with every kind of saved field (scoreboard.dat). No criteria that
+        # Horizon's own player (not the bot) would update while it runs.
+        for command in SCOREBOARD:
+            out = server.run(command.replace('{uuid0}', entity_uuid_text(0)))
+            if command_failed(out):
+                failed.append((command, out))
+        server.run('time set 6000')
+        server.run('gamerule advance_time false')
+        server.run('gamerule advance_weather false')
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import vanilla_login
+        threading.Thread(target=lambda: vanilla_login.join('127.0.0.1', server.port, 'RoundTrip', 25), daemon=True).start()
+        time.sleep(6)
+        server.run('item replace entity RoundTrip container.0 with minecraft:iron_sword[damage=3]')
+        server.run('give RoundTrip minecraft:apple 7')
+        server.run('xp set RoundTrip 5 levels')
+        time.sleep(20)
+        server.run('save-all flush', 300)
+        time.sleep(2)
+    finally:
+        server.stop()
     return failed, server.problems()
 
 
@@ -330,49 +339,27 @@ def entity_uuid_text(i):
 
 # ---------------------------------------------------------------- Horizon
 
-def vscreen_env():
-    text = subprocess.run(['vscreen', 'env'], capture_output=True, text=True, check=True).stdout
-    env = lab.game_env()
-    env.pop('DISPLAY', None)
-    for match in re.finditer(r'(\w+)=(\S+)', text.split('unset')[0]):
-        env[match.group(1)] = match.group(2)
-    return env
-
-
-def horizon_resave(source, destination, bin_dir):
+def horizon_resave(source, destination, engine):
+    """Horizon's dedicated server opens a copy of `source` with the server.properties vanilla's had, sets
+    HORIZON_RULES from its console, saves everything (`save-all flush`) and stops: the world it saved."""
     shutil.rmtree(destination, ignore_errors=True)
-    saves = destination / 'saves'
-    saves.mkdir(parents=True)
-    shutil.copytree(source, saves / 'world')
-    socket = Path(tempfile.mkdtemp(prefix='hzrt')) / 'control.sock'  # sockets need short paths
-    ctl = [str(bin_dir / 'horizon-ctl'), '--socket', str(socket)]
-    extra = []
-    # Offscreen on macOS, and on a Linux without vscreen (never a window on a real monitor).
-    if sys.platform == 'darwin' or not shutil.which('vscreen'):
-        env = lab.game_env()
-        extra = ['--offscreen']
-    else:
-        alsa = destination / 'null-asound.conf'
-        alsa.write_text('pcm.!default { type null }\nctl.!default { type null }\n')
-        env = vscreen_env()
-        env['ALSA_CONFIG_PATH'] = str(alsa)
-        subprocess.run(['vscreen', 'up'], check=False, capture_output=True)
-    launch = subprocess.run(
-        ctl + ['launch', '--resources', str(RESOURCES), '--world', 'world', '--render-distance', '6'] + extra,
-        cwd=destination, env=env, capture_output=True, text=True)
-    print(launch.stdout.strip())
-    if launch.returncode:
-        sys.exit('horizon failed to launch: ' + launch.stdout + launch.stderr)
-    steps = [['wait-ready', '240']]
-    steps += [['command', f'gamerule {rule} {new}'] for rule, (_, new) in HORIZON_RULES.items()]
-    steps += [['save-all'], ['quit']]
-    for step in steps:
-        result = subprocess.run(ctl + step, cwd=destination, env=env, capture_output=True, text=True)
-        print(' '.join(step), '->', result.stdout.strip() or result.stderr.strip())
-        if step[0] != 'quit' and result.returncode:
-            sys.exit('horizon-ctl failed: ' + result.stdout)
-    time.sleep(3)
-    return saves / 'world'
+    destination.mkdir(parents=True)
+    shutil.copytree(source, destination / 'world')
+    (destination / 'world' / 'session.lock').unlink(missing_ok=True)
+    server = Vanilla(destination, command=engine)
+    try:
+        for rule, (_, new) in HORIZON_RULES.items():
+            print(f'gamerule {rule} {new} ->', ' '.join(server.run(f'gamerule {rule} {new}')))
+        server.process.stdin.write('save-all flush\n')
+        server.process.stdin.flush()
+        server.wait('Saved the game', 300)
+    finally:
+        server.stop()
+    if server.process.returncode:
+        sys.exit(f'horizon exited with {server.process.returncode}: ' + '\n'.join(server.lines[-20:]))
+    for line in server.problems():
+        print('horizon log:', line)
+    return destination / 'world'
 
 
 # ---------------------------------------------------------------- NBT comparison
@@ -627,7 +614,7 @@ def summarize(report):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--keep', action='store_true')
-    parser.add_argument('--bin-dir', help='prebuilt horizon-client and horizon-ctl (default: build them with the fast profile)')
+    parser.add_argument('--engine', type=Path, help='an already-built engine instead of compiling the fast profile')
     parser.add_argument('--vanilla', help='an existing vanilla world folder (skips generation)')
     parser.add_argument('--horizon', help='an existing Horizon-saved world folder (skips the Horizon run)')
     parser.add_argument('--skip-vanilla-load', action='store_true')
@@ -650,11 +637,8 @@ def main():
     if args.horizon:
         h = Path(args.horizon)
     else:
-        bin_dir = Path(args.bin_dir).resolve() if args.bin_dir else None
-        if bin_dir is None:
-            subprocess.run(['cargo', 'build', '--locked', '--profile', 'fast', '-p', 'horizon-client', '--no-default-features', '--bins'], cwd=ROOT, check=True)
-            bin_dir = ROOT / os.environ.get('CARGO_TARGET_DIR', 'target') / 'fast'
-        h = horizon_resave(v0, RUN / 'h', bin_dir)
+        _, _, engine, _ = servers(RUN, args.engine)
+        h = horizon_resave(v0, RUN / 'h', engine)
     print('comparing', v0, 'with', h)
     report = compare_worlds(v0, h)
     failures += summarize(report)
