@@ -1305,7 +1305,8 @@ impl Game<'_> {
     /// packets before it: the player goes back to where they left them (CraftBukkit's
     /// teleport to `from`); a move a listener changed teleports at once. A
     /// cancelled toggle is dropped (a flight's client is told its abilities
-    /// again). Only while a plugin listens to one.
+    /// again). Only while a plugin listens to one, or a cancelled move's
+    /// correction is still to come.
     pub(in crate::game) fn plugin_inbox(&mut self, host: &mut LanHost) {
         for i in 0..host.hub.guests.len() {
             if host.hub.here(&host.hub.guests[i]) && !host.hub.guests[i].inbox.is_empty() {

@@ -1482,10 +1482,10 @@ impl Hub {
                     // Ferraloom: a cancelled PlayerMoveEvent's correction
                     // (game/plugins/players.rs), to where the moves before it left
                     // them, once none is left for a later tick. Not for a guest who
-                    // died or mounted since.
+                    // died, went to sleep or mounted since.
                     let g = &mut self.guests[i];
                     if g.correct_move.is_some() {
-                        if g.dead || g.vehicle.is_some() {
+                        if g.dead || g.sleeping || g.vehicle.is_some() {
                             g.correct_move = None;
                         } else if g.inbox.is_empty() {
                             g.correct_move = None;

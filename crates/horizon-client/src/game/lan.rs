@@ -1510,7 +1510,12 @@ impl Game<'_> {
                 // Ferraloom: PlayerMoveEvent and the sneak, sprint and flight toggles of
                 // this tick's packets, before the hub handles them. Their listeners reach
                 // the whole game, so the context is made again (game/plugins/players.rs).
-                if ferraloom_plugins::listens_any(super::plugins::INBOX_EVENTS) {
+                // Also while a cancelled move's correction is to come, whose listener
+                // may have gone since: the moves after it are still dropped.
+                if ferraloom_plugins::listens_any(super::plugins::INBOX_EVENTS)
+                    || (ferraloom_plugins::running()
+                        && host.hub.guests.iter().any(|g| g.correct_move.is_some()))
+                {
                     self.plugin_inbox(&mut host);
                     ctx = TickCtx {
                         world: &mut self.world,
