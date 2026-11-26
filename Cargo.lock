@@ -1002,13 +1002,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b5343afd4a8365a643ac588dab4cf234a190c7f6c88c9f6dd6ffe00837661b7"
 
 [[package]]
-name = "far-view"
-version = "1.0.0"
-dependencies = [
- "horizon-mod-sdk",
-]
-
-[[package]]
 name = "fastrand"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1132,13 +1125,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
-]
-
-[[package]]
-name = "fps-overlay"
-version = "1.0.0"
-dependencies = [
- "horizon-mod-sdk",
 ]
 
 [[package]]
@@ -2124,13 +2110,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "keystrokes"
-version = "1.0.0"
-dependencies = [
- "horizon-mod-sdk",
-]
-
-[[package]]
 name = "khronos-egl"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2285,13 +2264,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d1219ed1b7f229ee7104d281dd01d6802fe28bb6e95d292942c4daacdeb798c0"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "minimap"
-version = "1.0.0"
-dependencies = [
- "horizon-mod-sdk",
 ]
 
 [[package]]
@@ -3224,13 +3196,6 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-foundation 0.3.2",
  "objc2-quartz-core 0.3.2",
-]
-
-[[package]]
-name = "recipes"
-version = "1.0.0"
-dependencies = [
- "horizon-mod-sdk",
 ]
 
 [[package]]
@@ -5669,13 +5634,6 @@ name = "zmij"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
-
-[[package]]
-name = "zoom"
-version = "1.0.0"
-dependencies = [
- "horizon-mod-sdk",
-]
 
 [[package]]
 name = "zopfli"
