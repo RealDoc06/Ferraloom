@@ -7,14 +7,14 @@ should beat vanilla, Paper and Fabric + Lithium on TPS/MSPT, RAM, CPU, chunk gen
 Gameplay stays vanilla: there are no Paper-style rule changes unless the owner turns one on.
 
 This page covers what the server does today (measured), the design of `horizon-server`, and what ships for the
-first working version (2026-10-23). The owner's guide is docs/hosting.md, also at
-https://playhorizon.dev/server.
+first working version (2026-10-23). The owner's guide is [hosting.md](hosting.md). Sections 1 and 10 to 11
+record the state and plan of October 2026; the engine has lost the client since (section 2).
 
 ## 1. Today
 
 ### How it runs
 
-The dedicated server is the game itself, run headless:
+The dedicated server is the engine:
 `horizon-client --resources <prepared> --dedicated [--nogui] [--port N] [--world NAME] [--universe DIR]
 [--initSettings]`, started in the server folder (`crates/horizon-client/src/game/dedicated.rs`).
 
@@ -22,8 +22,9 @@ The dedicated server is the game itself, run headless:
   and writes it straight back with vanilla's defaults filled in (`horizon_client::server`, byte-exact with
   vanilla's `Properties.store`), and refuses to start until `eula.txt` says `eula=true`. It then loads the
   operator, whitelist and ban lists in vanilla's order and format, and opens `<universe>/<level-name>` with
-  the same `Game` as single player, minus the local player.
-- **Network.** Players join through the play-state hub that Open to LAN uses (`crates/horizon-client/src/lan`).
+  one `Game` and no local player.
+- **Network.** Players join through the play-state hub (`crates/horizon-client/src/lan`, named for the LAN
+  hosting it began as).
   Status ping, legacy ping, compression, login gate (bans, whitelist, IP bans), operator permission levels,
   the player limit with `bypassesPlayerLimit`, MOTD and `server-icon.png` all follow `server.properties`.
 - **Main loop.** It ticks at 20 TPS on one thread, with chunk generation and lighting on the worker pool.
@@ -53,31 +54,19 @@ distance 10. The vanilla server was the pinned 26.3 `server.jar` on Java 25 with
 | CPU, idle with nobody online | 1.2 % of one core | **0.6 %** |
 | `stop` to exit | 0.6 s | 0.6 s |
 | What has to be installed | one 46.8 MB binary + 589 MB of prepared resources | Java 25 + the 62 MB jar |
-| Crates linked | 384 (wgpu, winit, cpal, gilrs, arboard, naga…) | n/a |
-
-On Linux the full game loads `libasound.so.2` (cpal) and `libudev.so.1` (gilrs) at startup. wgpu, winit
-and the Wayland/X11 libraries are loaded only when a window opens. The server build (`horizon-engine`,
-section 3) is the same program built without its `audio` and `controllers` features, so it needs neither
-library, and a minimal server image runs it as it is.
-
-The two clear losses are RAM and idle CPU. The dedicated server loads everything the client needs to draw
-(the HUD atlas, item renderer, block-entity models, panorama, fog and music tables, entity models), and it
-builds the meshing tables at startup. None of these are used without a window. Loading them is startup work,
-not tick cost, so it is in scope here (see section 9).
+The engine then was the whole game run headless. The two clear losses were RAM and idle CPU: it loaded what
+the client needed to draw. The client has since been removed from the engine (section 2), so these figures
+need measuring again.
 
 ### Joining it
 
-- **Horizon client:** works. A headless Horizon client (`--server 127.0.0.1:PORT`, the harness mode) logged
-  in, received its 49 chunks at render distance 2, chatted, saw `/list`, and left. The server's log matched
-  vanilla's lines (`logged in with entity id`, `joined the game`, `[Not Secure] <Tester> …`, `lost connection:
-  Disconnected`, `left the game`).
 - **Vanilla 26.3 client:** checked by `tools/test_dedicated_server_parity.py`. VanillaProtocolClient, a
   headless client built from vanilla's own codecs, pings and joins Horizon's server and vanilla's from the
   same world copy. It compares every login, configuration and play packet up to the first chunk batch, the
   chunk bytes, chat, `/list`, failing commands, the console lines and the files left behind. Result on main:
   see "Harnesses on main" below.
 - **The real vanilla 26.3 client** (`tools/vanilla_client.py`, from the owner's own files, dev-only) joins
-  too. On 2026-10-18 it joined the server build of the game (`horizon-engine`, section 3) on the Mac mini:
+  too. On 2026-10-18 it joined the engine (`horizon-engine`, section 3) on the Mac mini:
   `python3 tools/vanilla_client.py --name Vanilla --join localhost:PORT`. It logged in, drew the terrain
   around spawn and stayed connected for four minutes, with no warning or error on the server. The tool
   runs on Linux under vscreen and on macOS from the logged-in screen session, even a locked one, with vsync
@@ -87,15 +76,15 @@ not tick cost, so it is in scope here (see section 9).
 
 | Area | Status |
 |---|---|
-| `online-mode=true` | **Works** (ServerLoginPacketListenerImpl): a 1024-bit RSA key pair at start ("Generating keypair"), the encryption request, the shared secret and challenge, AES/CFB8, and the session service's `hasJoined` check (with the address when `prevent-proxy-connections` is on), with vanilla's log lines and messages. `test_online_mode_parity.py` runs the same logins against vanilla's server and Horizon's with a mock session service. |
+| `online-mode=true` | **Works** (ServerLoginPacketListenerImpl): a 1024-bit RSA key pair at start ("Generating keypair"), the encryption request, the shared secret and challenge, AES/CFB8, and the session service's `hasJoined` check (with the address when `prevent-proxy-connections` is on), with vanilla's log lines and messages. Its harness joined with Horizon's own client and went with it; `test_secure_chat_parity.py` still logs in online against a mock services server. |
 | Secure chat | **Works** (`SignedMessageChain`, `LastSeenMessagesValidator`, `MessageSignatureCache`): the chat session update and its profile key, checked against the services' `playerCertificateKeys`; signed chat, `say`, `me` and `msg`, relayed with their signatures and last-seen lists; `enforce-secure-profile` (with `online-mode`) refuses unsigned chat; and vanilla's log lines (`[Not Secure]`, the decoder's warnings, the kicks). Offline servers and players without a chat session chat unsigned, as on vanilla. `test_secure_chat_parity.py` runs the same signed and unsigned players against vanilla's server and Horizon's, with test keys and a mock services server. |
 | Nether and End | **Works**: the server holds a level per dimension, and each player is in its own (portals, `execute in … tp`, respawn). `test_server_dimension_players_parity.py` checks it against vanilla. How it works, its cost and what's left: [server-levels.md](server-levels.md). |
 | Refused logins | Logged as vanilla does: `Disconnecting <name> (/address): <reason>`, then `<name> (/address) lost connection: <reason>`, and the session errors (`Username '<name>' tried to join with an invalid session`, `Couldn't verify username because servers are unavailable`). |
 | Gameplay for remote players | Checked against vanilla's server with a vanilla-codec client (#484, `tools/test_dedicated_server_parity.py`): a right click with an item on a block uses it once, a dead player's commands run, players on a team without friendly fire don't hurt each other, and a player's projectiles are theirs (their ender pearl takes them). The recipe book, status effects and block sync while digging (#500) work. Left: a player's projectiles don't hit other players (no bow PvP between guests), and a mob a guest kills counts in the host's statistics and advancements, not the guest's (`mob_died` runs as the host). |
 | Defaults that surprise owners | `white-list=true` is vanilla 26.3's default, so a fresh server refuses everyone until they are added. That matches vanilla, so the first-run flow (section 3) asks about the whitelist up front. |
-| Management | Only stdin. There is no service, no backups, no status beyond `list`, no restart after a crash, and a server can't be managed while it runs in the background. |
-| Packaging | The server is the full game client. Resources come from `horizon-prepare`, which needs a JDK and the official launcher's client install, both awkward on a headless VPS. |
-| Tick times | The dedicated loop never recorded its tick times in the game clock (only the windowed loop did), so `/tick query` on a dedicated server reported 0 ms. Fixed in PR 2b, which the benchmark needs (section 9). |
+| Management | `horizon-server` (sections 2 to 8): before it, only stdin. |
+| Packaging | Resources come from `horizon-prepare`, which needs a JDK and the host's own Minecraft files, awkward on a headless VPS. |
+| Tick times | The dedicated loop didn't record its tick times in the game clock, so `/tick query` reported 0 ms. Fixed in PR 2b, which the benchmark needs (section 9). |
 | Scale | Measured against vanilla on equal work (section 9, `benchmarks/server-equal-work-2026-10-17/`): 20 TPS up to 50 bots, 9 to 11 TPS at 100, where vanilla's watchdog stops it. Horizon is ahead with few players and when exploring; with 25 to 50 players near spawn vanilla's tick is shorter. |
 
 ### Harnesses on main
@@ -113,20 +102,19 @@ space; CI runs it on every pull request.
                  │                                │                               │
                  └────────── control API: HTTP + JSON on 127.0.0.1, token ────────┘
                                                   │
-                                   horizon-server run   (the supervisor: no GPU, no game code)
+                                   horizon-server run   (the supervisor: no game code)
                   server.toml ──► server.properties ──► │ ◄── stdout: the vanilla log
                   backups, updates, crash restart       │ ──► stdin: console commands
                                                         │ ◄─► engine endpoint: status, TPS/MSPT, players
                                                         ▼
-                                   the engine: horizon-client --dedicated   (the game, headless)
+                                   the engine: horizon-client --dedicated
 ```
 
-`horizon-server` is a new crate and binary (`crates/horizon-server`). It is the only program an owner runs.
-It depends only on the light crates (`horizon-core`, `horizon-protocol`, `horizon-world`, `horizon-bench`)
-plus `serde`, `toml`, `toml_edit` and `zip`, which are already in the lockfile. It doesn't link wgpu, winit,
-audio or controller crates. It runs the engine as a child process.
+`horizon-server` (`crates/horizon-server`) is the only program an owner runs. It depends on
+`horizon-server-files`, `horizon-bench` (process RAM and CPU) and `horizon-release-sign`, plus `serde`, `toml`,
+`toml_edit`, `ureq` and `zip`, and no game code. It runs the engine as a child process.
 
-The supervisor/engine split stays even after the engine becomes headless, for these reasons:
+The supervisor/engine split stays, for these reasons:
 
 - **Crash restart and diagnostics.** The supervisor outlives an engine crash. It keeps the crash report,
   restarts the engine with backoff, and the panel stays up to say what happened.
@@ -138,34 +126,24 @@ The supervisor/engine split stays even after the engine becomes headless, for th
 - **No conflicts.** The supervisor touches none of the game code that the tick and integrated-server work
   (perf-server-1, perf-ticks-2) are changing.
 
-**The engine today** is `horizon-client --dedicated`. It needs one small, additive change: a status endpoint.
-With `--control-socket <dir>/.horizon/engine.json` (the existing control protocol: TCP on 127.0.0.1 plus a token, on
+**The engine** is `horizon-client --dedicated`. Its status endpoint: with `--control-socket <dir>/.horizon/engine.json` (the existing control protocol: TCP on 127.0.0.1 plus a token, on
 every OS), the dedicated loop answers `server-status` with TPS, MSPT (average, P50/P95/P99 from the tick
 clock `/tick query` uses), players (name, UUID, address, ping), loaded chunks and uptime. It answers
 `console <line>` with the command's output.
 
-**The headless engine** comes after perf-ticks-2's work lands: Resources split into shared and per-game, the
-game built in `Game::new`, the integrated server on its own thread. On that base:
-
-1. The dedicated path skips everything only a window uses: the HUD atlas, item renderer, block-entity and
-   entity models, panorama, fog, music, and mesh tables (perf-ticks-2 already stops server-side meshing).
-   This is the RAM and start-time item.
-2. The game moves into a library crate, with the window parts behind a `client` feature, so
-   `horizon-engine` links no wgpu or winit either. Sound and controllers are already optional (the
-   `audio` and `controllers` features, on by default): `horizon-engine` today is the game built without
-   them (section 3).
+**The headless engine** landed in November 2026: the client (window, rendering, audio, input, HUD, screens)
+was removed from `horizon-client`, which now runs only as `--dedicated`, and links no wgpu, winit, audio or
+controller crates. Some lib modules the carve kept still hold client-side state (`hud.rs`, `audio.rs`,
+`mesher.rs`); trimming what the dedicated path loads at startup is the open RAM and start-time item.
 
 ## 3. Packaging
 
-**Binaries.** The release archives hold `horizon-client`, `horizon-ctl`, `horizon-prepare` and
-`horizon-server`. On Linux the release also has `horizon-server-linux-x86_64.tar.gz`: `horizon-server`,
-`horizon-prepare` and `horizon-engine`, the game built with `--no-default-features` (no sound, no
-controllers), which links neither `libasound.so.2` nor `libudev.so.1`. `release.yml` builds it after the
-client archive (`xtask package-server`) and fails if `tools/check_imports.py --server` finds either library;
-CI lints the same build. `horizon-server` runs `horizon-engine` when it is beside it or on the PATH, else
-`horizon-client`. Build it yourself with `cargo build --release -p horizon-client --no-default-features`
-and copy `target/release/horizon-client` as `horizon-engine`. macOS and Windows have no such libraries to
-avoid, so they keep the one archive.
+**Binaries.** Each release has one server archive per platform (`horizon-server-linux-x86_64.tar.gz`,
+`horizon-windows-x64.zip`, `horizon-macos-arm64.zip`): `horizon-server`, `horizon-prepare` and
+`horizon-engine`, the engine as `xtask package-server` names it. `game-build.yml` builds them and fails if
+`tools/check_imports.py --server` finds a library the server shouldn't load. `horizon-server` runs
+`horizon-engine` when it is beside it or on the PATH, else `horizon-client`. Build it yourself with
+`cargo build --release -p horizon-client` and copy `target/release/horizon-client` as `horizon-engine`.
 
 **Game files: the owner's own copy, as with `prepare`.** Nothing of Mojang's is redistributed and nothing is
 downloaded on the owner's behalf. `horizon-server` looks for prepared resources in this order:
@@ -176,11 +154,11 @@ downloaded on the owner's behalf. `horizon-server` looks for prepared resources 
    installer's `game-files` (below), or a checkout.
 
 If none is found, `init` says where it looked. Today the owner runs `horizon-prepare --prepare --server-jar
-PATH` from the release folder (it needs a JDK and the client files, as for playing), or copies a folder
+PATH` from the release folder (it needs a JDK and the pinned client jar), or copies a folder
 prepared on their own computer to the server (`scp -r`). Planned wrappers:
 
 - **On this machine:** `horizon-server prepare --server-jar PATH` runs `horizon-prepare` on the owner's own
-  server jar plus their launcher install.
+  server jar plus their Minecraft install.
 - **Prepared elsewhere:** `horizon-server import-resources DIR` copies a folder prepared on the owner's own
   computer, for example by `horizon-prepare`, to a headless machine.
 
@@ -191,19 +169,13 @@ comes out of the headless-engine work.
 **One-command install** (`packaging/server/`):
 
 - Linux and macOS:
-  `curl -fsSL https://raw.githubusercontent.com/horizon-rust/horizon/main/packaging/server/install.sh | sh`
-  The script picks the release archive for the OS and architecture (on Linux x86_64 the server archive,
-  on macOS arm64 the game's), downloads it from GitHub Releases, and checks it against the SHA-256 GitHub
+  `curl -fsSL https://raw.githubusercontent.com/RealDoc06/Ferraloom/main/packaging/server/install.sh | sh`
+  The script picks the server archive for the OS and architecture, downloads it from GitHub Releases, and checks it against the SHA-256 GitHub
   publishes for each asset. It never asks for sudo. Options: `--version vX.Y.Z`, `--dir` (default
   `~/.local/share/horizon`), `--bin` (default `~/.local/bin`), and `--archive FILE` to install an archive
   already on the machine (a build of your own; no download and no checksum).
-  A Linux release from before the server archive installs the full game, which links ALSA's and udev's
-  libraries (`libasound.so.2`, `libudev.so.1`); minimal server images often lack them (Debian and Ubuntu:
-  `sudo apt install libasound2 libudev1`, `libasound2t64` on Ubuntu 24.04 and later). Then the script lists
-  any that are missing, `init` warns, and `run` stops at once with what to install, rather than restarting
-  a game that can't load.
 - Windows:
-  `irm https://raw.githubusercontent.com/horizon-rust/horizon/main/packaging/server/install.ps1 | iex`
+  `irm https://raw.githubusercontent.com/RealDoc06/Ferraloom/main/packaging/server/install.ps1 | iex`
   The script does the same into `%LOCALAPPDATA%\Horizon` (`-Version`, `-Dir`), with junctions instead of
   links (no admin rights), and adds `bin` to the user's PATH.
 - **Layout.** Each release goes to `<dir>/releases/<tag>` and `<dir>/current` points at the one in use, so an
@@ -212,15 +184,14 @@ comes out of the headless-engine work.
   `.local/horizon-client` links there, so updates keep them. The script then prints the next steps
   (`horizon-prepare`, `horizon-server init`).
 
-**Docker** (`packaging/server/Dockerfile`, built the same way as the relay's image): a multi-stage build that
-ends on `debian:bookworm-slim` as user `horizon`, with the server build as `horizon-engine`, so the image needs
-no ALSA or udev. It uses volume `/data` for the server folder, takes the owner's prepared game files as a read-only
+**Docker** (`packaging/server/Dockerfile`): a multi-stage build that ends on `debian:bookworm-slim` as user
+`horizon`, with the engine as `horizon-engine`. It uses volume `/data` for the server folder, takes the owner's prepared game files as a read-only
 mount on `/opt/horizon/.local/horizon-client/26.3`, exposes port `25565/tcp`, and keeps the control API (and
 later the panel) on 127.0.0.1 inside the container: `docker exec <name> horizon-server status|cmd|backup`.
 On the first start, `HORIZON_EULA=true` and `HORIZON_WORLD`, `HORIZON_SEED`, `HORIZON_PORT`,
 `HORIZON_WHITELIST`, `HORIZON_PLAYERS` and `HORIZON_OP` answer `init`'s questions; without the EULA answer
 the container exits and says why. `docker stop` sends SIGTERM, which saves and stops cleanly (give it
-`--stop-timeout 180`). The image is published only with Ludovic's OK (it's hosted infrastructure).
+`--stop-timeout 180`). The image is not published.
 
 **Services.**
 
@@ -364,8 +335,8 @@ path as `horizon-server update` (section 7) and then shows how it went.
 the modpack work).
 
 **Tech:** one HTML page with plain JS and CSS (`crates/horizon-server/panel/`), embedded in the binary with
-`include_str!`. No build step, no framework, no CDN. It uses Horizon's design system tokens (`horizon-theme`'s
-colours, light and dark) and draws charts on a canvas. It polls the control API's routes once a second
+`include_str!`. No build step, no framework, no CDN. Its colours (light and dark) are CSS tokens in
+`panel.css`, and it draws charts on a canvas. It polls the control API's routes once a second
 (`status`, `metrics?since=`, `logs?since=`), served by the same small HTTP code on `std::net`, with no async
 runtime or new dependency. Server-sent events can replace the polling later if a tab ever costs too much.
 
@@ -408,7 +379,7 @@ runtime or new dependency. Server-sent events can replace the polling later if a
   newer release a minute after it starts and then every 6 hours, and only says so, in its log, in `status`
   and in the panel (`HORIZON_NO_UPDATE_CHECK=1` turns the check off). `update --check` asks GitHub once.
   `update`:
-  1. downloads the newest stable release's archive for this computer (on Linux the server build; `--version`
+  1. downloads the newest stable release's archive for this computer (`--version`
      picks another, a beta included) and checks it against the release's SHA256SUMS, whose Ed25519 signature
      must check with a key built into `horizon-server` (docs/release-flow.md, "Signed checksums"): an unsigned
      or tampered release is refused;
@@ -449,7 +420,8 @@ runtime or new dependency. Server-sent events can replace the polling later if a
 - **MCP.** `horizon-server mcp` is an MCP server on stdio, for Claude Code or any MCP client run as the same OS
   user. It reads the token itself, and its tools map one to one onto the API: `status`, `players`,
   `run_command`, `logs`, `backup`, `list_backups`, `restore` (needs `confirm: true`), `start`, `stop`,
-  `restart`, `get_config` and `set_config`. It's the same idea as the game's `horizon-ctl`: an AI can run and diagnose a server, and every action it takes shows in the log.
+  `restart`, `get_config` and `set_config`. An AI can run and diagnose a server, and every action it takes
+  shows in the log.
 - **Vanilla's own management protocol.** Vanilla 26.3 has a server management protocol: JSON-RPC over a
   WebSocket, set up by the `management-server-*` keys in server.properties. Horizon's engine already parses
   those keys but doesn't serve the protocol. Serving it later, on the engine or the supervisor, would let tools
@@ -500,7 +472,7 @@ reproducible by anyone, and show the same gameplay on both sides.
 - **Output.** `tools/server_bench.py` drives it: a fresh server per run from the same `server.properties`,
   `Done`, the bots, a warm-up, then the measurement. It writes a `horizon-server-benchmark` JSON report (the
   machine, commit, Java version, settings and every run) and prints a comparison table. Results are
-  published like the client benchmark, with the machine, the versions and the exact commands. TPS is derived
+  published in `benchmarks/`, with the machine, the versions and the exact commands. TPS is derived
   from `/tick query`'s average (20 while it fits in 50 ms), since the command reports times, not the rate.
 - **First run (PR 5,** on a busy shared Mac mini, so the numbers are noisy). With 1 bot Horizon ticks in
   3.5 ms against vanilla's 11.2 ms and uses 1.6 GB against 3.6 GB. At 10 and 25 `mixed` bots Horizon falls
@@ -540,8 +512,8 @@ reproducible by anyone, and show the same gameplay on both sides.
   run with the load made equal. The explore bots fly at 0.8 blocks a second, so every bot follows the same
   path on both servers and none waits for terrain. A 300-second warm-up lets both finish the bots' first
   views before the measurement. `server_bench.py` now prints a work table that compares each count's chunks
-  a second across servers and flags a run that isn't equal. Horizon ran as `horizon-engine`, the server
-  build, installed from its archive. Results, on the ThinkPad again (the desktop didn't wake):
+  a second across servers and flags a run that isn't equal. Horizon ran as `horizon-engine`, installed
+  from its archive. Results, on the ThinkPad again (the desktop didn't wake):
   - The work was equal at 1 and 10 bots. At 25 the chunks sent a second were equal (158.6 against 157.6),
     and vanilla still sent 2.5 more first-time chunks a second while it caught up.
   - Tick: 1.8 against 11.3 ms at 1 bot, 4.7 against 34.3 at 10, 11.7 against 50.5 at 25 (vanilla 19.8 TPS).
@@ -575,8 +547,8 @@ vanilla.
 
 **In:**
 
-1. `horizon-server` crate and binary, `horizon-server-files` (the vanilla files, moved out of the client
-   unchanged), `server.toml` with import, the CLI (`init`, `run`, `start`, `stop`, `status`, `cmd`, `op`,
+1. `horizon-server` crate and binary, `horizon-server-files` (the vanilla files, moved out of the engine
+   crate unchanged), `server.toml` with import, the CLI (`init`, `run`, `start`, `stop`, `status`, `cmd`, `op`,
    `whitelist`, `backup`, `backups`, `restore`, `logs`), crash restart, and the engine status endpoint.
 2. `install.sh` and `install.ps1`, the Dockerfile, systemd and launchd units, `service install`, and the server
    archive in the release.
@@ -594,7 +566,7 @@ machine, then published in `benchmarks/`; and item 5.
 **Out (next):**
 
 - the Nether and End for remote players;
-- the headless engine and its RAM win;
+- the headless engine and its RAM win (the client was removed in November 2026; the RAM win is open);
 - a server-only prepare without a JDK;
 - a Windows service, hot reload, modpacks in the panel;
 
@@ -607,7 +579,7 @@ In order, each one small and shippable alone:
 
 1. **This design** (docs only).
 2. **`horizon-server`**, stacked in three parts:
-   - a. The crate, the vanilla files moved out of the client unchanged (`horizon-server-files`),
+   - a. The crate, the vanilla files moved out of the engine crate unchanged (`horizon-server-files`),
      `server.toml` with import, `init`, `run` (crash restart, clean stop on Ctrl-C and SIGTERM), and `op`
      and `whitelist` for a stopped server: #551.
    - b. The control API on 127.0.0.1 with its token, `start`, `stop`, `restart`, `status`, `cmd` and

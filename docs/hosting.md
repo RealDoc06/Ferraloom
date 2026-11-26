@@ -1,9 +1,9 @@
 # Host a server
 
-`horizon-server` hosts a Minecraft Java Edition 26.3 server with Horizon's own game as the engine: one native
-program, no Java, one settings file, a command line, and a web panel. Vanilla 26.3 clients and Horizon clients
-can join it. This page covers what works on `main` today and says plainly what doesn't yet. The design and the
-plan are in [docs/server.md](https://github.com/horizon-rust/horizon/blob/main/docs/server.md).
+`horizon-server` hosts a Minecraft Java Edition 26.3 server with Ferraloom's Rust engine: one native program,
+no Java, one settings file, a command line, and a web panel. Vanilla 26.3 clients join it. This page covers
+what works on `main` today and says plainly what doesn't yet. The design and the plan are in
+[server.md](server.md).
 
 ## Before you start
 
@@ -17,15 +17,11 @@ plan are in [docs/server.md](https://github.com/horizon-rust/horizon/blob/main/d
   `horizon-server whitelist add` always writes the offline UUID, the one the player joins with, also while
   the server runs (it writes the entry and the game reloads the list): the console's own `whitelist add`
   takes the account's UUID when someone owns that name, as vanilla does, and that player is then refused.
-- **Horizon's own client can't sign in to a Microsoft account yet.** That needs an Azure app registration and
-  Mojang's approval, which the project doesn't have
-  ([docs/microsoft-account.md](https://github.com/horizon-rust/horizon/blob/main/docs/microsoft-account.md)).
-  Until then Horizon players can join offline servers only (`online_mode = false`). An offline server never
-  checks accounts: anyone who reaches it can join under any name. Keep it on your LAN or a tailnet
+- **An offline server** (`online_mode = false`) never checks accounts: anyone who reaches it can join under any name. Keep it on your LAN or a tailnet
   (Tailscale, ZeroTier), or share it only with friends you trust.
 - **Secure chat** works as on vanilla's server: in online mode, vanilla clients sign their chat, and with
   `enforce-secure-profile=true` (the default) unsigned chat is refused. On an offline server, or for a player
-  without a chat session (Horizon's own client today), chat stays unsigned and shows as not secure.
+  without a chat session, chat stays unsigned and shows as not secure.
 - **Nether and End:** each player travels on their own through portals, and operators with `execute in
   <dimension> run tp`. The players in the level they leave stop seeing them, and the ones in the level they
   arrive in start to, as on vanilla (checked against vanilla with two players, by command and through an End
@@ -44,13 +40,13 @@ plan are in [docs/server.md](https://github.com/horizon-rust/horizon/blob/main/d
 Linux (x86-64) and macOS (Apple Silicon):
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/horizon-rust/horizon/main/packaging/server/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/RealDoc06/Ferraloom/main/packaging/server/install.sh | sh
 ```
 
 Windows (x64), in PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/horizon-rust/horizon/main/packaging/server/install.ps1 | iex
+irm https://raw.githubusercontent.com/RealDoc06/Ferraloom/main/packaging/server/install.ps1 | iex
 ```
 
 The script downloads the latest Horizon release for your computer from GitHub, checks it against the SHA-256
@@ -308,7 +304,7 @@ No image is published: build one from the repository. The image holds none of Mi
 folder you prepared (step 2) read-only.
 
 ```sh
-git clone https://github.com/horizon-rust/horizon && cd horizon
+git clone https://github.com/RealDoc06/Ferraloom && cd Ferraloom
 docker build -f packaging/server/Dockerfile -t horizon-server .
 
 docker run -d --name horizon -p 25565:25565 --stop-timeout 180 \
@@ -327,16 +323,14 @@ docker run -d --name horizon -p 25565:25565 --stop-timeout 180 \
 - Manage it with `docker exec horizon horizon-server status` (and `cmd`, `backup`, `logs`, ...).
   `docker stop` saves and stops cleanly; `--stop-timeout 180` gives it the time.
 - The panel stays on 127.0.0.1 inside the container.
-- The image still carries ALSA and udev libraries because the game links them, even though a server never plays
-  a sound. A smaller engine without them is planned.
 
 ## 10. How fast is it
 
 The latest bot benchmark compares Horizon with vanilla 26.3, Paper and Fabric + Lithium:
-[benchmarks/server-four-way-2026-10-19](https://github.com/horizon-rust/horizon/blob/main/benchmarks/server-four-way-2026-10-19/README.md).
+[benchmarks/server-four-way-2026-10-19](../benchmarks/server-four-way-2026-10-19/README.md).
 It ran release v2026.10.19 on a 4-thread laptop CPU (i7-7500U), with 1 to 50 players walking, exploring and
 standing around spawn, the bots on another machine. All four servers did the same work. Earlier
-measurements are in [docs/server.md](https://github.com/horizon-rust/horizon/blob/main/docs/server.md). In
+measurements are in [server.md](server.md). In
 short:
 
 - **Memory:** 0.7 GB with one player and 1.1 GB with 50, against 3.4 to 4.5 GB for the Java servers
@@ -363,4 +357,4 @@ For more than 50 active players, give it more cores.
   open in your firewall. On a tailnet, use the server's tailnet address.
 - **It keeps restarting**: `horizon-server status` shows the last crash and `horizon-server logs -n 200` the log
   before it. Crash reports are in `crash-reports/`.
-- Report problems at <https://github.com/horizon-rust/horizon/issues>, with the end of the log.
+- Report problems at <https://github.com/RealDoc06/Ferraloom/issues>, with the end of the log.
