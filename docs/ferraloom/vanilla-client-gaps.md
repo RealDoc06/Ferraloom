@@ -7,7 +7,7 @@ Horizon's own client is out of scope.
 Verified against `ferraloom/next` at `5d5371c7b` (2026-11-26): every **Fixed** row's commit is an ancestor of
 that head, and every **Open** row was checked in the code unless it says otherwise.
 
-**Adding a gap.** Give it the next free number (the first free one is **#130**), put it in its area, ranked by how
+**Adding a gap.** Give it the next free number (the first free one is **#131**), put it in its area, ranked by how
 visible it is to players, and fill every column: what is seen and how vanilla differs, the vanilla
 reference (`Class#method` from `.cache/decompiled/26.3/`), where it lives in our code, a size and who found
 it. When it is fixed, move it to **Fixed** with the commit and the harness case that proves it. Numbers are
@@ -42,6 +42,7 @@ Sizes: S under a day, M a few days, L a week or more. Sources: *audit* (the orig
 | 47 | A camel or nautilus dash emits no `ENTITY_ACTION` game event, so sculk doesn't hear it | `Camel#handleStartJump` → `gameEvent(GameEvent.ENTITY_ACTION)` | `game/mounts.rs` riding-jump handler (`bfb5b4a89`) | S | B |
 | 48 | A player newly joined sees players standing still only after they send a move (hidden in practice: clients send one every 20 ticks) | `ChunkMap#playerLoadedChunk`, `ChunkMap.TrackedEntity#updatePlayer` | Pairing in `lan/hub.rs` `track_entities` runs on moves | S | A |
 | 125 | The sweep check reads the last move of the tick's whole packet pass, so a move the client sent after the attack in the same pass decides whether that hit sweeps; vanilla reads the movement known when the attack packet is handled, and zeroes it at `ClientTickEnd` when no move came. Off by one client tick while the player's speed crosses the sweep threshold | `ServerGamePacketListenerImpl#handleMovePlayer`, `#handleClientTickEnd`, `Player#isSweepAttack` | `game/lan_actions.rs` `guest_attack` (`known_movement` from `guests[gi].moves.last()`) | S | review |
+| 130 | After an operator changes a player's `attack_speed` base with `/attribute`, the client's cooldown bar and the server's damage disagree: the server computes the attack charge from a fixed base attack speed | `Player#getCurrentItemAttackStrengthDelay` reads the `attack_speed` attribute | `game/hand.rs` `main_hand_attack_speed` starts from `BASE_ATTACK_SPEED`; predates the plugin work | S | review |
 
 ### Commands
 
@@ -149,7 +150,7 @@ don't reach players)
 | 89 | `BlockExplodeEvent` fires only for `World.createExplosion` (not beds or respawn anchors) and its yield is not applied | S | p-blocks |
 | 90 | Chunks load asynchronously: `getChunkAt`, `loadChunk` and plugin tickets load over the next ticks and an unloaded block reads as air (CraftBukkit loads on the spot) | L | p-blocks |
 | 91 | A behaviour event's host refuses block writes; a plugin changing `BlockGrowEvent`'s (fade, form, spread) new state is not applied | M | p-blocks |
-| 92 | `BlockBreakEvent.setDropItems(false)` also withholds the experience; `BlockPhysicsEvent`'s source block is the updated block itself; `BlockPlaceEvent.getItemInHand` is a plain stack of the placed block's item; multi-block places fire one event | S | p-blocks |
+| 92 | `BlockPhysicsEvent`'s source block is the updated block itself; `BlockPlaceEvent.getItemInHand` is a plain stack of the placed block's item; multi-block places fire one event | S | p-blocks |
 | 93 | `World.getSeaLevel` answers 63 (32 in the Nether) whatever the generator; spawn, time, weather, rules and border are shared by every world | S | p-blocks |
 | 94 | Block-entity states other than signs throw on their own methods; `Block.getDrops`, `breakNaturally(ItemStack)` and container state methods are stubs; a block container's `getHolder()` is null | M | p-blocks, p-inv |
 
