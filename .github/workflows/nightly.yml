@@ -24,7 +24,7 @@ concurrency:
   group: nightly-audit
   cancel-in-progress: false
 env:
-  # Test runs never reach the telemetry server: no live-count ping, no uploads (docs/telemetry.md).
+  # Test runs never reach the telemetry server: no live-count ping, no uploads (crates/horizon-telemetry).
   HORIZON_TELEMETRY_URL: "off"
 
 jobs:

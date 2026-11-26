@@ -449,8 +449,7 @@ runtime or new dependency. Server-sent events can replace the polling later if a
 - **MCP.** `horizon-server mcp` is an MCP server on stdio, for Claude Code or any MCP client run as the same OS
   user. It reads the token itself, and its tools map one to one onto the API: `status`, `players`,
   `run_command`, `logs`, `backup`, `list_backups`, `restore` (needs `confirm: true`), `start`, `stop`,
-  `restart`, `get_config` and `set_config`. It's the same idea as the game's `horizon-ctl`
-  (docs/agent-control.md): an AI can run and diagnose a server, and every action it takes shows in the log.
+  `restart`, `get_config` and `set_config`. It's the same idea as the game's `horizon-ctl`: an AI can run and diagnose a server, and every action it takes shows in the log.
 - **Vanilla's own management protocol.** Vanilla 26.3 has a server management protocol: JSON-RPC over a
   WebSocket, set up by the `management-server-*` keys in server.properties. Horizon's engine already parses
   those keys but doesn't serve the protocol. Serving it later, on the engine or the supervisor, would let tools

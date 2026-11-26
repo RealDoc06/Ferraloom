@@ -92,7 +92,7 @@ def touched_crates(paths, packages):
 
 def area(path):
     """The part of the project a path belongs to; None for what goes with any change (docs, tests, harnesses)."""
-    if is_doc(path) or path.startswith(("tests/", "mods/", "docs/", "roadmap/")) or path == "research-lock.json" or \
+    if is_doc(path) or path.startswith(("tests/", "mods/", "docs/")) or path == "research-lock.json" or \
             (path.startswith("tools/") and not path.startswith("tools/ci/")):
         return None
     if path.startswith((".github/", "tools/ci/")):
@@ -284,7 +284,6 @@ CONTENT_ROOT_TESTS = "cargo test --locked -p horizon-client --features horizon-c
 def plan(args, base, changed, crates_of, libraries, dependencies):
     """The checks for these changed files, in the order they run."""
     rust = any(workspace_rust(path) for path in changed)
-    # The Python tests also hold ROADMAP.md to roadmap/roadmap.toml (tests/test_roadmap.py).
     crates = touched_crates(changed, crates_of) if rust else []
     # An unrecognised Rust path must not silently skip validation.
     if rust and crates == []:
@@ -304,7 +303,7 @@ def plan(args, base, changed, crates_of, libraries, dependencies):
     steps = [
         Step("Cargo.lock", where="git"),
         Step("Public tree", "python3 tools/check_public_tree.py", where="here"),
-        # Always, as in CI: some read the crates, the roadmap or the workflows.
+        # Always, as in CI: some read the crates or the workflows.
         Step("Python tests", "python3 -m unittest discover -s tests", where="here", summary=unittest_passed),
         Step("rustfmt", "cargo fmt --all -- --check", skip=None if rust else no_rust),
         Step("clippy", clippy, skip=None if rust else no_rust),
