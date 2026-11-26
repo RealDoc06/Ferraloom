@@ -83,7 +83,7 @@ public final class BlockEvents {
 
     /** BlockItem.place's BlockPlaceEvent, before the block is placed: true when cancelled or canBuild is false. */
     public static boolean blockPlace(long most, long least, int world, int x, int y, int z, int placed, int replaced,
-            int ax, int ay, int az, boolean canBuild) {
+            int ax, int ay, int az, int hand, boolean canBuild) {
         FerraloomPlayer player = Bridge.server.online(new UUID(most, least));
         FerraloomWorld in = Bridge.server.world(world);
         if (player == null || in == null) {
@@ -91,10 +91,10 @@ public final class BlockEvents {
         }
         try {
             Material item = Material.matchMaterial(Blocks.kind(placed).item);
-            ItemStack hand = new ItemStack(item == null ? Material.AIR : item, 1);
+            ItemStack held = new ItemStack(item == null ? Material.AIR : item, 1);
             BlockPlaceEvent event = new BlockPlaceEvent(block(world, x, y, z, placed),
-                    new FerraloomBlockState(in, x, y, z, replaced), new FerraloomBlock(in, ax, ay, az), hand, player,
-                    canBuild, EquipmentSlot.HAND);
+                    new FerraloomBlockState(in, x, y, z, replaced), new FerraloomBlock(in, ax, ay, az), held, player,
+                    canBuild, hand == 1 ? EquipmentSlot.OFF_HAND : EquipmentSlot.HAND);
             return call(event) || !event.canBuild();
         } catch (Throwable ex) {
             Bridge.log(ex, "a block placing");

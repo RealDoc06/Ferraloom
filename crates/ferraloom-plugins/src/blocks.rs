@@ -182,7 +182,7 @@ pub(crate) fn load(env: &mut JNIEnv) -> jni::errors::Result<()> {
         "dev/ferraloom/bukkit/BlockEvents",
         [
             ("blockBreak", "(JJIIIIII)J".to_owned()),
-            ("blockPlace", "(JJIIIIIIIIIZ)Z".to_owned()),
+            ("blockPlace", "(JJIIIIIIIIIIZ)Z".to_owned()),
             ("simple", "(IIIIIIIIII)I".to_owned()),
             ("piston", "(IIIIIZ[I)Z".to_owned()),
             ("signChange", format!("(JJIIIIZ[{S})[{S}")),
@@ -285,6 +285,7 @@ pub fn block_place(host: &mut dyn crate::PluginHost, p: &Placing) -> bool {
             int(p.against[0]),
             int(p.against[1]),
             int(p.against[2]),
+            int(p.hand),
             JValue::Bool(p.can_build.into()).as_jni(),
         ];
         let boolean = ReturnType::Primitive(Primitive::Boolean);
