@@ -47,7 +47,7 @@ cargo build --release --locked -p horizon-client --no-default-features -p horizo
 
 Hosting, `server.toml` and the game files the server needs: [`docs/hosting.md`](docs/hosting.md). Crate and binary names still carry the `horizon-` prefix: `horizon-server` is the supervisor and `horizon-client` is the server engine it runs.
 
-Plugins need a JDK 25 and the bridge, built once with `python3 crates/ferraloom-plugins/java/build.py --install <server folder>`.
+Plugins need a JDK (21 or newer) and the bridge, built once with `python3 crates/ferraloom-plugins/java/build.py --install <server folder>`.
 
 ## Develop
 
