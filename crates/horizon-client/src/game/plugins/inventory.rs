@@ -284,6 +284,16 @@ impl InventoryHost for GameHost<'_, '_> {
                 let Some(items) = slots.read(&game.world, &hub.hub.guests[gi]) else {
                     return false;
                 };
+                // The menu was picked before InventoryOpenEvent, whose listener
+                // may have put another block there: it must still fit the slots.
+                if let Slots::Block(key) = slots {
+                    let chest_like = game
+                        .container_menu(key)
+                        .is_some_and(|(live, _, _)| chest_menu_slots(live).is_some());
+                    if !chest_like || chest_menu_slots(menu) != Some(items.len()) {
+                        return false;
+                    }
+                }
                 // ServerPlayer.openMenu closes the menu that was open, as close_container;
                 // a retitle (CraftInventoryView.setTitle) keeps it and its cursor.
                 if !retitle {
@@ -385,6 +395,17 @@ impl InventoryHost for GameHost<'_, '_> {
             }
         });
     }
+}
+
+/// The container slots of a chest-like menu type (the generic ones, the
+/// hopper's and the shulker box's), the only ones a plugin opens on a block.
+fn chest_menu_slots(menu: &str) -> Option<usize> {
+    Some(match menu.strip_prefix("minecraft:")? {
+        "generic_3x3" => 9,
+        "hopper" => 5,
+        "shulker_box" => 27,
+        m => 9 * m.strip_prefix("generic_9x")?.parse::<usize>().ok()?,
+    })
 }
 
 /// The window of the menu the game runs itself that the guest has open (a

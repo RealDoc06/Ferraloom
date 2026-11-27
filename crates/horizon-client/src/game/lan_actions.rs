@@ -1119,7 +1119,10 @@ impl Game<'_> {
 
     /// The menu a guest gets for the container at `pos`: its type, title and
     /// slots; none when it is not one a guest can open.
-    fn container_menu(&self, pos: (i32, i32, i32)) -> Option<(&'static str, &'static str, Slots)> {
+    pub(super) fn container_menu(
+        &self,
+        pos: (i32, i32, i32),
+    ) -> Option<(&'static str, &'static str, Slots)> {
         let name = &self
             .res
             .facts()
