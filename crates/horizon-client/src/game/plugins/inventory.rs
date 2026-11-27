@@ -882,6 +882,18 @@ impl Game<'_> {
         }
     }
 
+    /// `PlayerList.remove`'s `closeContainer`, before PlayerQuitEvent: the
+    /// InventoryCloseEvent of the menu `guest` (gone from the hub already) had open.
+    pub(in crate::game) fn plugin_left_menu(&mut self, host: &mut LanHost, guest: &Guest) {
+        if !ferraloom_plugins::running() || !guest.placed {
+            return;
+        }
+        if let Some(m) = guest.menu.as_ref() {
+            let menu = (guest.uuid, holder(guest, m.slots), m.inventory_type);
+            self.plugin_menu_gone(host, menu);
+        }
+    }
+
     /// CraftBukkit's InventoryCloseEvent for a menu the server closed by itself
     /// (`ServerPlayer.closeContainer`), after it closed.
     pub(in crate::game) fn plugin_menu_gone(&mut self, host: &mut LanHost, menu: ClosedMenu) {

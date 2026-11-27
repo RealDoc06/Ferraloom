@@ -1619,7 +1619,9 @@ impl Game<'_> {
                             host.award_leave_game(guest.conn);
                         }
                         self.save_guest(&host, &guest);
-                        // Ferraloom: PlayerQuitEvent; true when it sent the quit message.
+                        // Ferraloom: InventoryCloseEvent for their menu, then
+                        // PlayerQuitEvent; true when it sent the quit message.
+                        self.plugin_left_menu(&mut host, &guest);
                         let plugins_told = self.plugin_quit(&mut host, &guest);
                         host.models.remove(&guest.conn);
                         host.play.remove(&guest.conn);

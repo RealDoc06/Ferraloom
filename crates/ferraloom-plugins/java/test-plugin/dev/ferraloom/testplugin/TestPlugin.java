@@ -291,7 +291,9 @@ public final class TestPlugin extends JavaPlugin implements Listener {
     private final Listener closes = new Listener() {
         @EventHandler
         public void onClose(InventoryCloseEvent event) {
-            getLogger().info("event: close " + event.getView().getTitle() + " gui=" + (event.getInventory().getHolder() instanceof Gui));
+            ItemStack middle = event.getInventory().getSize() > 13 ? event.getInventory().getItem(13) : null;
+            getLogger().info("event: close " + event.getView().getTitle() + " gui=" + (event.getInventory().getHolder() instanceof Gui)
+                    + " size=" + event.getInventory().getSize() + " middle=" + (middle == null ? null : middle.getType()));
         }
     };
 

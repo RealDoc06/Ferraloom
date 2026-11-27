@@ -22,7 +22,8 @@ server twice on a fresh flat world:
    game rules, another dimension) and a storm with its WeatherChangeEvent; a chest GUI a command opens
    (its title, its items' names, lore and plugin data) with a cancelled click leaving both sides as they
    were and an uncancelled one taking the item, its close event (and, with no close listener, the player's
-   own inventory taking clicks again once it closed), and a held item written through as
+   own inventory taking clicks again once it closed, and one left open closing, still readable, before
+   the quit event), and a held item written through as
    CraftItemStack's mirror is; entities: spawn events and a cancelled spawn, damage events cancelled and
    changed, reads and changes of an entity, using an entity, death and its killer; the server area: a
    command hidden from a player without its permission, tab
@@ -582,13 +583,20 @@ def check_plugins(engine, bot_binary, built, out, scratch):
 
         check_entities(server, bot)
 
-        # The player leaves.
-        mark = len(log.lines)
+        # The player leaves with the GUI open: it closes first (PlayerList.remove), its
+        # slots still readable, then the quit event.
+        mark, log_mark = len(bot.out.lines), len(log.lines)
+        bot.send('command ftest gui')
+        bot.out.wait_for(r'^open \d+ Ferraloom GUI$', start=mark)
         bot.send('quit')
         bot.process.wait(timeout=30)
-        log.wait_for(rf'\[FerraloomTest\] event: quit {PLAYER} online=true', start=mark)
-        log.absent(rf'System chat: {PLAYER} left the game', mark)
-        print('quit event, message removed: ok')
+        quit_at, _ = log.wait_for(rf'\[FerraloomTest\] event: quit {PLAYER} online=true', start=log_mark)
+        close_at, _ = log.wait_for(r'event: close \S*Ferraloom GUI gui=true size=27 middle=EMERALD$',
+                                   start=log_mark)
+        if close_at > quit_at:
+            raise Failed('the GUI closed after the quit event')
+        log.absent(rf'System chat: {PLAYER} left the game', log_mark)
+        print('leaving with a GUI open closes it before the quit event, message removed: ok')
 
         # A plugin stalling the server thread: the watchdog names it, with its stack, and the server goes on.
         mark = len(log.lines)
