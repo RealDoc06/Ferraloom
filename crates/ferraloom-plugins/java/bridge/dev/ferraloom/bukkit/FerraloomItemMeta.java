@@ -228,8 +228,11 @@ class FerraloomItemMeta extends StubItemMeta implements Damageable, Repairable {
         put("custom_model_data", c);
     }
 
+    /** Sets {@code key} to the list, or removes it for an empty one (the component's default). */
     private static void putList(Map<String, Object> c, String key, int type, List<?> items) {
-        if (!items.isEmpty()) {
+        if (items.isEmpty()) {
+            c.remove(key);
+        } else {
             c.put(key, new Nbt.ListTag(type, new ArrayList<>(items)));
         }
     }
