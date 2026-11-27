@@ -1117,15 +1117,15 @@ impl Game<'_> {
         self.creative = self.mode == GameMode::Creative;
     }
 
-    /// Hand a container the guest opened over (ServerPlayer.openMenu);
-    /// false when it is not one a guest can open.
-    fn lan_open_container(&mut self, host: &mut LanHost, conn: u32, pos: (i32, i32, i32)) -> bool {
+    /// The menu a guest gets for the container at `pos`: its type, title and
+    /// slots; none when it is not one a guest can open.
+    fn container_menu(&self, pos: (i32, i32, i32)) -> Option<(&'static str, &'static str, Slots)> {
         let name = &self
             .res
             .facts()
             .get(self.world.block(pos.0, pos.1, pos.2))
             .name;
-        let (menu, title, slots) = if &**name == "minecraft:ender_chest" {
+        Some(if &**name == "minecraft:ender_chest" {
             // EnderChestBlock.useWithoutItem: the player's own inventory.
             (
                 "minecraft:generic_9x3",
@@ -1164,13 +1164,13 @@ impl Game<'_> {
             ("minecraft:generic_9x6", "container.chestDouble", halves)
         } else {
             let Some(BlockEntity::Chest(items)) = self.world.block_entities.get(&pos) else {
-                return false;
+                return None;
             };
             let (menu, title) = match items.len() {
                 27 => ("minecraft:generic_9x3", "container.chest"),
                 9 => ("minecraft:generic_3x3", "container.dispenser"),
                 5 => ("minecraft:hopper", "container.hopper"),
-                _ => return false,
+                _ => return None,
             };
             let title = match &**name {
                 "minecraft:barrel" => "container.barrel",
@@ -1179,12 +1179,25 @@ impl Game<'_> {
                 _ => title,
             };
             (menu, title, Slots::Block(pos))
+        })
+    }
+
+    /// Hand a container the guest opened over (ServerPlayer.openMenu);
+    /// false when it is not one a guest can open.
+    fn lan_open_container(&mut self, host: &mut LanHost, conn: u32, pos: (i32, i32, i32)) -> bool {
+        let Some((menu, title, slots)) = self.container_menu(pos) else {
+            return false;
         };
         let opening = next_opening();
         // Ferraloom: InventoryOpenEvent; a cancelled one opens nothing and
-        // leaves open what was.
+        // leaves open what was. A listener that replaced the block leaves a
+        // container the menu no longer fits (a hopper's screen over a
+        // barrel's slots): nothing opens either.
         if ferraloom_plugins::listens(ferraloom_plugins::Event::InventoryOpen)
-            && self.plugin_opening(host, conn, slots, opening)
+            && (self.plugin_opening(host, conn, slots, opening)
+                || self
+                    .container_menu(pos)
+                    .is_none_or(|(m, _, s)| (m, s) != (menu, slots)))
         {
             return false;
         }
