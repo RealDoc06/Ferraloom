@@ -7,7 +7,7 @@ Horizon's own client is out of scope.
 Verified against `ferraloom/next` at `5d5371c7b` (2026-11-26): every **Fixed** row's commit is an ancestor of
 that head, and every **Open** row was checked in the code unless it says otherwise.
 
-**Adding a gap.** Give it the next free number (the first free one is **#135**), put it in its area, ranked by how
+**Adding a gap.** Give it the next free number (the first free one is **#136**), put it in its area, ranked by how
 visible it is to players, and fill every column: what is seen and how vanilla differs, the vanilla
 reference (`Class#method` from `.cache/decompiled/26.3/`), where it lives in our code, a size and who found
 it. When it is fixed, move it to **Fixed** with the commit and the harness case that proves it. Numbers are
@@ -166,6 +166,7 @@ don't reach players)
 | 96 | `PlayerItemDamageEvent` not fired: items wear in about eight separate places, with no single site | M | p-inv |
 | 97 | `createInventory` for furnace, workbench and similar types, `ItemFactory.createItemStack`, `ItemMeta` component objects (food, tool, equippable) and `ItemType.getCompostChance` not supported | M | p-inv |
 | 98 | `InventoryOpenEvent` on a double chest reports one half; `InventoryDragEvent` ignores a cursor the plugin sets; `PlayerItemConsumeEvent` ignores a replacement item | S | p-inv |
+| 135 | `InventoryMoveItemEvent` with a hopper minecart, chest minecart or chest boat on one side names that side as a block at the vehicle's placeholder key, which the `BlockPos.asLong` packing truncates into a bogus location; CraftBukkit's holder is the vehicle entity, with no block (`HopperBlockEntity#ejectItems`, `#suckInItems`; ours `game/plugins/inventory.rs` `plugin_move_item`, `ferraloom-plugins` `inventory_move_item`, `InventoryEvents.moveItem`) | S | review |
 | 99 | `Items.isAir` stays a constant check instead of `Material.isAir()` (the block table is now off-thread safe after `2466e3e14`); behaviour is the same | S | p-inv, p-blocks |
 
 **Server and bridge**
