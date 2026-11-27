@@ -36,9 +36,10 @@ pub enum Holder {
     Crafting(PlayerId),
     /// A plugin's container (`Server.createInventory`), by its id.
     Custom(u32),
-    /// The container slots of the menu a player has open (a chest, a double
-    /// chest, a furnace...), without their inventory's.
-    Menu(PlayerId),
+    /// The container slots of one opening of a menu a player has (a double
+    /// chest, a vehicle's chest), by the opening's id, without their
+    /// inventory's: once that opening ends it is gone.
+    Menu(u32),
     /// A block entity's container.
     Block { world: usize, pos: [i32; 3] },
 }
@@ -54,7 +55,7 @@ impl Holder {
                 world: usize::try_from(a).ok()?,
                 pos: unpack(b),
             },
-            5 => Holder::Menu(player_id(a, b)),
+            5 => Holder::Menu(u32::try_from(a).ok()?),
             _ => return None,
         })
     }
@@ -70,7 +71,7 @@ impl Holder {
             Holder::Crafting(id) => player(2, id),
             Holder::Custom(id) => (3, jlong::from(id), 0),
             Holder::Block { world, pos } => (4, world as jlong, pack(pos)),
-            Holder::Menu(id) => player(5, id),
+            Holder::Menu(opening) => (5, jlong::from(opening), 0),
         }
     }
 }

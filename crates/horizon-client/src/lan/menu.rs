@@ -39,6 +39,16 @@ pub struct Menu {
     /// opens while plugins run (its block may be gone when it closes); empty
     /// otherwise.
     pub inventory_type: &'static str,
+    /// Ferraloom: this opening of the menu (`next_opening`), which a plugin's
+    /// reference to its slots names: once it closes, the reference reads nothing.
+    pub opening: u32,
+}
+
+/// Ferraloom: a new menu opening's id (`Menu::opening`), unique while the
+/// server runs (a window id wraps at 100).
+pub fn next_opening() -> u32 {
+    static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 /// The y of the key a chest minecart's or chest boat's items are kept under

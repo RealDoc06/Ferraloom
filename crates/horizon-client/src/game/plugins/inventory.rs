@@ -95,7 +95,11 @@ impl InventoryHost for GameHost<'_, '_> {
             Holder::Ender(id) => self.placed(id).map(|g| g.ender_items.len()),
             Holder::Crafting(id) => self.placed(id).map(|_| 5),
             Holder::Custom(id) => plugin_containers::size(id),
-            Holder::Menu(id) => self.placed(id)?.menu.as_ref().map(|m| m.size),
+            Holder::Menu(opening) => {
+                let hub = self.hub()?;
+                let g = &hub.hub.guests[opener(&hub.hub.guests, opening)?];
+                g.menu.as_ref().map(|m| m.size)
+            }
             Holder::Block { world, pos } => {
                 let key = (pos[0], pos[1], pos[2]);
                 (world == super::world_index(self.game.dim))
@@ -112,9 +116,9 @@ impl InventoryHost for GameHost<'_, '_> {
             Holder::Ender(id) => self.placed(id)?.ender_items.get(slot)?.clone(),
             Holder::Crafting(id) => self.placed(id).and_then(|g| g.menu_slot(slot)),
             Holder::Custom(id) => plugin_containers::get(id, slot),
-            Holder::Menu(id) => {
+            Holder::Menu(opening) => {
                 let (world, hub) = self.world_and_hub()?;
-                let g = hub.hub.guests.iter().find(|g| g.uuid == id && g.placed)?;
+                let g = &hub.hub.guests[opener(&hub.hub.guests, opening)?];
                 let m = g.menu.as_ref().filter(|m| slot < m.size)?;
                 m.slots.get(world, g, slot)
             }
@@ -156,12 +160,12 @@ impl InventoryHost for GameHost<'_, '_> {
                 _ => false,
             },
             Holder::Custom(id) => plugin_containers::set(id, slot, item),
-            Holder::Menu(id) => self
+            Holder::Menu(opening) => self
                 .split(|game, hub| {
-                    let Some(g) = hub.hub.guests.iter_mut().find(|g| g.uuid == id && g.placed)
-                    else {
+                    let Some(i) = opener(&hub.hub.guests, opening) else {
                         return false;
                     };
+                    let g = &mut hub.hub.guests[i];
                     let Some(m) = g.menu.as_ref().filter(|m| slot < m.size) else {
                         return false;
                     };
@@ -285,7 +289,9 @@ impl InventoryHost for GameHost<'_, '_> {
                     game.guest_carried_back(hub, gi);
                 }
             }
-            hub.hub.open_container(conn, menu, title, pos, slots, items);
+            let opening = horizon_client::lan::menu::next_opening();
+            hub.hub
+                .open_container(conn, menu, title, pos, slots, items, opening);
             game.plugin_name_menu(hub, conn);
             true
         })
@@ -343,7 +349,7 @@ impl InventoryHost for GameHost<'_, '_> {
     fn open_menu(&mut self, player: PlayerId) -> Option<(Holder, &'static str)> {
         let g = self.placed(player)?;
         let m = g.menu.as_ref()?;
-        Some((holder(g, m.slots), m.inventory_type))
+        Some((holder(g, m.slots, m.opening), m.inventory_type))
     }
 
     fn resend_inventory(&mut self, player: PlayerId) {
@@ -413,13 +419,21 @@ fn top(g: &Guest, window: i32) -> Option<(Holder, &'static str, usize)> {
         return Some((Holder::Crafting(g.uuid), "CRAFTING", 5));
     }
     let m = g.menu.as_ref().filter(|m| m.window == window)?;
-    Some((holder(g, m.slots), m.inventory_type, m.size))
+    Some((holder(g, m.slots, m.opening), m.inventory_type, m.size))
 }
 
-/// The holder of guest `g`'s menu over `slots`: a single block's container
-/// is the block's, as its InventoryOpenEvent named it, in the guest's own
-/// dimension (a change of level reports its close from the next one).
-fn holder(g: &Guest, slots: Slots) -> Holder {
+/// The guest whose open menu is `opening`: none once that opening ended.
+fn opener(guests: &[Guest], opening: u32) -> Option<usize> {
+    guests
+        .iter()
+        .position(|g| g.placed && g.menu.as_ref().is_some_and(|m| m.opening == opening))
+}
+
+/// The holder of guest `g`'s menu over `slots`, opened as `opening`: a single
+/// block's container is the block's, as its InventoryOpenEvent named it, in
+/// the guest's own dimension (a change of level reports its close from the
+/// next one); a double chest is that opening's.
+fn holder(g: &Guest, slots: Slots, opening: u32) -> Holder {
     match slots {
         Slots::Custom(c) => Holder::Custom(c),
         Slots::Ender => Holder::Ender(g.uuid),
@@ -427,7 +441,7 @@ fn holder(g: &Guest, slots: Slots) -> Holder {
             world: super::world_index(crate::game::Dim::from_id(&g.dimension)),
             pos: [key.0, key.1, key.2],
         },
-        Slots::Double(..) => Holder::Menu(g.uuid),
+        Slots::Double(..) => Holder::Menu(opening),
     }
 }
 
@@ -853,7 +867,7 @@ impl Game<'_> {
         }
         let g = host.hub.guest(conn).filter(|g| g.placed)?;
         let m = g.menu.as_ref()?;
-        Some((g.uuid, holder(g, m.slots), m.inventory_type))
+        Some((g.uuid, holder(g, m.slots, m.opening), m.inventory_type))
     }
 
     /// Names the guest's container just opened as Bukkit does, while plugins
@@ -867,17 +881,18 @@ impl Game<'_> {
         }
     }
 
-    /// The container over `slots` (of `InventoryType` `kind`) closed because
+    /// The container over `slots` (its `opening`, of `InventoryType` `kind`) closed because
     /// its block went (`HostEvent::MenuGone`).
     pub(in crate::game) fn plugin_menu_block_gone(
         &mut self,
         host: &mut LanHost,
         conn: u32,
         slots: Slots,
+        opening: u32,
         kind: &'static str,
     ) {
         if let Some(g) = host.hub.guest(conn).filter(|g| g.placed) {
-            let menu = (g.uuid, holder(g, slots), kind);
+            let menu = (g.uuid, holder(g, slots, opening), kind);
             self.plugin_menu_gone(host, menu);
         }
     }
@@ -889,7 +904,11 @@ impl Game<'_> {
             return;
         }
         if let Some(m) = guest.menu.as_ref() {
-            let menu = (guest.uuid, holder(guest, m.slots), m.inventory_type);
+            let menu = (
+                guest.uuid,
+                holder(guest, m.slots, m.opening),
+                m.inventory_type,
+            );
             self.plugin_menu_gone(host, menu);
         }
     }

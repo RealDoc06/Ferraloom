@@ -68,7 +68,7 @@ final class FerraloomInventories {
         private FerraloomInventoryView own;
         /** The view of the menu open over the player's inventory as last seen: kept while the server names its top. */
         private FerraloomInventoryView open;
-        /** The menu whose close event runs: it reads as closed already. */
+        /** The menu whose close event runs: it reads as closed already, until a listener opens another. */
         private FerraloomInventoryView closing;
 
         Of(FerraloomPlayer player) {
@@ -190,6 +190,8 @@ final class FerraloomInventories {
                 return null;
             }
             open = view;
+            // A close listener that opened this (the closing inventory again, say) sees it open.
+            closing = null;
             return view;
         }
 

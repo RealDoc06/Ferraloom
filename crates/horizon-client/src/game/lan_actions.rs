@@ -19,7 +19,7 @@ use horizon_client::{
     lan::{
         guest::SPECTATOR,
         hub::TickCtx,
-        menu::{Rules, Slots},
+        menu::{Rules, Slots, next_opening},
     },
     motion::{MotionEvent, MotionWorld, PlayerMotion},
 };
@@ -1203,6 +1203,7 @@ impl Game<'_> {
             pos,
             slots,
             items,
+            next_opening(),
         );
         self.plugin_name_menu(host, conn);
         true

@@ -267,7 +267,9 @@ impl Hub {
         );
     }
 
-    /// Open a block container for a guest (ServerPlayer.openMenu).
+    /// Open a block container for a guest (ServerPlayer.openMenu), as its
+    /// `opening` (`menu::next_opening`).
+    #[allow(clippy::too_many_arguments)]
     pub fn open_container(
         &mut self,
         conn: u32,
@@ -276,6 +278,7 @@ impl Hub {
         pos: (i32, i32, i32),
         slots: Slots,
         items: Vec<Option<ItemStack>>,
+        opening: u32,
     ) {
         let Some(kind) = self
             .sync
@@ -308,6 +311,7 @@ impl Hub {
             drag: None,
             sent_data: Vec::new(),
             inventory_type: "",
+            opening,
         });
         self.send_menu_content(i, items);
     }
@@ -706,12 +710,18 @@ impl Hub {
             else {
                 continue;
             };
-            let (size, window, slots, kind) =
-                (menu.size, menu.window, menu.slots, menu.inventory_type);
+            let (size, window, slots, kind, opening) = (
+                menu.size,
+                menu.window,
+                menu.slots,
+                menu.inventory_type,
+                menu.opening,
+            );
             if !slots.valid(world) {
                 self.close_container_at(i);
                 if ferraloom_plugins::running() {
-                    events.push(HostEvent::MenuGone(self.guests[i].conn, slots, kind));
+                    let conn = self.guests[i].conn;
+                    events.push(HostEvent::MenuGone(conn, slots, opening, kind));
                 }
                 continue;
             }

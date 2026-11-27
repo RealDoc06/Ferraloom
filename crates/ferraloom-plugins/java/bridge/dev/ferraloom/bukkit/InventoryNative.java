@@ -4,7 +4,8 @@ package dev.ferraloom.bukkit;
  * The inventory area's calls into the server (src/inventory.rs). An inventory is named by
  * {@code (kind, a, b)}: 0 a player's inventory, 1 their ender chest, 2 their crafting grid (a and b
  * their UUID's halves); 3 a plugin's container (a its id); 4 a block's (a the world, b the
- * position as BlockPos.asLong); 5 the container of the menu a player has open. Items are
+ * position as BlockPos.asLong); 5 the container of one opening of a player's menu, a double chest or a vehicle's
+ * chest (a the opening's id: gone once it closes). Items are
  * {@link Items}' bytes, null for none. Server thread only, but {@link #dropContainer}.
  */
 final class InventoryNative {
