@@ -1,7 +1,7 @@
 //! The inventory area: players' inventories, plugins' containers and the
 //! menus that show them; container clicks, opens and closes.
-use super::GameHost;
-use crate::game::{Game, lan::LanHost};
+use super::{DIMS, GameHost};
+use crate::game::{Dim, Game, lan::LanHost};
 use ferraloom_plugins::{Click, Drag, Holder, InventoryHost, ItemFacts, PlayerId, Side, Swap};
 use horizon_client::{
     items::ItemStack,
@@ -77,15 +77,6 @@ impl GameHost<'_, '_> {
         self.game.lan = Some(hub);
         Some(r)
     }
-
-    /// The game's world and the hub, both to read.
-    fn world_and_hub(&self) -> Option<(&horizon_client::world::World, &LanHost)> {
-        let hub: &LanHost = match &self.hub {
-            Some(h) => h,
-            None => self.game.lan.as_ref()?,
-        };
-        Some((&self.game.world, hub))
-    }
 }
 
 impl InventoryHost for GameHost<'_, '_> {
@@ -101,11 +92,9 @@ impl InventoryHost for GameHost<'_, '_> {
                 g.menu.as_ref().map(|m| m.size)
             }
             Holder::Block { world, pos } => {
-                let key = (pos[0], pos[1], pos[2]);
-                (world == super::world_index(self.game.dim))
-                    .then(|| self.game.world.block_entities.get(&key))
-                    .flatten()
-                    .map(|e| e.slots().len())
+                let w = self.game.level_world(*DIMS.get(world)?)?;
+                let e = w.block_entities.get(&(pos[0], pos[1], pos[2]))?;
+                Some(e.slots().len())
             }
         }
     }
@@ -116,21 +105,18 @@ impl InventoryHost for GameHost<'_, '_> {
             Holder::Ender(id) => self.placed(id)?.ender_items.get(slot)?.clone(),
             Holder::Crafting(id) => self.placed(id).and_then(|g| g.menu_slot(slot)),
             Holder::Custom(id) => plugin_containers::get(id, slot),
-            Holder::Menu(opening) => {
-                let (world, hub) = self.world_and_hub()?;
-                let g = &hub.hub.guests[opener(&hub.hub.guests, opening)?];
-                let m = g.menu.as_ref().filter(|m| slot < m.size)?;
-                m.slots.get(world, g, slot)
-            }
+            Holder::Menu(opening) => self
+                .split(|game, hub| {
+                    let g = &hub.hub.guests[opener(&hub.hub.guests, opening)?];
+                    let m = g.menu.as_ref().filter(|m| slot < m.size)?;
+                    // In the guest's own level, which may not be the one in place.
+                    let world = game.level_world(Dim::from_id(&g.dimension))?;
+                    m.slots.get(world, g, slot)
+                })
+                .flatten(),
             Holder::Block { world, pos } => {
-                if world != super::world_index(self.game.dim) {
-                    return None;
-                }
-                let e = self
-                    .game
-                    .world
-                    .block_entities
-                    .get(&(pos[0], pos[1], pos[2]))?;
+                let w = self.game.level_world(*DIMS.get(world)?)?;
+                let e = w.block_entities.get(&(pos[0], pos[1], pos[2]))?;
                 e.slots().get(slot)?.clone()
             }
         }
@@ -170,33 +156,40 @@ impl InventoryHost for GameHost<'_, '_> {
                         return false;
                     };
                     let slots = m.slots;
-                    let Some(mut items) = slots.read(&game.world, g) else {
-                        return false;
-                    };
-                    items[slot] = item;
-                    slots.write(&mut game.world, g, items);
-                    if let Slots::Block(key) | Slots::Double(key, _) = slots {
-                        game.container_changed(key);
-                        // A vehicle's menu edits the vehicle's own items.
-                        game.store_cart_items(key);
-                    }
-                    true
+                    // In the guest's own level, which may not be the one in place.
+                    let dim = Dim::from_id(&g.dimension);
+                    game.in_level(dim, |game| {
+                        let Some(mut items) = slots.read(&game.world, g) else {
+                            return false;
+                        };
+                        items[slot] = item;
+                        slots.write(&mut game.world, g, items);
+                        if let Slots::Block(key) | Slots::Double(key, _) = slots {
+                            game.container_changed(key);
+                            // A vehicle's menu edits the vehicle's own items.
+                            game.store_cart_items(key);
+                        }
+                        true
+                    })
+                    .unwrap_or(false)
                 })
                 .unwrap_or(false),
             Holder::Block { world, pos } => {
-                if world != super::world_index(self.game.dim) {
+                let Some(&dim) = DIMS.get(world) else {
                     return false;
-                }
+                };
                 let key = (pos[0], pos[1], pos[2]);
-                let Some(e) = self.game.world.block_entities.get_mut(&key) else {
-                    return false;
-                };
-                let Some(s) = e.slots_mut().get_mut(slot) else {
-                    return false;
-                };
-                *s = item;
-                self.game.container_changed(key);
-                true
+                self.game
+                    .in_level(dim, |game| {
+                        let e = game.world.block_entities.get_mut(&key);
+                        let Some(s) = e.and_then(|e| e.slots_mut().get_mut(slot)) else {
+                            return false;
+                        };
+                        *s = item;
+                        game.container_changed(key);
+                        true
+                    })
+                    .unwrap_or(false)
             }
         }
     }
@@ -451,7 +444,7 @@ fn holder(g: &Guest, slots: Slots, opening: u32) -> Holder {
         Slots::Ender => Holder::Ender(g.uuid),
         Slots::Block(key) if key.1 == VEHICLE_KEY_Y => Holder::Menu(opening),
         Slots::Block(key) => Holder::Block {
-            world: super::world_index(crate::game::Dim::from_id(&g.dimension)),
+            world: super::world_index(Dim::from_id(&g.dimension)),
             pos: [key.0, key.1, key.2],
         },
         Slots::Double(..) => Holder::Menu(opening),

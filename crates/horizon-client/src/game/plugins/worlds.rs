@@ -317,7 +317,7 @@ impl WorldHost for GameHost<'_, '_> {
 
     fn level_event(&mut self, world: usize, pos: [i32; 3], id: i32, data: i32) {
         let Some(&dim) = DIMS.get(world) else { return };
-        self.in_level(dim, |g| g.level_event_at(id, pos, data));
+        self.game.in_level(dim, |g| g.level_event_at(id, pos, data));
     }
 
     /// CraftWorld.createExplosion with no source: a block explosion
@@ -340,7 +340,7 @@ impl WorldHost for GameHost<'_, '_> {
         } else {
             BlockInteraction::Destroy
         };
-        let exploded = self.in_level(dim, |g| {
+        let exploded = self.game.in_level(dim, |g| {
             super::blocks::as_block_explosion(|| g.server_explode(at, power, interaction, fire))
         });
         matches!(exploded, Some(Ok(())))
@@ -350,7 +350,9 @@ impl WorldHost for GameHost<'_, '_> {
         let Some(&dim) = DIMS.get(world) else {
             return false;
         };
-        self.in_level(dim, |g| g.spawn_bolt(at, effect)).is_some()
+        self.game
+            .in_level(dim, |g| g.spawn_bolt(at, effect))
+            .is_some()
     }
 }
 

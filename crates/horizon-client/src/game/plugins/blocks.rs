@@ -115,19 +115,19 @@ fn block_table(game: &Game) -> String {
     out
 }
 
-impl GameHost<'_, '_> {
+impl Game<'_> {
     /// `f` with `dim`'s level in place, then the level that was (as a
     /// command run in another dimension does); none when it is not loaded.
     pub(super) fn in_level<R>(&mut self, dim: Dim, f: impl FnOnce(&mut Game) -> R) -> Option<R> {
-        if dim == self.game.dim {
-            return Some(f(self.game));
+        if dim == self.dim {
+            return Some(f(self));
         }
-        if !self.game.levels.parked_dims().contains(&dim) {
+        if !self.levels.parked_dims().contains(&dim) {
             return None;
         }
-        let back = self.game.enter_command_level(dim)?;
-        let r = f(self.game);
-        if let Err(e) = self.game.enter_level(None, back) {
+        let back = self.enter_command_level(dim)?;
+        let r = f(self);
+        if let Err(e) = self.enter_level(None, back) {
             log::error!("Ferraloom: could not put {} back: {e}", back.id());
         }
         Some(r)
@@ -161,7 +161,9 @@ impl BlockHost for GameHost<'_, '_> {
             return false;
         }
         // `/setblock`'s placement: without physics as its `strict` mode.
-        let placed = self.in_level(dim, |g| g.place_state(pos, BlockStateId(state), !physics));
+        let placed = self
+            .game
+            .in_level(dim, |g| g.place_state(pos, BlockStateId(state), !physics));
         matches!(placed, Some(Ok(true)))
     }
 
@@ -203,7 +205,9 @@ impl BlockHost for GameHost<'_, '_> {
         if self.game.res.facts().is_air(BlockStateId(state)) {
             return false;
         }
-        let broke = self.in_level(dim, |g| g.destroy_block_dropping(pos).is_ok());
+        let broke = self
+            .game
+            .in_level(dim, |g| g.destroy_block_dropping(pos).is_ok());
         broke == Some(true)
     }
 
@@ -232,7 +236,7 @@ impl BlockHost for GameHost<'_, '_> {
             return false;
         };
         let key = (pos[0], pos[1], pos[2]);
-        let set = self.in_level(dim, |g| {
+        let set = self.game.in_level(dim, |g| {
             let Some(BlockEntity::Sign(sign)) = g.world.block_entities.get_mut(&key) else {
                 return false;
             };
