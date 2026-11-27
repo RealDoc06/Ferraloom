@@ -7,7 +7,7 @@ use horizon_client::{
     items::ItemStack,
     lan::{
         guest::Guest,
-        menu::{Slots, input},
+        menu::{Slots, VEHICLE_KEY_Y, input},
         plugin_containers,
     },
 };
@@ -177,6 +177,8 @@ impl InventoryHost for GameHost<'_, '_> {
                     slots.write(&mut game.world, g, items);
                     if let Slots::Block(key) | Slots::Double(key, _) = slots {
                         game.container_changed(key);
+                        // A vehicle's menu edits the vehicle's own items.
+                        game.store_cart_items(key);
                     }
                     true
                 })
@@ -391,6 +393,15 @@ fn top_type(game: &Game, slots: Slots) -> &'static str {
         Slots::Ender => return "ENDER_CHEST",
         Slots::Custom(_) => return "CHEST",
         Slots::Double(..) => return "CHEST",
+        // A chest minecart or chest boat, or a hopper minecart.
+        Slots::Block(key) if key.1 == VEHICLE_KEY_Y => {
+            let hopper = game
+                .world
+                .block_entities
+                .get(&key)
+                .is_some_and(|e| e.slots().len() == 5);
+            return if hopper { "HOPPER" } else { "CHEST" };
+        }
         Slots::Block(key) => key,
     };
     let name = &game
@@ -432,11 +443,13 @@ fn opener(guests: &[Guest], opening: u32) -> Option<usize> {
 /// The holder of guest `g`'s menu over `slots`, opened as `opening`: a single
 /// block's container is the block's, as its InventoryOpenEvent named it, in
 /// the guest's own dimension (a change of level reports its close from the
-/// next one); a double chest is that opening's.
+/// next one); a double chest or a vehicle's container (kept under a key, not
+/// a block) is that opening's.
 fn holder(g: &Guest, slots: Slots, opening: u32) -> Holder {
     match slots {
         Slots::Custom(c) => Holder::Custom(c),
         Slots::Ender => Holder::Ender(g.uuid),
+        Slots::Block(key) if key.1 == VEHICLE_KEY_Y => Holder::Menu(opening),
         Slots::Block(key) => Holder::Block {
             world: super::world_index(crate::game::Dim::from_id(&g.dimension)),
             pos: [key.0, key.1, key.2],
@@ -808,12 +821,15 @@ impl Game<'_> {
     }
 
     /// InventoryOpenEvent as a guest's container is about to open
-    /// (`ServerPlayer.openMenu`): true when a plugin cancelled it.
+    /// (`ServerPlayer.openMenu`) as `opening`: true when a plugin cancelled it.
+    /// A vehicle's container is named by that opening, so it reads as nothing
+    /// until it is open.
     pub(in crate::game) fn plugin_opening(
         &mut self,
         host: &mut LanHost,
         conn: u32,
         slots: Slots,
+        opening: u32,
     ) -> bool {
         let Some(id) = host.hub.guest(conn).map(|g| g.uuid) else {
             return false;
@@ -821,6 +837,7 @@ impl Game<'_> {
         let holder = match slots {
             Slots::Custom(c) => Holder::Custom(c),
             Slots::Ender => Holder::Ender(id),
+            Slots::Block(key) if key.1 == VEHICLE_KEY_Y => Holder::Menu(opening),
             Slots::Block(key) | Slots::Double(key, _) => Holder::Block {
                 world: super::world_index(self.dim),
                 pos: [key.0, key.1, key.2],
