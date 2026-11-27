@@ -1187,16 +1187,17 @@ impl Game<'_> {
         else {
             return false;
         };
-        // ServerPlayer.openMenu closes the menu that was open.
-        self.guest_container_closed(host, conn);
-        self.lan_station_closed(host, conn, None);
         let opening = next_opening();
-        // Ferraloom: InventoryOpenEvent; a cancelled one opens nothing.
+        // Ferraloom: InventoryOpenEvent; a cancelled one opens nothing and
+        // leaves open what was.
         if ferraloom_plugins::listens(ferraloom_plugins::Event::InventoryOpen)
             && self.plugin_opening(host, conn, slots, opening)
         {
             return false;
         }
+        // ServerPlayer.openMenu closes the menu that was open.
+        self.guest_container_closed(host, conn);
+        self.lan_station_closed(host, conn, None);
         host.hub.open_container(
             conn,
             menu,
