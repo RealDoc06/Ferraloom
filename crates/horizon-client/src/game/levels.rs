@@ -498,6 +498,9 @@ impl Game<'_> {
                 p.idle = 0;
                 continue;
             }
+            // Nobody is there to hear what a plugin or a command raised in a
+            // level that does not tick, and nothing else would drain it.
+            p.sounds.clear();
             p.idle += 1;
             if *dim != Dim::Overworld && p.idle >= IDLE_TICKS {
                 closing.push(*dim);

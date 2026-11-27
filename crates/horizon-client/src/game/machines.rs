@@ -857,7 +857,8 @@ impl Game<'_> {
                     Move::Unchanged => {}
                     Move::Cancelled => {
                         self.put_back(source, slot, one);
-                        if hopper.kind == Kind::Hopper {
+                        // Not where a listener removed the hopper.
+                        if hopper.kind == Kind::Hopper && self.block_id_at(to) == before {
                             self.hoppers.entry(to).or_default().cooldown = 8;
                         }
                         return false;
