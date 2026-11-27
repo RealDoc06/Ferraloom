@@ -573,6 +573,13 @@ impl Game<'_> {
         }
         rest
     }
+    /// The destination of a move after its InventoryMoveItemEvent: the
+    /// container at the same place, if a listener left one of the same kind.
+    fn moved_into(&self, view: &View) -> Option<View> {
+        let now = self.containers().view(view.parts[0].0, false)?;
+        let kind = std::mem::discriminant(&view.kind);
+        (std::mem::discriminant(&now.kind) == kind).then_some(now)
+    }
     /// Remove one item from a slot (`removeItem(slot, 1)`).
     fn take_one(&mut self, view: &View, slot: usize) -> Option<ItemStack> {
         let target = self.slot_mut_at(view, slot)?;
@@ -685,7 +692,7 @@ impl Game<'_> {
                 continue;
             };
             // Ferraloom: InventoryMoveItemEvent (game/plugins/inventory.rs).
-            let mut original = None;
+            let (mut original, mut fresh) = (None, None);
             if ferraloom_plugins::listens(ferraloom_plugins::Event::InventoryMoveItem) {
                 match self.plugin_move_item(pos, target.parts[0].0, true, &one) {
                     Move::Unchanged => {}
@@ -696,7 +703,16 @@ impl Game<'_> {
                     }
                     Move::Replaced(item) => original = Some(std::mem::replace(&mut one, item)),
                 }
+                // A listener that removed the destination, or put another kind
+                // of container there, leaves the move as a cancel does.
+                let Some(now) = self.moved_into(target) else {
+                    self.put_back(hopper, slot, original.unwrap_or(one));
+                    self.hoppers.entry(pos).or_default().cooldown = 8;
+                    return false;
+                };
+                fresh = Some(now);
             }
+            let target = fresh.as_ref().unwrap_or(target);
             // A replaced item's original goes back whatever happens, and the
             // rest of the replacement is discarded.
             match self.add_item(Some(pos), target, one, Some(face)) {
@@ -803,7 +819,7 @@ impl Game<'_> {
                 continue;
             };
             // Ferraloom: InventoryMoveItemEvent (game/plugins/inventory.rs).
-            let mut original = None;
+            let (mut original, mut fresh) = (None, None);
             if ferraloom_plugins::listens(ferraloom_plugins::Event::InventoryMoveItem) {
                 let (from, to) = (source.parts[0].0, hopper.parts[0].0);
                 match self.plugin_move_item(from, to, false, &one) {
@@ -817,7 +833,18 @@ impl Game<'_> {
                     }
                     Move::Replaced(item) => original = Some(std::mem::replace(&mut one, item)),
                 }
+                // A listener that removed the destination, or put another kind
+                // of container there, leaves the move as a cancel does.
+                let Some(now) = self.moved_into(hopper) else {
+                    self.put_back(source, slot, original.unwrap_or(one));
+                    if hopper.kind == Kind::Hopper {
+                        self.hoppers.entry(to).or_default().cooldown = 8;
+                    }
+                    return false;
+                };
+                fresh = Some(now);
             }
+            let hopper = fresh.as_ref().unwrap_or(hopper);
             // A replaced item's original goes back whatever happens, and the
             // rest of the replacement is discarded.
             match self.add_item(source_hopper, hopper, one, None) {
