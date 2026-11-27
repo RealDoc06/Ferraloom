@@ -404,7 +404,10 @@ fn chest_menu_slots(menu: &str) -> Option<usize> {
         "generic_3x3" => 9,
         "hopper" => 5,
         "shulker_box" => 27,
-        m => 9 * m.strip_prefix("generic_9x")?.parse::<usize>().ok()?,
+        m => match m.strip_prefix("generic_9x")?.parse::<usize>().ok()? {
+            rows @ 1..=6 => 9 * rows,
+            _ => return None,
+        },
     })
 }
 
@@ -1087,5 +1090,18 @@ impl Game<'_> {
             }
             cancelled
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::chest_menu_slots;
+
+    #[test]
+    fn chest_menu_rows_are_one_to_six() {
+        assert_eq!(chest_menu_slots("minecraft:generic_9x1"), Some(9));
+        assert_eq!(chest_menu_slots("minecraft:generic_9x6"), Some(54));
+        assert_eq!(chest_menu_slots("minecraft:generic_9x0"), None);
+        assert_eq!(chest_menu_slots("minecraft:generic_9x7"), None);
     }
 }

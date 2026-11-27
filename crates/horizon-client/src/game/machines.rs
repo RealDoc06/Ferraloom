@@ -865,12 +865,10 @@ impl Game<'_> {
                     Move::Replaced(item) => original = Some(std::mem::replace(&mut one, item)),
                 }
                 // A listener that removed the destination, or put another
-                // block there, leaves the move as a cancel does.
+                // block there, leaves the move as a cancel does, without the
+                // cooldown of a hopper no longer there.
                 let Some(now) = self.moved_into(to, before) else {
                     self.put_back(source, slot, original.unwrap_or(one));
-                    if hopper.kind == Kind::Hopper {
-                        self.hoppers.entry(to).or_default().cooldown = 8;
-                    }
                     return false;
                 };
                 fresh = Some(now);
