@@ -129,7 +129,8 @@ final class FerraloomInventoryView implements InventoryView {
             } else if (slot > 35) {
                 type = SlotType.QUICKBAR;
             }
-        } else if (slot >= countSlots() - (9 + 4 + 1)) {
+        } else if (slot >= countSlots() - 9) {
+            // countSlots() here ends with the hotbar: no armour or off hand after it.
             type = SlotType.QUICKBAR;
         }
         return type;
