@@ -287,7 +287,9 @@ the baseline is the coordinator's next step; budget: no measurable MSPT differen
   book and enchanted book metas; `ItemType` from the server's item table. Inventories: `PlayerInventory`,
   ender chests, block containers, `Server.createInventory` (a plugin's container lives in the server as
   `Slots::Custom`), `openInventory`, `closeInventory`, `updateInventory`, the cursor and held slot; a slot's
-  item writes through to the slot as CraftItemStack's mirror does. Events: `InventoryClickEvent` (CraftBukkit's
+  item writes through to the slot as CraftItemStack's mirror does. `getOpenInventory()` and
+  `Inventory.getViewers()` ask the engine, so like every other inventory read they must be called on the
+  server thread. Events: `InventoryClickEvent` (CraftBukkit's
   click types and actions; a cancelled click is corrected on the client), `InventoryDragEvent`,
   `InventoryOpenEvent`, `InventoryCloseEvent`, `InventoryMoveItemEvent` (hoppers), `PlayerItemConsumeEvent`,
   `PlayerSwapHandItemsEvent`. Menus the game runs itself (crafting table, anvil, trading, stations) fire no
