@@ -320,25 +320,31 @@ impl InventoryHost for GameHost<'_, '_> {
             };
             let conn = hub.hub.guests[gi].conn;
             let open = hub.hub.guests[gi].menu.is_some();
-            // A menu the game runs itself closes with nothing told: its client is.
-            let shown = engine_window(hub, conn);
-            if open {
-                game.guest_container_closed(hub, conn);
-                hub.hub.close_container(conn);
-            }
-            let closed = open
-                || game.lan_station_closed(hub, conn, None)
-                || game.lan_crafting_closed(hub, conn, None)
-                || game.lan_merchant_closed(hub, conn, None)
-                || game.lan_mount_closed(hub, conn, None);
-            if closed {
-                game.guest_carried_back(hub, gi);
-            }
-            if let Some(container) = shown.filter(|_| !open) {
-                hub.hub
-                    .send_to(conn, &C::ContainerClose(play::ContainerClose { container }));
-            }
-            closed
+            // The menu's block and what drops are in the player's own level,
+            // which may not be the one in place (a scheduled task runs between levels).
+            let own = Dim::from_id(&hub.hub.guests[gi].dimension);
+            game.in_level(own, |game| {
+                // A menu the game runs itself closes with nothing told: its client is.
+                let shown = engine_window(hub, conn);
+                if open {
+                    game.guest_container_closed(hub, conn);
+                    hub.hub.close_container(conn);
+                }
+                let closed = open
+                    || game.lan_station_closed(hub, conn, None)
+                    || game.lan_crafting_closed(hub, conn, None)
+                    || game.lan_merchant_closed(hub, conn, None)
+                    || game.lan_mount_closed(hub, conn, None);
+                if closed {
+                    game.guest_carried_back(hub, gi);
+                }
+                if let Some(container) = shown.filter(|_| !open) {
+                    hub.hub
+                        .send_to(conn, &C::ContainerClose(play::ContainerClose { container }));
+                }
+                closed
+            })
+            .unwrap_or(false)
         })
         .unwrap_or(false)
     }
