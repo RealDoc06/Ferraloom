@@ -1,5 +1,5 @@
 //! Port a Java modpack to Horizon (`docs/modpacks.md`): the steps behind the
-//! `horizon-port-pack` command, and the launcher's "Import modpack".
+//! `horizon-port-pack` command.
 //!
 //! Every step reads and writes files in a work folder (`pipeline`), so it can
 //! be rerun, resumed and inspected. The work folder belongs to the user: the

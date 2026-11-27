@@ -610,3 +610,28 @@ fn horizon_commands_are_off_unless_the_server_turns_them_on() {
         );
     }
 }
+
+#[test]
+fn dedicated_tree_has_the_server_commands_at_vanilla_levels() {
+    let d = vanilla::dedicated_tree(false, false);
+    let at = |level: u8, command: &str| {
+        let r = Registries {
+            permission: level,
+            ..reg()
+        };
+        d.parse(command, &r).executable().map(|(_, id)| id).ok()
+    };
+    assert_eq!(at(3, "op Bob"), Some("server.op"));
+    assert_eq!(at(2, "op Bob"), None);
+    assert_eq!(at(3, "ban Bob Griefing again"), Some("server.ban"));
+    assert_eq!(at(3, "save-all"), None);
+    assert_eq!(at(4, "save-all flush"), Some("server.save-all"));
+    assert_eq!(at(3, "transfer \"a b\" 25566 @a"), Some("server.transfer"));
+    assert_eq!(at(3, "whitelist add Bob"), Some("server.whitelist.add"));
+    // CommandSelection.DEDICATED: no /publish, and /seed needs a gamemaster.
+    assert!(d.find("publish").is_none() && d.find("unpublish").is_none());
+    assert_eq!(at(0, "seed"), None);
+    assert_eq!(at(2, "seed"), Some("seed"));
+    // The integrated tree has none of them.
+    assert!(vanilla::game_tree(false, false).find("op").is_none());
+}

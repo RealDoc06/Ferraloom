@@ -1,4 +1,4 @@
-//! The programs the server runs. Started by the launcher, the server has no console, and each
+//! The programs the server runs. Started without a console (as a service), the server has none, and each
 //! console program it started would open a terminal window on Windows: those open none. Run from
 //! a terminal, they share it, so what they print still reaches it.
 use std::{ffi::OsStr, process::Command};

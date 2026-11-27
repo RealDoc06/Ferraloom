@@ -8,6 +8,7 @@
 use super::{
     Dim, Game, GuestUse, Hit, Mining, Screen, lan::LanHost, respawn_anchor::RespawnConfig,
 };
+use crate::game::keys::KeyCode;
 use horizon_client::{
     command::vanilla,
     containers::BlockEntity,
@@ -18,7 +19,7 @@ use horizon_client::{
     lan::{
         guest::SPECTATOR,
         hub::TickCtx,
-        menu::{Rules, Slots},
+        menu::{Rules, Slots, next_opening},
     },
     motion::{MotionEvent, MotionWorld, PlayerMotion},
 };
@@ -28,7 +29,6 @@ use horizon_protocol::{
     text::literal,
 };
 use horizon_world::entity_move::EntityMoveWorld;
-use winit::keyboard::KeyCode;
 
 /// Per-guest state of the gameplay code that lives outside `Guest`.
 #[derive(Default)]
@@ -93,12 +93,6 @@ pub(super) struct GuestPlay {
     xp_delay: u32,
     /// What last killed the guest outright (`/kill`): the death message's key.
     death_cause: Option<String>,
-    /// The equipment modifiers on the guest's attributes (`apply_equipment`)
-    /// and the armour and main hand they were put on for: the hub's player
-    /// is a `ServerPlayer` too, whose worn armour counts
-    /// (`LivingEntity.collectEquipmentChanges`).
-    modifiers: Vec<(String, String)>,
-    equipped: Option<Vec<Option<ItemStack>>>,
     /// The guest's cast fishing hook (`Player.fishing`).
     pub(super) hook: Option<super::fishing::Hook>,
     sculk: super::sculk::PlayerEvents,
@@ -180,8 +174,6 @@ pub(super) struct GuestSwap {
     swings: u32,
     /// How many projectiles there were: those added since are the guest's.
     projectiles: usize,
-    /// The host's equipment modifiers.
-    modifiers: Vec<(String, String)>,
 }
 
 /// Where the items guests can take lay when the guests' tick began, in cells
@@ -239,13 +231,6 @@ impl GuestPlay {
     /// The item in use: its slot and for how many ticks.
     pub(super) fn using(&self) -> Option<(usize, u32)> {
         self.using
-    }
-    /// Whether the equipment modifiers were last put on for this armour and
-    /// main hand (`apply_equipment`).
-    fn wears(&self, armor: &[Option<ItemStack>; 4], held: Option<&ItemStack>) -> bool {
-        self.equipped
-            .as_ref()
-            .is_some_and(|e| e.len() == 5 && e[..4] == armor[..] && e[4].as_ref() == held)
     }
 }
 
@@ -341,6 +326,7 @@ fn needs_host(event: &MotionEvent) -> bool {
     matches!(
         event,
         MotionEvent::HurtSound(_)
+            | MotionEvent::Health(horizon_client::health::HealthEvent::DamageBroadcast { .. })
             | MotionEvent::Fall(_)
             | MotionEvent::Drown
             | MotionEvent::HoneySlide { .. }
@@ -367,7 +353,10 @@ impl Game<'_> {
         f: impl FnOnce(&mut Self) -> R,
     ) -> Option<R> {
         let swap = self.enter_guest(host, conn)?;
-        let result = f(self);
+        // Ferraloom: who `Who::Player` is in mob code in this turn (game/plugins/entities.rs).
+        let _acting = super::plugins::entities::acting(self.lan_acting_uuid, self.dim);
+        // Ferraloom: plugin events in the guest's turn reach the hub (game/plugins.rs).
+        let result = super::plugins::lend_hub(host, || f(self));
         self.leave_guest(host, swap);
         Some(result)
     }
@@ -414,8 +403,8 @@ impl Game<'_> {
         let mut play = host.play.remove(&conn).unwrap_or_default();
         if fresh {
             // A new body (joined, respawned, changed level): nothing on it yet,
-            // its effects' modifiers and armor protection included.
-            play.equipped = None;
+            // its effects' modifiers and armor protection included (its
+            // equipment's are on `PlayerMotion::last_equipment`).
             play.potions = Default::default();
             play.sculk = Default::default();
         }
@@ -445,6 +434,8 @@ impl Game<'_> {
         // FireworkRocketItem.use boosts only a gliding player.
         motion.fall_flying = g.fall_flying;
         motion.invulnerable = motion.may_fly;
+        // Ferraloom: a plugin's allow-flight (Player.setAllowFlight).
+        motion.may_fly |= g.allow_flight;
         // LivingEntity.setHealth clamps to the maximum and stores what
         // differs: the body holding the record's health already, at most the
         // maximum and above zero, is left as it is.
@@ -479,6 +470,7 @@ impl Game<'_> {
                 level: g.xp_level,
                 progress: g.xp_progress,
                 total: g.xp_total,
+                score: g.meta.score,
             },
         );
         // The host's held keys stay theirs: the guest holds only sneak, and a
@@ -568,18 +560,8 @@ impl Game<'_> {
         let entity_events = std::mem::take(&mut self.guest_entity_events);
         let swings = self.swings_started;
         let projectiles = self.creatures.projectiles.len();
-        let modifiers = std::mem::replace(
-            &mut self.applied_modifiers,
-            std::mem::take(&mut play.modifiers),
-        );
-        // Its worn armour on its attributes, when it changed.
-        let held = self.inventory.get(self.selected).and_then(Option::as_ref);
-        if !play.wears(&self.armor, held) {
-            let mut equipped: Vec<Option<ItemStack>> = self.armor.to_vec();
-            equipped.push(held.cloned());
-            self.apply_equipment();
-            play.equipped = Some(equipped);
-        }
+        // Its equipment's modifiers on its attributes, for the slots that changed.
+        self.apply_equipment();
         // The player's effects are on the new body before anything it does
         // (the movement that brought it, a landing): vanilla keeps the same
         // entity through a level change, with its attributes and effects.
@@ -637,7 +619,6 @@ impl Game<'_> {
             entity_events,
             swings,
             projectiles,
-            modifiers,
             combat: host_combat,
         })
     }
@@ -668,9 +649,16 @@ impl Game<'_> {
             && (g.vehicle.is_some() || g.vehicle_good.is_none())
             && g.sleeping == g.bed.is_some()
             && play.stats.events.is_empty()
-            && play.wears(
-                &g.armor,
-                g.inventory.get(g.selected).and_then(Option::as_ref),
+            && super::lan_attributes::wears(
+                m,
+                [
+                    g.inventory.get(g.selected).and_then(Option::as_ref),
+                    g.offhand.as_ref(),
+                    g.armor[3].as_ref(),
+                    g.armor[2].as_ref(),
+                    g.armor[1].as_ref(),
+                    g.armor[0].as_ref(),
+                ],
             )
     }
 
@@ -772,13 +760,7 @@ impl Game<'_> {
         self.right = self.using.is_some();
         self.stat_criteria_changed(&name, stat_events);
         self.stats.unheard = self.score.board.objectives.is_empty();
-        let held = self.inventory.get(self.selected).and_then(Option::as_ref);
-        if !swap.play.wears(&self.armor, held) {
-            let mut equipped: Vec<Option<ItemStack>> = self.armor.to_vec();
-            equipped.push(held.cloned());
-            self.apply_equipment();
-            swap.play.equipped = Some(equipped);
-        }
+        self.apply_equipment();
         self.update_totem_ready();
     }
 
@@ -838,13 +820,11 @@ impl Game<'_> {
             entity_events,
             swings,
             projectiles,
-            modifiers,
         } = swap;
         self.sculk.swap_player(&mut play.sculk);
         // The guest's damage record back into their slot, the host's in place.
         let guest_combat = std::mem::replace(&mut self.combat, combat);
         self.guest_combat.insert(conn, guest_combat);
-        play.modifiers = std::mem::replace(&mut self.applied_modifiers, modifiers);
         // What the guest shot is theirs (Projectile.setOwner).
         for p in self.creatures.projectiles.iter_mut().skip(projectiles) {
             if p.owner == Some(horizon_client::mobs::Who::Player) && p.guest.is_none() {
@@ -978,6 +958,7 @@ impl Game<'_> {
         g.xp_level = new_xp.level;
         g.xp_progress = new_xp.progress;
         g.xp_total = new_xp.total;
+        g.meta.score = new_xp.score;
         let new_mode = self.mode_id();
         self.mode = mode;
         self.creative = creative;
@@ -1056,6 +1037,11 @@ impl Game<'_> {
         if new_mode != g.game_mode {
             let conn = g.conn;
             host.hub.set_game_mode(conn, new_mode);
+            // Ferraloom: setGameModeForPlayer gives a spectator's view back
+            // (game/lan_spectate.rs).
+            if new_mode != SPECTATOR {
+                self.set_guest_camera(host, i, None);
+            }
         }
         // LivingEntity.checkTotemDeathProtection's entity event, to every
         // client around, the guest's own included; this window draws it too.
@@ -1064,7 +1050,7 @@ impl Game<'_> {
             host.hub
                 .entity_event(id, super::totem::TOTEM_EVENT, body.at);
             if self.player.is_some() {
-                self.totem_event(body, false);
+                self.totem_event(body);
             }
         }
         host.play.insert(conn, play);
@@ -1131,15 +1117,18 @@ impl Game<'_> {
         self.creative = self.mode == GameMode::Creative;
     }
 
-    /// Hand a container the guest opened over (ServerPlayer.openMenu);
-    /// false when it is not one a guest can open.
-    fn lan_open_container(&mut self, host: &mut LanHost, conn: u32, pos: (i32, i32, i32)) -> bool {
+    /// The menu a guest gets for the container at `pos`: its type, title and
+    /// slots; none when it is not one a guest can open.
+    pub(super) fn container_menu(
+        &self,
+        pos: (i32, i32, i32),
+    ) -> Option<(&'static str, &'static str, Slots)> {
         let name = &self
             .res
             .facts()
             .get(self.world.block(pos.0, pos.1, pos.2))
             .name;
-        let (menu, title, slots) = if &**name == "minecraft:ender_chest" {
+        Some(if &**name == "minecraft:ender_chest" {
             // EnderChestBlock.useWithoutItem: the player's own inventory.
             (
                 "minecraft:generic_9x3",
@@ -1178,13 +1167,13 @@ impl Game<'_> {
             ("minecraft:generic_9x6", "container.chestDouble", halves)
         } else {
             let Some(BlockEntity::Chest(items)) = self.world.block_entities.get(&pos) else {
-                return false;
+                return None;
             };
             let (menu, title) = match items.len() {
                 27 => ("minecraft:generic_9x3", "container.chest"),
                 9 => ("minecraft:generic_3x3", "container.dispenser"),
                 5 => ("minecraft:hopper", "container.hopper"),
-                _ => return false,
+                _ => return None,
             };
             let title = match &**name {
                 "minecraft:barrel" => "container.barrel",
@@ -1193,7 +1182,42 @@ impl Game<'_> {
                 _ => title,
             };
             (menu, title, Slots::Block(pos))
+        })
+    }
+
+    /// Hand a container the guest opened over (ServerPlayer.openMenu);
+    /// false when it is not one a guest can open.
+    fn lan_open_container(&mut self, host: &mut LanHost, conn: u32, pos: (i32, i32, i32)) -> bool {
+        let Some((menu, title, slots)) = self.container_menu(pos) else {
+            return false;
         };
+        let opening = next_opening();
+        // Ferraloom: InventoryOpenEvent; a cancelled one opens nothing and
+        // leaves open what was. A listener that replaced the block leaves a
+        // container the menu no longer fits (a hopper's screen over a
+        // barrel's slots): nothing opens either.
+        if ferraloom_plugins::listens(ferraloom_plugins::Event::InventoryOpen)
+            && (self.plugin_opening(host, conn, slots, opening)
+                || self
+                    .container_menu(pos)
+                    .is_none_or(|(m, _, s)| (m, s) != (menu, slots)))
+        {
+            // A vehicle's placeholder (interact_cart, interact_boat) gives its
+            // items back and goes, unless a menu still open uses it.
+            if pos.1 == super::minecarts::CART_KEY_Y {
+                self.store_cart_items(pos);
+                let in_use = host
+                    .hub
+                    .guests
+                    .iter()
+                    .any(|g| g.menu.as_ref().is_some_and(|m| m.pos == Some(pos)));
+                if !in_use {
+                    self.world.block_entities.remove(&pos);
+                }
+            }
+            return false;
+        }
+        // Read after the event, so a listener's edits are in the first packet.
         let Some(items) = host
             .hub
             .guest(conn)
@@ -1211,7 +1235,9 @@ impl Game<'_> {
             pos,
             slots,
             items,
+            opening,
         );
+        self.plugin_name_menu(host, conn);
         true
     }
 
@@ -1251,10 +1277,15 @@ impl Game<'_> {
             .map(|g| g.conn)
             .collect();
         for conn in far {
+            let told = self.plugin_open_menu(host, conn);
             self.guest_container_closed(host, conn);
             host.hub.close_container(conn);
             if let Some(gi) = host.hub.guest_index(conn) {
                 self.guest_carried_back(host, gi);
+            }
+            // Ferraloom: InventoryCloseEvent (game/plugins/inventory.rs).
+            if let Some(menu) = told {
+                self.plugin_menu_gone(host, menu);
             }
         }
     }
@@ -1345,6 +1376,16 @@ impl Game<'_> {
         }
         let spectator = host.hub.guests[gi].spectator();
         match packet {
+            // Ferraloom: handleBlockBreakAction's reach and height checks
+            // (game/lan_reach.rs).
+            S::PlayerAction(a)
+                if matches!(a.action, 0 | 2 | 3) && {
+                    let digging = host.play.get(&conn).is_some_and(|p| p.digging.is_some());
+                    self.reject_guest_break(host, gi, &a, digging)
+                } =>
+            {
+                host.hub.ack(conn, a.sequence);
+            }
             S::PlayerAction(a) => match a.action {
                 0 => {
                     host.hub.ack(conn, a.sequence);
@@ -1355,6 +1396,12 @@ impl Game<'_> {
                     // under spawn protection (the ack puts the block back).
                     if self.under_spawn_protection(host, gi, a.pos) {
                         self.spawn_protection_message(host, conn, a.pos);
+                        return;
+                    }
+                    // Ferraloom: PlayerInteractEvent LEFT_CLICK_BLOCK; denied, no dig starts (game/plugins/players.rs).
+                    if ferraloom_plugins::listens(ferraloom_plugins::Event::PlayerInteract)
+                        && self.plugin_left_click_block(host, conn, a.pos, a.direction)
+                    {
                         return;
                     }
                     let face = direction(i32::from(a.direction));
@@ -1432,6 +1479,12 @@ impl Game<'_> {
                         });
                     });
                 }
+                // Ferraloom: PlayerSwapHandItemsEvent; cancelled, or with a plugin's items, the swap is done.
+                7 if !spectator
+                    && ferraloom_plugins::listens(
+                        ferraloom_plugins::Event::PlayerSwapHandItems,
+                    )
+                    && self.plugin_swap_hands(host, conn) => {}
                 // SWAP_ITEM_WITH_OFFHAND: the hands swap and the item in use stops
                 // (ServerGamePacketListenerImpl.handlePlayerAction), not for spectators.
                 7 if !spectator => {
@@ -1453,6 +1506,13 @@ impl Game<'_> {
                 _ => {}
             },
             S::SetCarriedItem(p) => {
+                // Ferraloom: PlayerItemHeldEvent; cancelled, the old slot stays (game/plugins/players.rs).
+                if ferraloom_plugins::listens(ferraloom_plugins::Event::PlayerItemHeld)
+                    && (0..9).contains(&p.slot)
+                    && self.plugin_item_held(host, conn, i32::from(p.slot))
+                {
+                    return;
+                }
                 if (0..9).contains(&p.slot) {
                     host.hub.guests[gi].selected = p.slot as usize;
                     if let Some(play) = host.play.get_mut(&conn) {
@@ -1466,13 +1526,19 @@ impl Game<'_> {
             // strength starts again.
             S::Punch(_) => {
                 self.as_guest(host, conn, |g| {
+                    // Ferraloom: PlayerInteractEvent LEFT_CLICK_AIR (game/plugins/players.rs).
+                    if ferraloom_plugins::listens(ferraloom_plugins::Event::PlayerInteract) {
+                        g.plugin_left_click_air();
+                    }
                     g.swing_hand(Hand::Main, SwingAnimation::DEFAULT);
                     g.reset_attack_strength();
                 });
             }
             S::UseItemOn(p) => {
                 host.hub.ack(conn, p.sequence);
-                if spectator {
+                // Ferraloom: handleUseItemOn's reach, hit and build-limit
+                // checks (game/lan_reach.rs).
+                if spectator || !self.guest_use_on_allowed(host, gi, &p) {
                     return;
                 }
                 let face = direction(p.face);
@@ -1491,6 +1557,18 @@ impl Game<'_> {
                 if self.under_spawn_protection(host, gi, p.pos) {
                     self.spawn_protection_message(host, conn, p.pos);
                 } else {
+                    // Ferraloom: PlayerInteractEvent RIGHT_CLICK_BLOCK; use_hand leaves out
+                    // what it denies, until plugin_interacted (game/plugins/players.rs).
+                    if ferraloom_plugins::listens(ferraloom_plugins::Event::PlayerInteract) {
+                        self.plugin_right_click_block(
+                            host,
+                            conn,
+                            p.pos,
+                            p.face,
+                            p.cursor,
+                            p.hand == 1,
+                        );
+                    }
                     let logged = self.world.block_log.as_ref().map_or(0, Vec::len);
                     let heard = self.audio.capture.as_ref().map_or(0, Vec::len);
                     let swung = self.as_guest(host, conn, |g| {
@@ -1503,7 +1581,12 @@ impl Game<'_> {
                         g.swings_started != swings
                     });
                     self.lan_swing_back(host, conn, swung);
+                    // Ferraloom: a placement that didn't happen at a build limit.
+                    let placed = self.world.block_log.as_ref().map_or(0, Vec::len) > logged;
+                    self.guest_use_on_limit(host, gi, &p, swung.unwrap_or(false) || placed);
                     self.guest_use_sounds(host, conn, logged, heard);
+                    // Ferraloom: the click's PlayerInteractEvent is over.
+                    self.plugin_interacted();
                 }
                 // The client predicted a result: correct it with what really is.
                 for pos in [
@@ -1526,6 +1609,12 @@ impl Game<'_> {
                 let hand = if p.hand == 1 { Hand::Off } else { Hand::Main };
                 let g = &mut host.hub.guests[gi];
                 (g.yaw, g.pitch) = (p.yaw, p.pitch);
+                // Ferraloom: PlayerInteractEvent RIGHT_CLICK_AIR; the item denied, nothing is used.
+                if ferraloom_plugins::listens(ferraloom_plugins::Event::PlayerInteract)
+                    && self.plugin_right_click_air(host, conn, p.hand == 1)
+                {
+                    return;
+                }
                 let swung = self.as_guest(host, conn, |g| {
                     g.guest_use = Some(GuestUse::Item(hand));
                     let swings = g.swings_started;
@@ -1541,6 +1630,9 @@ impl Game<'_> {
                 if self
                     .look_at_entity(host, gi, p.id, Some(p.location))
                     .is_some()
+                    // Ferraloom: PlayerInteractEntityEvent, before the interaction.
+                    && !(ferraloom_plugins::listens(ferraloom_plugins::Event::PlayerInteractEntity)
+                        && self.plugin_interact_entity(host, conn, p.id, p.hand == 1))
                 {
                     // handleInteract: the entity and that hand only; a click the
                     // entity passes comes back as UseItem.
@@ -1609,6 +1701,14 @@ impl Game<'_> {
                     });
                 }
             }
+            // Ferraloom: InventoryClickEvent, before any menu takes the click.
+            S::ContainerClick(p)
+                if ferraloom_plugins::listens(ferraloom_plugins::Event::InventoryClick)
+                    && self.plugin_click(host, conn, &p) => {}
+            // Ferraloom: InventoryDragEvent, before a drag's items land.
+            S::ContainerClick(p)
+                if ferraloom_plugins::listens(ferraloom_plugins::Event::InventoryDrag)
+                    && self.plugin_drag(host, conn, &p) => {}
             S::ContainerClick(p) if self.lan_merchant_click(host, conn, &p) => {}
             S::ContainerClick(p) if self.lan_inventory_click(host, conn, &p) => {}
             S::ContainerClick(p) if self.lan_crafting_click(host, conn, &p) => {}
@@ -1624,6 +1724,8 @@ impl Game<'_> {
                 });
             }
             S::PlayerCommand(p) if p.action == 6 => self.lan_start_gliding(host, conn),
+            // Ferraloom: START_RIDING_JUMP, forwarded by the hub (game/mounts.rs).
+            S::PlayerCommand(p) if p.action == 3 => self.guest_riding_jump(&host.hub, gi, p.data),
             S::ContainerButtonClick(p) => {
                 self.lan_station_button(host, conn, p.container, p.button);
             }
@@ -1636,6 +1738,9 @@ impl Game<'_> {
             }
             S::SetBeacon(p) => self.lan_station_beacon(host, conn, p.primary, p.secondary),
             S::SelectTrade(p) => self.lan_select_trade(host, conn, p.item),
+            // Ferraloom: InventoryCloseEvent, told whenever plugins run; never takes the close.
+            S::ContainerClose(p)
+                if ferraloom_plugins::running() && self.plugin_closed(host, conn, p.container) => {}
             S::ContainerClose(p) if self.lan_merchant_closed(host, conn, Some(p.container)) => {
                 self.guest_carried_back(host, gi);
             }
@@ -1675,21 +1780,24 @@ impl Game<'_> {
                 self.drop_guest_items(host, gi, drops);
             }
             S::ContainerClose(p) => {
-                if host.hub.guests[gi]
-                    .menu
-                    .as_ref()
-                    .is_some_and(|m| m.window == p.container)
-                {
+                let menu = host.hub.guests[gi].menu.as_ref().map(|m| m.window);
+                if menu == Some(p.container) {
                     self.guest_container_closed(host, conn);
                 }
                 host.hub.container_closed(conn, p.container);
-                self.guest_carried_back(host, gi);
+                // A stale close (of a window a retitle replaced) leaves the menu
+                // open and its cursor with it.
+                if menu.is_none_or(|w| w == p.container) {
+                    self.guest_carried_back(host, gi);
+                }
             }
             S::ChatCommand(c) => self.guest_chat_command(host, conn, &c.command),
             S::CustomPayload(p) if p.channel == horizon_protocol::quiet::CHANNEL => {
                 self.guest_quiet_commands(host, conn, &p.data)
             }
             S::ChatCommandSigned(p) => self.guest_signed_command(host, conn, p),
+            // Ferraloom: a plugin channel's message (game/plugins/players.rs).
+            S::CustomPayload(p) => self.plugin_message(host, conn, &p),
             S::ChangeDifficulty(p) if host.hub.guests[gi].permission >= 2 => {
                 if !self.level.difficulty_locked && (0..=3).contains(&p.difficulty) {
                     self.ui.difficulty = if self.level.hardcore {
@@ -1757,6 +1865,11 @@ impl Game<'_> {
             // handleTeleportToEntityPacket: a spectator goes to the player,
             // in whichever level they are.
             S::TeleportToEntity(p) if spectator => self.guest_spectate_teleport(host, gi, p.uuid),
+            // Ferraloom: handleSpectatorAction (game/lan_spectate.rs).
+            S::SpectatorAction(p) => self.guest_spectator_action(host, gi, p.target),
+            // Ferraloom: F3+I (game/lan_editors.rs).
+            S::EntityTagQuery(p) => self.guest_entity_tag_query(host, gi, p.transaction, p.id),
+            S::BlockEntityTagQuery(p) => self.guest_block_tag_query(host, gi, p.transaction, p.pos),
             S::ChangeGameMode(p) if host.hub.guests[gi].permission >= 2 => {
                 if let Some(mode) = usize::try_from(p.mode)
                     .ok()
@@ -1910,6 +2023,8 @@ impl Game<'_> {
         let Some((at, yaw, pitch, dim)) = target else {
             return;
         };
+        // Ferraloom: teleportTo(..., resetCamera = true).
+        self.set_guest_camera(host, gi, None);
         if Dim::from_id(&host.hub.guests[gi].dimension) != dim {
             // Only a dedicated server keeps its players in different levels.
             if self.options.dedicated.is_some() {
@@ -2079,6 +2194,12 @@ impl Game<'_> {
         if host.hub.guests[gi].spectator() {
             return;
         }
+        // ServerPlayer.getKnownMovement, for Player.isSweepAttack: the move
+        // their client just sent.
+        self.known_movement = host.hub.guests[gi]
+            .moves
+            .last()
+            .map_or(Vec3::ZERO, |m| Vec3::new(m.0[0], m.0[1], m.0[2]));
         if let Some(victim) = Self::pvp_victim(host, conn, id) {
             if let Some(Some(strike)) = self.as_guest(host, conn, |g| g.pvp_strike())
                 && self.pvp_land(host, victim, &strike)
@@ -2145,6 +2266,18 @@ impl Game<'_> {
         command: &str,
         signed: Option<Vec<(String, horizon_client::lan::hub::chat::ChatMessage)>>,
     ) {
+        // Ferraloom: PlayerCommandPreprocessEvent, then a Bukkit plugin's command; a
+        // line a listener changed runs unsigned (game/plugins/players.rs).
+        let changed;
+        let (command, signed) =
+            match self.plugin_guest_command(host, conn, command.trim_start_matches('/')) {
+                None => return,
+                Some(None) => (command, signed),
+                Some(Some(line)) => {
+                    changed = line;
+                    (changed.as_str(), None)
+                }
+            };
         if self.guest_message_command(host, conn, command, signed.as_ref()) {
             return;
         }
@@ -2301,6 +2434,10 @@ impl Game<'_> {
         let Some(permission) = host.hub.guest(conn).map(|g| g.permission) else {
             return;
         };
+        // Ferraloom: a plugin command's arguments are its TabCompleter's.
+        if self.plugin_suggestions(host, conn, id, &text) {
+            return;
+        }
         let skip = usize::from(text.starts_with('/'));
         let command = &text[skip..];
         let d = vanilla::game_dispatcher();
@@ -2347,6 +2484,8 @@ impl Game<'_> {
         if !host.hub.guests[i].dead {
             return;
         }
+        // Ferraloom: the container the respawn closes, read in its own level.
+        let told = self.plugin_open_menu(host, conn);
         // PlayerList.respawn removes the dead player (Player.remove).
         self.guest_drop_carried(host, i);
         // PlayerList.respawn: a server's player comes back in its respawn
@@ -2402,9 +2541,11 @@ impl Game<'_> {
             level: g.xp_level,
             progress: g.xp_progress,
             total: g.xp_total,
+            score: g.meta.score,
         };
         xp.respawn(self.ui.rules.bool("keep_inventory") || g.game_mode == SPECTATOR);
         (g.xp_level, g.xp_progress, g.xp_total) = (xp.level, xp.progress, xp.total);
+        g.meta.score = xp.score;
         let clock_rate = self.network_clock_rate();
         let ctx = TickCtx {
             world: &mut self.world,
@@ -2422,6 +2563,10 @@ impl Game<'_> {
             border: &self.border,
         };
         host.hub.respawn(i, spawn, &ctx);
+        // Ferraloom: the respawn closed the open container (game/plugins/inventory.rs).
+        if let Some(menu) = told {
+            self.plugin_menu_gone(host, menu);
+        }
         // ServerGamePacketListenerImpl.handleClientCommand: a hardcore world's
         // respawned player only watches.
         if self.level.hardcore {
@@ -2460,6 +2605,10 @@ impl Game<'_> {
         if away && let Err(e) = self.enter_level(Some(host), back) {
             log::error!("could not reopen {}: {e}", back.id());
         }
+        // Ferraloom: PlayerRespawnEvent; a place a listener chose wins (game/plugins/players.rs).
+        if ferraloom_plugins::listens(ferraloom_plugins::Event::PlayerRespawn) {
+            self.plugin_respawn(host, conn);
+        }
     }
 
     /// Per tick, for every guest: dig, use items, pick up drops, die.
@@ -2471,6 +2620,8 @@ impl Game<'_> {
         self.lan_containers_tick(host);
         self.tick_lan_mount_menus(host);
         self.announce_guest_advancements(host);
+        // Ferraloom: the spectators watching through an entity follow it.
+        self.tick_guest_cameras(host);
         let conns: Vec<u32> = host
             .hub
             .guests
@@ -2639,6 +2790,7 @@ impl Game<'_> {
                 level: g.xp_level,
                 progress: g.xp_progress,
                 total: g.xp_total,
+                ..Default::default()
             }
             .death_reward(self.ui.rules.bool("keep_inventory") || g.game_mode == SPECTATOR);
             let (name, uuid) = (g.name.clone(), g.uuid);
@@ -2646,6 +2798,9 @@ impl Game<'_> {
             let drops =
                 (g.game_mode != SPECTATOR).then(|| [at[0], at[1] + g.eye_height() - 0.3, at[2]]);
             let cause = host.play.get_mut(&conn).and_then(|p| p.death_cause.take());
+            // Ferraloom: PlayerDeathEvent, before anything is said or dropped (game/plugins/players.rs).
+            let death = ferraloom_plugins::listens(ferraloom_plugins::Event::PlayerDeath)
+                .then(|| self.plugin_death(host, conn, cause.as_deref(), at, reward));
             // ServerPlayer.die: with showDeathMessages, the message goes to
             // the dying player's death screen and to everyone the team lets
             // see it; without it, the death screen gets an empty one.
@@ -2658,9 +2813,13 @@ impl Game<'_> {
                     }
                     None => self.guest_death_message(conn, me),
                 };
+                // Ferraloom: the message PlayerDeathEvent left; an empty one is not sent.
+                let text = Self::plugin_death_text(death.as_ref(), text);
                 let message = horizon_client::lan::data::component_nbt(&text.component());
                 let team = self.score.board.players_team(&name);
-                if horizon_client::scoreboard::own_death_message_shown(team) {
+                if horizon_client::scoreboard::own_death_message_shown(team)
+                    && !text.plain().is_empty()
+                {
                     host.hub.system_message(message.clone());
                     if self.options.dedicated.is_some() {
                         super::dedicated::log("INFO", &format!("System chat: {}", text.plain()));
@@ -2678,10 +2837,17 @@ impl Game<'_> {
             );
             // LivingEntity.die: the death animation, the dying player included.
             host.hub.entity_event(id, 3, at);
-            if let Some(eyes) = drops {
+            // Ferraloom: PlayerDeathEvent's keepInventory and dropped experience.
+            if let Some(eyes) = drops.filter(|_| !death.as_ref().is_some_and(|d| d.keep_inventory))
+            {
                 self.as_guest(host, conn, |game| game.drop_inventory(eyes));
             }
-            self.spawn_orbs(at, reward);
+            self.spawn_orbs(
+                at,
+                death
+                    .as_ref()
+                    .map_or(reward, |d| d.dropped_exp.max(0) as u32),
+            );
         }
     }
 
@@ -2950,6 +3116,8 @@ impl Game<'_> {
             // LivingEntity.aiStep: a Riptide spin counts down on the server's
             // copy too, or it would stay in the spin pose (eye 0.4) for good.
             w.player.count_down_server_spin();
+            // Ferraloom: LivingEntity.tick lets stuck arrows and stingers go.
+            w.player.stuck.tick();
             // Player.tick ends with updatePlayerPose: a swimmer, or a player
             // crawling under a block, takes the short box its moves are checked with.
             let _ = w.update_player_pose();
@@ -3044,7 +3212,26 @@ impl Game<'_> {
         }
         for event in events {
             match event {
-                MotionEvent::HurtSound(sound) => self.player_hurt_sound(sound, at),
+                // Ferraloom: Player.playSound leaves the hurt guest out; its
+                // own client plays the sound from the damage event below.
+                MotionEvent::HurtSound(sound) => {
+                    let source = horizon_client::settings::sound_source(sound) as i32;
+                    self.audio.play_unshared(sound, Some(at), 1.0, 1.0);
+                    host.hub.sound(sound, at, 1.0, 1.0, source, Some(conn));
+                }
+                // Ferraloom: LivingEntity.hurtServer's broadcastDamageEvent, to
+                // the guest and the players around (the red flash, the walk
+                // animation's kick). The causing entities aren't known here.
+                MotionEvent::Health(horizon_client::health::HealthEvent::DamageBroadcast {
+                    source,
+                }) => {
+                    if let (Some(d), Some(g)) = (
+                        self.motion.health.damage.definition(source),
+                        host.hub.guest(conn),
+                    ) {
+                        host.hub.damage_event(g.entity_id, &d.name, None, None, at);
+                    }
+                }
                 // LivingEntity.checkFallDamage: the crumbs reach every player.
                 MotionEvent::Fall(horizon_client::landing::FallEvent::Particles {
                     state,
@@ -3390,12 +3577,10 @@ impl Game<'_> {
             let rest = self.as_guest(host, conn, |g| g.give(stack)).flatten();
             match rest {
                 None => {
-                    let item = self.dropped.remove(i);
-                    self.guest_pickup(host, id, item);
+                    self.dropped.remove(i);
                     taken.push((item_id, before));
                 }
                 Some(rest) if rest.count < before => {
-                    self.guest_pickup(host, id, self.dropped[i].clone());
                     self.dropped[i].stack = rest;
                     taken.push((item_id, before - self.dropped[i].stack.count));
                 }
@@ -3471,14 +3656,6 @@ impl Game<'_> {
             pitch,
         );
         let value = orb.value;
-        if let Some(target) = super::pickups::guest_target(host, id as u32) {
-            use super::pickups::{Collector, Taken};
-            self.add_pickup_toward(
-                Taken::Orb(Box::new(orb)),
-                Collector::Guest(id as u32),
-                target,
-            );
-        }
         self.as_guest(host, conn, |game| {
             let rest = game.mending(value);
             if rest > 0 {
@@ -3487,24 +3664,7 @@ impl Game<'_> {
         });
     }
 
-    /// The host's own `ItemPickupParticle` toward the guest's model.
-    fn guest_pickup(
-        &mut self,
-        host: &LanHost,
-        id: i32,
-        item: horizon_client::entities::ItemEntity,
-    ) {
-        use super::pickups::{Collector, Taken, guest_target};
-        if let Some(target) = guest_target(host, id as u32) {
-            self.add_pickup_toward(
-                Taken::Item(Box::new(item)),
-                Collector::Guest(id as u32),
-                target,
-            );
-        }
-    }
-
-    /// `level.playSound(player, ...)` of a guest's use it predicted (`remote::hand_operated`
+    /// `level.playSound(player, ...)` of a guest's use it predicted (`hand_operated`
     /// blocks only, as the guest decides): the others hear it now, the guest already did.
     fn guest_use_sounds(&mut self, host: &mut LanHost, conn: u32, logged: usize, heard: usize) {
         let changed: Vec<(i32, i32, i32)> = self
@@ -3541,9 +3701,9 @@ impl Game<'_> {
             }
         }
         if changed.is_empty()
-            || !changed.iter().all(|&(x, y, z)| {
-                super::remote::hand_operated(&facts.get(self.world.block(x, y, z)).name)
-            })
+            || !changed
+                .iter()
+                .all(|&(x, y, z)| hand_operated(&facts.get(self.world.block(x, y, z)).name))
         {
             return;
         }
@@ -3682,6 +3842,17 @@ fn swing_packet(id: i32, hand: Hand, animation: SwingAnimation) -> C {
         kind: i32::from(animation.kind),
         duration: animation.duration,
     })
+}
+
+/// The blocks a guest's hand flips that its use predicts (and hears at once): a wooden or
+/// copper door, trapdoor or fence gate, a lever or a button. An iron door or trapdoor has
+/// no hand use.
+fn hand_operated(name: &str) -> bool {
+    let name = name.trim_start_matches("minecraft:");
+    ((name.ends_with("_door") || name.ends_with("_trapdoor")) && !name.starts_with("iron_"))
+        || name.ends_with("_fence_gate")
+        || name.ends_with("_button")
+        || name == "lever"
 }
 
 #[cfg(test)]

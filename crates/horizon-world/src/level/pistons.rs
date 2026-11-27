@@ -12,6 +12,7 @@ use super::{
 };
 use crate::{
     java_hash_map::{JavaHashMap, JavaKey},
+    plugin_hooks::{self, Hook},
     registry::BlockStateId,
 };
 use horizon_core::{geometry::Direction, position::BlockPos, random::RandomSource};
@@ -540,6 +541,23 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         else {
             return false;
         };
+        // Ferraloom: BlockPistonExtendEvent / BlockPistonRetractEvent, before anything moves.
+        let hook = if extending {
+            Hook::PistonExtend
+        } else {
+            Hook::PistonRetract
+        };
+        if plugin_hooks::listens(hook)
+            && self.plugin_piston_cancels(
+                piston_pos,
+                push_direction,
+                extending,
+                &to_push,
+                &to_destroy,
+            )
+        {
+            return false;
+        }
         let mut delete_after: JavaHashMap<PosKey, BlockStateId> = JavaHashMap::default();
         let mut shapes = Vec::with_capacity(to_push.len());
         for pos in &to_push {

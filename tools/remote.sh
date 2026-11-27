@@ -4,7 +4,7 @@
 #   tools/remote.sh [--host H] [--name N] [--cpus LIST] [--exclusive] [--jobs J] <worktree> <command...>
 #   tools/remote.sh .claude/worktrees/my-fix cargo test -p horizon-world --lib
 #   tools/remote.sh . python3 tools/parity.py food light
-#   tools/remote.sh --cpus 0-3 --exclusive . python3 tools/perf_bench.py   # a benchmark: CPUs 0-3 to itself
+#   tools/remote.sh --cpus 0-3 --exclusive . python3 tools/server_bench.py   # a benchmark: CPUs 0-3 to itself
 #   tools/remote.sh --list                          # checkouts on the host, their size and last use
 #   tools/remote.sh --gc [DAYS]                     # remove checkouts unused for DAYS (default 2)
 #
@@ -13,8 +13,8 @@
 # folder) keeps one checkout there, ~/remote-work/<name>, with its own target/: the next run checks out the new
 # commit over it, so only what changed rebuilds (sccache shares the registry crates between names). One run per
 # name at a time. The command runs in bash at the checkout's root, niced in the host's CI slice, with the host's
-# toolchains, a virtual screen and scratch homes for the game and launcher. .local/ links to the host's vanilla
-# data; a command that runs harnesses (it names parity, lan_e2e or horizon-prepare) also gets .local/horizon-client,
+# toolchains, a virtual screen and scratch homes for the engine. .local/ links to the host's vanilla
+# data; a command that runs harnesses (it names parity or horizon-prepare) also gets .local/horizon-client,
 # prepared as CI prepares it (tools/ci/vanilla-data.sh). Output streams back and is kept in ~/remote-work/<name>.logs/.
 # What the command leaves running is stopped when it ends; stopping this script stops the command on the host.
 # The exit status is the command's.
@@ -87,7 +87,7 @@ elif ! flock -s -n 8; then
   flock -s 8
 fi
 if [ ! -d "$name/.git" ]; then
-  git clone -q --filter=blob:none --no-checkout https://github.com/horizon-rust/horizon "$name" 8>&- 9>&-
+  git clone -q --filter=blob:none --no-checkout https://github.com/RealDoc06/Ferraloom "$name" 8>&- 9>&-
 fi
 cd "$name"
 # The lock's descriptor stays out of everything started here (8>&- 9>&-): a daemon one of them starts (sccache's server,
@@ -97,7 +97,7 @@ git checkout -q --force --detach "$sha"
 git clean -qfd -e /target -e /.local
 # The host's vanilla data, linked as CI's runner links it; for harnesses also .local/horizon-client, prepared by
 # this commit's own preparer (once per preparer version, kept beside the data and shared by every name).
-if [[ $command =~ parity|lan_e2e|horizon-prepare ]]; then
+if [[ $command =~ parity|horizon-prepare ]]; then
   RUNNER_WORKSPACE=$(dirname "$HORIZON_SHARED_SOURCE") RUNNER_TEMP=$(mktemp -d) bash tools/ci/vanilla-data.sh >&2 8>&- 9>&-
 else
   mkdir -p .local
@@ -107,9 +107,8 @@ else
 fi
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
-export HORIZON_HOME=$scratch/game HORIZON_LAUNCHER_HOME=$scratch/launcher XDG_DATA_HOME=$scratch/data \
-  XDG_CONFIG_HOME=$scratch/config HORIZON_NO_AUDIO=1 HORIZON_LAUNCHER_NO_SELF_UPDATE=1 HORIZON_TELEMETRY_URL=off
-mkdir -p "$HORIZON_HOME" "$HORIZON_LAUNCHER_HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" ../"$name.logs"
+export HORIZON_HOME=$scratch/game XDG_DATA_HOME=$scratch/data XDG_CONFIG_HOME=$scratch/config
+mkdir -p "$HORIZON_HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" ../"$name.logs"
 log=../"$name.logs/$(date -u +%Y%m%dT%H%M%SZ)-${sha:0:9}.log"
 echo "remote.sh: $(hostname) at ${sha:0:9} in ~/remote-work/$name, CPUs $cpus, -j $jobs; log ~/remote-work/${log#../}" >&2
 # The command runs in a scope of its own, stopped with everything in it once the command is done (a game or a

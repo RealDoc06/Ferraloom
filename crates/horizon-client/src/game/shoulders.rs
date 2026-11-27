@@ -3,7 +3,7 @@
 //! or `ShoulderEntityRight`, and flies off again when the player is hurt,
 //! falls, swims, flies or sleeps (`ServerPlayer.handleShoulderEntities`).
 use super::Game;
-use horizon_client::mobs::Species;
+use horizon_client::{lan::hub::player_meta::shoulders_of, mobs::Species};
 use horizon_world::nbt::Tag;
 
 const KEYS: [&str; 2] = ["ShoulderEntityLeft", "ShoulderEntityRight"];
@@ -53,6 +53,7 @@ impl Game<'_> {
         let (uuid, now) = (self.acting_uuid(), self.world.game_time);
         self.creatures.shoulder_time.insert(uuid, now);
         self.mobs[i].removed = true;
+        self.shoulders_changed();
     }
 
     /// `ServerPlayer.handleShoulderEntities`: the parrots leave the shoulder
@@ -105,6 +106,7 @@ impl Game<'_> {
             .iter()
             .filter_map(|k| map.remove(&(*k).into()))
             .collect();
+        self.shoulders_changed();
         let pos = [p.x, p.y + f64::from(0.7_f32), p.z];
         for mut tag in tags {
             let Tag::Compound(c) = &mut tag else {
@@ -119,6 +121,26 @@ impl Game<'_> {
             );
             c.insert("Owner".into(), Tag::IntArray(uuid.to_vec()));
             self.load_mob(tag, None);
+        }
+    }
+
+    /// Ferraloom: `setShoulderEntityLeft/Right`'s entity data
+    /// (`Player.DATA_SHOULDER_PARROT_LEFT/RIGHT`) for the guest whose turn
+    /// it is, handed to the hub at [`Self::lan_sync_shoulders`].
+    fn shoulders_changed(&mut self) {
+        if let Some(uuid) = self.lan_acting_uuid {
+            let now = shoulders_of(self.level.player_extra.as_ref());
+            self.lan_shoulder_changes.push((uuid, now));
+        }
+    }
+
+    /// Ferraloom: the shoulder parrots that changed this tick, onto the
+    /// guests, whose trackers and own clients are sent them.
+    pub(super) fn lan_sync_shoulders(&mut self, host: &mut super::lan::LanHost) {
+        for (uuid, now) in self.lan_shoulder_changes.drain(..) {
+            if let Some(g) = host.hub.guests.iter_mut().find(|g| g.uuid == uuid) {
+                g.meta.shoulders = now;
+            }
         }
     }
 }

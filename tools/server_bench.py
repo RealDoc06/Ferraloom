@@ -77,6 +77,8 @@ PROPERTIES = {
     'max-players': '200',
     'difficulty': 'easy',
     'sync-chunk-writes': 'true',
+    # No watchdog: vanilla kills a server whose tick (a slow "Saving the game") passes 60 s.
+    'max-tick-time': '-1',
 }
 
 
@@ -181,7 +183,7 @@ def paper_jar():
     lock, _ = lab.config()
     version = lock['minecraft']['version']
     request = urllib.request.Request(PAPER_API.format(version=version),
-                                     headers={'User-Agent': 'horizon-server-bench (github.com/horizon-rust/horizon)'})
+                                     headers={'User-Agent': 'horizon-server-bench (github.com/RealDoc06/Ferraloom)'})
     with urllib.request.urlopen(request, timeout=30) as response:
         build = json.load(response)
     download = build['downloads']['server:default']
@@ -257,6 +259,10 @@ def server_command(kind, directory, args):
     server = BIN / f'horizon-server{EXE}'
     subprocess.run([server, '--dir', directory, 'import', directory / 'server.properties'], check=True,
                    capture_output=True)
+    # Ferraloom: a folder laid over the server's before it starts, for plugins/ and ferraloom-bukkit/
+    # (tools/ferraloom-bench/README.md).
+    if overlay := os.environ.get('FERRALOOM_BENCH_OVERLAY'):
+        shutil.copytree(overlay, directory, dirs_exist_ok=True)
     toml = directory / 'server.toml'
     # The same settings, without the web panel.
     toml.write_text(re.sub(r'(?m)^bind = "127\.0\.0\.1:8130"', 'bind = ""', toml.read_text()))

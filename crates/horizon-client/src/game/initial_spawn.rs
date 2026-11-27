@@ -90,9 +90,6 @@ impl Game<'_> {
         {
             return Ok(((0, 0), flat.spawn_height()));
         }
-        if self.options.test_terrain {
-            return Ok(((0, 0), 64));
-        }
         let origin = match self.end.locator() {
             Some(terrain) => terrain.origin()?,
             None => horizon_core::position::ChunkPos::new(0, 0),

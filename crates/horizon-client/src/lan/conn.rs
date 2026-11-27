@@ -437,11 +437,6 @@ impl PlayerSender {
         self.send_body(PacketBody::Slot(slot.clone()));
         SlotFiller(slot)
     }
-    /// Several packets in order, as [`Self::send`] each: under one lock
-    /// while the tick holds them.
-    pub fn send_many(&self, bodies: impl IntoIterator<Item = Vec<u8>>) {
-        self.send_bodies(bodies.into_iter().map(PacketBody::Owned));
-    }
     /// Queue shared and private packet bodies together, retaining their order.
     pub fn send_bodies(&self, bodies: impl IntoIterator<Item = PacketBody>) {
         if !HOLDING.get() {
@@ -486,6 +481,12 @@ impl PlayerSender {
             posted: self.posted.clone(),
             wake: self.wake.clone(),
         }
+    }
+    /// Several packets in order, as [`Self::send`] each: under one lock
+    /// while the tick holds them.
+    #[cfg(test)]
+    pub fn send_many(&self, bodies: impl IntoIterator<Item = Vec<u8>>) {
+        self.send_bodies(bodies.into_iter().map(PacketBody::Owned));
     }
 }
 
@@ -634,16 +635,6 @@ pub fn serve(
         return serve_legacy(stream, &shared);
     }
     serve_connection(Connection::from_stream(stream).map_err(e)?, address, shared)
-}
-
-/// `ServerConnectionListener.startMemoryChannel`: an integrated server's
-/// own player, over one end of an in-memory pipe.
-pub fn serve_local(
-    pipe: horizon_protocol::connection::Pipe,
-    shared: Arc<Shared>,
-) -> Result<(), String> {
-    let address = std::net::SocketAddr::from(([127, 0, 0, 1], 0));
-    serve_connection(Connection::local(pipe), address, shared)
 }
 
 fn serve_connection(
@@ -903,6 +894,8 @@ fn serve_login(
     // verifyLoginAndFinishConnectionSetup: PlayerList.canPlayerLogin, then
     // duplicates and a full server.
     if let Some(reason) = shared.try_admit(address, uuid, &hello.name) {
+        // Ferraloom: a refusal after PlayerLoginEvent let them in leaves no pending player.
+        ferraloom_plugins::login_abandoned(uuid);
         let text = refuse(&mut c, shared, "Server thread", &user, &reason);
         lost(shared, &user, &text);
         return Ok(());
@@ -915,10 +908,12 @@ fn serve_login(
         }
         Ok(None) => {
             shared.release(uuid);
+            ferraloom_plugins::login_abandoned(uuid);
             Ok(())
         }
         Err(err) => {
             shared.release(uuid);
+            ferraloom_plugins::login_abandoned(uuid);
             // ServerConfigurationPacketListenerImpl.onDisconnect.
             let profile = format!("{} ({})", hello.name, uuid_string(uuid));
             lost(shared, &profile, "Disconnected");
@@ -932,7 +927,6 @@ struct Parts {
     name: String,
     properties: Vec<login::Property>,
     info: ClientInformation,
-    brand: String,
 }
 
 fn login_and_configure(
@@ -1043,6 +1037,10 @@ fn login_and_configure(
         send(c, cfg::Clientbound::RegistryData(packet))?;
     }
     send(c, cfg::Clientbound::UpdateTags(sync.tags.clone()))?;
+    // Ferraloom: ServerCodeOfConductConfigurationTask, after the registries.
+    if !shared.config.code_of_conduct.is_empty() {
+        accept_code_of_conduct(c, &shared.config.code_of_conduct, &mut info)?;
+    }
     if let Some(pack) = &shared.config.resource_pack
         && let Some(rejected) = offer_pack(c, pack, &mut info)?
     {
@@ -1065,12 +1063,144 @@ fn login_and_configure(
         name: name.to_owned(),
         properties,
         info,
-        brand,
     }))
 }
 
 /// ServerboundResourcePackPacket.Action.DECLINED.
 const PACK_DECLINED: i32 = 1;
+
+/// Port of `DedicatedServer#readCodeOfConducts`: `codeofconduct/<language>.txt`,
+/// each language's text with its colour codes taken out (`StringUtil.stripColor`).
+pub fn read_code_of_conducts(
+    dir: &std::path::Path,
+) -> Result<std::collections::BTreeMap<String, String>, String> {
+    if !dir.is_dir() {
+        return Err(format!(
+            "Code of Conduct folder does not exist: {}",
+            dir.display()
+        ));
+    }
+    let entries = std::fs::read_dir(dir)
+        .map_err(|e| format!("Failed to read Code of Conduct folder: {e}"))?;
+    let mut texts = std::collections::BTreeMap::new();
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let Some(language) = name.strip_suffix(".txt") else {
+            continue;
+        };
+        let text = std::fs::read_to_string(entry.path())
+            .map_err(|e| format!("Failed to read Code of Conduct file {name}: {e}"))?;
+        // Files.readAllLines then String.join("\n"): no line break at the end.
+        let text = text.lines().collect::<Vec<_>>().join("\n");
+        texts.insert(language.to_lowercase(), strip_color(&text));
+    }
+    Ok(texts)
+}
+
+/// `StringUtil.stripColor`: `§` and a formatting code (0-9, a-f, k-o, r).
+fn strip_color(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\u{a7}'
+            && chars.peek().is_some_and(
+                |n| matches!(n.to_ascii_lowercase(), '0'..='9' | 'a'..='f' | 'k'..='o' | 'r'),
+            )
+        {
+            chars.next();
+            continue;
+        }
+        out.push(c);
+    }
+    out
+}
+
+/// ServerCodeOfConductConfigurationTask: the text in the client's language
+/// (else `en_us`, else the first), then wait for its acceptance
+/// (handleAcceptCodeOfConduct), keeping the connection alive meanwhile as
+/// ServerConfigurationPacketListenerImpl.tick does. A client that closes
+/// the screen instead disconnects itself.
+fn accept_code_of_conduct(
+    c: &mut Connection,
+    texts: &std::collections::BTreeMap<String, String>,
+    info: &mut ClientInformation,
+) -> Result<(), String> {
+    let e = |e: horizon_protocol::Error| e.to_string();
+    let text = texts
+        .get(&info.language.to_lowercase())
+        .or_else(|| texts.get("en_us"))
+        .or_else(|| texts.values().next())
+        .cloned()
+        .unwrap_or_default();
+    c.send(&cfg::Clientbound::CodeOfConduct(cfg::CodeOfConduct { text }).encode())
+        .map_err(e)?;
+    // ServerCommonPacketListenerImpl#keepConnectionAlive and #handleKeepAlive:
+    // the one keep-alive awaiting its answer; a keep-alive still unanswered
+    // when the next is due, or a wrong answer, disconnects with a timeout.
+    const TIMED_OUT: &str = "timed out";
+    let timeout = || {
+        let reason = translatable("disconnect.timeout", &[]);
+        cfg::Clientbound::Disconnect(cfg::Disconnect { reason }).encode()
+    };
+    let outstanding = Mutex::new(None::<i64>);
+    let writer_timed_out = std::sync::atomic::AtomicBool::new(false);
+    let answer = std::thread::scope(|scope| {
+        let (stop, stopped) = channel::<()>();
+        let writer = &mut c.writer;
+        let (outstanding, writer_timed_out) = (&outstanding, &writer_timed_out);
+        scope.spawn(move || {
+            let start = Instant::now();
+            while stopped.recv_timeout(KEEP_ALIVE_EVERY) == Err(RecvTimeoutError::Timeout) {
+                let id = i64::try_from(start.elapsed().as_millis()).unwrap_or(0);
+                if outstanding.lock().unwrap().replace(id).is_some() {
+                    writer_timed_out.store(true, Ordering::Relaxed);
+                    let _ = writer.send(&timeout());
+                    // Wakes the blocked read, as write_loop does.
+                    writer.shutdown();
+                    break;
+                }
+                let keep_alive = cfg::Clientbound::KeepAlive(cfg::KeepAlive { id });
+                if writer.send(&keep_alive.encode()).is_err() {
+                    break;
+                }
+            }
+        });
+        let answer = loop {
+            let packet = c.reader.recv();
+            if writer_timed_out.load(Ordering::Relaxed) {
+                break Err(TIMED_OUT.to_owned());
+            }
+            let (id, payload) = match packet {
+                Ok(packet) => packet,
+                Err(err) => break Err(err.to_string()),
+            };
+            match cfg::Serverbound::decode(id, &payload) {
+                Ok(cfg::Serverbound::AcceptCodeOfConduct(_)) => break Ok(()),
+                Ok(cfg::Serverbound::ClientInformation(i)) => *info = i,
+                Ok(cfg::Serverbound::KeepAlive(k)) => {
+                    let mut sent = outstanding.lock().unwrap();
+                    if *sent != Some(k.id) {
+                        break Err(TIMED_OUT.to_owned());
+                    }
+                    *sent = None;
+                }
+                Ok(_) => {}
+                Err(err) => break Err(err.to_string()),
+            }
+        };
+        drop(stop);
+        answer
+    });
+    // The writer's timeout wins over an acceptance read at the same moment.
+    if writer_timed_out.into_inner() {
+        return Err(TIMED_OUT.to_owned());
+    }
+    // A wrong answer: the writer is back, so the disconnect goes now.
+    if matches!(&answer, Err(e) if e == TIMED_OUT) {
+        let _ = c.send(&timeout());
+    }
+    answer
+}
 
 /// ServerCommonPacketListenerImpl.handleResourcePackResponse: a player who
 /// declined the required pack is disconnected. The reason and its text.
@@ -1161,10 +1291,10 @@ fn play(c: Connection, shared: &Arc<Shared>, parts: Parts, address: std::net::So
         name: parts.name.clone(),
         properties: parts.properties,
         info: parts.info,
-        brand: parts.brand,
         sender,
         latency: latency.clone(),
         address,
+        plugin_attempt: ferraloom_plugins::login_attempt(),
     };
     let player = Player {
         conn: conn_id,
@@ -1246,6 +1376,13 @@ impl Player {
     pub fn receive(&self, id: i32, payload: &[u8]) -> Result<(), Ended> {
         match play::Serverbound::decode(id, payload) {
             Ok(play::Serverbound::KeepAlive(k)) => self.alive.store(k.id, Ordering::Relaxed),
+            // Ferraloom: handlePingRequest answers on the connection's thread,
+            // so the debug ping chart measures the network alone.
+            Ok(play::Serverbound::PingRequest(p)) => {
+                let body = play::Clientbound::PongResponse(p).encode();
+                self.pending.fetch_add(body.len(), Ordering::Relaxed);
+                let _ = self.tx.send(Out::Packet(body));
+            }
             Ok(play::Serverbound::ResourcePack(r))
                 if r.action == PACK_DECLINED && self.required_pack =>
             {
@@ -1529,6 +1666,16 @@ fn write_loop(
 
 #[cfg(test)]
 mod tests {
+    /// `StringUtil.stripColor`: a section sign and a formatting code go, any
+    /// other section sign stays.
+    #[test]
+    fn code_of_conduct_colour_codes_are_stripped() {
+        assert_eq!(
+            strip_color("\u{a7}aBe kind\u{a7}R. \u{a7}zno\u{a7}"),
+            "Be kind. \u{a7}zno\u{a7}"
+        );
+    }
+
     use super::*;
 
     /// The 500-player waypoint send path: individual sends versus one lock per recipient.

@@ -3,7 +3,6 @@
 //! and snow golems (snowballs at monsters, the snow trail, melting).
 use super::{
     Mob, MobEvent, MobWorld, Species, Who,
-    anim::{Poses, State},
     goals::{
         Cx, Goal, HurtByTarget, LOOK, LookAtPlayer, MOVE, MeleeAttack, NearestTarget, Prey,
         RandomLookAround, Stroll, goal_clone,
@@ -237,25 +236,6 @@ fn entity_event(m: &Mob, event: i8, cx: &mut Cx) {
         at: [m.position.x, m.position.y, m.position.z],
     });
 }
-/// `IronGolem.handleEntityEvent` on a client: 4 the swing, 11 and 34 the
-/// poppy offer starting and stopping.
-pub fn client_event(m: &mut Mob, event: u8) {
-    match event {
-        4 => m.extra.anim_ticks = 10,
-        11 => m.extra.counter = 400,
-        34 => m.extra.counter = 0,
-        _ => {}
-    }
-}
-/// The swing and offer clocks of `IronGolem.aiStep` on a client.
-pub fn client_tick(m: &mut Mob) {
-    if m.extra.anim_ticks > 0 {
-        m.extra.anim_ticks -= 1;
-    }
-    if m.extra.counter > 0 {
-        m.extra.counter -= 1;
-    }
-}
 /// `IronGolem.aiStep` timers and anger.
 pub fn iron_ai_step(m: &mut Mob) {
     if m.extra.anim_ticks > 0 {
@@ -270,50 +250,6 @@ pub fn iron_ai_step(m: &mut Mob) {
             m.ai.target = None;
         }
     }
-}
-/// `Crackiness.GOLEM` texture for the health left.
-pub fn crackiness(m: &Mob) -> Option<&'static str> {
-    let f = m.health / m.attrs.max_health;
-    if f < 0.25 {
-        Some("entity/iron_golem/iron_golem_crackiness_high")
-    } else if f < 0.5 {
-        Some("entity/iron_golem/iron_golem_crackiness_medium")
-    } else if f < 0.75 {
-        Some("entity/iron_golem/iron_golem_crackiness_low")
-    } else {
-        None
-    }
-}
-fn triangle_wave(x: f32, period: f32) -> f32 {
-    ((x % period) - period * 0.5).abs() / (period * 0.5) * 2.0 - 1.0
-}
-/// `IronGolemModel.setupAnim`.
-pub fn iron_anim(m: &Mob, s: &State, p: &mut Poses) {
-    let attack = if m.extra.anim_ticks > 0 {
-        m.extra.anim_ticks as f32 - s.partial
-    } else {
-        0.0
-    };
-    let (pos, speed) = (s.pos, s.speed);
-    if attack > 0.0 {
-        p.xrot("right_arm", -2.0 + 1.5 * triangle_wave(attack, 10.0));
-        p.xrot("left_arm", -2.0 + 1.5 * triangle_wave(attack, 10.0));
-    } else if m.extra.counter > 0 {
-        p.xrot(
-            "right_arm",
-            -0.8 + 0.025 * triangle_wave(m.extra.counter as f32, 70.0),
-        );
-        p.xrot("left_arm", 0.0);
-    } else {
-        p.xrot("right_arm", (-0.2 + 1.5 * triangle_wave(pos, 13.0)) * speed);
-        p.xrot("left_arm", (-0.2 - 1.5 * triangle_wave(pos, 13.0)) * speed);
-    }
-    p.yrot("head", s.y_rot.to_radians());
-    p.xrot("head", s.x_rot.to_radians());
-    p.xrot("right_leg", -1.5 * triangle_wave(pos, 13.0) * speed);
-    p.xrot("left_leg", 1.5 * triangle_wave(pos, 13.0) * speed);
-    p.yrot("right_leg", 0.0);
-    p.yrot("left_leg", 0.0);
 }
 
 pub fn register_snow(m: &mut Mob) {

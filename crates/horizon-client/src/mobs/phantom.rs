@@ -334,18 +334,6 @@ pub fn move_control(m: &mut Mob) {
     // PhantomBodyRotationControl: the head follows the body.
     m.head_yaw = m.body_yaw;
 }
-/// `PhantomModel.setupAnim` (flap time offset by the id).
-pub fn anim(m: &Mob, s: &super::anim::State, p: &mut super::anim::Poses) {
-    let flap = (m.id as f32 * 3.0 + s.age) * 7.448_451_f32.to_radians();
-    let wing = flap.mcos() * 16.0f32.to_radians();
-    p.zrot("left_wing_base", wing);
-    p.zrot("left_wing_tip", wing);
-    p.zrot("right_wing_base", -wing);
-    p.zrot("right_wing_tip", -wing);
-    let tail = -(5.0 + (flap * 2.0).mcos() * 5.0f32).to_radians();
-    p.xrot("tail_base", tail);
-    p.xrot("tail_tip", tail);
-}
 /// The flap sound when a wingbeat begins (`Phantom.isFlapping`).
 pub fn flap_sound(m: &Mob, events: &mut Vec<MobEvent>) {
     let t = m.id as f32 * 3.0 + m.age as f32;

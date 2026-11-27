@@ -1,15 +1,16 @@
 # Mod API
 
-Mods are Rust crates compiled to sandboxed WebAssembly components. Client mods run in the player's game; server mods
-(experimental) run wherever a world is simulated: single player, a LAN host, the dedicated server. Design and the runtime: [mods.md](../mods.md).
+Mods are Rust crates compiled to sandboxed WebAssembly components. On Ferraloom, server mods (experimental) run on
+the dedicated server and content mods add blocks and items. Client mods ran in Horizon's game window, which was
+removed; nothing hosts them now. Design and the runtime: [mods.md](../mods.md).
 
 ## Overview
 
-A mod today can read the local player and the world clock, show chat lines only that player sees, draw a text panel
-on the HUD, keep small files of its own, register chat commands, and run on every tick, frame or chat line it asks
-for. A content mod adds blocks and items from JSON in its `.hmod`, copying vanilla templates, plus tags, recipes,
+A server mod today sees the players online and tells them things, reads and sets blocks and biomes, keeps small files
+of its own, registers typed commands, and hears joins, chat, commands and players' block breaking and placing. A
+content mod adds blocks and items from JSON in its `.hmod`, copying vanilla templates, plus tags, recipes,
 loot, models, textures and structures in its own namespaces. Every capability is declared in the manifest, shown to
-the player before the mod is turned on, and checked against the component's real imports.
+the owner before the mod is turned on, and checked against the component's real imports.
 
 | | Count |
 | --- | --- |
@@ -24,15 +25,12 @@ the player before the mod is turned on, and checked against the component's real
 
 ## Guide
 
-The step-by-step guide, from installing the tools to publishing on the registry, is
-[Make a mod](https://playhorizon.dev/docs/make-a-mod) on the website. In short:
-
-1. `rustup target add wasm32-unknown-unknown`, `cargo install --git https://github.com/horizon-rust/horizon
+1. `rustup target add wasm32-unknown-unknown`, `cargo install --git https://github.com/RealDoc06/Ferraloom
    cargo-horizon-mod`, then `cargo horizon-mod new my-mod` ([Making a mod](../mods.md#making-a-mod)).
-2. Implement `Mod` for your type, list the capabilities you import in `horizon-mod.toml`
+2. Implement `ServerMod` for your type, list the capabilities you import in `horizon-mod.toml`
    ([The manifest](../mods.md#the-manifest)).
-3. `cargo horizon-mod run` builds the `.hmod` and starts the game with it as a dev mod; after an edit,
-   `cargo horizon-mod build` and the running game reloads it.
+3. `cargo horizon-mod build` writes the `.hmod`; copy it into a server's `horizon-mods/` and turn it on
+   ([Running mods on a server](../mods.md#running-mods-on-a-server)).
 4. `cargo horizon-mod test` runs the mod's `tests/*.toml` scripts in the sandbox, with no game: ticks, commands,
    chat lines and the player's position in, chat, feedback and the HUD panel checked
    ([Testing a mod](../mods.md#testing-a-mod)).
@@ -88,21 +86,17 @@ release.
 What real mods need next, in the order modpacks and servers need it:
 
 - **More for server mods** (`api = "0.3"`, [Server mods](../mods.md#server-mods-api-03-experimental)): they run
-  on the server thread, a LAN host and the dedicated server today, with joins, chat, typed commands in players'
+  on the dedicated server today, with joins, chat, typed commands in players'
   command trees, players' block breaking and placing, and `world` (read blocks and biomes, set blocks as `/setblock`
   does); next entity events, game rules, entity, item and block-state arguments.
-- **World and blocks**: blocks, block states and biomes are there for server mods (`world`); next block entities,
-  and `world` for client mods (raycasts, single player and LAN hosts).
+- **World and blocks**: blocks, block states and biomes are there for server mods (`world`); next block entities.
 - **Items and inventories**: the player's inventory, held item and open container; item stacks with components.
 - **Entities**: query and change entities near a position; spawn from a mod's own entity types (data first).
-- **Block entities and menus**: ticking machines with slots and their screens.
-- **Screens and UI**: widgets built from vanilla's, a screen the mod owns, a settings page under Options > Mods.
-- **Networking**: a channel between a mod's two halves, client and server, typed by the mod's own WIT.
-- **Config**: typed settings the game shows and stores for the mod, on the server too.
-- **Keys and the crosshair target**: keybinds in Controls; what the player is looking at.
+- **Block entities and menus**: ticking machines with slots, their menus shown to vanilla clients.
+- **Config**: typed settings the server stores for the mod.
 - **Script mods and other languages**: see [Ways in](#ways-in).
-- **SDK**: templates per kind of mod, typed wrappers in the SDK for every interface. Dev mods already reload when
-  rebuilt, and `cargo horizon-mod test` runs a mod headless.
+- **SDK**: a server-mod template, typed wrappers in the SDK for every interface; `cargo horizon-mod test` already
+  runs a mod headless.
 
 ## Changelog
 
@@ -111,7 +105,8 @@ What real mods need next, in the order modpacks and servers need it:
   `command` gets their values. SDK `Registration::command_with`, `Argument`, `Args`.
 - API 0.3: capability `world` (`get-block`, `get-biome`, `set-blocks`); example `beacons`; test scripts' `blocks` and
   `expect.blocks`.
-- Server mods run in the game: single player (server thread and in-frame), LAN hosts, the dedicated server.
+- Server mods run in the game: single player (server thread and in-frame), LAN hosts, the dedicated server (all
+  but the dedicated server removed with the client since).
 - API 0.3 (server mods, experimental): world `horizon-server-mod`, capability `players`, the `server-events`
   hooks; SDK `server::ServerMod`; example `welcome`.
 - SDK: `cargo horizon-mod test` and `horizon_mods::testing`, test scripts in TOML; the template has one.

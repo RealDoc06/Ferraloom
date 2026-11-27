@@ -1,5 +1,5 @@
-//! The engine: the game itself, run headless (`horizon-client --dedicated`, crates/horizon-client
-//! game/dedicated.rs). It reads the vanilla files the supervisor writes, takes console commands on stdin and
+//! The engine: the dedicated server program (`horizon-client --dedicated`, crates/horizon-client
+//! src/game/dedicated.rs). It reads the vanilla files the supervisor writes, takes console commands on stdin and
 //! logs on stdout.
 
 use crate::config::Config;
@@ -11,9 +11,8 @@ use std::{
     time::Duration,
 };
 
-/// The game's program names, most specific first: the server build (the game without sound or
-/// controllers, so it needs neither ALSA nor udev on Linux; `horizon-server-linux-x86_64.tar.gz` holds it),
-/// else the full game.
+/// The engine's program names, most specific first: `horizon-engine` as a release folder names it
+/// (xtask `package-server`), else `horizon-client` as cargo builds it.
 const PROGRAMS: [&str; 2] = ["horizon-engine", "horizon-client"];
 
 fn exe(name: &str) -> String {
@@ -65,8 +64,7 @@ pub fn program_in(
 }
 
 /// Checks that the game program starts at all: `--help` loads no game files, so it fails only when the
-/// system can't load the program, as on a Linux without the ALSA and udev libraries the full game links
-/// (the server build doesn't). The reason, with what to install.
+/// system can't load the program. The reason, from its stderr.
 pub fn check_starts(program: &Path) -> Result<(), String> {
     let mut command = crate::process::command(program);
     let output = command
@@ -90,7 +88,7 @@ fn start_failure(program: &Path, code: Option<i32>, stderr: &str) -> String {
         .find(|l| !l.trim().is_empty())
         .unwrap_or("")
         .trim();
-    let mut text = format!(
+    format!(
         "the game ({}) can't start{}{}",
         program.display(),
         code.map_or(String::new(), |c| format!(" (exit status {c})")),
@@ -99,19 +97,7 @@ fn start_failure(program: &Path, code: Option<i32>, stderr: &str) -> String {
         } else {
             format!(": {reason}")
         }
-    );
-    if reason.contains("error while loading shared libraries")
-        && (reason.contains("libasound") || reason.contains("libudev"))
-    {
-        text.push_str(
-            "\nThe full game needs ALSA's and udev's libraries (libasound.so.2, libudev.so.1). Install the \
-             server build, which needs neither (packaging/server/install.sh picks it on Linux), or the \
-             libraries:\n  Debian, Ubuntu: sudo apt install libasound2 libudev1   (Ubuntu 24.04 and later: \
-             libasound2t64)\n  Fedora, RHEL: sudo dnf install alsa-lib systemd-libs\n  Arch: sudo pacman -S \
-             alsa-lib systemd-libs\n  NixOS: enable programs.nix-ld with alsa-lib and udev in its libraries",
-        );
-    }
-    text
+    )
 }
 
 /// Where the prepared game files may be, in the order they are tried.
@@ -145,7 +131,7 @@ pub fn resources(config: &Config, dir: &Path, program: Option<&Path>) -> Result<
                 .collect();
             format!(
                 "no prepared game files. Horizon reads them from your own copy of Minecraft 26.3:\n\
-                 prepare them with `horizon-prepare --prepare --server-jar PATH` (or the launcher) and copy \
+                 prepare them with `horizon-prepare --prepare --server-jar PATH` and copy \
                  the folder to resources/ here, or set engine.resources in server.toml. Looked in:\n{}",
                 tried.join("\n")
             )
@@ -167,7 +153,6 @@ pub fn spawn(program: &Path, resources: &Path, dir: &Path) -> std::io::Result<Ch
         .arg(control_path(&dir))
         .args(["--dedicated", "--nogui"])
         .current_dir(&dir)
-        .env("HORIZON_NO_AUDIO", "1")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -267,30 +252,11 @@ mod tests {
     }
 
     #[test]
-    fn a_missing_library_says_what_to_install() {
+    fn a_start_failure_names_the_program_and_its_first_line() {
         let program = Path::new("/opt/horizon/horizon-client");
-        let text = start_failure(
-            program,
-            Some(127),
-            "/opt/horizon/horizon-client: error while loading shared libraries: libasound.so.2: cannot open \
-             shared object file: No such file or directory\n",
-        );
-        assert!(text.starts_with(
-            "the game (/opt/horizon/horizon-client) can't start (exit status 127): /opt/horizon/horizon-client: \
-             error while loading shared libraries: libasound.so.2"
-        ));
-        assert!(text.contains("sudo apt install libasound2 libudev1"));
-        // Another library: no ALSA advice (the server build, horizon-engine, links neither).
-        let engine = start_failure(
-            Path::new("/opt/horizon/horizon-engine"),
-            Some(127),
-            "/opt/horizon/horizon-engine: error while loading shared libraries: libgcc_s.so.1: cannot open \
-             shared object file: No such file or directory\n",
-        );
-        assert!(!engine.contains("libasound"), "{engine}");
-        let other = start_failure(program, Some(1), "something else\n");
+        let text = start_failure(program, Some(1), "something else\n");
         assert_eq!(
-            other,
+            text,
             "the game (/opt/horizon/horizon-client) can't start (exit status 1): something else"
         );
     }

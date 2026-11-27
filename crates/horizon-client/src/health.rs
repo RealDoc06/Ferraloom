@@ -116,29 +116,6 @@ pub enum HealthEvent {
         blocked: bool,
     },
 }
-impl HealthEvent {
-    pub fn trace(self) -> String {
-        match self {
-            Self::StarvationDamage(amount) => format!("damage starve {:08x}", amount.to_bits()),
-            Self::FreezeDamage(amount) => format!("damage freeze {:08x}", amount.to_bits()),
-            Self::SweetBerryBushDamage(amount) => {
-                format!("damage sweet_berry_bush {:08x}", amount.to_bits())
-            }
-            Self::DrownDamage(amount) => format!("damage drown {:08x}", amount.to_bits()),
-            Self::Updated { id, value, dirty } => {
-                format!("updated {id} {:08x} {dirty}", value.to_bits())
-            }
-            Self::Statistic { name, amount } => format!("health-stat {name} {amount}"),
-            Self::RecordedDamage { amount, .. } => {
-                format!("record-damage {:08x}", amount.to_bits())
-            }
-            Self::Phase(name) => name.into(),
-            Self::ArmorHurt { amount, .. } => format!("hurt-armor {:08x}", amount.to_bits()),
-            Self::DamageBroadcast { .. } => "broadcast-damage".into(),
-            Self::Criterion { .. } => "hurt-criterion".into(),
-        }
-    }
-}
 pub(crate) struct Updates<'a>(pub(crate) &'a mut Vec<MotionEvent>);
 impl Observer for Updates<'_> {
     type Error = io::Error;
@@ -256,39 +233,11 @@ impl PlayerHealth {
             self.hurt_animation_time -= 1;
         }
     }
-    /// `LivingEntity.animateHurt` / `handleDamageEvent` on a client: the hurt
-    /// tilt and red flash restart.
-    pub fn animate_hurt(&mut self) {
-        self.hurt.hurt_duration = 10;
-        self.hurt.hurt_time = 10;
-        self.hurt_animation_time = 10;
-    }
-    /// `LivingEntity.animateHurt(yaw)` on a player: the tilt restarts around
-    /// `yaw` (`Player.animateHurt` keeps it as `hurtDir`).
-    pub fn animate_hurt_dir(&mut self, yaw: f32) {
-        self.animate_hurt();
-        self.hurt_dir = yaw;
-    }
     /// `ServerPlayer.indicateDamage`: the hit's direction relative to where
     /// the player looks, kept for the packet to its client.
     pub fn indicate_damage(&mut self, xd: f64, zd: f64, yaw: f32) {
         use horizon_core::geometry::trig::{RAD_TO_DEG, atan2};
         self.indicated_dir = Some((atan2(zd, xd) * f64::from(RAD_TO_DEG) - f64::from(yaw)) as f32);
-    }
-    /// `LocalPlayer.hurtTo` with `flashOnSetHealth`: a drop below the current
-    /// health starts the hurt animation; `damageCooldownTime` (20 on a drop,
-    /// 10 on a gain) is what lets `Hud.extractPlayerHealth` blink the hearts.
-    pub fn flash_health_change(&mut self, health: f32) {
-        let damage = self.health() - health;
-        if damage <= 0.0 {
-            if damage < 0.0 {
-                self.hurt.cooldown = 10;
-            }
-        } else {
-            self.hurt.last_hurt = damage;
-            self.hurt.cooldown = 20;
-            self.animate_hurt();
-        }
     }
 }
 impl PlayerMotion {

@@ -3,14 +3,14 @@
 //! Every release carries `SHA256SUMS` (`sha256sum`'s format, `<hex>  <file>` per line) and
 //! `SHA256SUMS.sig`: one base64 Ed25519 signature per line, each over `horizon release <tag>\n`
 //! followed by SHA256SUMS's bytes, so a signed list can't be passed off under another tag.
-//! release.yml and launcher.yml sign with the key(s) in the `release` environment's secrets
-//! (tools/ci/sign_release.sh, OpenSSL only); the launcher and `horizon-server update` check a
+//! release.yml signs with the key(s) in the `release` environment's secrets
+//! (tools/ci/sign_release.sh, OpenSSL only); `horizon-server update` checks a
 //! download against the public keys built in from `release-keys.txt` before installing it, and
-//! refuse it otherwise.
+//! refuses it otherwise.
 //!
 //! Releases published before signing began carry no SHA256SUMS. Their archives' SHA-256s are
-//! pinned in `legacy-releases.txt` (taken from GitHub when signing began, by
-//! tools/ci/legacy_releases.py), so they stay installable for a rollback without trusting
+//! pinned in `legacy-releases.txt` (taken from GitHub once, when signing
+//! began), so they stay installable for a rollback without trusting
 //! whatever GitHub serves for them later.
 
 use base64::{Engine, engine::general_purpose::STANDARD};
@@ -114,9 +114,9 @@ pub fn verify(
     parse_sums(text)
 }
 
-/// The channel nightly builds are signed for (nightly-build.yml): their message is
-/// `horizon release nightly`, which no release's tag is, so a nightly's signature never passes for a
-/// release's, nor a release's for a nightly's.
+/// The channel nightly builds were signed for (upstream's Nightly; no workflow builds one now):
+/// their message is `horizon release nightly`, which no release's tag is, so a nightly's signature
+/// never passes for a release's, nor a release's for a nightly's.
 pub const NIGHTLY: &str = "nightly";
 
 /// Whether `tag` is a nightly's: `nightly`, or a past one kept as `nightly-<date>`.

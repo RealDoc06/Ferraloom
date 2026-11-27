@@ -30,10 +30,6 @@ const BUCKETS: [Bucket; 7] = [
     Bucket::Side(1, false),
 ];
 const OTHER: usize = 2;
-/// How far, in blocks, the eye must be behind a bucket's planes before the
-/// bucket is left out. The renderer computes both the eye and the section
-/// origins in `f32`, with errors far below this.
-const MARGIN: f32 = 1.0 / 16.0;
 
 #[derive(Clone, Copy)]
 enum Bucket {
@@ -52,55 +48,6 @@ pub struct Sides {
     /// Per bucket facing a positive direction, its lowest plane; facing a
     /// negative one, its highest (unused for the other bucket).
     planes: [f32; 7],
-}
-
-impl Sides {
-    /// `quads` solid quads in one bucket drawn from everywhere: for meshes
-    /// that were not sorted.
-    pub fn unsorted(quads: u32) -> Self {
-        let mut ends = [0; 7];
-        ends[OTHER..].fill(quads);
-        Self {
-            ends,
-            planes: [0.0; 7],
-        }
-    }
-
-    /// The number of solid quads the buckets hold.
-    pub fn quads(&self) -> u32 {
-        self.ends[6]
-    }
-
-    /// Calls `draw(first, count)` for each run of quads an eye at `eye`
-    /// (relative to the mesh's origin) can see the front of, nearest the
-    /// start first. Empty buckets do not break a run.
-    pub fn visible(&self, eye: [f32; 3], mut draw: impl FnMut(u32, u32)) {
-        let mut start = 0;
-        let mut run: Option<u32> = None;
-        for (i, bucket) in BUCKETS.iter().enumerate() {
-            let end = self.ends[i];
-            if end == start {
-                continue;
-            }
-            let seen = match *bucket {
-                Bucket::Side(axis, true) => eye[axis] > self.planes[i] - MARGIN,
-                Bucket::Side(axis, false) => eye[axis] < self.planes[i] + MARGIN,
-                Bucket::Other => true,
-            };
-            match (seen, run) {
-                (true, None) => run = Some(start),
-                (false, Some(first)) => {
-                    draw(first, start - first);
-                    run = None;
-                }
-                _ => {}
-            }
-            start = end;
-        }
-        if let Some(first) = run {
-            draw(first, start - first);
-        }
-    }
 }
 
 /// The bucket of a quad: the axis plane it lies in and the side its
@@ -195,35 +142,6 @@ mod tests {
         .collect()
     }
 
-    fn runs(sides: &Sides, eye: [f32; 3]) -> Vec<(u32, u32)> {
-        let mut out = Vec::new();
-        sides.visible(eye, |first, count| out.push((first, count)));
-        out
-    }
-
-    /// The quads of `solid` whose triangles face `eye`, by their layer.
-    fn front_facing(solid: &[TerrainVertex], eye: [f32; 3]) -> Vec<u16> {
-        let sub = |a: [f32; 3], b: [f32; 3]| [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-        solid
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .filter(|q| {
-                [[0, 1, 2], [0, 2, 3]].iter().any(|t| {
-                    let (e1, e2) = (sub(q[t[1]].pos, q[t[0]].pos), sub(q[t[2]].pos, q[t[0]].pos));
-                    let n = [
-                        e1[1] * e2[2] - e1[2] * e2[1],
-                        e1[2] * e2[0] - e1[0] * e2[2],
-                        e1[0] * e2[1] - e1[1] * e2[0],
-                    ];
-                    let to_eye = sub(eye, q[t[0]].pos);
-                    n[0] * to_eye[0] + n[1] * to_eye[1] + n[2] * to_eye[2] > 0.0
-                })
-            })
-            .map(|q| q[0].layer)
-            .collect()
-    }
-
     #[test]
     fn cube_faces_go_to_their_buckets_in_order() {
         let mut solid = cube([3.0, 4.0, 5.0], 0);
@@ -238,86 +156,6 @@ mod tests {
         assert_eq!(sides.planes[0], 4.0); // +X at x = 4
         assert_eq!(sides.planes[5], 3.0); // -X at x = 3
         assert_eq!(sides.planes[3], 5.0); // +Y at y = 5
-    }
-
-    #[test]
-    fn the_drawn_runs_hold_every_quad_that_faces_the_eye() {
-        // Blocks across a section, with a sloped quad and a bowtie.
-        let mut solid = Vec::new();
-        let mut layer = 0;
-        for origin in [
-            [0.0, 0.0, 0.0],
-            [7.0, 3.0, 12.0],
-            [15.0, 15.0, 15.0],
-            [2.0, 9.0, 4.0],
-        ] {
-            for q in cube(origin, 0).chunks(4) {
-                solid.extend(q.iter().map(|v| TerrainVertex { layer, ..*v }));
-                layer += 1;
-            }
-        }
-        let slope = [
-            [1.0, 1.0, 1.0],
-            [2.0, 1.0, 1.0],
-            [2.0, 2.0, 2.0],
-            [1.0, 2.0, 2.0],
-        ];
-        let bowtie = [
-            [5.0, 1.0, 1.0],
-            [5.0, 2.0, 2.0],
-            [5.0, 1.0, 2.0],
-            [5.0, 2.0, 1.0],
-        ];
-        for corners in [slope, bowtie] {
-            solid.extend(quad(corners, layer));
-            layer += 1;
-        }
-        let sides = sort(&mut solid);
-        assert_eq!(sides.quads(), u32::from(layer));
-        let eyes = [-20.0f32, -0.5, 0.0, 3.5, 8.0, 15.99, 16.0, 30.0];
-        for &x in &eyes {
-            for &y in &eyes {
-                for &z in &eyes {
-                    let eye = [x, y, z];
-                    let mut drawn = Vec::new();
-                    for (first, count) in runs(&sides, eye) {
-                        drawn.extend(
-                            solid[first as usize * 4..(first + count) as usize * 4]
-                                .iter()
-                                .step_by(4)
-                                .map(|v| v.layer),
-                        );
-                    }
-                    for layer in front_facing(&solid, eye) {
-                        assert!(drawn.contains(&layer), "{eye:?} misses quad {layer}");
-                    }
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn runs_merge_across_hidden_and_empty_buckets() {
-        let mut solid = cube([0.0; 3], 0);
-        let sides = sort(&mut solid);
-        // From above, +X and +Z: +X, +Z, (no other), +Y is one run.
-        assert_eq!(runs(&sides, [8.0, 8.0, 8.0]), [(0, 3)]);
-        // From below, -X and -Z: -Z, -X, -Y.
-        assert_eq!(runs(&sides, [-8.0, -8.0, -8.0]), [(3, 3)]);
-        // From above, -X and +Z: +Z, +Y, then -X.
-        assert_eq!(runs(&sides, [-8.0, 8.0, 8.0]), [(1, 2), (4, 1)]);
-        // Inside the block every face is seen from behind.
-        assert!(runs(&sides, [0.5; 3]).is_empty());
-        // Level with its top, the eye may see it: the margin keeps it.
-        assert_eq!(runs(&sides, [0.5, 1.0, 0.5]), [(2, 1)]);
-    }
-
-    #[test]
-    fn unsorted_meshes_draw_everything() {
-        let sides = Sides::unsorted(9);
-        assert_eq!(sides.quads(), 9);
-        assert_eq!(runs(&sides, [-100.0; 3]), [(0, 9)]);
-        assert!(runs(&Sides::unsorted(0), [0.0; 3]).is_empty());
     }
 
     #[test]

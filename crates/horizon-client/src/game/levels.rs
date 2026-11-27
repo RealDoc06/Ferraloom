@@ -54,7 +54,6 @@ pub(super) struct Parked {
     others: Vec<commands::OtherEntity>,
     boats: Vec<boats::Boat>,
     carts: Vec<minecarts::Minecart>,
-    jukebox_sounds: HashMap<(i32, i32, i32), u64>,
     bolts: Vec<lightning::Bolt>,
     crystals: Vec<dragon::Crystal>,
     dragon: Option<dragon::Dragon>,
@@ -78,6 +77,8 @@ pub(super) struct Parked {
     lan_block_events: Vec<([i32; 3], i32, i32, u32)>,
     lan_entity_events: Vec<(i32, i8, [f64; 3])>,
     lan_critical_hits: Vec<(Option<u32>, i32, bool)>,
+    /// The level's sounds not yet sent to its players (`audio.capture`).
+    sounds: Vec<(String, [f64; 3], f32, f32)>,
     /// Only the per-level parts of these are used (`swap_level`).
     anims: BlockEntityAnims,
     raiding: Raiding,
@@ -126,6 +127,33 @@ impl Levels {
     pub(super) fn parked_dims(&self) -> Vec<Dim> {
         self.parked.keys().copied().collect()
     }
+    /// Ferraloom: a parked level's world, its forced chunks and its save
+    /// folder (Bukkit's `World` reaches every dimension, game/plugins/).
+    pub(super) fn parked_world(&self, dim: Dim) -> Option<&World> {
+        self.parked.get(&dim).map(|p| &p.world)
+    }
+    pub(super) fn parked_forced(
+        &mut self,
+        dim: Dim,
+    ) -> Option<&mut std::collections::HashSet<(i32, i32)>> {
+        self.parked.get_mut(&dim).map(|p| &mut p.streaming.forced)
+    }
+    pub(super) fn parked_save_root(&self, dim: Dim) -> Option<std::path::PathBuf> {
+        self.parked.get(&dim).map(|p| p.save.root.clone())
+    }
+}
+
+impl Game<'_> {
+    /// Ferraloom: `dim`'s world wherever its level is, in place or parked,
+    /// to read without swapping it in (Bukkit's `World` reaches every
+    /// dimension); none when the level is not loaded. Writes that need the
+    /// level's ticks and updates go through `enter_command_level`.
+    pub(super) fn level_world(&mut self, dim: Dim) -> Option<&mut World> {
+        if dim == self.dim {
+            return Some(&mut self.world);
+        }
+        self.levels.parked.get_mut(&dim).map(|p| &mut p.world)
+    }
 }
 
 impl Game<'_> {
@@ -160,7 +188,6 @@ impl Game<'_> {
             others: Vec::new(),
             boats: Vec::new(),
             carts: Vec::new(),
-            jukebox_sounds: HashMap::new(),
             bolts: Vec::new(),
             crystals: Vec::new(),
             dragon: None,
@@ -183,6 +210,7 @@ impl Game<'_> {
             lan_block_events: Vec::new(),
             lan_entity_events: Vec::new(),
             lan_critical_hits: Vec::new(),
+            sounds: Vec::new(),
             anims: Default::default(),
             raiding: Default::default(),
             sculk: Default::default(),
@@ -214,7 +242,6 @@ impl Game<'_> {
         swap(&mut self.others, &mut p.others);
         swap(&mut self.boats, &mut p.boats);
         swap(&mut self.carts, &mut p.carts);
-        swap(&mut self.jukebox_sounds, &mut p.jukebox_sounds);
         swap(&mut self.bolts, &mut p.bolts);
         swap(&mut self.crystals, &mut p.crystals);
         swap(&mut self.dragon, &mut p.dragon);
@@ -237,6 +264,11 @@ impl Game<'_> {
         swap(&mut self.lan_block_events, &mut p.lan_block_events);
         swap(&mut self.lan_entity_events, &mut p.lan_entity_events);
         swap(&mut self.lan_critical_hits, &mut p.lan_critical_hits);
+        // A sound raised in a level (a plugin's or a command's work there)
+        // waits with it, to reach its players when it is next flushed.
+        if let Some(sounds) = self.audio.capture.as_mut() {
+            swap(sounds, &mut p.sounds);
+        }
         let (a, b) = (&mut self.be_anims, &mut p.anims);
         swap(&mut a.chests, &mut b.chests);
         swap(&mut a.books, &mut b.books);
@@ -253,7 +285,6 @@ impl Game<'_> {
         self.creaking.swap_level(&mut p.creaking);
         // What only the client draws starts over.
         self.particles.clear();
-        self.pickups.clear();
     }
 
     /// Put `target`'s level in place, opening it first if it is not loaded.
@@ -261,10 +292,6 @@ impl Game<'_> {
     /// clock and weather go with the swap. `host` is the hub when the caller
     /// holds it (`self.lan` is taken during the network tick).
     pub(super) fn enter_level(&mut self, host: Option<&mut LanHost>, target: Dim) -> Result<()> {
-        // The in-frame game keeps its one level (`enter_dimension`).
-        if self.options.execution_role.is_client() {
-            return Ok(());
-        }
         if target != self.dim {
             let (mut p, opened) = match self.levels.parked.remove(&target) {
                 Some(p) => (p, false),
@@ -302,7 +329,7 @@ impl Game<'_> {
     /// nobody is in it; returns the level to put back afterwards. Only a
     /// server holds other levels.
     pub(super) fn enter_command_level(&mut self, dim: Dim) -> Option<Dim> {
-        if self.options.execution_role.is_client() || dim == self.dim {
+        if dim == self.dim {
             return None;
         }
         let back = self.dim;
@@ -471,6 +498,9 @@ impl Game<'_> {
                 p.idle = 0;
                 continue;
             }
+            // Nobody is there to hear what a plugin or a command raised in a
+            // level that does not tick, and nothing else would drain it.
+            p.sounds.clear();
             p.idle += 1;
             if *dim != Dim::Overworld && p.idle >= IDLE_TICKS {
                 closing.push(*dim);

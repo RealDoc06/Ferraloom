@@ -1,9 +1,7 @@
 # A server's levels: one per dimension
 
 Vanilla's `MinecraftServer` holds a `ServerLevel` per dimension, and each player is in one of them.
-Horizon's server does the same. That covers the dedicated server and single player's server thread
-(`Game::serving`, the default since #1114). So a LAN world's host and each guest can be in different
-dimensions at the same time.
+Horizon's server does the same, so each player of the dedicated server can be in a different dimension.
 
 ## How the single-level `Game` maps onto vanilla's levels
 
@@ -26,28 +24,18 @@ the other dimensions' levels as `Parked` values and swaps one into place (`enter
 The packets of a guest are read in its own level's pass (`Hub::tick_level`), so its actions and
 commands run with its level in place.
 
-The window's own game (`--in-frame`, `--no-server-thread`, `HORIZON_SERVER_THREAD=0`, and the command
-harness) keeps one level, which follows its player (`enter_dimension`). LAN guests of a world run that way
-stay in the host's dimension. That mode is the escape hatch, so it gets no multi-level work.
+## The execution role
 
-## One code path for both
-
-The dedicated server and the server thread are the same code. Each `Game` has an explicit
-`ExecutionRole`: `Client`, `IntegratedServer` or `DedicatedServer`, selected before construction in
-`Options.execution_role`. Startup, world loading and opening other dimensions use that role. Only
-clients mesh chunks and show loading progress; a client can still run its simulation in-frame.
-Connecting or disconnecting changes `remote`, independently of the execution role.
-
-The server thread has a hub without a host player. The window joins it through memory as one
-more player. It still sets `options.dedicated` for gameplay checks outside the role migration's
-startup/world-loading scope. Everything above serves both servers, and `server_dimension_players`
-(vanilla clients on Horizon's dedicated server) and `lan_e2e --server-thread` (Horizon clients on the
-server thread) check it from the two sides.
+Each `Game` has an explicit `ExecutionRole` (`game/execution_role.rs`), fixed at construction:
+`DedicatedServer` for `--dedicated`, `IntegratedServer` for the component fixtures' server `Game`
+(`game/integrated.rs`). Startup, world loading and opening other dimensions use it.
+`server_dimension_players` checks the levels with vanilla-codec clients against vanilla's dedicated server.
 
 ## Cost of an extra level
 
-Measured on the Mac mini (M4 Pro) at render distance 12, on 2026-10-22. The host and a guest each
-played a fresh world on the server thread. RSS is the host's whole process, window included. Tick time
+Measured on the Mac mini (M4 Pro) at render distance 12, on 2026-10-22, before the client was removed: the host
+and a guest each played a fresh world on single player's server thread. RSS is the host's whole process, window
+included. Tick time
 is `/tick query`'s average over 100 ticks.
 
 | Where the players are | Average tick | P95 | Host RSS |
@@ -72,27 +60,14 @@ the Nether, or whose host saves and quits, joins again in the Nether where it wa
 
 ## What's checked
 
-`python3 tools/lan_e2e.py --server-thread --check portals --check levels`:
-
-- `portals`: the guest goes to the Nether through a portal while the host stays. The host then goes
-  to the End while the guest is in the Nether, so three levels run at once, and both come back.
-- `levels`, with the host and the guest each in a level of its own:
-  - `execute in the_nether run tp` moves the guest alone. From the Nether, `execute in overworld` and
-    `execute at` the host change and test blocks in the host's level.
-  - Mobs and armour stands fall in two levels at once, and every entity id is unique across the
-    levels.
-  - The guest leaves in the Nether and joins again there.
-  - The guest dies in the Nether and respawns in the Overworld. With a `spawnpoint` and then a
-    respawn anchor set in the Nether, it respawns there, and the anchor loses a charge.
-  - The host takes a Nether portal alone.
-  - The guest takes an End portal, an End gateway and then the exit portal alone.
-  - The host saves, quits and opens the world again with the guest in the Nether, and the guest
-    joins again there.
+`python3 tools/parity.py server_dimension_players`: vanilla-codec players on Ferraloom's dedicated server and
+vanilla's, each in a level of its own, through portals and `execute in … tp`. The broader LAN checks that used
+to cover portals, respawn anchors and rejoining in the Nether drove Horizon's own client and were removed with it.
 
 ## Not done yet
 
 - **End credits for server players.** The first exit from the End should show a player the credits
-  (`EndPortalBlock.entityInside`, `seenCredits`). The client's WinScreen is #338.
+  (`EndPortalBlock.entityInside`, `seenCredits`).
 - **Entities through portals between levels.** Mobs, items and minecarts that enter a portal on a
   server, and portal tickets (`TeleportTransition.PLACE_PORTAL_TICKET`), are not handled.
 - **Unlimited selectors.** `@e` without a distance or volume reads only the source's level. Vanilla's

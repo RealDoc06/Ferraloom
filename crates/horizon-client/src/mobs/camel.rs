@@ -2,7 +2,6 @@
 //! then, dashing instead of jumping, eating cactus, always "tame".
 use super::{
     Mob, MobEvent,
-    anim::{Poses, State},
     goals::{
         Breed, Cx, Float, FollowParent, Goal, LookAtPlayer, MOVE, Panic, RandomLookAround, Stroll,
         Tempt, goal_clone,
@@ -10,7 +9,6 @@ use super::{
 };
 use horizon_core::geometry::trig::Mth;
 use horizon_core::random::RandomSource;
-use std::collections::HashMap;
 
 // Camel state: `egg_time` the last pose change tick (negative while
 // sitting), `anim_ticks` the dash cooldown, `flag2` dashing, `ints[0]` the
@@ -46,24 +44,11 @@ pub fn sitting(m: &Mob) -> bool {
 fn in_transition(m: &Mob) -> bool {
     pose_time(m) < if sitting(m) { SIT_DOWN } else { STAND_UP }
 }
-/// `Camel.getPoseTime` of a client mob from the `LAST_POSE_CHANGE_TICK` it
-/// was sent and the client's game time, and whether that value says it sits.
-fn client_pose(m: &Mob, game_time: i64) -> (i64, bool) {
-    let tick = m.extra.pose_change_tick;
-    (game_time - tick.abs(), tick < 0)
-}
 /// The camel's `LAST_POSE_CHANGE_TICK` as the server sends it: in game time
 /// (a mob counts its own age), negative while sitting.
 pub fn synced_pose_tick(m: &Mob, game_time: i64) -> i64 {
     let tick = (game_time - pose_time(m)).max(0);
     if sitting(m) { -tick.max(1) } else { tick }
-}
-/// `Entity.onSyncedDataUpdated` for the pose tick of a client mob: its sign
-/// is whether it sits. `client_tick` keeps `egg_time` (in the mob's age, for
-/// `sitting` and `refuse_to_move`) with it.
-pub fn set_synced_pose_tick(m: &mut Mob, tick: i64) {
-    m.extra.pose_change_tick = tick;
-    m.extra.egg_time = if tick < 0 { -1 } else { 0 };
 }
 /// `Camel.refuseToMove`: sitting or getting up or down.
 pub fn refuse_to_move(m: &Mob) -> bool {
@@ -188,17 +173,6 @@ pub fn ai_step(m: &mut Mob, events: &mut Vec<MobEvent>) {
     }
     animation_states(m, pose_time(m), sitting(m));
 }
-/// `Camel.tick` on a client that is not the server: the dash cooldown, which
-/// the dash flag starts, and the keyframe states from the synced pose tick.
-pub fn client_tick(m: &mut Mob, game_time: i64) {
-    if m.extra.anim_ticks > 0 {
-        m.extra.anim_ticks -= 1;
-    }
-    let (pose_time, sitting) = client_pose(m, game_time);
-    let since = (i64::from(m.age) - pose_time).max(0) as i32;
-    m.extra.egg_time = if sitting { -since.max(1) } else { since };
-    animation_states(m, pose_time, sitting);
-}
 /// `Camel.onSyncedDataUpdated(DASH)`: a dash starts the cooldown unless it
 /// runs. Not on the first tick.
 pub fn set_dashing(m: &mut Mob, dashing: bool) {
@@ -254,42 +228,4 @@ pub fn dash(m: &mut Mob, amount: f32, events: &mut Vec<MobEvent>) {
     m.extra.anim_ticks = DASH_COOLDOWN;
     m.extra.flag2 = true;
     sound(m, voice(m, 3), events);
-}
-/// `CamelModel.setupAnim`.
-pub fn anim(
-    m: &Mob,
-    s: &State,
-    p: &mut Poses,
-    animations: &HashMap<String, super::keyframes::Animation>,
-) {
-    let mut y = s.y_rot.clamp(-30.0, 30.0);
-    let mut x = s.x_rot.clamp(-25.0, 45.0);
-    let cooldown = (m.extra.anim_ticks as f32 - s.partial).max(0.0);
-    if cooldown > 0.0 {
-        x = (x + 45.0 * cooldown / 55.0).clamp(-25.0, 70.0);
-    }
-    y = y.to_radians();
-    p.yrot("head", y);
-    p.xrot("head", x.to_radians());
-    let prefix = if m.is_baby() {
-        "CamelBabyAnimation.CAMEL_BABY_"
-    } else {
-        "CamelAnimation.CAMEL_"
-    };
-    let get = |n: &str| animations.get(&format!("{prefix}{n}"));
-    if let Some(walk) = get("WALK") {
-        walk.apply_walk(s.pos, s.speed, 2.0, 2.5, p);
-    }
-    let age = s.age;
-    for (state, name) in [
-        (&m.anim.states[0], "SIT"),
-        (&m.anim.states[1], "SIT_POSE"),
-        (&m.anim.states[2], "STANDUP"),
-        (&m.anim.states[3], "IDLE"),
-        (&m.anim.states[4], "DASH"),
-    ] {
-        if let (Some(ms), Some(a)) = (state.millis(age), get(name)) {
-            a.apply(ms, 1.0, p);
-        }
-    }
 }

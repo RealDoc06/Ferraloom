@@ -569,7 +569,12 @@ fn player_damage(e: &MobEvent) -> f32 {
     match e {
         MobEvent::AttackPlayer(amount, _)
         | MobEvent::AttackPlayerWithEffect { amount, .. }
-        | MobEvent::DamagePlayer { amount, .. } => *amount,
+        | MobEvent::DamagePlayer { amount, .. }
+        | MobEvent::Sting {
+            target: Who::Player,
+            amount,
+            ..
+        } => *amount,
         MobEvent::SonicBoom {
             target: Who::Player,
             ..
@@ -586,7 +591,12 @@ fn player_hurt(player: Option<&PlayerView>, e: &MobEvent) -> bool {
     match e {
         MobEvent::AttackPlayer(amount, _)
         | MobEvent::AttackPlayerWithEffect { amount, .. }
-        | MobEvent::DamagePlayer { amount, .. } => *amount > 0.0,
+        | MobEvent::DamagePlayer { amount, .. }
+        | MobEvent::Sting {
+            target: Who::Player,
+            amount,
+            ..
+        } => *amount > 0.0,
         MobEvent::SonicBoom {
             target: Who::Player,
             ..

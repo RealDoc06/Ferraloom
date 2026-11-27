@@ -4,13 +4,17 @@
 //! mount's health and jump bar on the HUD.
 use super::Game;
 use horizon_client::{
-    hud::HudBatch,
     items::ItemStack,
     mobs::{MobEvent, Species, equine},
     sprint::Keys,
 };
 use horizon_core::{geometry::Vec3, random::RandomSource};
 
+/// `LivingEntity.getVoicePitch`, from the mob's own random.
+fn voice_pitch(m: &mut horizon_client::mobs::Mob) -> f32 {
+    let base = if m.is_baby() { 1.5 } else { 1.0 };
+    (m.random.next_float() - m.random.next_float()) * 0.2 + base
+}
 /// `passengerAttachments` minus the player's 0.6 vehicle attachment.
 fn seat(s: Species) -> f64 {
     let attach = match s {
@@ -66,7 +70,7 @@ impl Game<'_> {
                 .insert((at[0].floor() as i32 >> 4, at[2].floor() as i32 >> 4));
             return true;
         }
-        if !m.extra.saddled || self.keys.contains(&winit::keyboard::KeyCode::ShiftLeft) {
+        if !m.extra.saddled || self.keys.contains(&crate::game::keys::KeyCode::ShiftLeft) {
             return false;
         }
         self.riding = Some(m.id);
@@ -142,8 +146,8 @@ impl Game<'_> {
         // AbstractHorse.mobInteract: shift + use opens a tamed adult's inventory.
         if !m.is_baby()
             && m.extra.tame
-            && (self.keys.contains(&winit::keyboard::KeyCode::ShiftLeft)
-                || self.keys.contains(&winit::keyboard::KeyCode::ShiftRight))
+            && (self.keys.contains(&crate::game::keys::KeyCode::ShiftLeft)
+                || self.keys.contains(&crate::game::keys::KeyCode::ShiftRight))
         {
             self.open_mount_menu(index);
             return true;
@@ -351,7 +355,7 @@ impl Game<'_> {
             pitch: self.pitch,
             jump: if jump > 0.0 { jump } else { pending },
             steer,
-            sprint: keys.sprint || self.keys.contains(&winit::keyboard::KeyCode::ControlLeft),
+            sprint: keys.sprint || self.keys.contains(&crate::game::keys::KeyCode::ControlLeft),
             jumping: keys.jump,
         });
         true
@@ -482,50 +486,67 @@ impl Game<'_> {
             _ => {}
         }
     }
+    /// Ferraloom: port of ServerGamePacketListenerImpl#handlePlayerCommand
+    /// START_RIDING_JUMP for guest `gi`, whose client drives the jump itself:
+    /// the server's `PlayerRideableJumping.handleStartJump` of the mount they
+    /// control, when it `canJump` and the jump has strength (`data`, 1..100).
+    /// STOP_RIDING_JUMP needs no port: every `handleStopJump` is empty.
+    pub(super) fn guest_riding_jump(
+        &mut self,
+        host: &horizon_client::lan::hub::Hub,
+        gi: usize,
+        data: i32,
+    ) {
+        let g = &host.guests[gi];
+        let Some(vehicle) = g.vehicle.filter(|_| g.loaded && data > 0) else {
+            return;
+        };
+        let Some(m) = self.mobs.iter_mut().find(|m| m.id == vehicle) else {
+            return;
+        };
+        // getControlledVehicle and canJump: a saddled one (llamas never are).
+        let species = m.species();
+        if !m.extra.saddled || !Self::jumps(species) {
+            return;
+        }
+        let at = [m.position.x, m.position.y, m.position.z];
+        let (sound, volume, pitch) = if horizon_client::mobs::camel::is_camel(species) {
+            // Camel.handleStartJump, once it is neither sitting nor standing up:
+            // makeSound(getDashingSound()) and setDashing(true).
+            if horizon_client::mobs::camel::refuse_to_move(m) {
+                return;
+            }
+            horizon_client::mobs::camel::set_dashing(m, true);
+            let sound = horizon_client::mobs::camel::voice(m, 3);
+            (sound, 1.0, voice_pitch(m))
+        } else if horizon_client::mobs::nautilus::is_nautilus(species) {
+            // AbstractNautilus.handleStartJump: setDashing(true) (its
+            // onSyncedDataUpdated starts the cooldown); its own next tick
+            // plays the dash sound, as for the host's dash.
+            if m.extra.anim_ticks == 0 {
+                m.extra.anim_ticks = 40;
+            }
+            m.extra.flag2 = true;
+            m.extra.scratch[1] = 1;
+            return;
+        } else {
+            // AbstractHorse.handleStartJump: standIfPossible (all but llamas,
+            // setStanding(20)) and playJumpSound.
+            m.extra.counter = 20;
+            m.extra.flag = false;
+            let sound = match species {
+                Species::Donkey => "entity.donkey.jump",
+                Species::Mule => "entity.mule.jump",
+                Species::SkeletonHorse if m.fluids.in_water => "entity.skeleton_horse.jump_water",
+                _ => "entity.horse.jump",
+            };
+            (sound, 0.4, 1.0)
+        };
+        self.audio
+            .play(&format!("minecraft:{sound}"), Some(at), volume, pitch);
+    }
     /// `PlayerRideableJumping`: horses, camels and nautili (the dash).
     fn jumps(species: Species) -> bool {
         equine::is_equine(species) || horizon_client::mobs::nautilus::is_nautilus(species)
-    }
-    /// `Player.jumpableVehicle`: a saddled mount that jumps (not a pig or a
-    /// strider, which a saddle only steers).
-    pub(super) fn jumpable_mount(&self) -> bool {
-        self.mount_index()
-            .is_some_and(|i| self.mobs[i].extra.saddled && Self::jumps(self.mobs[i].species()))
-    }
-    /// `willPrioritizeJumpInfo`: charging a jump or recharging.
-    pub(super) fn mount_jumping(&self) -> bool {
-        self.mount.jump_scale > 0.0 || self.mount.jump_ticks < 0
-    }
-    /// `Hud.extractVehicleHealth`, and the jump bar when it is the
-    /// contextual bar (`jump_bar`). Returns the mount's heart count
-    /// (`getVehicleMaxHearts`).
-    pub(super) fn draw_mount_hud(
-        &self,
-        batch: &mut HudBatch,
-        w: i32,
-        h: i32,
-        jump_bar: bool,
-    ) -> i32 {
-        let Some(i) = self.mount_index() else {
-            return 0;
-        };
-        let m = &self.mobs[i];
-        let atlas = &self.gui.atlas;
-        let hearts = horizon_client::hud_layout::vehicle_max_hearts(m.attrs.max_health);
-        let draws = horizon_client::hud_layout::vehicle_health(w, h, hearts, m.health);
-        horizon_client::hud_layout::paint(batch, atlas, &draws);
-        if jump_bar {
-            // JumpableVehicleBar: `getJumpCooldown`, which only the camel's and
-            // the nautilus' dash have; a horse always shows the progress.
-            let cooldown = i32::from(
-                self.mount.jump_ticks < 0
-                    && (matches!(m.species(), Species::Camel | Species::CamelHusk)
-                        || horizon_client::mobs::nautilus::is_nautilus(m.species())),
-            );
-            let draws =
-                horizon_client::hud_overlays::jump_bar(w, h, cooldown, self.mount.jump_scale);
-            horizon_client::hud_layout::paint(batch, atlas, &draws);
-        }
-        hearts
     }
 }

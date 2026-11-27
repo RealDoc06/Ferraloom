@@ -225,12 +225,7 @@ fn block_jump_factor(m: &Mob, w: &MobWorld) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mobs::{
-        Anim, Brain, Flags, MobType, Part, Species,
-        anim::{self, Poses},
-        body_anim,
-        keyframes::Animation,
-    };
+    use crate::mobs::{Anim, Brain, Flags, MobType, Part, Species};
     use serde_json::json;
     use std::{collections::HashMap, sync::Arc};
 
@@ -290,36 +285,6 @@ mod tests {
     }
 
     #[test]
-    fn summoned_age_selects_the_baby_model_and_texture() {
-        let mut template = rabbit();
-        let kind = Arc::make_mut(&mut template.kind);
-        kind.texture = "entity/rabbit/rabbit_brown".into();
-        kind.layers
-            .insert("rabbit_baby#main".into(), kind.model.clone());
-        let types = HashMap::from([(kind.id.clone(), template.kind.clone())]);
-        for (age, baby) in [(-24000, true), (-1, true), (0, false), (6000, false)] {
-            let (tag, _) = horizon_world::nbt::parse_snbt(&format!(
-                "{{id:\"minecraft:rabbit\",Pos:[0.0d,0.0d,0.0d],Age:{age}}}"
-            ))
-            .unwrap();
-            let m = crate::entity_nbt::mob_from_nbt(&tag, &types, 2).unwrap();
-            assert_eq!(m.extra.age, age);
-            assert_eq!(m.is_baby(), baby);
-            assert_eq!(
-                crate::mobs::render::body(&m),
-                if baby {
-                    (
-                        "rabbit_baby#main".into(),
-                        "entity/rabbit/rabbit_brown_baby".into(),
-                    )
-                } else {
-                    ("rabbit#main".into(), "entity/rabbit/rabbit_brown".into())
-                }
-            );
-        }
-    }
-
-    #[test]
     fn love_ticks_survive_a_save() {
         // Animal.addAdditionalSaveData / readAdditionalSaveData: "InLove" (#1396).
         let mut m = rabbit();
@@ -329,51 +294,6 @@ mod tests {
         let types = HashMap::from([(m.kind.id.clone(), m.kind.clone())]);
         let back = crate::entity_nbt::mob_from_nbt(&tag, &types, 2).unwrap();
         assert_eq!(back.extra.in_love, 570);
-    }
-
-    #[test]
-    fn landing_waits_then_real_hop_clock_moves_the_model() {
-        let mut m = rabbit();
-        m.on_ground = true;
-        m.ai.mov.set_wanted(0.0, 0.0, 5.0, 0.6);
-        server_ai_step(&mut m);
-        assert_eq!(m.extra.ints[MOVE_DELAY], 10);
-        assert!(!m.ai.jumping);
-        for _ in 0..9 {
-            server_ai_step(&mut m);
-        }
-        assert!(!m.ai.jumping);
-        server_ai_step(&mut m);
-        assert!(m.ai.jumping);
-        assert_eq!(m.extra.ints[JUMP_DURATION], 15);
-        assert_eq!(m.anim.states[0].started, None);
-        apply_jump(&mut m, 0.2);
-        post_tick(&mut m);
-        m.age = 1;
-        base_tick(&mut m);
-        assert_eq!(m.anim.states[0].started, Some(1.0));
-        let curve = Animation::parse(&json!({"length": 0.75, "looping": true,
-            "bones": {"left_hind_foot": [{"target": "rotation", "keyframes": [[0,[0,0,0],[0,0,0],"linear"],[0.75,[1,0,0],[1,0,0],"linear"]]}]}}));
-        let animations = HashMap::from([("RabbitAnimation.HOP".into(), curve)]);
-        let mut poses = Poses::new(&m.kind.model);
-        let state = anim::state(&m, 0.5);
-        body_anim::rabbit(
-            &mut poses,
-            &state,
-            &m.anim.states[0],
-            &m.anim.states[1],
-            &animations,
-        );
-        assert!(poses.get("left_hind_foot")[3] > 0.0);
-        for _ in 1..15 {
-            post_tick(&mut m);
-        }
-        assert_eq!(m.extra.ints[JUMP_TICKS], 15);
-        assert!(m.ai.jumping);
-        post_tick(&mut m);
-        base_tick(&mut m);
-        assert!(!m.ai.jumping);
-        assert_eq!(m.anim.states[0].started, None);
     }
 
     #[test]

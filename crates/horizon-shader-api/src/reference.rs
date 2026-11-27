@@ -33,7 +33,7 @@ pub fn markdown() -> String {
     let mut out = format!(
         "# Shader API reference ({API})\n\n\
          Generated from `crates/horizon-shader-api` (`HORIZON_WRITE_DOCS=1 cargo test -p horizon-shader-api --test reference`\n\
-         rewrites it; the test fails when it drifts). The API's design and pack format: [shaders.md](shaders.md).\n\n\
+         rewrites it; the test fails when it drifts).\n\n\
          A stage is a function your WGSL defines, with the signature below; Horizon puts the prelude (these structs, the\n\
          resources and helpers) before your files and calls the function from its own pass. Your files declare no\n\
          bindings and no entry points, and no names starting with `horizon_`.\n\n\
@@ -85,8 +85,8 @@ pub fn markdown() -> String {
          - Per stage: {MAX_EXPRESSIONS} naga expressions over all its functions, {MAX_TEXTURE_READS} texture reads (samples,\n  \
          gathers and loads, the prelude's included).\n\n\
          ## The check\n\n\
-         A pack runs only after it passes `horizon_shader_api::check` (the game when it loads a pack, the launcher before it\n\
-         installs one, the registry's CI): each stage is parsed and validated by naga, checked against its signature and\n\
+         A pack runs only after it passes `horizon_shader_api::check` (the registry's CI, `cargo horizon-mod` and\n\
+         `horizon-shader check`): each stage is parsed and validated by naga, checked against its signature and\n\
          the rules above, and translated for Vulkan (SPIR-V), Metal and DirectX 12 (HLSL) with its options at their\n\
          defaults, minimums and maximums. Every option must be an `override` of its type in some stage; an `override`\n\
          that is no option needs a default.\n",

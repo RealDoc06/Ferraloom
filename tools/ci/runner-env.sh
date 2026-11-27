@@ -45,4 +45,3 @@ else
     { echo "RUSTC_WRAPPER=$sccache"; echo "CARGO_INCREMENTAL=0"; } >> "$GITHUB_ENV"
   fi
 fi
-echo "HORIZON_NO_AUDIO=1" >> "$GITHUB_ENV"

@@ -4,7 +4,6 @@
 //! the elder's mining fatigue curse every minute.
 use super::{
     Damage, DamageKind, Mob, MobEvent, MobWorld, Species, Who,
-    anim::{Poses, State},
     control::{MoveKind, Operation, rotlerp},
     goals::{
         Cx, Goal, LOOK, LookAtPlayer, MOVE, NearestTarget, RandomLookAround, Stroll, goal_clone,
@@ -14,7 +13,6 @@ use super::{
 };
 use horizon_core::geometry::trig::Mth;
 use horizon_core::{geometry::Vec3, random::RandomSource};
-use std::f32::consts::PI;
 
 // Guardian state: `flag` an active beam target (DATA_ID_ATTACK_TARGET),
 // `flag2` moving (DATA_ID_MOVING), `counter2` the client attack time.
@@ -364,124 +362,4 @@ pub fn beam(m: &Mob, partial: f32) -> Option<(f32, f32)> {
     }
     let time = m.extra.counter2 as f32 + partial;
     Some((time, time / attack_duration(m) as f32))
-}
-/// `GuardianRenderer.renderBeam` from `eye` to `target` (world minus
-/// camera): the four rotating sides and the end cap. The texture's V
-/// repeats along the beam, so the sides are cut at each repeat.
-pub fn beam_geometry(
-    eye: glam::Vec3,
-    target: glam::Vec3,
-    time: f32,
-    scale: f32,
-    uv: [f32; 4],
-    out: &mut Vec<crate::mesher::Vertex>,
-) {
-    let v = target - eye;
-    let length = v.length() + 1.0;
-    let dir = v.normalize_or_zero();
-    let x_rot = dir.y.clamp(-1.0, 1.0).acos();
-    let y_rot = std::f32::consts::FRAC_PI_2 - dir.z.atan2(dir.x);
-    let pose = glam::Mat4::from_translation(eye)
-        * glam::Mat4::from_rotation_y(y_rot)
-        * glam::Mat4::from_rotation_x(x_rot);
-    let rot = time * 0.05 * -1.5;
-    let cs = scale * scale;
-    let (r, g, b) = (
-        64 + (cs * 191.0) as u32,
-        32 + (cs * 191.0) as u32,
-        128u32.saturating_sub((cs * 64.0) as u32),
-    );
-    let color = 0xFF00_0000 | (b.min(255) << 16) | (g.min(255) << 8) | r.min(255);
-    let at = |a: f32, radius: f32| (a.mcos() * radius, a.msin() * radius);
-    let quarter = std::f32::consts::FRAC_PI_4;
-    let (wx, wz) = at(rot + PI, 0.2);
-    let (ex, ez) = at(rot, 0.2);
-    let (nx, nz) = at(rot + PI / 2.0, 0.2);
-    let (sx, sz) = at(rot + PI * 1.5, 0.2);
-    let (wnx, wnz) = at(rot + quarter * 3.0, 0.282);
-    let (enx, enz) = at(rot + quarter, 0.282);
-    let (wsx, wsz) = at(rot + quarter * 5.0, 0.282);
-    let (esx, esz) = at(rot + quarter * 7.0, 0.282);
-    let tex_off = (time * 0.5) % 1.0;
-    let min_v = -1.0 + tex_off;
-    let max_v = min_v + length * 2.5;
-    let atlas = |u: f32, v: f32| [uv[0] + (uv[2] - uv[0]) * u, uv[1] + (uv[3] - uv[1]) * v];
-    let mut push = |p: [f32; 3], t: [f32; 2]| {
-        out.push(crate::mesher::Vertex {
-            normal: [0; 4],
-            pos: pose.transform_point3(glam::Vec3::from(p)).to_array(),
-            uv: t,
-            layer: 0,
-            color,
-            light: 240 | 240 << 8,
-
-            glint_uv: [0.0, 0.0],
-        });
-    };
-    // Sides: one quad per texture repeat.
-    let mut k = min_v.floor();
-    while k < max_v {
-        let (v0, v1) = (min_v.max(k), max_v.min(k + 1.0));
-        let (y0, y1) = (
-            (v0 - min_v) / (max_v - min_v) * length,
-            (v1 - min_v) / (max_v - min_v) * length,
-        );
-        let (t0, t1) = (v0 - k, v1 - k);
-        for (a, c) in [((wx, wz), (ex, ez)), ((nx, nz), (sx, sz))] {
-            push([a.0, y1, a.1], atlas(0.4999, t1));
-            push([a.0, y0, a.1], atlas(0.4999, t0));
-            push([c.0, y0, c.1], atlas(0.0, t0));
-            push([c.0, y1, c.1], atlas(0.0, t1));
-        }
-        k += 1.0;
-    }
-    let base = if (time.floor() as i32) % 2 == 0 {
-        0.5
-    } else {
-        0.0
-    };
-    push([wnx, length, wnz], atlas(0.5, base + 0.5));
-    push([enx, length, enz], atlas(1.0, base + 0.5));
-    push([esx, length, esz], atlas(1.0, base));
-    push([wsx, length, wsz], atlas(0.5, base));
-}
-/// `GuardianModel.setupAnim`: head, spikes by withdrawal, the eye toward
-/// what it looks at, and the tail.
-pub fn anim(m: &Mob, s: &State, p: &mut Poses) {
-    p.yrot("head", s.y_rot.to_radians());
-    p.xrot("head", s.x_rot.to_radians());
-    let spikes = m.anim.lerp(SPIKES, s.partial);
-    let withdrawal = (1.0 - spikes) * 0.55;
-    const X: [f32; 12] = [
-        0.0, 0.0, 8.0, -8.0, -8.0, 8.0, 8.0, -8.0, 0.0, 0.0, 8.0, -8.0,
-    ];
-    const Y: [f32; 12] = [
-        -8.0, -8.0, -8.0, -8.0, 0.0, 0.0, 0.0, 0.0, 8.0, 8.0, 8.0, 8.0,
-    ];
-    const Z: [f32; 12] = [
-        8.0, -8.0, 0.0, 0.0, -8.0, -8.0, 8.0, 8.0, 8.0, -8.0, 0.0, 0.0,
-    ];
-    for i in 0..12 {
-        let offset = 1.0 + (s.age * 1.5 + i as f32).mcos() * 0.01 - withdrawal;
-        let part = p.get(&format!("spike{i}"));
-        part[0] = X[i] * offset;
-        part[1] = 16.0 + Y[i] * offset;
-        part[2] = Z[i] * offset;
-    }
-    let e = p.get("eye");
-    e[0] = m.anim.v[EYE_X];
-    e[1] = m.anim.v[EYE_Y];
-    let tail = m.anim.lerp(TAIL, s.partial);
-    p.yrot("tail0", tail.msin() * PI * 0.05);
-    p.yrot("tail1", tail.msin() * PI * 0.1);
-    p.yrot("tail2", tail.msin() * PI * 0.15);
-}
-/// `Guardian.getAttackAnimationScale(0)`: how far the beam has charged. A
-/// beam that ended counts from zero again.
-pub fn attack_scale(m: &Mob) -> f32 {
-    if m.extra.flag {
-        m.extra.counter2 as f32 / attack_duration(m) as f32
-    } else {
-        0.0
-    }
 }

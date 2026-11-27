@@ -9,7 +9,10 @@ use super::{
     states::BlockId,
     update::{HORIZONTAL, above, below, rel},
 };
-use crate::registry::BlockStateId;
+use crate::{
+    plugin_hooks::{self, Hook, PluginEvent},
+    registry::BlockStateId,
+};
 use horizon_core::{
     geometry::{Axis, Direction, trig},
     position::BlockPos,
@@ -414,6 +417,19 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             15
         } else {
             block_signal.max(self.wire_incoming_signal(pos))
+        };
+        // Ferraloom: BlockRedstoneEvent, whose new current is the one used.
+        let old = self.b.table.int(state, self.b.props.power);
+        let target = if old != target && plugin_hooks::listens(Hook::Redstone) {
+            self.level
+                .plugin_event(PluginEvent::Redstone {
+                    pos,
+                    old,
+                    new: target,
+                })
+                .clamp(0, 15)
+        } else {
+            target
         };
         if self.b.table.int(state, self.b.props.power) != target {
             if self.state(pos) == state {

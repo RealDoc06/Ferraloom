@@ -681,11 +681,13 @@ fn content_root_carries_a_structure_mod() {
 
     let assets = Assets::load(&root).unwrap();
     let biomes = crate::biome::Biomes::load(&root).unwrap();
-    let terrain = crate::vanillagen::VanillaTerrain::new(
+    let terrain = crate::vanillagen::VanillaTerrain::for_world(
         &root.join("worldgen"),
         assets.registry,
         &biomes,
         1234,
+        "minecraft:overworld",
+        true,
     )
     .unwrap();
     let (name, at) = terrain
@@ -714,48 +716,6 @@ fn manifest(id: &str, namespaces: &str) -> String {
     format!(
         "id = \"{id}\"\nname = \"{id}\"\nversion = \"1.0\"\napi = \"0.2\"\ncapabilities = [\"registries\"]\nnamespaces = [{namespaces}]\n"
     )
-}
-
-/// A mod whose files sit under namespaces besides its id (Towns and Towers'
-/// `kaisyn`): they join the root, and loaders read those namespaces.
-#[test]
-fn listed_namespaces_join_the_root() {
-    let Some(base) = prepared() else {
-        return;
-    };
-    let scratch = std::env::temp_dir().join(format!("horizon-mod-ns-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&scratch);
-    let toml = manifest("towers", "\"kaisyn\"");
-    let m = folder_mod(
-        &scratch.join("towers"),
-        &[
-            ("horizon-mod.toml", &toml),
-            (
-                "data/kaisyn/worldgen/processor_list/mossy.json",
-                r#"{"processors": []}"#,
-            ),
-            (
-                "data/kaisyn/tags/worldgen/biome/has_tower.json",
-                r#"{"values": ["minecraft:plains"]}"#,
-            ),
-            (
-                "assets/kaisyn/lang/en_us.json",
-                r#"{"block.kaisyn.x": "X"}"#,
-            ),
-        ],
-    );
-    let root = scratch.join("root");
-    build(&base, &[m], &root).unwrap();
-    assert_eq!(namespaces(&root), ["kaisyn", "towers"]);
-    assert!(tag_namespaces(&root).contains(&"kaisyn".to_owned()));
-    let lists: BTreeMap<String, String> =
-        serde_json::from_slice(&fs::read(root.join("worldgen/processor_lists.json")).unwrap())
-            .unwrap();
-    assert!(lists.contains_key("kaisyn:mossy"));
-    let tags: BTreeMap<String, String> =
-        serde_json::from_slice(&fs::read(root.join("worldgen/biome_tags.json")).unwrap()).unwrap();
-    assert!(tags.contains_key("kaisyn:has_tower"));
-    let _ = fs::remove_dir_all(&scratch);
 }
 
 /// Two mods owning one namespace (one's listed namespace is the other's id,

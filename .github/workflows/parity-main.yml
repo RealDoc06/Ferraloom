@@ -17,10 +17,6 @@ permissions:
 concurrency:
   group: parity-main
   cancel-in-progress: false
-env:
-  # Test runs never reach the telemetry server: no live-count ping, no uploads (docs/telemetry.md).
-  HORIZON_TELEMETRY_URL: "off"
-
 jobs:
   parity-main:
     # A Mac mini runner of its own (ludovics-mac-mini-2 holds only this label since 2026-10-26): behind PR parity jobs

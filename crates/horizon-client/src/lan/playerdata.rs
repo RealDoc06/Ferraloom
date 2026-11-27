@@ -33,11 +33,6 @@ pub fn ints_uuid(ints: [i32; 4]) -> u128 {
         .fold(0, |acc, &i| acc << 32 | u128::from(i as u32))
 }
 
-/// Whether a saved file exists for this player.
-pub fn exists(world: &Path, uuid: u128) -> bool {
-    path(world, uuid).is_file()
-}
-
 /// Load a guest's saved state, if they have been here before.
 pub fn load(guest: &mut Guest, world: &Path) -> bool {
     let Some(tag) = read_dat(&path(world, guest.uuid)) else {
@@ -93,6 +88,8 @@ pub fn apply(guest: &mut Guest, level: &Level) {
             .and_then(|t| crate::save::number(t.get(key)))
             .unwrap_or(default) as i32
     };
+    // Ferraloom: Player.readAdditionalSaveData's `Score`.
+    guest.meta.score = short("Score", 0);
     guest.loaded_body = Some(SavedBody {
         fire_ticks: short("Fire", -20),
         air: short("Air", 300),
@@ -171,6 +168,16 @@ pub fn store(guest: &Guest, level: &mut Level) {
     level.seen_credits = guest.seen_credits;
     level.last_death = guest.last_death.clone();
     level.player_extra = guest.saved.clone();
+    // Ferraloom: Player.addAdditionalSaveData's `Score`.
+    if let horizon_world::nbt::Tag::Compound(map) = level
+        .player_extra
+        .get_or_insert_with(|| horizon_world::nbt::Tag::Compound(Default::default()))
+    {
+        map.insert(
+            "Score".into(),
+            horizon_world::nbt::Tag::Int(guest.meta.score),
+        );
+    }
     // The live body's fire, air and fall distance (Entity.saveWithoutId),
     // or what the file had while the player has no body yet.
     let body = guest
@@ -229,10 +236,10 @@ mod tests {
                 name: "Alex".into(),
                 properties: Vec::new(),
                 info: ClientInformation::new(8),
-                brand: "test".into(),
                 sender: PlayerSender::new(tx, Arc::default()),
                 latency: Arc::new(AtomicI32::new(0)),
                 address: "127.0.0.1:25565".parse().unwrap(),
+                plugin_attempt: 0,
             },
             2,
             [0.0, 64.0, 0.0],

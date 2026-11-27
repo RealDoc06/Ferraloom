@@ -43,6 +43,8 @@ PROPERTIES = {
     'view-distance': '2',
     'simulation-distance': '2',
     'spawn-protection': '0',
+    # No watchdog: vanilla kills a server whose tick (a slow "Saving the game") passes 60 s.
+    'max-tick-time': '-1',
 }
 CASES = {
     # server.properties' default generator-settings ({}) has no layers: the preset's classic ones.

@@ -146,15 +146,6 @@ impl Goal for Spell {
     }
 }
 
-/// `Entity.isInvisible` of an illusioner on a client: the shared flag stands
-/// in for the effect the server holds, which draws the mirror images.
-pub fn set_invisible(m: &mut Mob, on: bool) {
-    m.extra.effects.retain(|e| e.0 != INVISIBILITY);
-    if on {
-        m.extra.effects.push((INVISIBILITY, i32::MAX, 0));
-    }
-}
-
 /// The client-side half of `Illusioner.aiStep`: new image offsets when
 /// hurt and once a minute, with a puff of cloud and a sound.
 pub fn tick(m: &mut Mob, events: &mut Vec<MobEvent>) {
@@ -173,26 +164,6 @@ pub fn tick(m: &mut Mob, events: &mut Vec<MobEvent>) {
             1.0,
             1.0,
         ));
-    }
-}
-
-/// `Illusioner.aiStep` on a client of a server: invisible is the synched
-/// shared flag. The puff is drawn here exactly (sixteen `addParticle`s); the
-/// sound comes from the server.
-pub fn client_tick(m: &mut Mob, events: &mut Vec<MobEvent>) {
-    if !m.invisible || !step(m) {
-        return;
-    }
-    let (w, h) = (f64::from(m.width()), f64::from(m.height()));
-    for _ in 0..16 {
-        // getRandomX(0.5), getRandomY() and getZ(0.5), which is not random.
-        let x = m.position.x + w * (2.0 * m.random.next_double() - 1.0) * 0.5;
-        let y = m.position.y + h * m.random.next_double();
-        events.push(MobEvent::ParticleAt {
-            kind: "cloud",
-            at: [x, y, m.position.z + w * 0.5],
-            velocity: [0.0; 3],
-        });
     }
 }
 
@@ -225,34 +196,6 @@ fn step(m: &mut Mob) -> bool {
     jumped
 }
 
-/// `Illusioner.getIllusionOffsets`.
-pub fn offsets(m: &Mob, partial: f32) -> [[f64; 3]; COPIES] {
-    let Some(il) = &m.extra.illusions else {
-        return [[0.0; 3]; COPIES];
-    };
-    if il.ticks <= 0 {
-        return il.offsets[1];
-    }
-    let scale = (f64::from(il.ticks as f32 - partial) / 3.0).powf(0.25);
-    let mut out = [[0.0; 3]; COPIES];
-    for (i, o) in out.iter_mut().enumerate() {
-        for k in 0..3 {
-            o[k] = il.offsets[1][i][k] * (1.0 - scale) + il.offsets[0][i][k] * scale;
-        }
-    }
-    out
-}
-
-/// The wobble `IllusionerRenderer.submit` adds to each image.
-pub fn wobble(i: usize, age: f32) -> [f64; 3] {
-    let i = i as f32;
-    [
-        f64::from((i + age * 0.5).cos()) * 0.025,
-        f64::from((i + age * 0.75).cos()) * 0.0125,
-        f64::from((i + age * 0.7).cos()) * 0.025,
-    ]
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -265,9 +208,5 @@ mod tests {
         let mut v = [[0.0; 3]; COPIES];
         v.copy_from_slice(&il.offsets[1]);
         assert_eq!(v[0], [2.0; 3]);
-    }
-    #[test]
-    fn wobble_is_small() {
-        assert!(wobble(1, 10.0).iter().all(|c| c.abs() <= 0.025));
     }
 }

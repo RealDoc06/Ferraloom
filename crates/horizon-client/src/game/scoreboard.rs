@@ -8,28 +8,67 @@ use horizon_client::{
         Context,
         args::{IntRange, Selector},
     },
-    hud::HudBatch,
-    hud_layout, hud_overlays,
-    lan::guest::Guest,
     save::{self, uuid_from_text, uuid_text},
     scoreboard::{self as sb, Comp, Scoreboard, literal},
     scoreboard_cmd::{self, Env, Holder},
-    tab_list::TabPlayer,
     text::Text,
 };
 use horizon_world::nbt::Tag;
 use std::collections::HashSet;
 
-/// What `ServerPlayer` last recorded for the criteria that follow the player.
-#[derive(Default)]
-pub(super) struct Recorded {
-    /// `lastRecordedHealthAndAbsorption` (compared as a float).
-    health_and_absorption: Option<f32>,
-    food: Option<i32>,
-    air: Option<i32>,
-    armor: Option<i32>,
-    xp: Option<i32>,
-    level: Option<i32>,
+// What `ServerPlayer` last recorded for the criteria that follow the
+// player (`lastRecordedHealthAndAbsorption`, compared as a float, and the
+// others); a guest's is on its `Guest`.
+use horizon_client::lan::hub::player_meta::RecordedCriteria as Recorded;
+
+/// The values `ServerPlayer.doTick` writes to the criteria that follow a player.
+struct Criteria {
+    health_and_absorption: f32,
+    food: i32,
+    air: i32,
+    /// `getArmorValue`: the armor attribute rounded down.
+    armor: i32,
+    xp: i32,
+    level: i32,
+}
+
+/// `ServerPlayer.doTick`'s `updateScoreForCriteria`: each value that changed
+/// since `rec` last recorded it goes to every objective of its criteria for
+/// `name`, shown as `display` (made only when something changed).
+fn record_criteria(
+    board: &mut Scoreboard,
+    rec: &mut Recorded,
+    name: &str,
+    display: impl FnOnce(&Scoreboard) -> Comp,
+    now: Criteria,
+) {
+    let mut display = Some(display);
+    let mut shown: Option<Comp> = None;
+    let mut show = |board: &Scoreboard| -> Comp {
+        if let Some(make) = display.take() {
+            shown = Some(make(board));
+        }
+        shown.clone().unwrap_or_else(|| literal(name))
+    };
+    if rec.health_and_absorption != Some(now.health_and_absorption) {
+        rec.health_and_absorption = Some(now.health_and_absorption);
+        let value = now.health_and_absorption.ceil() as i32;
+        let d = show(board);
+        board.for_all_objectives_with(sb::CRITERIA_HEALTH, name, Some(&d), |_| value);
+    }
+    for (criteria, last, value) in [
+        (sb::CRITERIA_FOOD, &mut rec.food, now.food),
+        (sb::CRITERIA_AIR, &mut rec.air, now.air),
+        (sb::CRITERIA_ARMOR, &mut rec.armor, now.armor),
+        (sb::CRITERIA_XP, &mut rec.xp, now.xp),
+        (sb::CRITERIA_LEVEL, &mut rec.level, now.level),
+    ] {
+        if *last != Some(value) {
+            *last = Some(value);
+            let d = show(board);
+            board.for_all_objectives_with(criteria, name, Some(&d), |_| value);
+        }
+    }
 }
 #[derive(Default)]
 pub(super) struct ScoreState {
@@ -51,7 +90,7 @@ impl Game<'_> {
     }
     /// `ScoreboardSaveData` read from `data/minecraft/scoreboard.dat`.
     pub(super) fn load_scoreboard(&mut self) {
-        if self.score.loaded || self.remote.is_some() {
+        if self.score.loaded {
             return;
         }
         self.score.loaded = true;
@@ -71,7 +110,7 @@ impl Game<'_> {
         self.sync_score_registries();
     }
     pub(super) fn save_scoreboard(&mut self) {
-        if !self.score.loaded || self.remote.is_some() {
+        if !self.score.loaded {
             return;
         }
         self.score.storage.save(&self.world_root);
@@ -346,6 +385,7 @@ impl Game<'_> {
             return;
         }
         self.load_scoreboard();
+        self.guest_criteria(host);
         host.hub.teams.clone_from(&self.score.board.teams);
         let view = horizon_client::lan::scoreboard::View::of(&self.score.board);
         for g in host.hub.guests.iter_mut().filter(|g| g.placed) {
@@ -353,6 +393,33 @@ impl Game<'_> {
                 g.send_all(&g.scoreboard.changes(&view));
                 g.scoreboard = view.clone();
             }
+        }
+    }
+    /// Ferraloom: `ServerPlayer.doTick`'s criteria for each player on the
+    /// server, under their own name. Recorded every tick as vanilla does,
+    /// with or without objectives, so an objective made later starts empty
+    /// until the value changes.
+    fn guest_criteria(&mut self, host: &mut super::lan::LanHost) {
+        let board = &mut self.score.board;
+        for g in host.hub.guests.iter_mut().filter(|g| g.placed) {
+            let Some(m) = g.motion.as_mut() else {
+                continue;
+            };
+            let now = Criteria {
+                health_and_absorption: g.health + m.health.absorption(),
+                food: g.food,
+                air: m.air,
+                armor: armor_value(m),
+                xp: g.xp_total,
+                level: g.xp_level,
+            };
+            let name = g.name.as_str();
+            // Player.getDisplayName: the name with the team's prefix, suffix and colour.
+            let display = |board: &Scoreboard| match board.players_team(name) {
+                Some(t) => t.formatted_name_comp(&literal(name)),
+                None => literal(name),
+            };
+            record_criteria(board, &mut g.meta.recorded, name, display, now);
         }
     }
     /// `ServerPlayer.doTick` score updates and the statistic criteria.
@@ -364,44 +431,16 @@ impl Game<'_> {
         if !board.objectives.is_empty() {
             let display = self.player_display_comp();
             if let Some(p) = self.player.as_mut() {
-                let health_and_absorption = p.health.health() + p.health.absorption();
-                let food = p.health.food.food;
-                // getArmorValue: the armor attribute rounded down.
-                let armor = p
-                    .attribute("minecraft:armor")
-                    .or_else(|_| p.attribute("armor"))
-                    .unwrap_or(0.0)
-                    .floor() as i32;
-                let rec = &mut self.score.recorded;
-                let board = &mut self.score.board;
-                if rec.health_and_absorption != Some(health_and_absorption) {
-                    rec.health_and_absorption = Some(health_and_absorption);
-                    let value = health_and_absorption.ceil() as i32;
-                    board.for_all_objectives_with(
-                        sb::CRITERIA_HEALTH,
-                        PLAYER_NAME,
-                        Some(&display),
-                        |_| value,
-                    );
-                }
-                for (criteria, last, value) in [
-                    (sb::CRITERIA_FOOD, &mut rec.food, food),
-                    // The air supply is full unless the player is drowning.
-                    (sb::CRITERIA_AIR, &mut rec.air, 300),
-                    (sb::CRITERIA_ARMOR, &mut rec.armor, armor),
-                    (sb::CRITERIA_XP, &mut rec.xp, self.experience.total),
-                    (sb::CRITERIA_LEVEL, &mut rec.level, self.experience.level),
-                ] {
-                    if *last != Some(value) {
-                        *last = Some(value);
-                        board.for_all_objectives_with(
-                            criteria,
-                            PLAYER_NAME,
-                            Some(&display),
-                            |_| value,
-                        );
-                    }
-                }
+                let now = Criteria {
+                    health_and_absorption: p.health.health() + p.health.absorption(),
+                    food: p.health.food.food,
+                    air: p.air,
+                    armor: armor_value(p),
+                    xp: self.experience.total,
+                    level: self.experience.level,
+                };
+                let (board, rec) = (&mut self.score.board, &mut self.score.recorded);
+                record_criteria(board, rec, PLAYER_NAME, |_| display, now);
             }
         }
         if self.ticks.is_multiple_of(20) {
@@ -593,134 +632,6 @@ impl Game<'_> {
     }
 
     // ---- the sidebar -----------------------------------------------------------
-
-    /// The objective in the player's team's sidebar slot, else the sidebar's.
-    fn sidebar_objective(&self) -> Option<&sb::Objective> {
-        let board = &self.score.board;
-        if board.display.is_empty() {
-            return None;
-        }
-        // A server's client is in its team by its profile name.
-        let name = self
-            .remote
-            .as_ref()
-            .map_or(PLAYER_NAME, |r| r.profile_name.as_str());
-        let team_slot = board
-            .players_team(name)
-            .and_then(|t| t.color.as_ref())
-            .map(|c| format!("sidebar.team.{c}"))
-            .and_then(|slot| board.display_objective(&slot));
-        team_slot.or_else(|| board.display_objective(sb::SLOT_SIDEBAR))
-    }
-    /// The sidebar the HUD shows: its objective and its lines, for `status`.
-    pub(super) fn sidebar_status(&self) -> serde_json::Value {
-        let board = &self.score.board;
-        let Some(objective) = self.sidebar_objective() else {
-            return serde_json::Value::Null;
-        };
-        let scores: serde_json::Map<String, serde_json::Value> = board
-            .scores
-            .iter()
-            .filter_map(|(holder, s)| Some((holder.clone(), s.get(&objective.name)?.value.into())))
-            .collect();
-        serde_json::json!({ "objective": objective.name, "title": objective.display_text().plain(), "scores": scores })
-    }
-
-    /// `Hud.extractScoreboardSidebar` / `displayScoreboardSidebar`.
-    pub(super) fn draw_scoreboard(&self, batch: &mut HudBatch) {
-        let board = &self.score.board;
-        let Some(objective) = self.sidebar_objective() else {
-            return;
-        };
-        let draws = hud_overlays::sidebar(
-            batch.width as i32,
-            batch.height as i32,
-            board,
-            objective,
-            &self.gui.atlas.font,
-            self.settings.text_background(0.3),
-            self.settings.text_background(0.4),
-        );
-        hud_layout::paint(batch, &self.gui.atlas, &draws);
-    }
-}
-
-impl Game<'_> {
-    /// `Hud.extractTabList`: the player list while the player-list key is
-    /// held. A local world shows it with a joined LAN guest or a `list`
-    /// objective.
-    pub(super) fn draw_tab_list(&mut self, batch: &mut HudBatch) {
-        use horizon_client::tab_list::{self, TabInputs};
-        // Player heads and the player list both draw from the same skin slots.
-        let ready: Vec<_> = self.skin_downloads.borrow_mut().take_ready();
-        for (location, rgba) in ready {
-            self.store_skin(location, rgba);
-        }
-        let key = self.screen == super::Screen::Playing
-            && self.keys.contains(&winit::keyboard::KeyCode::Tab);
-        let (players, online_mode, upside_down) = match self.remote_tab_players() {
-            Some(remote) => remote,
-            None => {
-                // The integrated server: the local player, online mode, no ping.
-                let uuid = self.level.player_uuid.map_or(0, |u| {
-                    u.iter()
-                        .fold(0u128, |a, &w| (a << 32) | u128::from(w as u32))
-                });
-                let mut me = TabPlayer::new(uuid, PLAYER_NAME);
-                me.game_mode = self.mode_id();
-                me.skin = "entity/player/wide/steve".into();
-                let guests = self.lan.as_ref().map_or(&[][..], |h| &h.hub.guests);
-                let players = local_tab_players(me, guests);
-                let upside_down = players
-                    .iter()
-                    .filter(|p| p.name == "Dinnerbone" || p.name == "Grumm")
-                    .map(|p| p.uuid)
-                    .collect();
-                (players, true, upside_down)
-            }
-        };
-        let board = &self.score.board;
-        let objective = board.display_objective(sb::SLOT_LIST);
-        let shown = tab_list::visible(
-            key,
-            self.has_singleplayer_server(),
-            players.len(),
-            objective.is_some(),
-        );
-        self.tab_list.set_visible(shown);
-        if !shown {
-            return;
-        }
-        let up = |id: u128| upside_down.contains(&id);
-        let inputs = TabInputs {
-            players: &players,
-            board,
-            objective,
-            screen_width: batch.width as i32,
-            online_mode,
-            gui_ticks: self.ticks as i64,
-            // Horizon has no "chat background only" option: vanilla's default (on).
-            background: tab_list::row_background(
-                true,
-                f64::from(self.settings.text_background_opacity),
-            ),
-            upside_down: &up,
-        };
-        let draws = self.tab_list.layout(&inputs, &self.gui.atlas.font);
-        horizon_client::hud_layout::paint(batch, &self.gui.atlas, &draws);
-    }
-}
-
-/// The host and guests that have entered the world, rebuilt from live state.
-fn local_tab_players(me: TabPlayer, guests: &[Guest]) -> Vec<TabPlayer> {
-    let mut players = vec![me];
-    players.extend(guests.iter().filter(|g| g.placed).map(|g| {
-        let mut player = TabPlayer::new(g.uuid, &g.name);
-        player.game_mode = g.game_mode;
-        player.latency = g.latency.load(std::sync::atomic::Ordering::Relaxed);
-        player
-    }));
-    players
 }
 
 /// The commands' view of the game.
@@ -781,85 +692,10 @@ impl Env for GameEnv<'_, '_> {
     }
 }
 
-#[cfg(test)]
-mod tab_list_tests {
-    use super::*;
-    use horizon_client::{
-        lan::{Joined, PlayerSender},
-        tab_list,
-    };
-    use horizon_protocol::packets::configuration::ClientInformation;
-    use std::sync::{
-        Arc,
-        atomic::{AtomicI32, Ordering},
-        mpsc,
-    };
-
-    fn guest(uuid: u128, name: &str) -> Guest {
-        let (tx, _rx) = mpsc::channel();
-        Guest::new(
-            Joined {
-                conn: uuid as u32,
-                uuid,
-                name: name.into(),
-                properties: Vec::new(),
-                info: ClientInformation::new(8),
-                brand: "test".into(),
-                sender: PlayerSender::new(tx, Arc::default()),
-                latency: Arc::new(AtomicI32::new(42)),
-                address: "127.0.0.1:25565".parse().unwrap(),
-            },
-            uuid as i32,
-            [0.0, 64.0, 0.0],
-            8,
-        )
-    }
-
-    #[test]
-    fn lan_tab_list_tracks_join_and_disconnect() {
-        let me = TabPlayer::new(1, PLAYER_NAME);
-        let mut guests = vec![guest(2, "Alex")];
-        let players = local_tab_players(me.clone(), &guests);
-        assert_eq!(players.as_slice(), std::slice::from_ref(&me));
-        assert!(!tab_list::visible(true, true, players.len(), false));
-
-        guests[0].placed = true;
-        let players = local_tab_players(me.clone(), &guests);
-        assert_eq!(players.len(), 2);
-        assert_eq!(players[0], me);
-        assert_eq!(players[1].uuid, 2);
-        assert_eq!(players[1].name, "Alex");
-        assert!(tab_list::visible(true, true, players.len(), false));
-        assert!(!tab_list::visible(false, true, players.len(), false));
-
-        guests.clear();
-        let players = local_tab_players(me, &guests);
-        assert_eq!(players.len(), 1);
-        assert!(!tab_list::visible(true, true, players.len(), false));
-        assert!(tab_list::visible(true, true, players.len(), true));
-    }
-
-    #[test]
-    fn lan_tab_list_reads_current_guest_state() {
-        let me = TabPlayer::new(1, PLAYER_NAME);
-        let mut guests = vec![guest(2, "Alex"), guest(3, "Grumm")];
-        for guest in &mut guests {
-            guest.placed = true;
-        }
-        guests[0].game_mode = tab_list::SPECTATOR;
-        let players = local_tab_players(me.clone(), &guests);
-        assert_eq!(players.len(), 3);
-        assert_eq!(players[1].game_mode, tab_list::SPECTATOR);
-        assert_eq!(players[1].latency, 42);
-        assert_eq!(players[1].skin, tab_list::default_skin(2));
-        assert_eq!(players[2].name, "Grumm");
-
-        guests[0].game_mode = 1;
-        guests[0].latency.store(123, Ordering::Relaxed);
-        guests.remove(1);
-        let players = local_tab_players(me, &guests);
-        assert_eq!(players.len(), 2);
-        assert_eq!(players[1].game_mode, 1);
-        assert_eq!(players[1].latency, 123);
-    }
+/// `LivingEntity.getArmorValue`: the armor attribute rounded down.
+fn armor_value(p: &mut horizon_client::motion::PlayerMotion) -> i32 {
+    p.attribute("minecraft:armor")
+        .or_else(|_| p.attribute("armor"))
+        .unwrap_or(0.0)
+        .floor() as i32
 }

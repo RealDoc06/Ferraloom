@@ -73,7 +73,9 @@ import net.minecraft.world.phys.Vec3;
  * (tools/test_locator_bar_parity.py). Each joins in offline mode, answers
  * keep-alives, pings, teleports and chunk batches, and records every
  * ClientboundTrackedWaypointPacket it receives, decoded by vanilla's codec
- * (a byte vanilla would not read is an error) and summarised from its bytes.
+ * (a byte vanilla would not read is an error) and summarised from its bytes,
+ * the ClientboundTransferPacket it is sent ({@code transfer HOST:PORT}) and
+ * its disconnection.
  *
  * <p>{@code LocatorBarClient HOST PORT OUT} takes its script on stdin, one
  * line at a time: {@code step LABEL} (the label the next packets are recorded
@@ -400,6 +402,8 @@ public final class LocatorBarClient {
                         }
                     } else if (p instanceof ClientboundChunkBatchFinishedPacket) {
                         send(new ServerboundChunkBatchReceivedPacket(64.0F));
+                    } else if (p instanceof net.minecraft.network.protocol.common.ClientboundTransferPacket t) {
+                        record("transfer " + t.host() + ":" + t.port());
                     } else if (p instanceof ClientboundDisconnectPacket d) {
                         record("disconnected " + d.reason().getString());
                         return;

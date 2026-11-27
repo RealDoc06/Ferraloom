@@ -230,11 +230,6 @@ impl Environment {
     fn base(&self, name: &str) -> [f32; 4] {
         self.base.get(name).copied().unwrap_or([0.0, 0.0, 0.0, 1.0])
     }
-    /// The dimension's value of an RGB attribute (what biomes without it keep).
-    pub fn base_rgb(&self, name: &str) -> [f32; 3] {
-        let b = self.base(name);
-        [b[0], b[1], b[2]]
-    }
     /// Sky state for a time of day, with the biomes' (blended) sky and fog
     /// colours as base values.
     pub fn sample(

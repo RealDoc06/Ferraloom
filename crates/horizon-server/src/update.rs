@@ -13,9 +13,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-const REPO: &str = "horizon-rust/horizon";
-/// The release archives for this computer, most specific first: on Linux the server build (no ALSA or
-/// udev), else the full game (releases before the server build).
+/// Ferraloom's own releases: the upstream Horizon project's would replace this server with Horizon.
+const REPO: &str = "RealDoc06/Ferraloom";
+/// The release archives for this computer, most specific first: on Linux the server archive, else the
+/// older all-in-one archive name.
 const ASSETS: &[&str] = if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
     &[
         "horizon-server-linux-x86_64.tar.gz",

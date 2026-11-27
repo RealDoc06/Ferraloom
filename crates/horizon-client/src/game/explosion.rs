@@ -541,25 +541,26 @@ impl Game<'_> {
         damage_type: &str,
         resists: Option<([i32; 3], f32)>,
     ) -> Result<()> {
-        if let Some(p) = &self.player {
-            let d = [
-                p.position.x - center[0],
-                p.position.y - center[1],
-                p.position.z - center[2],
-            ];
-            let distance = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
-            self.pad_rumble(horizon_client::gamepad::Rumble::Explosion { distance, radius });
-        }
         // Explosion.explode: the blast is heard.
         let ctx = horizon_client::sculk::Context::default();
         self.post_game_event("minecraft:explode", center, ctx);
         let mut targets = self.exploded_positions(center, radius, resists);
         self.explosion_hurt_entities(center, radius, damage_type);
         if interaction != BlockInteraction::Keep {
+            // Ferraloom: EntityExplodeEvent before blocks break (CraftBukkit's interactWithBlocks).
+            if ferraloom_plugins::listens(ferraloom_plugins::Event::EntityExplode) {
+                targets = self.plugin_explode(center, radius, targets);
+            }
             // Util.shuffle(list, level.random)
             for i in (2..=targets.len()).rev() {
                 let swap = self.world.random.next_int_bound(i as i32).unwrap_or(0) as usize;
                 targets.swap(i - 1, swap);
+            }
+            // Ferraloom: BlockExplodeEvent, before blocks are destroyed (game/plugins/blocks.rs).
+            if ferraloom_plugins::listens(ferraloom_plugins::Event::BlockExplode)
+                && self.plugin_block_explode(center, radius, &mut targets)
+            {
+                return Ok(());
             }
             let mut stacks: Vec<([i32; 3], ItemStack)> = Vec::new();
             for &pos in &targets {

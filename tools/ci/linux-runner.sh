@@ -20,11 +20,11 @@
 # RUNNER_CPUS and RUNNER_MEMORY (GB): the slice's CPU quota and memory cap (default half the threads, two thirds of
 # the memory), for a machine that does nothing else. RUNNER_TOKEN: the registration (or, for uninstall, removal)
 # token, made with gh on another machine, where gh must not be logged in (a machine someone else also runs):
-#   RUNNER_TOKEN=$(gh api -X POST repos/horizon-rust/horizon/actions/runners/registration-token --jq .token)
+#   RUNNER_TOKEN=$(gh api -X POST repos/RealDoc06/Ferraloom/actions/runners/registration-token --jq .token)
 # Without Nix (Debian, Ubuntu), the packages come from apt (the list in system_packages) and python3.13 from the
 # PATH (uv python install 3.13, linked into ~/.local/bin).
 set -euo pipefail
-repo=horizon-rust/horizon
+repo=RealDoc06/Ferraloom
 dir=$HOME/.actions-runners/horizon
 units=${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user
 version=2.338.0
@@ -152,10 +152,6 @@ PARITY_MACHINE_JOBS=$jobs
 PARITY_LOCAL_JOBS=$jobs
 JAVA_HOME=$java
 HORIZON_SHARED_SOURCE=$source
-HORIZON_NO_AUDIO=1
-HORIZON_NO_HEARTBEAT=1
-HORIZON_TELEMETRY_URL=off
-HORIZON_LAUNCHER_NO_SELF_UPDATE=1
 EOF
     [ -n "$platform_env" ] && echo "$platform_env"
     command -v vscreen > /dev/null && echo "VSCREEN=ci-horizon"

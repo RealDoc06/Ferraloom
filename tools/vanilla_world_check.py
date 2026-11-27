@@ -56,6 +56,7 @@ def main():
         'simulation-distance': '4', 'sync-chunk-writes': 'true', 'enable-query': 'false',
         'enable-rcon': 'false', 'management-server-enabled': 'false',
         'pause-when-empty-seconds': '-1', 'white-list': 'false', 'enforce-whitelist': 'false',
+        'max-tick-time': '-1',
     }
     with open(os.path.join(args.dir, 'server.properties'), 'w') as f:
         f.writelines(f'{k}={v}\n' for k, v in props.items())

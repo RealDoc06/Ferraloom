@@ -72,14 +72,6 @@ impl EffectInstance {
         }
         changed
     }
-    /// `MobEffectInstance.tickClient`: a client counts its effects down
-    /// (the server removes them).
-    pub fn tick_client(&mut self) {
-        if self.infinite() || self.duration > 0 {
-            self.tick_down();
-            self.downgrade();
-        }
-    }
     fn tick_down(&mut self) {
         if let Some(h) = self.hidden.as_mut() {
             h.tick_down();
@@ -285,25 +277,6 @@ impl PlayerEffects {
         }
         (actions, added)
     }
-    /// `LivingEntity.tickEffects` (server part): actions to apply, in order.
-    pub fn tick(&mut self) -> Vec<EffectAction> {
-        self.tick_count = self.tick_count.wrapping_add(1);
-        let mut actions = Vec::new();
-        let tick_count = self.tick_count;
-        self.list.retain_mut(|e| {
-            if !(e.infinite() || e.duration > 0) {
-                return false;
-            }
-            let t = if e.infinite() { tick_count } else { e.duration };
-            if let Some(a) = periodic(e.id, t, e.amplifier) {
-                actions.push(a);
-            }
-            e.tick_down();
-            e.downgrade();
-            e.infinite() || e.duration > 0
-        });
-        actions
-    }
     /// Effects applied by drinking a potion (`PotionContents.applyToLivingEntity`).
     pub fn potion_effects(
         potion: Option<&str>,
@@ -363,6 +336,26 @@ impl PlayerEffects {
         }
         f
     }
+    /// `LivingEntity.tickEffects` (server part): actions to apply, in order.
+    #[cfg(test)]
+    pub fn tick(&mut self) -> Vec<EffectAction> {
+        self.tick_count = self.tick_count.wrapping_add(1);
+        let mut actions = Vec::new();
+        let tick_count = self.tick_count;
+        self.list.retain_mut(|e| {
+            if !(e.infinite() || e.duration > 0) {
+                return false;
+            }
+            let t = if e.infinite() { tick_count } else { e.duration };
+            if let Some(a) = periodic(e.id, t, e.amplifier) {
+                actions.push(a);
+            }
+            e.tick_down();
+            e.downgrade();
+            e.infinite() || e.duration > 0
+        });
+        actions
+    }
 }
 /// Effect and equipment facts the movement and damage kernels query.
 #[derive(Clone, Debug, Default)]
@@ -391,31 +384,33 @@ impl StatusFlags {
 
 /// The attribute modifier an effect adds at amplifier 0
 /// (`MobEffect.addAttributeModifier`): (attribute, id, amount, operation).
-/// Each level multiplies the amount (`amplifier + 1`).
+/// Each level multiplies the amount (`amplifier + 1`). Vanilla's amounts are
+/// float literals widened to double (`MobEffects`: 0.20000000298023224), and
+/// that is what its clients are sent.
 pub fn effect_modifier(effect: &str) -> Option<(&'static str, &'static str, f64, &'static str)> {
     match effect {
         "speed" => Some((
             "minecraft:movement_speed",
             "minecraft:effect.speed",
-            0.2,
+            f64::from(0.2_f32),
             "add_multiplied_total",
         )),
         "slowness" => Some((
             "minecraft:movement_speed",
             "minecraft:effect.slowness",
-            -0.15,
+            f64::from(-0.15_f32),
             "add_multiplied_total",
         )),
         "haste" => Some((
             "minecraft:attack_speed",
             "minecraft:effect.haste",
-            0.1,
+            f64::from(0.1_f32),
             "add_multiplied_total",
         )),
         "mining_fatigue" => Some((
             "minecraft:attack_speed",
             "minecraft:effect.mining_fatigue",
-            -0.1,
+            f64::from(-0.1_f32),
             "add_multiplied_total",
         )),
         "strength" => Some((

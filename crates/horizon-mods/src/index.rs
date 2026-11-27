@@ -1,8 +1,7 @@
 //! The mod registry's index, `index.json` (docs/api/mod-index.md): every
 //! reviewed mod and modpack, its versions, the file of each with its size,
-//! SHA-256 and minisign signature, and the files taken down. The launcher
-//! reads it to browse and install, the website to show it, and the
-//! registry's CI writes it.
+//! SHA-256 and minisign signature, and the files taken down. The engine
+//! reads none; `cargo horizon-mod` checks entries against it.
 //!
 //! [`check_file`] is what a file must pass before it is installed: its size
 //! and hash are the ones the index lists, its signature verifies against the
@@ -20,8 +19,6 @@ use std::{io::Read, path::Path};
 pub const SCHEMA: u32 = 1;
 /// The biggest file the registry takes (a `.hmod` with content, a `.hpack`).
 pub const MAX_FILE: u64 = 64 << 20;
-/// Where files may be downloaded from: the registry's release assets.
-pub const FILE_HOST: &str = "https://github.com/horizon-rust/horizon-mods/releases/download/";
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Index {
@@ -48,10 +45,15 @@ pub enum Kind {
     /// A resource pack (`.zip` with `pack.mcmeta`) made or tested for Horizon.
     ResourcePack,
     /// A Horizon shader pack (`.hshader`, the native WGSL format of
-    /// docs/shaders.md; not the shaders/-folder packs, which stay on Modrinth).
+    /// crates/horizon-shader-api; not the shaders/-folder packs, which stay on Modrinth).
     Shader,
     Other(String),
 }
+
+/// A shader pack's file extension and manifest (`horizon_shader_api::EXTENSION`
+/// and `MANIFEST`), known without the `shader-packs` feature.
+const SHADER_EXTENSION: &str = "hshader";
+const SHADER_MANIFEST: &str = "horizon-shaders.toml";
 
 impl Kind {
     pub fn name(&self) -> &str {
@@ -70,7 +72,7 @@ impl Kind {
             Kind::Mod => Some("hmod"),
             Kind::Modpack => Some("hpack"),
             Kind::ResourcePack => Some("zip"),
-            Kind::Shader => Some(horizon_shader_api::EXTENSION),
+            Kind::Shader => Some(SHADER_EXTENSION),
             Kind::Other(_) => None,
         }
     }
@@ -179,7 +181,7 @@ pub struct File {
 }
 
 /// A file taken down: by hash, or every version of `id` when `sha256` is
-/// None. The launcher refuses to install it and turns installed copies off.
+/// None. An installer refuses to install it and turns installed copies off.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Revoked {
     pub id: String,
@@ -488,8 +490,8 @@ pub fn check_file(
 }
 
 /// What a file says about itself, read by its kind's own check
-/// ([`inspect`]). The registry's CI writes these into the index; the
-/// launcher compares them with the index before it installs.
+/// ([`inspect`]). The registry's CI writes these into the index; an
+/// installer compares them with the index before it installs.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Facts {
     /// A mod's or a modpack's manifest id; None for a resource pack.
@@ -536,7 +538,7 @@ impl Facts {
             Kind::Modpack => format!("its {} isn't what the index lists", modpack::MANIFEST),
             Kind::Shader => format!(
                 "its {} ({} {}, shader API {}) isn't what the index lists",
-                horizon_shader_api::MANIFEST,
+                SHADER_MANIFEST,
                 self.id.as_deref().unwrap_or("?"),
                 self.version.as_deref().unwrap_or("?"),
                 self.api
@@ -587,6 +589,9 @@ pub fn inspect(kind: &Kind, path: &Path) -> Result<Facts, String> {
             api: check_resource_pack(path)?,
             ..Facts::default()
         }),
+        #[cfg(not(feature = "shader-packs"))]
+        Kind::Shader => Err("shader packs are checked with the `shader-packs` feature".into()),
+        #[cfg(feature = "shader-packs")]
         Kind::Shader => {
             let pack = horizon_shader_api::Pack::read(path)?;
             if let Err(problems) = horizon_shader_api::check(&pack) {

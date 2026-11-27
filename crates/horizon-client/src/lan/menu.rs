@@ -35,6 +35,20 @@ pub struct Menu {
     pub drag: Option<(u8, Vec<usize>)>,
     /// The data slots the client was last sent (ContainerSetData), a furnace's progress.
     pub sent_data: Vec<i16>,
+    /// Ferraloom: the Bukkit `InventoryType` of the container, named as it
+    /// opens while plugins run (its block may be gone when it closes); empty
+    /// otherwise.
+    pub inventory_type: &'static str,
+    /// Ferraloom: this opening of the menu (`next_opening`), which a plugin's
+    /// reference to its slots names: once it closes, the reference reads nothing.
+    pub opening: u32,
+}
+
+/// Ferraloom: a new menu opening's id (`Menu::opening`), unique while the
+/// server runs (a window id wraps at 100).
+pub fn next_opening() -> u32 {
+    static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 /// The y of the key a chest minecart's or chest boat's items are kept under
@@ -51,6 +65,8 @@ pub enum Slots {
     Double((i32, i32, i32), (i32, i32, i32)),
     /// The player's own ender chest inventory (`PlayerEnderChestContainer`).
     Ender,
+    /// Ferraloom: a plugin's container (`lan/plugin_containers.rs`).
+    Custom(u32),
 }
 
 impl Slots {
@@ -58,12 +74,15 @@ impl Slots {
         match self {
             Slots::Block(k) => vec![k],
             Slots::Double(a, b) => vec![a, b],
-            Slots::Ender => Vec::new(),
+            Slots::Ender | Slots::Custom(_) => Vec::new(),
         }
     }
     /// Whether the block entities behind the slots are still there
     /// (`Container.stillValid`).
     pub fn valid(self, world: &World) -> bool {
+        if let Slots::Custom(id) = self {
+            return super::plugin_containers::exists(id);
+        }
         self.halves()
             .iter()
             .all(|k| world.block_entities.contains_key(k))
@@ -85,6 +104,9 @@ impl Slots {
     }
     /// Container slot `n`.
     pub fn get(self, world: &World, guest: &Guest, mut n: usize) -> Option<ItemStack> {
+        if let Slots::Custom(id) = self {
+            return super::plugin_containers::get(id, n);
+        }
         if self == Slots::Ender {
             return guest.ender_items.get(n).cloned().flatten();
         }
@@ -99,6 +121,9 @@ impl Slots {
     }
     /// Every container slot, in menu order.
     pub fn read(self, world: &World, guest: &Guest) -> Option<Vec<Option<ItemStack>>> {
+        if let Slots::Custom(id) = self {
+            return super::plugin_containers::read(id);
+        }
         if self == Slots::Ender {
             return Some(guest.ender_items.clone());
         }
@@ -110,6 +135,9 @@ impl Slots {
     }
     /// Store what `read` gave, changed.
     pub fn write(self, world: &mut World, guest: &mut Guest, items: Vec<Option<ItemStack>>) {
+        if let Slots::Custom(id) = self {
+            return super::plugin_containers::write(id, items);
+        }
         if self == Slots::Ender {
             guest.ender_items = items;
             return;
@@ -140,9 +168,6 @@ impl View<'_> {
             Some(c) => c.len() + 36,
             None => 46,
         }
-    }
-    pub fn is_empty(&self) -> bool {
-        false
     }
     pub fn get(&self, i: usize) -> Option<ItemStack> {
         match &self.container {
@@ -194,6 +219,9 @@ impl View<'_> {
             Some(c) => (c.len()..c.len() + 27, c.len() + 27..c.len() + 36),
             None => (9..36, 36..45),
         }
+    }
+    pub fn is_empty(&self) -> bool {
+        false
     }
 }
 
@@ -684,10 +712,10 @@ mod tests {
                 name: "Alex".into(),
                 properties: Vec::new(),
                 info: ClientInformation::new(8),
-                brand: "test".into(),
                 sender: PlayerSender::new(tx, Arc::default()),
                 latency: Arc::new(AtomicI32::new(0)),
                 address: "127.0.0.1:25565".parse().unwrap(),
+                plugin_attempt: 0,
             },
             2,
             [0.0, 64.0, 0.0],

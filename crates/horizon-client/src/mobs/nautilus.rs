@@ -5,15 +5,12 @@
 //! them, the zombie's temperate and coral variants, and `NautilusModel`.
 use super::{
     Mob, MobEvent, MobWorld, Species, Who,
-    anim::{Poses, State},
     control::{LookKind, MoveKind, Operation},
     goals::{Breed, Cx, Goal, LOOK, LookAtPlayer, MOVE, Panic, Stroll, Tempt, goal_clone},
-    keyframes::Animation,
     nav::NavKind,
 };
 use crate::blocks::Fluid;
 use horizon_core::{geometry::Vec3, random::RandomSource};
-use std::collections::HashMap;
 
 // Nautilus state: `tame`/`owner`, the saddle, `head` the body armour,
 // `variant` the zombie's variant (0 temperate, 1 warm), `anim_ticks` the
@@ -308,13 +305,6 @@ fn bubbles(m: &mut Mob, events: &mut Vec<MobEvent>) {
         velocity,
     });
 }
-/// `AbstractNautilus.tick` on a client of a server: the bubbles of a nautilus
-/// in the water, from the motion the server sent.
-pub fn client_tick(m: &mut Mob, events: &mut Vec<MobEvent>) {
-    if m.fluids.in_water {
-        bubbles(m, events);
-    }
-}
 fn in_water_at(w: &MobWorld, p: Vec3) -> bool {
     w.fluid(p.x.floor() as i32, p.y.floor() as i32, p.z.floor() as i32) == Fluid::Water
 }
@@ -477,52 +467,6 @@ impl Goal for Charge {
             m.velocity = Vec3::new(m.velocity.x * 0.6, m.velocity.y, m.velocity.z * 0.6);
         }
         m.ai.target = None;
-    }
-}
-/// The body texture: the baby's, the adult's, or the zombie's variant.
-pub fn texture(m: &Mob) -> String {
-    match (zombie(m), m.is_baby(), m.extra.variant) {
-        (true, _, 1) => "entity/nautilus/zombie_nautilus_coral".into(),
-        (true, _, _) => "entity/nautilus/zombie_nautilus".into(),
-        (false, true, _) => "entity/nautilus/nautilus_baby".into(),
-        (false, false, _) => "entity/nautilus/nautilus".into(),
-    }
-}
-/// The body model: `ZombieNautilusRenderer` picks the coral model for the
-/// warm variant.
-pub fn model(m: &Mob) -> &'static str {
-    match (zombie(m), m.is_baby(), m.extra.variant) {
-        (true, _, 1) => "zombie_nautilus_coral#main",
-        (true, _, _) => "zombie_nautilus#main",
-        (false, true, _) if m.kind.layer("nautilus_baby#main").is_some() => "nautilus_baby#main",
-        _ => "nautilus#main",
-    }
-}
-/// The `NAUTILUS_BODY` equipment texture of a nautilus armour item.
-pub fn armor_texture(item: &str) -> Option<String> {
-    let material = item
-        .strip_prefix("minecraft:")?
-        .strip_suffix("_nautilus_armor")?;
-    let material = if material == "golden" {
-        "gold"
-    } else {
-        material
-    };
-    Some(format!("entity/equipment/nautilus_body/{material}"))
-}
-/// `NautilusModel.setupAnim` (and `ZombieNautilusCoralModel`'s corals,
-/// hidden under armour).
-pub fn anim(m: &Mob, s: &State, p: &mut Poses, animations: &HashMap<String, Animation>) {
-    let deg = (std::f64::consts::PI / 180.0) as f32;
-    let y = s.y_rot.clamp(-10.0, 10.0);
-    let x = s.x_rot.clamp(-10.0, 10.0);
-    p.yrot("body", y * deg);
-    p.xrot("body", x * deg);
-    if let Some(a) = animations.get("NautilusAnimation.SWIMMING") {
-        a.apply_walk(s.pos + s.age / 5.0, s.speed + 0.2, 2.0, 3.0, p);
-    }
-    if m.extra.head.is_some() {
-        p.visible("corals", false);
     }
 }
 /// Saved fields: `TamableAnimal`'s owner, the saddle, the zombie's variant

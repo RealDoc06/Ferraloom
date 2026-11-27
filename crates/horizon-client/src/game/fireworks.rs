@@ -2,13 +2,10 @@
 //! from a block face, boosting a gliding player, the 1.15 horizontal
 //! acceleration and 0.04 lift, the flight-duration lifetime, explosion
 //! damage with line of sight, and the client explosion (`createFireworks`).
-use super::{Game, Hit, item_draw::owner_at, view_vector};
-use horizon_assets::item_model::DisplayContext;
+use super::{Game, Hit, view_vector};
 use horizon_client::{
-    block_entity_render::vertex_light,
     collisions::SceneCollisions,
     items::ItemStack,
-    mesher::Vertex,
     mobs::{Damage, DamageKind},
     particles::{FireworkExplosion, ParticleOptions, ParticleType},
 };
@@ -33,9 +30,6 @@ pub(super) struct Rocket {
     /// On a server, the player it boosts when not this game's own: a guest's
     /// connection.
     pub(super) guest: Option<u32>,
-    /// `DATA_ATTACHED_TO_TARGET`: the server entity the rocket follows;
-    /// boosting happens when it is the local player.
-    pub(super) attached_to: Option<u32>,
     /// `DATA_SHOT_AT_ANGLE` (dispensers): constant velocity, exploding on
     /// the first block it hits.
     pub(super) angled: bool,
@@ -43,35 +37,6 @@ pub(super) struct Rocket {
     pub(super) item: ItemStack,
 }
 impl Rocket {
-    /// A rocket a server sent (`handleAddEntity`): placed and moved by it.
-    pub(super) fn remote(id: u32, position: Vec3, velocity: Vec3) -> Self {
-        let item = ItemStack::new("minecraft:firework_rocket", 1);
-        let (_, explosions) = fireworks_of(&item);
-        Self {
-            id,
-            position,
-            previous: position,
-            velocity,
-            life: 0,
-            lifetime: i32::MAX,
-            explosions,
-            attached: false,
-            guest: None,
-            attached_to: None,
-            angled: false,
-            item,
-        }
-    }
-    /// One tick of a server's client: the rocket flies on by itself between
-    /// the server's updates (a rocket that follows an entity is placed by the
-    /// caller).
-    pub(super) fn remote_step(&mut self, scene: &mut SceneCollisions) {
-        self.previous = self.position;
-        if self.attached_to.is_none() {
-            self.free_flight(scene);
-        }
-        self.life += 1;
-    }
     /// `FireworkRocketEntity.tick` for a rocket attached to no entity: speed
     /// up (an angled one keeps its motion) and rise, then move. True when a
     /// block stopped it.
@@ -157,7 +122,6 @@ impl Game<'_> {
             explosions,
             attached,
             guest: None,
-            attached_to: None,
             angled: false,
             item: stack.clone(),
         }
@@ -345,16 +309,6 @@ impl Game<'_> {
         self.particles
             .fireworks(at, v, r.explosions.clone(), camera);
     }
-    /// FireworkRocketEntity.handleEntityEvent: use the synchronized item data.
-    pub(super) fn remote_firework_explosion(&mut self, id: i32) {
-        let camera = self.eye_position();
-        if let Some(r) = self.rockets.iter().find(|r| r.id == id as u32) {
-            let at = [r.position.x, r.position.y, r.position.z];
-            let v = [r.velocity.x, r.velocity.y, r.velocity.z];
-            self.particles
-                .fireworks(at, v, r.explosions.clone(), camera.unwrap_or(at));
-        }
-    }
     /// `dealExplosionDamage` on a player that is not the rocket's
     /// `attachedToEntity`: within 5 blocks, when the rocket sees its feet or
     /// its middle (`ClipContext.Block.COLLIDER`, no fluids).
@@ -390,56 +344,6 @@ impl Game<'_> {
             && let Some(id) = self.motion.health.damage.id("minecraft:fireworks")
         {
             let _ = p.hurt(&self.motion.health, self.world.health_rules, id, amount);
-        }
-    }
-    /// `FireworkEntityRenderer.submit`: the item (GROUND) facing the camera,
-    /// lit at the rocket's light probe.
-    pub(super) fn rocket_geometry(&self, camera: glam::DVec3, alpha: f64, out: &mut Vec<Vertex>) {
-        let orientation = glam::Mat4::from_quat(self.camera_orientation());
-        // shouldRender: not while attached to an entity (`isAttachedToEntity`).
-        for r in self
-            .rockets
-            .iter()
-            .filter(|r| !r.attached && r.attached_to.is_none())
-        {
-            // FireworkRocketEntity.shouldRenderAtSqrDistance: within 64 blocks;
-            // EntityRenderer.shouldRender: its 0.25 box in the view.
-            if !self.standing_entity_in_view(
-                camera,
-                super::entity_culling::at(r.previous),
-                super::entity_culling::at(r.position),
-                alpha,
-                0.25,
-                0.25,
-                64.0,
-                0.0,
-            ) {
-                continue;
-            }
-            let p = glam::DVec3::new(
-                r.previous.x + (r.position.x - r.previous.x) * alpha,
-                r.previous.y + (r.position.y - r.previous.y) * alpha,
-                r.previous.z + (r.position.z - r.previous.z) * alpha,
-            );
-            // `updateForNonLiving`: GROUND, owned by the rocket.
-            let owner = owner_at(p.to_array(), 0.0, "minecraft:firework_rocket");
-            let state = self.resolve_item(&r.item, DisplayContext::Ground, Some(&owner), 0);
-            if state.is_empty() {
-                continue;
-            }
-            let mut pose = glam::Mat4::from_translation((p - camera).as_vec3()) * orientation;
-            if r.angled {
-                pose *= glam::Mat4::from_rotation_z(std::f32::consts::PI)
-                    * glam::Mat4::from_rotation_y(std::f32::consts::PI)
-                    * glam::Mat4::from_rotation_x(std::f32::consts::FRAC_PI_2);
-            }
-            // getLightProbePosition: the eye, 0.85 of its 0.25 height.
-            let light = self.world.light(
-                p.x.floor() as i32,
-                (p.y + 0.2125).floor() as i32,
-                p.z.floor() as i32,
-            );
-            self.submit_item_world(&state, pose, vertex_light(light), out);
         }
     }
 }

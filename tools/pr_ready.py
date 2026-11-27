@@ -8,10 +8,8 @@
 
 From the files the branch changes since its merge base with --base (committed or not) it decides what to run:
 rustfmt, and clippy with warnings denied exactly as CI's verify job runs it (the whole workspace with the game's code
-mods, plus the server build when horizon-client is affected); the tests of the touched crates, with the features
-CI's workspace-wide run gives them; the launcher (its own workspace) the same way when CI's launcher job would run
-(tools/ci/rust_changes.py --launcher); crates/horizon-theme/tokens.css against horizon-theme; Cargo.lock changing
-only with a Cargo.toml; the Python tests (always, as in CI) and the public-tree check; and the vanilla harnesses the
+mods, plus the engine without them when horizon-client is affected); the tests of the touched crates, with the features
+CI's workspace-wide run gives them; Cargo.lock changing only with a Cargo.toml; the Python tests (always, as in CI) and the public-tree check; and the vanilla harnesses the
 changes can affect, picked as CI's parity job picks them (tools/parity.py --changed). Harnesses run where the
 vanilla data is (a prepared .local/ here, or the Mac mini); elsewhere they are listed for CI.
 Tests select library, binary and integration targets explicitly, followed by doc tests, so unrelated example
@@ -44,7 +42,6 @@ if "PARITY_SHARED" not in os.environ and not (ROOT / ".local" / "minecraft").exi
     # A fleet worktree without vanilla data still knows each harness's dependencies.
     os.environ["PARITY_SHARED"] = str(FLEET_SHARED)
 from tools import parity, release_train  # noqa: E402
-from tools.ci import rust_changes  # noqa: E402
 
 RBUILD = Path.home() / "fleet" / "rbuild"
 LINE_LIMIT = 500
@@ -68,10 +65,6 @@ mkdir -p "$state/parity-runner" "$state/parity-target"
 ln -sfn "$state/parity-runner" .local/parity-runner && ln -sfn "$state/parity-target" .local/parity-target""",
 }
 ROOT_RUST = {"Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "rustfmt.toml", "clippy.toml"}
-LAUNCHER_FEATURES = """export features=""
-if [ "$(uname)" = Darwin ] && ! xcrun metal --version > /dev/null 2>&1; then features="--features gpui/runtime_shaders"; fi
-in_shell() { if [ "$(uname)" = Linux ] && ! pkg-config --exists xkbcommon 2>/dev/null && command -v nix-shell > /dev/null; then
-  nix-shell shell.nix --run "$1"; else bash -c "$1"; fi; }"""
 
 
 def is_doc(path):
@@ -81,11 +74,6 @@ def is_doc(path):
 def workspace_rust(path):
     """Whether a change to path is built by the main Cargo workspace."""
     return not is_doc(path) and (path.startswith(("crates/", "xtask/", ".cargo/")) or path in ROOT_RUST)
-
-
-def launcher_rust(path):
-    """Whether a change to path is built into the launcher (its own workspace): CI's launcher job's own rule."""
-    return rust_changes.needs_launcher([path])
 
 
 def touched_crates(paths, packages):
@@ -104,15 +92,11 @@ def touched_crates(paths, packages):
 
 def area(path):
     """The part of the project a path belongs to; None for what goes with any change (docs, tests, harnesses)."""
-    if is_doc(path) or path.startswith(("tests/", "mods/", "docs/", "roadmap/")) or path == "research-lock.json" or \
+    if is_doc(path) or path.startswith(("tests/", "mods/", "docs/")) or path == "research-lock.json" or \
             (path.startswith("tools/") and not path.startswith("tools/ci/")):
         return None
-    if path.startswith(("launcher/", "crates/horizon-prepare/")):
-        return "launcher"
     if path.startswith((".github/", "tools/ci/")):
         return "CI"
-    if path.startswith("crates/horizon-theme/"):
-        return None  # the design system feeds the game, the launcher and the website (its tokens.css) alike
     return "game"
 
 
@@ -140,7 +124,7 @@ def lock_problem(paths):
 
 
 def suggested_label(paths, exporter_paths=frozenset()):
-    if any(release_train.player_facing(path, kind, exporter_paths) for path in paths for kind in ("game", "launcher")):
+    if any(release_train.player_facing(path, exporter_paths) for path in paths):
         return "player-facing: `feature` if players get something new, no label for a fix (`release-now` if urgent)"
     return "`skip-release`"
 
@@ -269,10 +253,10 @@ def parity_summary(output):
     return text
 
 
-# CI's verify job (.github/workflows/ci.yml): clippy over the whole workspace with the game's code mods, and over the
-# server build (the game without sound or controllers); tests with code mods and mod packaging.
+# CI's verify job (.github/workflows/ci.yml): clippy over the whole workspace with the engine's code mods, and over the
+# engine without them; tests with code mods and mod packaging.
 CI_CLIPPY = "cargo clippy --workspace --all-targets --locked --features horizon-client/mods -- -D warnings"
-CI_CLIPPY_SERVER = "cargo clippy -p horizon-client --all-targets --locked --no-default-features -- -D warnings"
+CI_CLIPPY_SERVER = "cargo clippy -p horizon-client --all-targets --locked -- -D warnings"
 CI_TEST_FEATURES = "horizon-client/mods,horizon-mods/pack"
 
 
@@ -300,8 +284,6 @@ CONTENT_ROOT_TESTS = "cargo test --locked -p horizon-client --features horizon-c
 def plan(args, base, changed, crates_of, libraries, dependencies):
     """The checks for these changed files, in the order they run."""
     rust = any(workspace_rust(path) for path in changed)
-    launcher = any(launcher_rust(path) for path in changed)
-    # The Python tests also hold ROADMAP.md to roadmap/roadmap.toml (tests/test_roadmap.py).
     crates = touched_crates(changed, crates_of) if rust else []
     # An unrecognised Rust path must not silently skip validation.
     if rust and crates == []:
@@ -321,7 +303,7 @@ def plan(args, base, changed, crates_of, libraries, dependencies):
     steps = [
         Step("Cargo.lock", where="git"),
         Step("Public tree", "python3 tools/check_public_tree.py", where="here"),
-        # Always, as in CI: some read the crates, the roadmap or the workflows.
+        # Always, as in CI: some read the crates or the workflows.
         Step("Python tests", "python3 -m unittest discover -s tests", where="here", summary=unittest_passed),
         Step("rustfmt", "cargo fmt --all -- --check", skip=None if rust else no_rust),
         Step("clippy", clippy, skip=None if rust else no_rust),
@@ -333,16 +315,7 @@ def plan(args, base, changed, crates_of, libraries, dependencies):
         Step("content root tests", CONTENT_ROOT_TESTS, summary=tests_passed,
              skip=None if crates is None or any(p.startswith(CONTENT_ROOT) for p in changed)
              else "content root untouched"),
-        Step("tokens.css up to date", "cargo test --locked -p horizon-theme --lib tokens_css_is_up_to_date",
-             skip=None if any(p.startswith(("crates/horizon-theme/", "xtask/")) for p in changed)
-             else "theme untouched"),
     ]
-    launcher_skip = None if launcher else "launcher untouched"
-    for name, command in [("launcher rustfmt", "cargo fmt --check"),
-                          ("launcher clippy", "cargo clippy --all-targets --locked $features -- -D warnings"),
-                          ("launcher tests", "cargo test --locked --lib $features")]:
-        steps.append(Step(name, f"cd launcher && {LAUNCHER_FEATURES}\nin_shell {shlex.quote(command)}", skip=launcher_skip,
-                          summary=tests_passed if name == "launcher tests" else None))
     harness = Step("Parity", summary=parity_summary)
     affected = affected_here(changed)
     local_data = (ROOT / ".local" / "minecraft").exists() and (ROOT / ".local" / "horizon-client").exists()
@@ -427,20 +400,9 @@ def run_windows(steps, verbose):
         elif step.name == "rustfmt":
             command = ["cargo", "fmt", "--all", "--", "--check"]
         elif step.name == "clippy":
-            command = shlex.split(CI_CLIPPY)  # the server build's clippy runs in CI (Linux)
+            command = shlex.split(CI_CLIPPY)  # the engine without code mods is linted in CI
         elif step.name.startswith("tests"):
             command = shlex.split(step.command)
-        elif step.name == "tokens.css up to date":
-            command = shlex.split(step.command)
-        elif step.name == "launcher rustfmt":
-            command = ["cargo", "fmt", "--check"]
-            cwd = ROOT / "launcher"
-        elif step.name == "launcher clippy":
-            command = ["cargo", "clippy", "--all-targets", "--locked", "--", "-D", "warnings"]
-            cwd = ROOT / "launcher"
-        elif step.name == "launcher tests":
-            command = ["cargo", "test", "--locked", "--lib"]
-            cwd = ROOT / "launcher"
         elif step.name == "Parity":
             command = shlex.split(step.command)
             if command and command[0] == "PARITY_HOSTS=":

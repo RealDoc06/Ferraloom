@@ -12,6 +12,7 @@ mod place;
 mod players;
 pub(super) mod pregen;
 mod raid;
+pub(super) mod server_cmds;
 mod terrain_cmds;
 mod text_commands;
 mod world_cmds;
@@ -151,7 +152,10 @@ impl Game<'_> {
             .rev()
             .find(|&i| input.is_char_boundary(i))
             .unwrap_or(0);
-        context.push(&input[start..cursor]);
+        // Ferraloom: MutableComponent.append(String) skips an empty string.
+        if start < cursor {
+            context.push(&input[start..cursor]);
+        }
         if cursor < input.len() {
             context.push(
                 Text::literal(&input[cursor..])
@@ -187,7 +191,9 @@ impl Game<'_> {
             self.command_block_success(block, message);
             return;
         }
-        if self.ui.rules.bool("send_command_feedback") {
+        // Ferraloom: the console always accepts success
+        // (MinecraftServer.acceptsSuccess); a player follows the rule.
+        if self.console_broadcast.is_some() || self.ui.rules.bool("send_command_feedback") {
             self.system_message(message.clone());
         }
         self.broadcast_to_admins(message);
@@ -896,6 +902,8 @@ impl Game<'_> {
             "spreadplayers" => self.cmd_spreadplayers(ctx),
             id if id.starts_with("forceload.") => self.cmd_forceload(id, ctx),
             id if id.starts_with("pregen.") => self.cmd_pregen(id, ctx),
+            // Ferraloom: the dedicated server's own commands (server_cmds.rs).
+            id if id.starts_with("server.") => self.cmd_server(id, ctx),
             "fillbiome" => self.cmd_fillbiome(ctx),
             id if id.starts_with("worldborder.") => self.cmd_worldborder(id, ctx),
             id if id.starts_with("loot.") => self.cmd_loot(id, ctx),
@@ -979,6 +987,12 @@ impl Game<'_> {
     }
     pub(super) fn set_game_mode(&mut self, mode: GameMode) -> bool {
         if self.mode == mode {
+            return false;
+        }
+        // Ferraloom: PlayerGameModeChangeEvent; cancelled, nothing changes (game/plugins/players.rs).
+        if ferraloom_plugins::listens(ferraloom_plugins::Event::PlayerGameModeChange)
+            && self.plugin_game_mode(mode)
+        {
             return false;
         }
         self.set_mode(mode);
@@ -1245,7 +1259,7 @@ impl Game<'_> {
         self.feedback(message);
         Ok(targets.len() as i32)
     }
-    fn teleport_to(&mut self, t: Target, pos: [f64; 3], rotation: Option<[f32; 2]>) {
+    pub(super) fn teleport_to(&mut self, t: Target, pos: [f64; 3], rotation: Option<[f32; 2]>) {
         // An entity in another level is teleported in the level that holds it.
         let _ = self.in_target_level(t, |g| g.teleport_to_in_level(t, pos, rotation));
     }
@@ -1359,6 +1373,8 @@ impl Game<'_> {
             // Wall-mounted entities do not move.
             Target::Frame(_) | Target::Painting(_) => {}
         }
+        // Ferraloom: the riders' and trackers' ClientboundTeleportEntityPacket.
+        self.lan_teleport_entity(t, pos, rotation);
     }
     /// Teleport the local player into the command source's dimension. Unlike
     /// portal travel, `/tp` keeps the coordinates given by the command.
@@ -1400,7 +1416,7 @@ impl Game<'_> {
     /// A server's player teleported into another level than theirs
     /// (ServerPlayer.teleport): queued to move after the command. False
     /// when `t` is not a player in another level.
-    fn teleport_across(
+    pub(super) fn teleport_across(
         &mut self,
         t: Target,
         level: super::Dim,
@@ -1439,6 +1455,12 @@ impl Game<'_> {
             // TeleportCommand.teleportToEntity: the destination's rotation too.
             let rotation = Some(self.target_rotation(dest));
             for &t in &targets {
+                // Ferraloom: PlayerTeleportEvent COMMAND; cancelled, they stay (game/plugins/players.rs).
+                let Some((level, pos, rotation)) =
+                    self.plugin_command_teleport(t, level, pos, rotation)
+                else {
+                    continue;
+                };
                 if !self.teleport_across(t, level, pos, rotation) {
                     self.teleport_to(t, pos, rotation);
                 }
@@ -1519,6 +1541,12 @@ impl Game<'_> {
         };
         for &t in &targets {
             let rotation = look_at(self, t).or(rotation);
+            // Ferraloom: PlayerTeleportEvent COMMAND; cancelled, they stay (game/plugins/players.rs).
+            let Some((source_level, pos, rotation)) =
+                self.plugin_command_teleport(t, source_level, pos, rotation)
+            else {
+                continue;
+            };
             if self.teleport_across(t, source_level, pos, rotation) {
                 continue;
             }
@@ -2317,6 +2345,8 @@ impl Game<'_> {
     /// Player.giveExperiencePoints including negative amounts.
     fn give_points(&mut self, amount: i32) {
         let e = &mut self.experience;
+        // Ferraloom: Player.increaseScore.
+        e.score = e.score.wrapping_add(amount);
         e.progress += amount as f32 / horizon_client::entities::Experience::needed(e.level) as f32;
         e.total = e.total.saturating_add(amount).clamp(0, i32::MAX);
         while e.progress < 0.0 {
@@ -3126,17 +3156,8 @@ impl Game<'_> {
             }
         };
         if let Some(capture) = self.chat_capture.as_mut() {
-            capture.push(line.clone());
+            capture.push(line);
         }
-        let focused = self.screen == Screen::Chat;
-        self.ui.chat.add(
-            &self.gui.atlas,
-            line,
-            None,
-            horizon_client::chat::ChatSource::Player,
-            self.ticks,
-            focused,
-        );
         Ok(1)
     }
     /// MessageArgument: `@p`-style selectors in a message become names.

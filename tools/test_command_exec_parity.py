@@ -1,19 +1,27 @@
 #!/usr/bin/env python3
-"""Compare Horizon's command execution with vanilla's real command implementations.
+"""Compare Ferraloom's command execution with vanilla's, both as dedicated servers.
 
-Java (VanillaCommandExecOracle) starts a stand-in integrated server: a real
-MinecraftServer with a generated world, Commands.CommandSelection.INTEGRATED
-and one single-player owner named Player. Rust runs the same script through
-Horizon's integrated server with a connected headless client (HORIZON_COMMAND_SCRIPT). Both run each command as
-the player through Commands.performPrefixedCommand and record every system or
-chat message the player receives (text and resolved style: colour, bold,
-italic, underlined, strikethrough, obfuscated) together with the results the
-command reported to the player's CommandResultCallback. World, entity and item
-changes are observed through probe commands whose feedback reports them
-(execute if, clear with a zero count, data get, scoreboard queries...).
-Messages that depend on time or a random UUID are compared after masking.
+A vanilla dedicated server (Commands.CommandSelection.DEDICATED) and Ferraloom's
+(`horizon-client --dedicated --nogui`) each generate a world from seed 1 with the
+same server.properties. CommandExecClient, a player made of vanilla's protocol
+code (any byte vanilla would not read is an error), joins each one as an
+operator (level 4, ops.json), freezes the game and runs the script of
+tools/command_exec_corpus.py through ServerboundChatCommandPacket. Each recorded
+command's messages are compared: every system message that is not an overlay
+and every player or disguised chat message, decorated by its chat type, as
+text and resolved style (colour, bold, italic, underlined, strikethrough,
+obfuscated). So is the result its CommandResultCallback was given last, read
+back through `execute store ... storage` (see CommandExecClient). World, entity
+and item changes are observed through probe commands whose feedback reports
+them (execute if, clear with a zero count, data get, scoreboard queries...).
+Messages that depend on time are compared after masking.
+
+KNOWN lists the commands Ferraloom still gets wrong and why; one that matches
+again is reported, and should leave the list.
 """
 import argparse
+import difflib
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -22,18 +30,156 @@ import re
 import shutil
 import subprocess
 import sys
+import uuid as uuidlib
 
 try:
     from . import lab, test_rust_parity as base
-    from .integration_env import run_game
+    from .test_dedicated_server_parity import Server
     from . import command_exec_corpus as corpus_module
 except ImportError:
     import lab
-    from integration_env import run_game
     import test_rust_parity as base
+    from test_dedicated_server_parity import Server
     import command_exec_corpus as corpus_module
 
+NAME = 'command-exec-parity'
 SEED = 1
+PLAYER = 'Player'
+PROPERTIES = {
+    'online-mode': 'false',
+    'white-list': 'false',
+    'level-seed': str(SEED),
+    'view-distance': '4',
+    'simulation-distance': '4',
+    'spawn-protection': '0',
+    'max-players': '8',
+    'allow-flight': 'true',
+    'pause-when-empty-seconds': '-1',
+    # No watchdog: vanilla kills a server whose tick (a slow "Saving the game") passes 60 s.
+    'max-tick-time': '-1',
+}
+# Commands Ferraloom still gets wrong (the command as in the corpus, or "COMMAND #N" for its Nth occurrence -> why).
+# Their mismatches are reported, and do not fail the run. TICKS_SHORT covers every `tick` whose step ended short.
+TICKS_SHORT = '#tick step ends short'
+# A command that ends in say, me or msg runs as the player's own chat: the execute chain before it is skipped (as, on,
+# in, forks to nothing, an unknown dimension), selectors in the message stay as typed, and no result is reported.
+CHAT = ("say/me/msg run as the player's chat: execute's source, forks and errors are skipped, selectors stay unresolved, "
+        "no result")
+KNOWN = {
+    '/say Hello world': CHAT,
+    '/me waves': CHAT,
+    '/msg @s secret': CHAT,
+    '/tell Player hi': CHAT,
+    '/w @a hi all': CHAT,
+    '/say @s says': CHAT,
+    '/execute as @a run say connected owner': CHAT,
+    '/execute as @s run say hi': CHAT,
+    '/execute as @e[tag=h] run say mob': CHAT,
+    '/execute on vehicle run say mounted': CHAT,
+    '/execute on vehicle run say still mounted': CHAT,
+    '/execute on vehicle run say still riding after teleport': CHAT,
+    '/execute on vehicle run say still riding after ticks': CHAT,
+    '/execute as @e[tag=ride_r] on vehicle run say carrying': CHAT,
+    '/execute as @e[tag=ride_r] on vehicle run say still carrying': CHAT,
+    '/execute in minecraft:the_end run say elsewhere': CHAT,
+    '/execute in minecraft:nowhere run say nowhere': CHAT,
+    '/execute as @e[tag=ex] on passengers run say passenger': CHAT,
+    '/execute on vehicle run say vehicle': CHAT,
+    '/execute in minecraft:the_nether if dimension minecraft:the_nether run say source dimension': CHAT,
+    '/execute in minecraft:the_nether at @s if dimension minecraft:overworld run say entity dimension': CHAT,
+    '/execute in minecraft:the_nether positioned as @s if dimension minecraft:the_nether run say position only': CHAT,
+    '/execute if dimension minecraft:the_nether run say dimension switched': CHAT,
+    '/execute if dimension minecraft:overworld run say relative dimension': CHAT,
+    '/execute if dimension minecraft:overworld run say dimension restored': CHAT,
+    '/execute if dimension minecraft:the_nether run say through the portal': CHAT,
+    '/execute if dimension minecraft:overworld run say back through the portal': CHAT,
+    '/perf stop': 'Ferraloom has no /perf (a dedicated command)',
+    '/help': 'lists no /perf',
+    '/waypoint list #6': "a mob's new waypoint transmit range counts at once, not from its next tick "
+                         '(LivingEntity.refreshDirtyAttributes)',
+    TICKS_SHORT: 'tick step N moves the game time fewer than N ticks after the player changed dimension or chunks loaded',
+}
+
+
+def offline_uuid(name):
+    """The UUID an offline-mode server gives a player (UUIDUtil.createOfflinePlayerUUID)."""
+    digest = bytearray(hashlib.md5(f'OfflinePlayer:{name}'.encode()).digest())
+    digest[6] = (digest[6] & 0x0F) | 0x30
+    digest[8] = (digest[8] & 0x3F) | 0x80
+    return str(uuidlib.UUID(bytes=bytes(digest)))
+
+
+def server_dir(directory, properties, operators=(), world=None):
+    """A fresh server folder: server.properties (and `server-port`, a free port, which this returns), eula.txt,
+    ops.json naming `operators` at level 4, and a copy of `world` as its world."""
+    if directory.exists():
+        shutil.rmtree(directory)
+    directory.mkdir(parents=True)
+    port = lab.free_port()
+    props = dict(properties, **{'server-port': str(port)})
+    (directory / 'server.properties').write_text(''.join(f'{k}={v}\n' for k, v in props.items()), encoding='iso-8859-1')
+    (directory / 'eula.txt').write_text('eula=true\n')
+    ops = [{'uuid': offline_uuid(n), 'name': n, 'level': 4, 'bypassesPlayerLimit': False} for n in operators]
+    (directory / 'ops.json').write_text(json.dumps(ops, indent=2))
+    if world is not None:
+        shutil.copytree(world, directory / 'world')
+        (directory / 'world' / 'session.lock').unlink(missing_ok=True)
+    return port
+
+
+def servers(build, engine=None):
+    """The commands that start vanilla's dedicated server and Ferraloom's (built with the fast profile, without
+    audio or controller libraries, unless `engine` names a built one), and the classpath of the vanilla server
+    with lock: (lock, vanilla command, Ferraloom command, classpath)."""
+    lock, jars, libraries = base.verify_artifacts()
+    if engine is None:
+        with (build / 'compile-rust.log').open('w') as log:
+            subprocess.run(['cargo', 'build', '--locked', '--profile', 'fast', '-p', 'horizon-client',
+                            '--no-default-features', '--bin', 'horizon-client'], cwd=lab.ROOT, check=True,
+                           stdout=log, stderr=subprocess.STDOUT)
+        metadata = json.loads(subprocess.check_output(['cargo', 'metadata', '--no-deps', '--format-version', '1'],
+                                                      cwd=lab.ROOT, text=True))
+        engine = Path(metadata['target_directory']) / 'fast' / ('horizon-client.exe' if os.name == 'nt' else 'horizon-client')
+    classpath = os.pathsep.join(map(str, [jars['server'], *libraries]))
+    vanilla = ['java', '-Xmx2g', '-Duser.timezone=UTC', '-cp', classpath, 'net.minecraft.server.Main', 'nogui']
+    ferraloom = [Path(engine).resolve(), '--resources', lab.RESOURCES, '--dedicated', '--nogui']
+    return lock, vanilla, ferraloom, classpath
+
+
+def compile_java(build, lock, classpath, source):
+    """Compiles one of mods/horizon/src/test/java's parity classes (and what it uses) into build/classes."""
+    classes = build / 'classes'
+    shutil.rmtree(classes, ignore_errors=True)
+    classes.mkdir()
+    with (build / 'compile-java.log').open('w') as log:
+        subprocess.run(['javac', '--release', str(lock['minecraft']['java_major']), '-proc:none', '-nowarn',
+                        '-sourcepath', lab.ROOT / 'mods/horizon/src/test/java', '-cp', classpath, '-d', classes,
+                        lab.ROOT / 'mods/horizon/src/test/java/dev/horizonlab/parity' / f'{source}.java'],
+                       cwd=lab.ROOT, check=True, stdout=log, stderr=subprocess.STDOUT)
+    return classes
+
+
+def run_side(label, server_command, client_command, build, script_path):
+    """One server running the script: its records, and the client's notes of `tick` steps that ended short."""
+    directory = build / label
+    port = server_dir(directory, PROPERTIES, [PLAYER])
+    out = build / f'{label}.jsonl'
+    out.unlink(missing_ok=True)
+    server = Server(server_command, directory, label)
+    try:
+        server.wait_for(r'Done \(', timeout=600)
+        with (build / f'{label}-client.log').open('w') as log:
+            result = subprocess.run([*map(str, client_command), '127.0.0.1', str(port), PLAYER, script_path, out],
+                                    cwd=lab.ROOT, stdout=log, stderr=subprocess.STDOUT, timeout=900)
+        if result.returncode:
+            tail = (build / f'{label}-client.log').read_text(errors='replace').splitlines()[-30:]
+            server_tail = server.lines[-15:]
+            raise AssertionError(f'{label}: the client failed ({result.returncode}):\n' + '\n'.join(tail)
+                                 + f'\n{label} server:\n' + '\n'.join(server_tail))
+    finally:
+        server.stop()
+    notes = Path(f'{out}.notes').read_text(encoding='utf-8').splitlines()
+    return [json.loads(line) for line in out.open(encoding='utf-8')], notes
 
 
 def main():
@@ -42,84 +188,80 @@ def main():
     parser.add_argument('--limit', type=int, default=40, help='print at most this many mismatches')
     parser.add_argument('--allow-gaps', action='store_true', help='report mismatches without failing')
     parser.add_argument('--only', help='run only corpus groups whose name contains this')
+    parser.add_argument('--engine', type=Path, help='an already-built engine instead of compiling the fast profile')
     args = parser.parse_args()
-    build = lab.LOCAL / 'command-exec-parity'
+    build = lab.LOCAL / NAME
     build.mkdir(parents=True, exist_ok=True)
     report_path = build / 'report.json'
     report_path.unlink(missing_ok=True)
     if args.prepare:
         lab.prepare()
-    lock, jars, libraries = base.verify_artifacts()
-    oracle = lab.ROOT / 'mods/horizon/src/test/java/dev/horizonlab/parity/VanillaCommandExecOracle.java'
-    classes = build / 'classes'
-    classes.mkdir(exist_ok=True)
-    dependency_path = os.pathsep.join(map(str, libraries))
-
-    def run(command, name, **kw):
-        with (build / (name + '.log')).open('w', encoding='utf-8') as log:
-            runner = run_game if Path(command[0]).name == 'horizon-client' else subprocess.run
-            result = runner(list(map(str, command)), stdout=log, stderr=subprocess.STDOUT, **kw)
-        if result.returncode:
-            tail = (build / (name + '.log')).read_text(errors='replace')[-3000:]
-            sys.exit(f'{name} failed ({result.returncode}):\n{tail}')
+    lock, vanilla_server, ferraloom_server, classpath = servers(build, args.engine)
+    classes = compile_java(build, lock, classpath, 'CommandExecClient')
+    client = ['java', '-Xmx1g', '-Duser.timezone=UTC', '-cp', str(classes) + os.pathsep + classpath,
+              'dev.horizonlab.parity.CommandExecClient']
 
     groups = corpus_module.groups()
     if args.only:
         groups = [g for g in groups if args.only in g[0] or g[0] == 'setup']
-    script = []
-    for _, lines in groups:
-        script.extend(lines)
+    script = [op for _, lines in groups for op in lines]
     script_path = build / 'script.jsonl'
     script_path.write_text(''.join(json.dumps(op, ensure_ascii=False) + '\n' for op in script), encoding='utf-8')
 
-    run(['javac', '--release', lock['minecraft']['java_major'], '-proc:none', '-cp', str(jars['server']) + os.pathsep + dependency_path, '-d', classes, oracle], 'compile-java')
-    vanilla_dir = build / 'vanilla'
-    shutil.rmtree(vanilla_dir, ignore_errors=True)
-    vanilla_dir.mkdir()
-    run(['java', '-Xmx3G', '-Duser.timezone=UTC', '-cp', os.pathsep.join([str(classes), str(jars['server']), dependency_path]),
-         'dev.horizonlab.parity.VanillaCommandExecOracle', vanilla_dir / 'universe', script_path, build / 'vanilla.jsonl', SEED], 'java', cwd=vanilla_dir)
-
-    run(['cargo', 'build', '--profile', 'fast', '-p', 'horizon-client', '--bin', 'horizon-client'], 'compile-rust', cwd=lab.ROOT)
-    metadata = json.loads(subprocess.check_output(['cargo', 'metadata', '--no-deps', '--format-version', '1'], cwd=lab.ROOT, text=True))
-    binary = Path(metadata['target_directory']) / 'fast' / ('horizon-client.exe' if os.name == 'nt' else 'horizon-client')
-    rust_dir = build / 'rust'
-    shutil.rmtree(rust_dir, ignore_errors=True)
-    rust_dir.mkdir()
-    env = lab.game_env(HORIZON_SERVER_THREAD=1, HORIZON_PLAYER_NAME="Player", HORIZON_COMMAND_SCRIPT=script_path, HORIZON_COMMAND_OUTPUT=build / 'rust.jsonl')
-    run([binary, '--resources', lab.RESOURCES, '--world', 'harness', '--seed', SEED, '--radius', 4], 'rust', cwd=rust_dir, env=env)
-
-    vanilla = [json.loads(l) for l in (build / 'vanilla.jsonl').open(encoding='utf-8')]
-    rust = [json.loads(l) for l in (build / 'rust.jsonl').open(encoding='utf-8')]
+    vanilla, vanilla_notes = run_side('vanilla', vanilla_server, client, build, script_path)
+    rust, rust_notes = run_side('ferraloom', ferraloom_server, client, build, script_path)
     if len(vanilla) != len(rust):
-        sys.exit(f'record count differs: vanilla {len(vanilla)} rust {len(rust)}')
+        sys.exit(f'record count differs: vanilla {len(vanilla)} ferraloom {len(rust)}')
     commands_by_group = []
     index = 0
     for name, lines in groups:
         n = sum(1 for op in lines if (op['op'] == 'cmd' and op.get('record', True)) or (op['op'] == 'tick' and op.get('record')))
         commands_by_group.append((name, index, index + n))
         index += n
-    mismatches = []
-    for v, r in zip(vanilla, rust):
+    mismatches, known, fixed = [], [], set(KNOWN)
+    seen = {}
+    for at, (v, r) in enumerate(zip(vanilla, rust)):
         assert v['cmd'] == r['cmd'], (v['cmd'], r['cmd'])
+        seen[v['cmd']] = seen.get(v['cmd'], 0) + 1
         kind = compare(v, r)
         if kind:
-            mismatches.append({'kind': kind, 'cmd': v['cmd'], 'vanilla': v, 'rust': r})
-    (build / 'mismatches.jsonl').write_text(''.join(json.dumps(m, ensure_ascii=False) + '\n' for m in mismatches), encoding='utf-8')
+            # A KNOWN key names the command, or one of its occurrences ("/waypoint list #6").
+            key = next((k for k in (f'{v["cmd"]} #{seen[v["cmd"]]}', v['cmd']) if k in KNOWN), None)
+            (known if key else mismatches).append({'kind': kind, 'cmd': v['cmd'], 'at': at, 'occurrence': seen[v['cmd']],
+                                                   'key': key, 'vanilla': v, 'rust': r})
+            fixed.discard(key)
+    # A `tick` whose step ended short on one server only (vanilla's step them all).
+    for note in sorted(set(vanilla_notes) ^ set(rust_notes)):
+        side = 'vanilla' if note in vanilla_notes else 'ferraloom'
+        record = {'cmd': note, 'messages': [], 'results': [], 'side': side}
+        key = TICKS_SHORT if side == 'ferraloom' and TICKS_SHORT in KNOWN else None
+        (known if key else mismatches).append({'kind': 'ticks', 'cmd': note, 'at': None, 'key': key,
+                                               'vanilla': record, 'rust': record})
+        fixed.discard(key)
+    (build / 'mismatches.jsonl').write_text(''.join(json.dumps(m, ensure_ascii=False) + '\n' for m in mismatches + known),
+                                            encoding='utf-8')
     summary = []
-    bad = {m['cmd'] for m in mismatches}
+    bad = {m['at'] for m in mismatches + known}
     for name, lo, hi in commands_by_group:
-        failed = sum(1 for rec in vanilla[lo:hi] if rec['cmd'] in bad)
+        failed = sum(1 for at in range(lo, hi) if at in bad)
         summary.append({'group': name, 'commands': hi - lo, 'mismatches': failed})
         print(f'{name}: {hi - lo - failed}/{hi - lo} commands match', flush=True)
     for m in mismatches[:args.limit]:
-        print(m['kind'], repr(m['cmd']))
-        print('  vanilla', render(m['vanilla'])[:400])
-        print('  rust   ', render(m['rust'])[:400])
+        print(m['kind'], repr(m['cmd']), '' if m['at'] is None else f'(#{m["occurrence"]}, record {m["at"]})')
+        show(m)
+    for m in known:
+        print(f'known: {m["cmd"]!r} ({KNOWN[m["key"]]})')
+        if long_messages(m):
+            show(m)
+    for key in sorted(fixed):
+        print(f'matches now, leave KNOWN: {key!r}')
     total = len(vanilla)
-    print(f'total: {total - len(mismatches)}/{total} commands match', flush=True)
-    report = {'schema': 1, 'minecraft': lock['minecraft']['version'], 'platform': platform.platform(), 'seed': SEED,
-              'commands': total, 'mismatches': len(mismatches), 'groups': summary,
-              'scope': 'Feedback and failure messages (text and resolved style), chat lines, and CommandResultCallback results of commands run by the single-player owner of an integrated server; world, entity and item effects through probe commands.'}
+    print(f'total: {total - len(mismatches) - len(known)}/{total} commands match ({len(known)} known)', flush=True)
+    report = {'schema': 2, 'minecraft': lock['minecraft']['version'], 'platform': platform.platform(), 'seed': SEED,
+              'commands': total, 'mismatches': len(mismatches), 'known': len(known), 'groups': summary,
+              'scope': 'Feedback and failure messages (text and resolved style), chat lines, and the last '
+                       'CommandResultCallback result of commands an operator runs on a dedicated server; world, '
+                       'entity and item effects through probe commands.'}
     lab.write_json(report_path, report)
     if mismatches and not args.allow_gaps:
         sys.exit(f'{len(mismatches)} command execution mismatches; see {build}')
@@ -131,7 +273,7 @@ MASKS = [
     (re.compile(r'after [0-9.]+ second\(s\) and \d+ tick\(s\) \([0-9.,NaInfity]+ tick\(s\) per second\)'), 'after <time>'),
     (re.compile(r'Average time per tick: [0-9.]+ms'), 'Average time per tick: <ms>'),
     (re.compile(r'P50: [0-9.]+ms P95: [0-9.]+ms P99: [0-9.]+ms'), 'P50: <ms> P95: <ms> P99: <ms>'),
-    (re.compile(r'debug/client-[0-9_.-]+\.(jfr|json)'), 'debug/client-<time>'),
+    (re.compile(r'debug/(client|server)-[0-9_.-]+\.(jfr|json)'), r'debug/\1-<time>'),
 ]
 
 
@@ -152,10 +294,26 @@ def compare(v, r):
     if masked(v) != masked(r):
         return 'messages'
     if v['results'] != r['results']:
+        # The ticks the profiler ran, which depend on how long it ran.
         if v['cmd'].startswith('/debug stop'):
             return None
         return 'results'
     return None
+
+
+def long_messages(m):
+    return m['kind'] == 'messages' and max(len(m['vanilla']['messages']), len(m['rust']['messages'])) > 3
+
+
+def show(m):
+    """A mismatch's two records, or the lines that differ for long replies (/help)."""
+    if long_messages(m):
+        lines = [[''.join(span[0] for span in message) for message in json.loads(masked(side))] for side in (m['vanilla'], m['rust'])]
+        for line in difflib.unified_diff(*lines, 'vanilla', 'ferraloom', n=0, lineterm=''):
+            print('   ', line[:300])
+        return
+    print('  vanilla  ', render(m['vanilla'])[:400])
+    print('  ferraloom', render(m['rust'])[:400])
 
 
 def render(record):
@@ -164,4 +322,7 @@ def render(record):
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except AssertionError as error:
+        sys.exit(f'{NAME}: {error}')

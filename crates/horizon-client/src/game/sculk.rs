@@ -4,6 +4,7 @@
 //! (`SculkShriekerBlockEntity`, `SpawnUtil`), catalysts feeding the sculk
 //! spreader from deaths, and the darkness wardens and shriekers cast.
 use super::{Game, Result};
+use crate::game::keys::KeyCode;
 use horizon_client::{
     containers::BlockEntity,
     fast_hash::{FxHashMap, FxHashSet},
@@ -14,14 +15,6 @@ use horizon_client::{
 use horizon_core::{geometry::Direction, position::BlockPos, random::RandomSource};
 use horizon_world::registry::BlockStateId;
 use std::collections::HashSet;
-use winit::keyboard::KeyCode;
-
-pub const HELP: &[&str] = &[
-    "sculk                          sculk listeners, the warning level and the darkness blend",
-    "sculk charge X Y Z AMOUNT      a mob dying there with that much experience (the nearest catalyst takes it)",
-    "sculk warn LEVEL               set the player's warden warning level",
-    "sculk dig                      end the minute of calm of every warden",
-];
 
 /// The sculk block kinds by state id, built once.
 #[derive(Default)]
@@ -196,12 +189,6 @@ impl Index {
     fn contains(&self, key: &Pos) -> bool {
         self.seq.contains_key(key)
     }
-    /// Every position, in insertion order.
-    fn ordered(&self) -> Vec<Pos> {
-        let mut all: Vec<(u64, Pos)> = self.chunks.values().flatten().copied().collect();
-        all.sort_unstable_by_key(|e| e.0);
-        all.into_iter().map(|e| e.1).collect()
-    }
     /// The positions within `radius` (block distance squared) of `at`, with
     /// their sequence numbers, in insertion order.
     fn near(&self, at: [i32; 3], radius: i32) -> Vec<(u64, Pos)> {
@@ -246,6 +233,13 @@ impl Index {
             }
             None => self.awake.extend(self.seq.keys().copied()),
         }
+    }
+    /// Every position, in insertion order.
+    #[cfg(test)]
+    fn ordered(&self) -> Vec<Pos> {
+        let mut all: Vec<(u64, Pos)> = self.chunks.values().flatten().copied().collect();
+        all.sort_unstable_by_key(|e| e.0);
+        all.into_iter().map(|e| e.1).collect()
     }
 }
 const KIND_SENSOR: u8 = 1;
@@ -295,66 +289,6 @@ impl Game<'_> {
         out
     }
 
-    /// The `sculk` control command: listeners and their vibrations, or a
-    /// test charge for the nearest catalyst.
-    pub(super) fn sculk_command(&mut self, words: &[&str]) -> Result<serde_json::Value> {
-        match words.get(1).copied() {
-            Some("charge") => {
-                let num = |i: usize| -> Result<f64> {
-                    Ok(words.get(i).ok_or("missing argument")?.parse::<f64>()?)
-                };
-                let at = [num(2)?, num(3)?, num(4)?];
-                let amount = num(5)? as u32;
-                let taken = self.catalyst_takes_experience(at, |_| amount);
-                Ok(serde_json::json!({ "ok": true, "taken": taken }))
-            }
-            Some("dig") => {
-                // Let every warden's minute of calm run out.
-                for m in self
-                    .mobs
-                    .iter_mut()
-                    .filter(|m| m.species() == Species::Warden)
-                {
-                    warden::expire_dig_cooldown(m);
-                }
-                Ok(serde_json::json!({ "ok": true }))
-            }
-            Some("warn") => {
-                let level = words.get(2).ok_or("missing level")?.parse::<i32>()?;
-                self.sculk.tracker.set_warning_level(level);
-                Ok(serde_json::json!({ "ok": true }))
-            }
-            _ => Ok(self.sculk_status()),
-        }
-    }
-    /// The `sculk` control command's listing.
-    pub(super) fn sculk_status(&self) -> serde_json::Value {
-        let listeners: Vec<serde_json::Value> = self
-            .sculk
-            .index
-            .ordered()
-            .iter()
-            .filter_map(|key| match self.world.block_entities.get(key) {
-                Some(BlockEntity::Sculk(e)) => Some(serde_json::json!({
-                    "pos": [key.0, key.1, key.2],
-                    "kind": e.id(),
-                    "current": e.vibration.current.map(|i| i.event),
-                    "travel": e.vibration.travel,
-                    "last_frequency": e.last_frequency,
-                    "warning_level": e.warning_level,
-                    "cursors": e.spreader.cursors.len(),
-                })),
-                _ => None,
-            })
-            .collect();
-        serde_json::json!({
-            "listeners": listeners,
-            "warning_level": self.sculk.tracker.warning_level,
-            "cooldown": self.sculk.tracker.cooldown_ticks,
-            "darkness": self.sculk.darkness.1,
-            "chunks_known": self.sculk.known.len(),
-        })
-    }
     /// `WardenSpawnTrackerCommand`: clear the player's tracker or set its
     /// warning level.
     pub(super) fn cmd_warden_spawn_tracker(&mut self, level: Option<i32>) {
@@ -656,7 +590,7 @@ impl Game<'_> {
                 pos[2].floor() as i32
             )
         });
-        if self.remote.is_some() || !self.sculk.tables.built {
+        if !self.sculk.tables.built {
             return;
         }
         let at = block_of(pos);
@@ -1337,50 +1271,6 @@ impl Game<'_> {
         };
         self.sculk.darkness = (current, next);
     }
-    /// The darkness effect's blend factor at the partial tick.
-    fn darkness_blend(&self, partial: f32) -> f32 {
-        let (previous, current) = self.sculk.darkness;
-        previous + (current - previous) * partial
-    }
-    /// The fog's view of the darkness effect, while it is on.
-    pub(super) fn darkness_fog(&self) -> Option<f32> {
-        self.potions
-            .effects
-            .get("darkness")
-            .map(|_| self.darkness_blend(self.clock.fraction() as f32))
-    }
-    /// `LightmapRenderStateExtractor`: (brightness taken off the gamma
-    /// option, the pulsing light scale).
-    pub(super) fn darkness_lighting(&self, partial: f32) -> (f32, f32) {
-        let scale = self.settings.file.double("darknessEffectScale") as f32;
-        let modifier = self.darkness_blend(partial) * scale;
-        let pulse =
-            ((self.ticks as f32 - partial) * std::f32::consts::PI * 0.025).cos() * 0.45 * modifier;
-        (modifier, pulse.max(0.0) * scale)
-    }
-
-    /// `LightmapRenderStateExtractor`: the night vision effect's intensity
-    /// (`GameRenderer.nightVisionScale`), or conduit power's water vision.
-    pub(super) fn night_vision_intensity(&self, partial: f32) -> f32 {
-        use horizon_client::fog::FogType;
-        if let Some(e) = self.potions.effects.get("night_vision") {
-            // MobEffectInstance.endsWithin(200); -1 is infinite.
-            return if e.duration < 0 || e.duration > 200 {
-                1.0
-            } else {
-                0.7 + ((e.duration as f32 - partial) * std::f32::consts::PI * 0.2).sin() * 0.3
-            };
-        }
-        if self.potions.effects.get("conduit_power").is_some()
-            && let Some(eye) = self.eye_position()
-        {
-            let in_water =
-                horizon_client::fog::fog_type(&self.world, self.res.facts(), eye, self.forward())
-                    == FogType::Water;
-            return self.fog.water_vision(in_water);
-        }
-        0.0
-    }
 
     /// `Warden.applyDarknessAround` / `MobEffectUtil.addEffectToPlayersAround`.
     pub(super) fn apply_darkness(&mut self, at: [f64; 3], radius: f64) {
@@ -1625,7 +1515,7 @@ impl Game<'_> {
             at[2].floor() as i32,
         );
         let state = self.world.block(below.0, below.1, below.2);
-        let Some((sprite, tint)) = self.particle_sprite(state, [below.0, below.1, below.2]) else {
+        let Some((_, tint)) = self.particle_sprite(state, [below.0, below.1, below.2]) else {
             return;
         };
         for _ in 0..30 {
@@ -1637,8 +1527,7 @@ impl Game<'_> {
                 at[1],
                 at[2] + off(r.next_float()),
             ];
-            let particle =
-                horizon_client::particles::Particle::terrain(r, p, [0.0; 3], sprite.clone(), tint);
+            let particle = horizon_client::particles::Particle::terrain(r, p, [0.0; 3], tint);
             self.particles.push(particle);
         }
     }

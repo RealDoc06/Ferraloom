@@ -16,7 +16,12 @@ players made of vanilla's protocol code, joins them both and runs one script on 
   Alice's motion packets and her sprint flag as the server sets it are compared exactly;
 - a zombie hits Bob, twice: the knockback reaches Bob's client once his server-side copy has
   travelled a tick (the mob's hit, then ServerPlayer's travel, then ServerEntity.sendChanges). It is night, so
-  that no zombie burns (a burning mob is in its hurt cooldown).
+  that no zombie burns (a burning mob is in its hurt cooldown);
+- Bob falls five blocks: a hurt with no entity behind it.
+
+In every case each player's ClientboundDamageEventPacket about a player (LivingEntity.hurtServer's
+broadcastDamageEvent, to the trackers and the hurt player: the red flash) and the player hurt sounds it hears
+(Player.playSound leaves the hurt player out) are compared as well, in their own order.
 
 The script waits on the server, not on the wall: `ticks N` is N ticks of its game clock (with a `sync` round trip
 before and after, so each client holds what the server sent), `tickstep` is one `/tick step` that has run, `frozen`
@@ -60,10 +65,17 @@ PROPERTIES = {
     'spawn-protection': '0',
     'max-players': '5',
     'pause-when-empty-seconds': '-1',
+    # No watchdog: vanilla kills a server whose tick (a slow "Saving the game") passes 60 s.
+    'max-tick-time': '-1',
+}
+# Cases compared on their damage events and hurt sounds only, and why.
+HURTS_ONLY = {
+    'damage-fall': "the motion packet of a fall's hurt differs (vanilla's carries the fall's last move, 0.42 up)",
 }
 # Cases Horizon still gets wrong, and why.
 KNOWN = {
     'pvp-mace': "a smash on a player runs none of MaceItem.hurtEnemy (the attacker's fall goes on)",
+    'pvp-shield': "a blocked hit plays no hurt sound (health.rs emits it with the damage broadcast only)",
 }
 
 A = (0.5, -60.0, 0.5)  # Alice, facing east (yaw -90)
@@ -177,6 +189,10 @@ CASES = {
     'pvp-mace': pvp_case(weapon='minecraft:mace', mace=True),
     'pvp-cooldown': pvp_case(cooldown=True),
     'zombie-hits-bob': mob_hits_case('zombie'),
+    # Bob falls five blocks (Resistance V takes the damage, not the hurt).
+    'damage-fall': ['cmd Bob effect give @s minecraft:resistance 1000 4 true', *stand('Bob', V, 90),
+                    *[f'pos Bob {V[0]} {V[1] + h} {V[2]} 90 0 0' for h in (5.0, 4.0, 2.5, 1.0)],
+                    *stand('Bob', V, 90, ticks=1), 'ticks 10'],
 }
 SETUP = ['cmd Alice gamerule spawn_mobs false', 'cmd Alice gamerule spawn_monsters false',
          'cmd Alice kill @e[type=!player]', 'cmd Alice gamerule advance_time false', 'cmd Alice time set midnight',
@@ -211,7 +227,11 @@ def server_dir(directory, world):
     return port
 
 
-def run_side(label, server_command, client_command, build, world):
+def run_side(label, server_command, client_command, build, world, cases=None, setup=None):
+    """Runs SETUP then each case's script against one server, the transcript's lines back (`cases` and `setup`
+    default to this harness's; test_server_combat_parity.py passes its own)."""
+    cases = CASES if cases is None else cases
+    setup = SETUP if setup is None else setup
     directory = build / label
     port = server_dir(directory, world)
     out = build / f'{label}.txt'
@@ -278,9 +298,9 @@ def run_side(label, server_command, client_command, build, world):
                     send(f'join {name}')
                     server.wait_for(rf'{name} joined the game', timeout=120)
                     wait_ticks(server, 40)
-                for line in SETUP:
+                for line in setup:
                     send(line)
-                for case, lines in CASES.items():
+                for case, lines in cases.items():
                     send(f'step {case}')
                     for line in lines:
                         send(line)
@@ -301,13 +321,19 @@ DATA = re.compile(r'^chat \S+ has the following entity data: \[(.*)\]$')
 
 
 def compared(lines):
-    """Per case, what is compared: the mob's Pos and Motion (to 1e-9), and each player's motion packets and
-    sprint flag."""
-    cases = {}
+    """Per case, what is compared: the mob's Pos and Motion (to 1e-9), each player's motion packets and sprint
+    flag, then each player's damage events and hurt sounds. Those come at the hurt in vanilla and at the hurt
+    player's next tick in Horizon, so their order against the motion packets isn't compared."""
+    cases, hurts = {}, {}
     for line in lines:
         who, step, text = line.split(' ', 2)
         step = step.removeprefix('step=')
         if step not in CASES:
+            continue
+        if text.startswith('damage ') or text.startswith('sound '):
+            hurts.setdefault(step, []).append(f'{who} {text}')
+            continue
+        if step in HURTS_ONLY:
             continue
         kept = cases.setdefault(step, [])
         data = DATA.match(text)
@@ -317,6 +343,9 @@ def compared(lines):
             kept.append(f'{who} {text}')
         elif text.startswith('error') or text.startswith('disconnected'):
             kept.append(f'{who} {text}')
+    for step, kept in hurts.items():
+        # Each player's own lines in order; the two players' interleaving is the network's.
+        cases.setdefault(step, []).extend(sorted(kept, key=lambda l: l.split(' ', 1)[0]))
     return cases
 
 
@@ -334,7 +363,8 @@ def main():
     subprocess.run(['javac', '--release', str(lock['minecraft']['java_major']), '-proc:none', '-nowarn', '-sourcepath',
                     lab.ROOT / 'mods/horizon/src/test/java', '-cp', dependencies, '-d', classes, oracle],
                    cwd=lab.ROOT, check=True, capture_output=True)
-    subprocess.run(['cargo', 'build', '--profile', 'fast', '-p', 'horizon-client', '--bin', 'horizon-client'], cwd=lab.ROOT,
+    subprocess.run(['cargo', 'build', '--profile', 'fast', '-p', 'horizon-client', '--no-default-features',
+                    '--bin', 'horizon-client'], cwd=lab.ROOT,
                    check=True, capture_output=True)
     import json
     metadata = json.loads(subprocess.check_output(['cargo', 'metadata', '--no-deps', '--format-version', '1'],

@@ -3,6 +3,7 @@
 //! the vanilla dispense behaviours Horizon has entities for, and container
 //! comparator signals (`AbstractContainerMenu.getRedstoneSignalFromContainer`).
 use super::Game;
+use ferraloom_plugins::Move;
 
 mod crafter;
 use horizon_client::{
@@ -12,7 +13,10 @@ use horizon_client::{
     world::World,
 };
 use horizon_core::{geometry::Direction, position::BlockPos, random::RandomSource};
-use horizon_world::{level::Behaviours, registry::BlockStateId};
+use horizon_world::{
+    level::{Behaviours, states::BlockId},
+    registry::BlockStateId,
+};
 
 type Pos = (i32, i32, i32);
 
@@ -505,17 +509,29 @@ impl Game<'_> {
         mut stack: ItemStack,
         slot: usize,
     ) -> Option<ItemStack> {
+        // The stack's own maximum (its max_stack_size component) caps both
+        // the empty-slot set and the merge, as ItemStack#getMaxStackSize does.
+        let max = self.stack_max_size(&stack);
         let c = self.containers();
         if !c.can_place(view, slot, &stack) {
             return Some(stack);
         }
         let was_empty = c.is_empty(view);
-        let max = c.max_stack(&stack);
         let mut success = false;
-        let target = self.slot_mut_at(view, slot)?;
+        // A slot gone (a plugin removed the container mid-move) takes nothing.
+        let Some(target) = self.slot_mut_at(view, slot) else {
+            return Some(stack);
+        };
         match target {
             None => {
-                *target = Some(stack.clone());
+                // Container.setItem's limitSize: a stack over its maximum (a
+                // plugin's replacement, an item entity summoned so) loses the
+                // rest, which counts as inserted. A bookshelf sets it as it is.
+                let mut placed = stack.clone();
+                if view.kind != Kind::Bookshelf {
+                    placed.count = placed.count.min(max);
+                }
+                *target = Some(placed);
                 stack.count = 0;
                 success = true;
             }
@@ -568,6 +584,20 @@ impl Game<'_> {
             rest = self.try_move_in_item(from_hopper, view, stack, slot);
         }
         rest
+    }
+    /// The block at `p`, to tell whether an InventoryMoveItemEvent listener
+    /// replaced it.
+    fn block_id_at(&self, p: Pos) -> BlockId {
+        self.res.behaviours().block(self.world.block(p.0, p.1, p.2))
+    }
+    /// The destination of a move after its InventoryMoveItemEvent: the
+    /// container at `at`, the block the mover faces, if a listener left the
+    /// block that was there (`before`, from `block_id_at`).
+    fn moved_into(&self, at: Pos, before: BlockId) -> Option<View> {
+        if self.block_id_at(at) != before {
+            return None;
+        }
+        self.containers().view(at, false)
     }
     /// Remove one item from a slot (`removeItem(slot, 1)`).
     fn take_one(&mut self, view: &View, slot: usize) -> Option<ItemStack> {
@@ -659,7 +689,7 @@ impl Game<'_> {
         let front = offset(pos, facing);
         let face = facing.opposite();
         if let Some(target) = c.view(front, false) {
-            return self.eject_into(pos, hopper, &target, face);
+            return self.eject_into(pos, hopper, front, &target, face);
         }
         let Some(id) = self.entity_container_at([
             f64::from(front.0) + 0.5,
@@ -668,24 +698,62 @@ impl Game<'_> {
         ]) else {
             return false;
         };
-        self.with_entity_container(id, |g, target| g.eject_into(pos, hopper, target, face))
-            .unwrap_or(false)
+        self.with_entity_container(id, |g, target| {
+            g.eject_into(pos, hopper, target.parts[0].0, target, face)
+        })
+        .unwrap_or(false)
     }
-    /// The rest of `HopperBlockEntity.ejectItems`: one item into `target`.
-    fn eject_into(&mut self, pos: Pos, hopper: &View, target: &View, face: Direction) -> bool {
+    /// The rest of `HopperBlockEntity.ejectItems`: one item into `target`,
+    /// the container the hopper faces at `front`.
+    fn eject_into(
+        &mut self,
+        pos: Pos,
+        hopper: &View,
+        front: Pos,
+        target: &View,
+        face: Direction,
+    ) -> bool {
         if self.containers().is_full(target, face) {
             return false;
         }
         for slot in 0..hopper.len() {
-            let Some(one) = self.take_one(hopper, slot) else {
+            let Some(mut one) = self.take_one(hopper, slot) else {
                 continue;
             };
+            // Ferraloom: InventoryMoveItemEvent (game/plugins/inventory.rs).
+            let (mut original, mut fresh) = (None, None);
+            if ferraloom_plugins::listens(ferraloom_plugins::Event::InventoryMoveItem) {
+                let before = self.block_id_at(front);
+                match self.plugin_move_item(pos, target.parts[0].0, true, &one) {
+                    Move::Unchanged => {}
+                    Move::Cancelled => {
+                        self.put_back(hopper, slot, one);
+                        self.hoppers.entry(pos).or_default().cooldown = 8;
+                        return false;
+                    }
+                    Move::Replaced(item) => original = Some(std::mem::replace(&mut one, item)),
+                }
+                // A listener that removed the destination, or put another
+                // block there, leaves the move as a cancel does.
+                let Some(now) = self.moved_into(front, before) else {
+                    self.put_back(hopper, slot, original.unwrap_or(one));
+                    self.hoppers.entry(pos).or_default().cooldown = 8;
+                    return false;
+                };
+                fresh = Some(now);
+            }
+            let target = fresh.as_ref().unwrap_or(target);
+            // A replaced item's original goes back whatever happens, and the
+            // rest of the replacement is discarded.
             match self.add_item(Some(pos), target, one, Some(face)) {
                 None => {
+                    if let Some(original) = original {
+                        self.put_back(hopper, slot, original);
+                    }
                     self.view_changed(target);
                     return true;
                 }
-                Some(rest) => self.put_back(hopper, slot, rest),
+                Some(rest) => self.put_back(hopper, slot, original.unwrap_or(rest)),
             }
         }
         false
@@ -777,15 +845,47 @@ impl Game<'_> {
             if !c.can_take(source, slot, stack, Direction::Down) {
                 continue;
             }
-            let Some(one) = self.take_one(source, slot) else {
+            let Some(mut one) = self.take_one(source, slot) else {
                 continue;
             };
+            // Ferraloom: InventoryMoveItemEvent (game/plugins/inventory.rs).
+            let (mut original, mut fresh) = (None, None);
+            if ferraloom_plugins::listens(ferraloom_plugins::Event::InventoryMoveItem) {
+                let (from, to) = (source.parts[0].0, hopper.parts[0].0);
+                let before = self.block_id_at(to);
+                match self.plugin_move_item(from, to, false, &one) {
+                    Move::Unchanged => {}
+                    Move::Cancelled => {
+                        self.put_back(source, slot, one);
+                        // Not where a listener removed the hopper.
+                        if hopper.kind == Kind::Hopper && self.block_id_at(to) == before {
+                            self.hoppers.entry(to).or_default().cooldown = 8;
+                        }
+                        return false;
+                    }
+                    Move::Replaced(item) => original = Some(std::mem::replace(&mut one, item)),
+                }
+                // A listener that removed the destination, or put another
+                // block there, leaves the move as a cancel does, without the
+                // cooldown of a hopper no longer there.
+                let Some(now) = self.moved_into(to, before) else {
+                    self.put_back(source, slot, original.unwrap_or(one));
+                    return false;
+                };
+                fresh = Some(now);
+            }
+            let hopper = fresh.as_ref().unwrap_or(hopper);
+            // A replaced item's original goes back whatever happens, and the
+            // rest of the replacement is discarded.
             match self.add_item(source_hopper, hopper, one, None) {
                 None => {
+                    if let Some(original) = original {
+                        self.put_back(source, slot, original);
+                    }
                     self.view_changed(source);
                     return true;
                 }
-                Some(rest) => self.put_back(source, slot, rest),
+                Some(rest) => self.put_back(source, slot, original.unwrap_or(rest)),
             }
         }
         false
@@ -1039,141 +1139,6 @@ impl Game<'_> {
 }
 
 // ---- hopper, dispenser and dropper screens ----
-
-/// Which machine screen the open container uses.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Screen {
-    Hopper,
-    Dispenser,
-    Dropper,
-}
-
-impl Game<'_> {
-    fn machine_screen(&self) -> Option<Screen> {
-        let key = self.container?;
-        // A server's menu shows by its type, whatever block (or minecart) holds it.
-        if let Some(menu) = self.remote_menu_type() {
-            return match menu {
-                "minecraft:hopper" => Some(Screen::Hopper),
-                "minecraft:generic_3x3" => Some(Screen::Dispenser),
-                _ => None,
-            };
-        }
-        if key.1 == super::minecarts::CART_KEY_Y {
-            return (self.open_cart_kind() == Some(super::minecarts::CartKind::Hopper))
-                .then_some(Screen::Hopper);
-        }
-        let state = self.world.block(key.0, key.1, key.2);
-        match &*self.res.facts().get(state).name {
-            "minecraft:hopper" => Some(Screen::Hopper),
-            "minecraft:dispenser" => Some(Screen::Dispenser),
-            "minecraft:dropper" => Some(Screen::Dropper),
-            _ => None,
-        }
-    }
-    /// `imageHeight` of the open screen (HopperScreen is 133 tall).
-    pub(super) fn screen_height(&self) -> f32 {
-        if self
-            .station
-            .as_ref()
-            .is_some_and(|s| s.kind == super::stations::Kind::Beacon)
-        {
-            return super::beacon::HEIGHT;
-        }
-        if let Some(rows) = self.chest_rows() {
-            // ContainerScreen: 114 + 18 per row.
-            return 114.0 + rows as f32 * 18.0;
-        }
-        if self.container_block_is_shulker() {
-            return 167.0;
-        }
-        if self.machine_screen() == Some(Screen::Hopper) {
-            133.0
-        } else {
-            166.0
-        }
-    }
-    /// HopperMenu / DispenserMenu slot layouts; None for other screens.
-    pub(super) fn machine_slot_position(&self, i: usize) -> Option<(f32, f32)> {
-        let screen = self.machine_screen()?;
-        let inventory_y = if screen == Screen::Hopper { 51.0 } else { 84.0 };
-        Some(match i {
-            0..9 => (8.0 + i as f32 * 18.0, inventory_y + 58.0),
-            9..36 => (
-                8.0 + ((i - 9) % 9) as f32 * 18.0,
-                inventory_y + ((i - 9) / 9) as f32 * 18.0,
-            ),
-            300..500 if screen == Screen::Hopper => (44.0 + (i - 300) as f32 * 18.0, 20.0),
-            300..500 => (
-                62.0 + ((i - 300) % 3) as f32 * 18.0,
-                17.0 + ((i - 300) / 3) as f32 * 18.0,
-            ),
-            _ => return None,
-        })
-    }
-    /// HopperScreen / DispenserScreen background and labels; false for other containers.
-    pub(super) fn draw_machine_screen(
-        &self,
-        batch: &mut horizon_client::hud::HudBatch,
-        ox: f32,
-        oy: f32,
-    ) -> bool {
-        let Some(screen) = self.machine_screen() else {
-            return false;
-        };
-        let atlas = &self.gui.atlas;
-        let key_is_cart = self
-            .container
-            .is_some_and(|k| k.1 == super::minecarts::CART_KEY_Y);
-        let (texture, height, key, fallback) = match screen {
-            Screen::Hopper if key_is_cart => (
-                "gui/container/hopper",
-                133.0,
-                "entity.minecraft.hopper_minecart",
-                "Minecart with Hopper",
-            ),
-            Screen::Hopper => (
-                "gui/container/hopper",
-                133.0,
-                "container.hopper",
-                "Item Hopper",
-            ),
-            Screen::Dispenser => (
-                "gui/container/dispenser",
-                166.0,
-                "container.dispenser",
-                "Dispenser",
-            ),
-            Screen::Dropper => (
-                "gui/container/dispenser",
-                166.0,
-                "container.dropper",
-                "Dropper",
-            ),
-        };
-        if let Some(mut r) = atlas.sprites.get(texture).copied() {
-            let dv = (r.v1 - r.v0) / r.h as f32;
-            let du = (r.u1 - r.u0) / r.w as f32;
-            r.u1 = r.u0 + 176.0 * du;
-            r.v1 = r.v0 + height * dv;
-            batch.rect_uv(ox, oy, 176.0, height, r, u32::MAX);
-        }
-        let grey = horizon_client::hud::rgba(64, 64, 64, 255);
-        let title = &self.remote_menu_title().unwrap_or_else(|| {
-            horizon_client::text::Text::literal(self.container_title(self.translate(key, fallback)))
-                .resolve_legacy()
-        });
-        let title_x = if screen == Screen::Hopper {
-            8.0
-        } else {
-            (176.0 - atlas.font.width_text(title)) / 2.0
-        };
-        batch.text_styled(atlas, title, ox + title_x, oy + 6.0, grey, false);
-        let inventory = self.translate("container.inventory", "Inventory");
-        batch.text(atlas, &inventory, ox + 8.0, oy + height - 94.0, grey, false);
-        true
-    }
-}
 
 #[cfg(test)]
 mod item_column_tests {

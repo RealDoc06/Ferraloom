@@ -15,7 +15,6 @@ pub mod armadillo;
 pub mod axolotl;
 pub mod bat;
 pub mod bee;
-pub mod body_anim;
 pub mod brain;
 pub mod breeze;
 pub mod camel;
@@ -58,6 +57,8 @@ pub mod path;
 pub mod phantom;
 pub mod piglin;
 pub mod player_index;
+// Ferraloom: plugin events fired from mob code.
+pub mod plugin_sites;
 pub mod polar_bear;
 pub mod rabbit;
 pub mod raider;
@@ -91,10 +92,10 @@ pub mod warden_brain;
 pub mod witch;
 pub mod wither;
 mod world;
-pub use world::{KeptTags, Others, keep_tag_answers, visual_clip};
+pub use world::{Others, keep_tag_answers, visual_clip};
 pub mod zombie_villager;
 
-use crate::{blocks::BlockFacts, mesher::Vertex, world::World};
+use crate::{blocks::BlockFacts, world::World};
 pub use data::MobData;
 use horizon_core::{
     geometry::{Aabb, Vec3},
@@ -108,103 +109,6 @@ use std::{collections::HashMap, fs, path::Path, sync::Arc};
 pub struct Polygon {
     pub normal: [f32; 3],
     pub vertices: [[f32; 5]; 4],
-}
-impl Polygon {
-    fn vertex_normal(&self, pose: ModelNormals) -> [i8; 4] {
-        let n = pose.matrix * glam::Vec3::from_array(self.normal);
-        let n = if pose.trusted {
-            n
-        } else {
-            n.normalize_or_zero()
-        };
-        let packed = n.to_array().map(|v| (v.clamp(-1.0, 1.0) * 127.0) as i8);
-        [packed[0], packed[1], packed[2], -127]
-    }
-}
-
-/// ModelPart uses a separate normal stack: uniform scaling keeps normal lengths,
-/// while nonuniform scaling requires normalization after the complete part transform.
-#[derive(Clone, Copy)]
-struct ModelNormals {
-    matrix: glam::Mat3,
-    trusted: bool,
-}
-impl ModelNormals {
-    // shortcut: infer the root normal pose from its geometry matrix; pass an explicit
-    // root normal stack when root-transform rounding is ported as well.
-    fn new(base: glam::Mat4) -> Self {
-        let m = glam::Mat3::from_mat4(base);
-        let lengths = glam::Vec3::new(m.x_axis.length(), m.y_axis.length(), m.z_axis.length());
-        let uniform =
-            lengths.min_element() > 0.0 && lengths.max_element() - lengths.min_element() < 1.0e-6;
-        Self {
-            matrix: if uniform {
-                m / lengths.x
-            } else {
-                m.inverse().transpose()
-            },
-            trusted: uniform,
-        }
-    }
-    fn rotation(x: f32, y: f32, z: f32) -> glam::Mat3 {
-        // JOML derives cosine from the rounded sine, then retains quaternion length.
-        // Assuming an exactly unit quaternion changes a packed normal by one byte.
-        let sin_cos = |angle: f32| {
-            let angle = angle * 0.5;
-            let sin = f64::from(angle).sin() as f32;
-            let cos = (1.0 - sin * sin).sqrt();
-            let a = angle + std::f32::consts::FRAC_PI_2;
-            let tau = std::f32::consts::TAU;
-            let mut quadrant = a - (a / tau) as i32 as f32 * tau;
-            if quadrant < 0.0 {
-                quadrant += tau;
-            }
-            (
-                sin,
-                if quadrant >= std::f32::consts::PI {
-                    -cos
-                } else {
-                    cos
-                },
-            )
-        };
-        let (sx, cx) = sin_cos(x);
-        let (sy, cy) = sin_cos(y);
-        let (sz, cz) = sin_cos(z);
-        let (cycz, sysz, sycz, cysz) = (cy * cz, sy * sz, sy * cz, cy * sz);
-        let (w, x, y, z) = (
-            cx * cycz + sx * sysz,
-            sx * cycz - cx * sysz,
-            cx * sycz + sx * cysz,
-            cx * cysz - sx * sycz,
-        );
-        let (ww, xx, yy, zz) = (w * w, x * x, y * y, z * z);
-        let (xy, xz, xw, yz, yw, zw) = (x * y, x * z, x * w, y * z, y * w, z * w);
-        glam::Mat3::from_cols_array(&[
-            ww + xx - zz - yy,
-            (xy + xy) + (zw + zw),
-            (xz + xz) - (yw + yw),
-            (xy + xy) - (zw + zw),
-            yy - zz + ww - xx,
-            (yz + yz) + (xw + xw),
-            (yw + yw) + (xz + xz),
-            (yz + yz) - (xw + xw),
-            zz - yy - xx + ww,
-        ])
-    }
-    fn part(mut self, pose: [f32; 9]) -> Self {
-        self.matrix *= Self::rotation(pose[3], pose[4], pose[5]);
-        let scale = glam::Vec3::new(pose[6], pose[7], pose[8]);
-        if scale.x.abs() == scale.y.abs() && scale.x.abs() == scale.z.abs() {
-            if scale.min_element() < 0.0 {
-                self.matrix *= glam::Mat3::from_diagonal(scale.signum());
-            }
-        } else {
-            self.matrix *= glam::Mat3::from_diagonal(scale.recip());
-            self.trusted = false;
-        }
-        self
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -750,6 +654,10 @@ pub struct Extra {
     /// The arm the current swing moves (`currentSwing.hand().asArm`): `Some(true)`
     /// for the right arm.
     pub swing_right_arm: Option<bool>,
+    /// Swings started (`SwingState.startIfAble` let them), for the harnesses:
+    /// at a few frames a second a swing can start and end between two
+    /// samples of `ai.swinging`, but it still counts here.
+    pub swings: u32,
     pub flag: bool,
     pub flag2: bool,
     /// Species scratch values (the wither's head targets and clocks).
@@ -920,6 +828,8 @@ pub struct Mob {
     pub climbing: bool,
     pub fire_ticks: i32,
     pub ticks_frozen: i32,
+    /// Ferraloom: the arrows and stingers stuck in it (entity data 12, 13).
+    pub stuck: crate::arrows::StuckCounts,
     pub glowing: bool,
     pub air: i32,
     pub last_hurt: f32,
@@ -1064,6 +974,16 @@ pub enum MobEvent {
         effect: &'static str,
         ticks: i32,
         amplifier: i32,
+    },
+    /// `Bee.doHurtTarget`: a sting of `bee` (the `sting` damage type) on
+    /// the player or a mob. If it hurt, the target has one more stinger and
+    /// `poison` ticks of poison (none on easy).
+    Sting {
+        target: Who,
+        bee: u32,
+        amount: f32,
+        from: [f64; 3],
+        poison: i32,
     },
     /// Damage of a given type to the player (guardian lasers, thorns).
     DamagePlayer {
@@ -2091,6 +2011,7 @@ impl Mob {
             climbing: false,
             fire_ticks: 0,
             ticks_frozen: 0,
+            stuck: Default::default(),
             glowing: false,
             air: 300,
             last_hurt: 0.0,
@@ -2257,6 +2178,8 @@ impl Mob {
         {
             amount *= 5.0;
         }
+        // Ferraloom: the damage before armor, for EntityDamageEvent's BASE.
+        let base = amount;
         let (worn, worn_toughness) = self.worn_armor();
         // Shulker.setRawPeekAmount: a closed shell adds the covered armor modifier.
         let covered = if self.species() == Species::Shulker && self.extra.counter == 0 {
@@ -2279,6 +2202,16 @@ impl Mob {
         let epf = gear::protection(self, source.kind);
         if epf > 0.0 {
             amount *= 1.0 - epf / 25.0;
+        }
+        // Ferraloom: EntityDamageEvent where CraftBukkit's actuallyHurt fires it, past the
+        // cooldown check and before the health changes (mobs/plugin_sites.rs).
+        if ferraloom_plugins::listens(ferraloom_plugins::Event::EntityDamage)
+            && !(self.invulnerable as f32 > 10.0 && amount <= self.last_hurt)
+        {
+            match plugin_sites::damage(self, &source, base, amount) {
+                Some(dealt) => amount = dealt,
+                None => return false,
+            }
         }
         // Wolf.actuallyHurt: wolf armor takes the damage instead of the wolf.
         let absorbed = self.wolf_armor_absorbs(&source);
@@ -2573,18 +2506,6 @@ impl Mob {
         events.push(MobEvent::Sound(event, at, ai::sound_volume(self), pitch));
     }
 }
-/// Model geometry for a mob, posed for its animation state, as camera-relative
-/// vertices textured from the shared atlas.
-pub fn render(
-    mob: &Mob,
-    alpha: f32,
-    camera: glam::DVec3,
-    uv: [f32; 4],
-    light: u32,
-    out: &mut Vec<Vertex>,
-) {
-    render::render_single(mob, alpha, camera, uv, light, out);
-}
 /// A parsed `entity-models.json` document, shared while loading model batches.
 /// Each lookup still constructs an independent part tree for the caller.
 pub struct EntityModelDocument(Value);
@@ -2613,70 +2534,6 @@ impl EntityModelDocument {
 pub fn load_model(root: &Path, key: &str) -> Option<Part> {
     EntityModelDocument::load(root).ok()?.model(key)
 }
-/// ModelPart.render: translate, rotate ZYX, scale, then children.
-pub fn render_model(
-    part: &Part,
-    base: glam::Mat4,
-    pose_for: &dyn Fn(&Part) -> [f32; 9],
-    uv: [f32; 4],
-    light: u32,
-    overlay: u32,
-    out: &mut Vec<Vertex>,
-) {
-    visit(
-        part,
-        base,
-        ModelNormals::new(base),
-        pose_for,
-        uv,
-        light,
-        overlay,
-        out,
-    );
-    fn visit(
-        part: &Part,
-        parent: glam::Mat4,
-        normals: ModelNormals,
-        pose_for: &dyn Fn(&Part) -> [f32; 9],
-        uv: [f32; 4],
-        light: u32,
-        overlay: u32,
-        out: &mut Vec<Vertex>,
-    ) {
-        let p = pose_for(part);
-        let m = parent
-            * glam::Mat4::from_translation(glam::Vec3::new(p[0], p[1], p[2]) / 16.0)
-            * glam::Mat4::from_quat(glam::Quat::from_euler(
-                glam::EulerRot::ZYX,
-                p[5],
-                p[4],
-                p[3],
-            ))
-            * glam::Mat4::from_scale(glam::Vec3::new(p[6], p[7], p[8]));
-        let normals = normals.part(p);
-        for poly in &part.polygons {
-            let normal = poly.vertex_normal(normals);
-            for v in poly.vertices {
-                let pos = m.transform_point3(glam::Vec3::new(v[0], v[1], v[2]) / 16.0);
-                out.push(Vertex {
-                    normal,
-                    pos: pos.to_array(),
-                    uv: [
-                        uv[0] + (uv[2] - uv[0]) * v[3],
-                        uv[1] + (uv[3] - uv[1]) * v[4],
-                    ],
-                    layer: overlay,
-                    color: 0xFFFF_FFFF,
-                    light,
-                    glint_uv: [0.0, 0.0],
-                });
-            }
-        }
-        for c in &part.children {
-            visit(c, m, normals, pose_for, uv, light, overlay, out);
-        }
-    }
-}
 
 impl Mob {
     /// The saddle worn, with its components.
@@ -2702,92 +2559,7 @@ impl Mob {
 #[cfg(test)]
 mod lighting_tests {
     use super::*;
-    use glam::{Mat4, Vec3};
     use serde_json::json;
-
-    fn plane(normal: [f32; 3]) -> Part {
-        Part::parse(
-            "root",
-            &json!({
-                "polygons": [[[0,0,0,0,0], [0,0,0,1,0], [0,0,0,1,1], [0,0,0,0,1]]],
-                "normals": [normal]
-            }),
-        )
-    }
-
-    #[test]
-    fn exported_normals_survive_collapsed_faces_and_mirroring() {
-        let part = plane([1.0, 0.0, 0.0]);
-        assert_eq!(
-            part.polygons[0].vertex_normal(ModelNormals::new(Mat4::IDENTITY)),
-            [127, 0, 0, -127]
-        );
-        assert_eq!(
-            part.polygons[0].vertex_normal(ModelNormals::new(Mat4::from_scale(Vec3::new(
-                -1.0, -1.0, 1.0
-            )))),
-            [-127, 0, 0, -127]
-        );
-    }
-
-    #[test]
-    fn normal_matrix_includes_parent_scale_and_child_rotation() {
-        let mut child = plane([1.0, 0.0, 0.0]);
-        child.pose[5] = std::f32::consts::FRAC_PI_4;
-        let parent = Part {
-            name: "parent".into(),
-            pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 1.0, 0.5],
-            polygons: Vec::new(),
-            children: vec![child],
-        };
-        let mut animated = Vec::new();
-        render::draw(
-            &parent,
-            Mat4::IDENTITY,
-            &anim::Poses::new(&parent),
-            [0.0, 0.0, 1.0, 1.0],
-            0x80402010,
-            240,
-            1,
-            &mut animated,
-        );
-        let mut direct = Vec::new();
-        render_model(
-            &parent,
-            Mat4::IDENTITY,
-            &|p| p.pose,
-            [0.0, 0.0, 1.0, 1.0],
-            240,
-            1,
-            &mut direct,
-        );
-        assert_eq!(animated.len(), 4);
-        for (a, b) in animated.iter().zip(&direct) {
-            assert_eq!(a.normal, [56, 113, 0, -127]);
-            assert_eq!(a.normal, b.normal);
-            assert_eq!(a.pos, b.pos);
-            assert_eq!(a.uv, b.uv);
-            assert_eq!((a.color, a.light, a.layer), (0x80402010, 240, 1));
-        }
-    }
-
-    #[test]
-    fn trusted_rotation_retains_native_quaternion_rounding() {
-        let mut part = plane([1.0, 0.0, 0.0]);
-        part.pose[3] = std::f32::consts::FRAC_PI_2;
-        let mut vertices = Vec::new();
-        render::draw(
-            &part,
-            Mat4::IDENTITY,
-            &anim::Poses::new(&part),
-            [0.0, 0.0, 1.0, 1.0],
-            0xffffffff,
-            240,
-            0,
-            &mut vertices,
-        );
-        assert_eq!(vertices[0].normal, [126, 0, 0, -127]);
-    }
 
     #[test]
     fn legacy_models_infer_non_degenerate_face_normals() {
@@ -2798,17 +2570,6 @@ mod lighting_tests {
             ]}),
         );
         assert_eq!(part.polygons[0].normal, [0.0, 0.0, 1.0]);
-    }
-
-    #[test]
-    fn packed_normal_uses_native_snorm_bytes_without_changing_vertex_offsets() {
-        assert_eq!(std::mem::offset_of!(Vertex, normal), 32);
-        assert_eq!(std::mem::size_of::<Vertex>(), 44);
-        let part = plane([0.0, 1.0, 0.0]);
-        assert_eq!(
-            part.polygons[0].vertex_normal(ModelNormals::new(Mat4::from_scale(Vec3::ZERO))),
-            [0, 0, 0, -127]
-        );
     }
 }
 

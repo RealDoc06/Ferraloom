@@ -1,4 +1,4 @@
-//! HORIZON_PREPARE_SOURCES_SHA256: a digest of this crate's sources, which the launcher compares
+//! HORIZON_PREPARE_SOURCES_SHA256: a digest of this crate's sources, so a caller can compare it
 //! with a version folder's copy to know whether it may prepare that version in-process. Keep the
 //! algorithm the same as `horizon_prepare::sources_sha256`.
 

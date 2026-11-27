@@ -115,36 +115,6 @@ impl Banners {
         }
         banners
     }
-    pub fn pattern(&self, id: &str) -> Option<&Pattern> {
-        self.patterns.iter().find(|p| &*p.id == id)
-    }
-    /// `Sheets.getBannerSprite` texture name of a pattern.
-    pub fn banner_texture(&self, id: &str) -> String {
-        match self.pattern(id) {
-            Some(p) => format!("entity/banner/{}", p.asset),
-            None => format!("entity/banner/{}", id.trim_start_matches("minecraft:")),
-        }
-    }
-    /// `Sheets.getShieldSprite` texture name of a pattern.
-    pub fn shield_texture(&self, id: &str) -> String {
-        match self.pattern(id) {
-            Some(p) => format!("entity/shield/{}", p.asset),
-            None => format!("entity/shield/{}", id.trim_start_matches("minecraft:")),
-        }
-    }
-    /// `BannerPatternLayers.Layer.description` translation key.
-    pub fn layer_key(&self, layer: &BannerLayer) -> String {
-        let base = self.pattern(&layer.pattern).map_or_else(
-            || {
-                format!(
-                    "block.minecraft.banner.{}",
-                    layer.pattern.trim_start_matches("minecraft:")
-                )
-            },
-            |p| p.translation_key.clone(),
-        );
-        format!("{base}.{}", layer.color)
-    }
     /// `LoomMenu.isDyeItem`: the dye colour of a loom dye.
     pub fn loom_dye(&self, items: &Items, stack: &ItemStack) -> Option<Arc<str>> {
         let tagged = items
@@ -177,21 +147,9 @@ pub fn banner_color(item: &str) -> Option<&'static str> {
     let name = item.strip_prefix("minecraft:")?.strip_suffix("_banner")?;
     DYES.iter().map(|d| d.0).find(|d| *d == name)
 }
-/// `DyeColor.getTextureDiffuseColor` (RGB) by dye name.
-pub fn dye_rgb(name: &str) -> u32 {
-    DYES.iter().find(|d| d.0 == name).map_or(0xFFFFFF, |d| d.1)
-}
 /// The layers of a banner or shield stack.
 pub fn layers(stack: &ItemStack) -> &[BannerLayer] {
     stack.data().map_or(&[], |d| &d.banner_patterns)
-}
-/// The ominous banner's component patch hides its pattern tooltip.
-pub fn tooltip_layers(stack: &ItemStack) -> &[BannerLayer] {
-    if stack.data().is_some_and(|d| d.ominous_banner) {
-        &[]
-    } else {
-        layers(stack)
-    }
 }
 /// `LoomMenu.setupResultSlot`: one banner with the pattern added in the dye colour.
 pub fn loom_result(banner: &ItemStack, dye: &str, pattern: &str) -> ItemStack {
@@ -251,23 +209,6 @@ mod tests {
             assert_eq!(layers(&banner).len(), i + 1);
         }
         assert!(has_max_layers(&banner));
-    }
-    #[test]
-    fn ominous_banner_hides_tooltip_layers_but_keeps_its_patterns() {
-        let mut banner = crate::mobs::raider::ominous_banner();
-        (banner.damage, banner.extra) = crate::item_data::decode_components(
-            crate::item_data::encode_components(&banner).as_ref(),
-        );
-        assert_eq!(
-            layers(&banner).len(),
-            crate::item_data::OMINOUS_LAYERS.len()
-        );
-        assert!(tooltip_layers(&banner).is_empty());
-        banner.data_mut().custom_name = Some("Captain's Standard".into());
-        assert!(tooltip_layers(&banner).is_empty());
-        banner.data_mut().ominous_banner = false;
-        assert_eq!(tooltip_layers(&banner), layers(&banner));
-        assert!(!tooltip_layers(&banner).is_empty());
     }
 
     #[test]

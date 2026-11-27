@@ -15,7 +15,7 @@ use horizon_protocol::packets::play::{self, Clientbound as C};
 
 /// A guest's open mount menu.
 pub(super) struct GuestMount {
-    window: i32,
+    pub(super) window: i32,
     mob: u32,
     columns: usize,
     state: i32,

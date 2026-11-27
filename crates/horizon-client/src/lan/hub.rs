@@ -36,6 +36,9 @@ use std::sync::{Arc, atomic::Ordering};
 
 /// GameEvent types (ClientboundGameEventPacket).
 pub mod chat;
+pub mod player_meta;
+// Ferraloom: plugin commands in the tree (lan/hub/plugins.rs).
+mod plugins;
 
 pub mod game_event {
     pub const START_RAINING: u8 = 1;
@@ -162,6 +165,10 @@ pub enum HostEvent {
     Warn(String),
     /// A server log error (LOGGER.error).
     Error(String),
+    /// Ferraloom: the guest's open container closed because its block went
+    /// (`sync_containers`), told while plugins run so the bridge forgets it:
+    /// its slots, its opening (`Menu::opening`) and its `InventoryType`, named as it opened.
+    MenuGone(u32, super::menu::Slots, u32, &'static str),
 }
 
 /// Profiling-only telemetry. Missing columns are movement observations, not
@@ -254,6 +261,8 @@ pub struct Hub {
     /// `spawn-protection` (dedicated servers): the radius around the world
     /// spawn that only operators may change.
     pub spawn_protection: i32,
+    /// Ferraloom: `allow-flight` and the spam thresholds (dedicated servers).
+    pub player_rules: player_meta::PlayerRules,
     chat_type: i32,
     dimension_type: i32,
     clock_ids: Vec<i32>,
@@ -275,6 +284,8 @@ pub struct Hub {
     /// Server mods' commands, a root in the commands report's format, sent
     /// after vanilla's; the key the game last set them for.
     mod_commands: (serde_json::Value, Option<u64>),
+    /// Ferraloom: Bukkit plugins' commands, sent after the server mods'.
+    plugin_commands: serde_json::Value,
 }
 
 fn string(s: &str) -> Tag {
@@ -328,6 +339,14 @@ impl Hub {
         c["insertion"] = name.into();
         crate::scoreboard::component_tag(&c)
     }
+    /// A whole tick with one level: the network, the level, then the
+    /// players' latencies.
+    pub fn tick(&mut self, ctx: &mut TickCtx) -> Vec<HostEvent> {
+        let mut events = self.poll(ctx);
+        events.extend(self.tick_level(ctx));
+        self.end_tick();
+        events
+    }
 }
 
 /// A yellow translation of player names (`multiplayer.player.joined`).
@@ -355,6 +374,8 @@ struct TrackView {
     tracker: Tracker,
     /// Filled and let go by the pass.
     slot: Option<super::conn::SlotFiller>,
+    /// Ferraloom: a spectator, who sees the players `TrackPass::hidden` hides.
+    spectator: bool,
 }
 
 /// All a tracking pass beside the tick needs (`Hub::track_beside`).
@@ -365,6 +386,8 @@ struct TrackPass {
     states: Arc<States>,
     riding: Riding,
     views: Vec<TrackView>,
+    /// Ferraloom: the spectating players the others don't see (`Viewer::hidden`).
+    hidden: Vec<i32>,
     types: std::collections::HashMap<String, i32>,
     /// Names the entity types (the tests' passes do without).
     sync: Option<Arc<SyncData>>,
@@ -390,6 +413,7 @@ impl TrackPass {
                 chunks: &v.chunks,
                 tracker: &mut v.tracker,
                 out,
+                hidden: if v.spectator { &[] } else { &self.hidden },
             })
             .collect();
         let (types, sync) = (&mut self.types, &self.sync);
@@ -649,6 +673,7 @@ impl Hub {
             ops: Default::default(),
             entity_range_percent: 100,
             spawn_protection: 0,
+            player_rules: Default::default(),
             weather: (false, 0.0, 0.0),
             level_sync: Default::default(),
             chat_type,
@@ -663,6 +688,7 @@ impl Hub {
             entity_out: Vec::new(),
             entity_players: Vec::new(),
             mod_commands: (serde_json::Value::Null, None),
+            plugin_commands: serde_json::Value::Null,
             teams: Vec::new(),
         }
     }
@@ -736,22 +762,6 @@ impl Hub {
             }));
         }
     }
-    /// PlayerList.setViewDistance: every player is told the new radius,
-    /// and each one's chunks follow it, up to what they asked for
-    /// (ChunkMap.getPlayerViewDistance).
-    pub fn set_view_distance(&mut self, distance: i32) {
-        self.config.view_distance = distance;
-        self.broadcast(&C::SetChunkCacheRadius(play::Distance { distance }));
-        for g in &mut self.guests {
-            g.view_distance = i32::from(g.info.view_distance).clamp(2, distance);
-            g.center = None;
-        }
-    }
-    /// PlayerList.setSimulationDistance.
-    pub fn set_simulation_distance(&mut self, distance: i32) {
-        self.config.simulation_distance = distance;
-        self.broadcast(&C::SetSimulationDistance(play::Distance { distance }));
-    }
     /// Whether a guest is placed in the level in place (`config.dimension`).
     pub fn here(&self, g: &Guest) -> bool {
         g.placed && g.dimension == self.config.dimension
@@ -782,18 +792,6 @@ impl Hub {
         self.broadcast(&C::SystemChat(play::SystemChat {
             content,
             overlay: true,
-        }));
-    }
-    /// A chat message from the host (a disguised chat: the host has no
-    /// connection to sign with).
-    pub fn chat(&self, sender: &str, text: &str) {
-        self.broadcast(&C::DisguisedChat(play::DisguisedChat {
-            message: literal(text),
-            chat_type: play::ChatTypeBound {
-                chat_type: self.chat_type,
-                name: literal(sender),
-                target: None,
-            },
         }));
     }
     /// ListPlayersCommand's reply: the players in join order (the host of a
@@ -893,7 +891,10 @@ impl Hub {
             latency: Some(latency),
             display_name: Some(None),
             list_order: Some(0),
-            show_hat: Some(true),
+            // Ferraloom: Player.isModelPartShown(HAT), the host's always.
+            show_hat: Some(
+                guest.is_none_or(|g| player_meta::shows_hat(g.info.model_customisation)),
+            ),
         }
     }
     /// ClientboundPlayerInfoUpdatePacket.createPlayerInitializing: every action.
@@ -977,6 +978,11 @@ impl Hub {
             let g = &self.guests[i];
             (g.name.clone(), g.uuid, g.entity_id, g.game_mode)
         };
+        // Ferraloom: the saved shoulder parrots (ServerPlayer.readAdditionalSaveData)
+        // and whether the server list may name the player.
+        let g = &mut self.guests[i];
+        g.meta.shoulders = player_meta::shoulders_of(g.saved.as_ref());
+        self.lan.shared.set_listed(g.uuid, g.info.allows_listing);
         let g = &self.guests[i];
         g.send(&C::Login(play::Login {
             player_id: entity_id,
@@ -1021,17 +1027,20 @@ impl Hub {
             ids::RECIPE_BOOK_ADD,
             self.sync.advancements.initial_recipe_book(book, &self.sync),
         ));
-        // The others hear of the newcomer before it joins the list.
-        self.broadcast_except(
-            conn,
-            &C::SystemChat(play::SystemChat {
-                content: yellow_names(
-                    "multiplayer.player.joined",
-                    vec![display_name(self.guests[i].uuid, &name)],
-                ),
-                overlay: false,
-            }),
-        );
+        // The others hear of the newcomer before it joins the list. Ferraloom:
+        // unless a plugin listens; it sends the message it chose (game/plugins.rs).
+        if !ferraloom_plugins::listens(ferraloom_plugins::Event::PlayerJoin) {
+            self.broadcast_except(
+                conn,
+                &C::SystemChat(play::SystemChat {
+                    content: yellow_names(
+                        "multiplayer.player.joined",
+                        vec![display_name(self.guests[i].uuid, &name)],
+                    ),
+                    overlay: false,
+                }),
+            );
+        }
         self.guests[i].placed = true;
         self.teleport(i, None);
         let g = &self.guests[i];
@@ -1175,10 +1184,16 @@ impl Hub {
                 effect,
             }));
         }
+        let changed = !changes.is_empty() || sent.len() != self.guests[i].sent_effects.len();
         for (e, added) in changes {
             sent.extend(self.send_effect(i, &e, added));
         }
         self.guests[i].sent_effects = sent;
+        // Ferraloom: the swirls those effects make go to the player too,
+        // once its first tick has sent the first ones.
+        if changed && self.guests[i].sent_health.is_some() {
+            self.sync_own_particles(i);
+        }
     }
 
     /// PlayerList.sendPlayerPermissionLevel: the op level as an entity event
@@ -1230,7 +1245,8 @@ impl Hub {
                     g.permission,
                     dedicated,
                     &self.sync.builtin,
-                    &self.mod_commands.0,
+                    // Ferraloom: per player, for plugin commands' permissions.
+                    &self.extra_commands_for(g.uuid),
                 )
             }
             None => play::Commands {
@@ -1267,6 +1283,10 @@ impl Hub {
     /// and motion they name are sent as zero changes.
     fn teleport_relative(&mut self, i: usize, position: Option<[f64; 3]>, relatives: i32) {
         let ticks = self.ticks;
+        if position.is_some() {
+            // Ferraloom: ServerPlayer.teleportTo's resetFlyingTicks.
+            self.reset_flying_ticks(i);
+        }
         let g = &mut self.guests[i];
         g.teleport_tick = ticks;
         if let Some(p) = position {
@@ -1408,15 +1428,6 @@ impl Hub {
 
     // ---- per tick ------------------------------------------------------
 
-    /// A whole tick with one level: the network, the level, then the
-    /// players' latencies.
-    pub fn tick(&mut self, ctx: &mut TickCtx) -> Vec<HostEvent> {
-        let mut events = self.poll(ctx);
-        events.extend(self.tick_level(ctx));
-        self.end_tick();
-        events
-    }
-
     /// The network since the last tick, once per server tick before any
     /// level ticks: joins (into the level in place), leaves, and each guest's
     /// packets queued for its own level's pass.
@@ -1469,6 +1480,21 @@ impl Hub {
             for i in 0..self.guests.len() {
                 if self.here(&self.guests[i]) {
                     self.process_inbox(i, ctx, &mut events);
+                    // Ferraloom: a cancelled PlayerMoveEvent's correction
+                    // (game/plugins/players.rs), to where the moves before it left
+                    // them, once none is left for a later tick. Not for a guest who
+                    // died, went to sleep or mounted since.
+                    let g = &mut self.guests[i];
+                    if g.correct_move.is_some() {
+                        if g.dead || g.sleeping || g.vehicle.is_some() {
+                            g.correct_move = None;
+                        } else if g.inbox.is_empty() {
+                            g.correct_move = None;
+                            self.teleport(i, None);
+                        } else {
+                            g.correct_move = Some(g.inbox.len());
+                        }
+                    }
                 }
             }
         });
@@ -1509,7 +1535,7 @@ impl Hub {
                 g.send(&C::BlockChangedAck(play::BlockChangedAck { sequence }));
             }
         }
-        self.sync_containers(ctx.world);
+        self.sync_containers(ctx.world, &mut events);
         crate::spans::time("lan_track", || self.track_entities(ctx));
         crate::spans::time("lan_player_state", || {
             for i in 0..self.guests.len() {
@@ -1568,10 +1594,13 @@ impl Hub {
         self.broadcast(&C::RemoveEntities(play::RemoveEntities {
             ids: vec![g.entity_id],
         }));
-        self.system_message(yellow_names(
-            "multiplayer.player.left",
-            vec![display_name(g.uuid, &g.name)],
-        ));
+        // Ferraloom: a plugin listening sends the message it chose (game/plugins.rs).
+        if !ferraloom_plugins::listens(ferraloom_plugins::Event::PlayerQuit) {
+            self.system_message(yellow_names(
+                "multiplayer.player.left",
+                vec![display_name(g.uuid, &g.name)],
+            ));
+        }
         g
     }
 
@@ -1888,6 +1917,8 @@ impl Hub {
         options: (u8, i32),
         health: f32,
         effects: &[EffectInstance],
+        // Ferraloom: ticks frozen, stuck arrows and stingers, score, shoulder parrots.
+        data: player_meta::PlayerData,
     ) {
         let (sneaking, sprinting, sleeping) = flags;
         let shared = shared_flags(sneaking, sprinting, &body);
@@ -1950,6 +1981,7 @@ impl Hub {
             (10, serializer::PARTICLES, Value::Particles(Vec::new())),
             (11, serializer::BOOLEAN, Value::Bool(false)),
         ]);
+        player_meta::tracked_meta(data, &mut state.meta, &mut state.defaults);
         state.precise = false;
         state.needs_sync = false;
         state.leash = None;
@@ -2018,6 +2050,7 @@ impl Hub {
                 (0x7F, 1),
                 h.health,
                 &[],
+                player_meta::PlayerData::default(),
             );
         }
         // Out of the hub while their states are made: what a state reads of
@@ -2055,12 +2088,14 @@ impl Hub {
                 (g.info.model_customisation, g.info.main_hand),
                 g.health,
                 &g.effects.list,
+                player_meta::PlayerData::of(g),
             );
         }
         all.truncate(n);
         self.guests = guests;
+        let hidden = self.hidden_spectators(ctx);
         if let Some(states) = self.entity_states.take() {
-            return self.track_beside(all, states);
+            return self.track_beside(all, states, hidden);
         }
         let entities: Vec<&EntityState> = all.iter().chain(ctx.entities).collect();
         // ChunkMap.tick: the level's entities, once for all its players.
@@ -2078,6 +2113,7 @@ impl Hub {
             .filter(|g| here(g))
             .zip(outs.iter_mut())
             .map(|(g, out)| Viewer {
+                hidden: if g.spectator() { &[] } else { &hidden },
                 entity_id: g.entity_id,
                 moved: std::mem::take(&mut g.moved),
                 position: g.position,
@@ -2107,7 +2143,7 @@ impl Hub {
     /// packets take a slot in its queue here and fill it from there. It reads
     /// what it was given and the players' trackers, which come back at
     /// [`Self::finish_tracking`], and nothing the tick does meanwhile.
-    fn track_beside(&mut self, players: Vec<EntityState>, states: Arc<States>) {
+    fn track_beside(&mut self, players: Vec<EntityState>, states: Arc<States>, hidden: Vec<i32>) {
         let dimension = self.config.dimension.clone();
         let here = |g: &&mut Guest| g.placed && g.dimension == dimension;
         let views = self
@@ -2123,6 +2159,7 @@ impl Hub {
                 chunks: g.sent_chunks.clone(),
                 tracker: std::mem::take(&mut g.tracker),
                 slot: Some(g.sender.reserve()),
+                spectator: g.spectator(),
             })
             .collect();
         let mut level = self.entities.remove(&dimension).unwrap_or_default();
@@ -2135,6 +2172,7 @@ impl Hub {
             states,
             riding: self.riding.clone(),
             views,
+            hidden,
             types: std::mem::take(&mut self.entity_types),
             sync: Some(self.sync.clone()),
         };
@@ -2251,11 +2289,18 @@ impl Hub {
         // The options its login set (updateOptions) are dirty then as well,
         // and go out in the same packet, after the health.
         if self.guests[i].sent_health.is_none() {
+            // Ferraloom: so are its loaded effects' swirls, score and
+            // shoulder parrots (by index, as packDirty sends them).
+            let particles = self.own_particle_changes(i);
+            let own = self.own_meta_changes(i);
             let g = &mut self.guests[i];
             let options = (g.info.model_customisation, g.info.main_hand);
             g.sent_options = options;
             let mut values = vec![(9, serializer::FLOAT, Value::Float(g.health))];
+            values.extend(particles);
             values.extend(Self::option_meta(options));
+            values.extend(own);
+            values.sort_by_key(|v| v.0);
             g.send(&C::SetEntityData(play::SetEntityData {
                 id: g.entity_id,
                 values,
@@ -2317,6 +2362,18 @@ impl Hub {
                     values,
                 }));
             }
+        }
+        // Ferraloom: ServerEntity.sendDirtyEntityData of the ticks frozen,
+        // stuck arrows and stingers, score and shoulder parrots to the
+        // player too (the frost overlay, its own arrows, the death screen's
+        // score, its own parrots).
+        let values = self.own_meta_changes(i);
+        if !values.is_empty() {
+            let g = &self.guests[i];
+            g.send(&C::SetEntityData(play::SetEntityData {
+                id: g.entity_id,
+                values,
+            }));
         }
         // ServerEntity.sendDirtyEntityData: the shared flags go to the player
         // too, so the sprint a hit stops (Player.causeExtraKnockback) stops
@@ -2454,6 +2511,10 @@ impl Hub {
         let g = &mut self.guests[i];
         g.first_good = g.position;
         g.known_moves = g.received_moves;
+        // Ferraloom: tickPlayer's floating kick and the spam throttlers.
+        if self.tick_connection(i, events) {
+            return;
+        }
         let mut budget = 400;
         while budget > 0 {
             let Some(packet) = self.guests[i].inbox.pop_front() else {
@@ -2473,6 +2534,8 @@ impl Hub {
                 | S::ChunkBatchReceived(_)
                 | S::ClientInformation(_)
                 | S::RecipeBookChangeSettings(_)
+                | S::RecipeBookSeenRecipe(_)
+                | S::SeenAdvancements(_)
                 | S::ClientTickEnd(_)
                 | S::KeepAlive(_) => false,
                 S::MovePlayerPos(p) => self.moved_far(i, [p.x, p.y, p.z]),
@@ -2508,7 +2571,9 @@ impl Hub {
                 // handlePlayerAbilities: the client flies only if it may.
                 S::PlayerAbilities(p) => {
                     let g = &mut self.guests[i];
-                    g.flying = p.flags & 2 != 0 && (g.creative() || g.spectator());
+                    // Ferraloom: or a plugin's allow-flight (Player.setAllowFlight).
+                    let may_fly = g.creative() || g.spectator() || g.allow_flight;
+                    g.flying = p.flags & 2 != 0 && may_fly;
                 }
                 S::MovePlayerPos(p) => {
                     self.move_player(i, Some([p.x, p.y, p.z]), None, p.flags, ctx, events);
@@ -2552,9 +2617,14 @@ impl Hub {
                     let g = &mut self.guests[i];
                     g.view_distance =
                         i32::from(info.view_distance).clamp(2, self.config.view_distance);
+                    let old_parts = g.info.model_customisation;
                     g.info = info;
                     g.center = None;
+                    self.client_information_changed(i, old_parts);
                 }
+                // Ferraloom: handleRecipeBookSeenRecipePacket, handleSeenAdvancements.
+                S::RecipeBookSeenRecipe(p) => self.recipe_seen(i, p),
+                S::SeenAdvancements(p) => self.seen_advancements(i, p),
                 S::PlayerInput(p) => {
                     self.guests[i].input = p.flags;
                     self.guests[i].sneaking = p.flags & 32 != 0;
@@ -2562,10 +2632,11 @@ impl Hub {
                     // Sprinting persists after the sprint key is released (or
                     // starts with a double tap); PlayerCommand changes it.
                 }
-                // OPEN_INVENTORY (the ridden mount's inventory) and
-                // START_FALL_FLYING (checked against the guest's chest slot
-                // and effects) are the game's.
-                S::PlayerCommand(p) if matches!(p.action, 5 | 6) => {
+                // START_RIDING_JUMP and STOP_RIDING_JUMP (the ridden mount's
+                // jump, `data` its boost), OPEN_INVENTORY (the ridden mount's
+                // inventory) and START_FALL_FLYING (checked against the
+                // guest's chest slot and effects) are the game's.
+                S::PlayerCommand(p) if matches!(p.action, 3..=6) => {
                     events.push(HostEvent::Packet(conn, Box::new(S::PlayerCommand(p))));
                 }
                 S::PlayerCommand(p) => match p.action {
@@ -2591,6 +2662,11 @@ impl Hub {
                     ) {
                         break;
                     }
+                }
+                // Ferraloom: detectCommandRateSpam once the command is the game's.
+                p @ (S::ChatCommand(_) | S::ChatCommandSigned(_)) => {
+                    events.push(HostEvent::Packet(conn, Box::new(p)));
+                    self.detect_command_spam(i);
                 }
                 other => events.push(HostEvent::Packet(conn, Box::new(other))),
             }
@@ -2748,6 +2824,8 @@ impl Hub {
         g.head_yaw = g.yaw;
         g.on_ground = flags & 1 != 0;
         g.ticks = g.ticks.max(1);
+        // Ferraloom: clientIsFloating, from how far this move rose.
+        self.update_floating(i, to[1] - start[1], ctx);
         #[cfg(feature = "profiler")]
         if absent_target && start != to {
             self.corrections.accepted_into_absent_target += 1;
@@ -2847,6 +2925,8 @@ impl Hub {
             return;
         };
         g.game_mode = mode;
+        // Ferraloom: updatePlayerAbilities sets mayfly from the mode, a plugin's allow-flight ends.
+        g.allow_flight = false;
         // GameType.updatePlayerAbilities: a spectator flies, survival and
         // adventure don't, creative keeps what it had.
         if g.spectator() {
@@ -2895,19 +2975,6 @@ impl Hub {
 }
 
 impl Hub {
-    pub fn item_name(&self, id: i32) -> Option<std::sync::Arc<str>> {
-        self.sync
-            .builtin
-            .get("minecraft:item")?
-            .name(id)
-            .map(std::sync::Arc::from)
-    }
-    pub fn enchantment_name(&self, id: i32) -> Option<String> {
-        self.sync
-            .dynamic
-            .name("minecraft:enchantment", id)
-            .map(str::to_owned)
-    }
     /// A stack a client sent (`SetCreativeModeSlot`), read with this
     /// server's registries.
     pub fn stack_from_network(&self, s: &horizon_protocol::item::Stack) -> crate::items::ItemStack {
@@ -2970,6 +3037,7 @@ impl Hub {
         // client's (ClientPacketListener.handleRespawn).
         g.effects = Default::default();
         g.sent_effects.clear();
+        g.meta.respawned();
         g.center = None;
         Arc::make_mut(&mut g.sent_chunks).clear();
         g.sent_bounds.clear();
@@ -3331,6 +3399,7 @@ mod tests {
                     chunks,
                     tracker,
                     out,
+                    hidden: &[],
                 })
                 .collect();
             level.tick(&entities, &Riding::default(), &mut viewers, |_| Some(1));
@@ -3372,6 +3441,7 @@ mod tests {
                         chunks: Arc::new(chunks_at(i as i32, tick)),
                         tracker: std::mem::take(tracker),
                         slot: Some(sender.reserve()),
+                        spectator: false,
                     };
                     sender.send(vec![tick as u8, 1]);
                     view
@@ -3385,6 +3455,7 @@ mod tests {
                 states: Arc::new(game(tick)),
                 riding: Riding::default(),
                 views,
+                hidden: Vec::new(),
                 types: Default::default(),
                 sync: None,
             };

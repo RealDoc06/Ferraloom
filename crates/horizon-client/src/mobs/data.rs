@@ -24,7 +24,6 @@ pub const VALID_EMPTY_SPAWN: u16 = 128;
 pub const STURDY_TOP: u16 = 256;
 /// BlockState.isSolid
 pub const SOLID: u16 = 512;
-pub const SOLID_RENDER: u16 = 1024;
 
 #[derive(Clone, Copy, Debug)]
 pub struct StateData {

@@ -44,7 +44,7 @@ pub const SCHEMA: i64 = 7;
 /// folder's sources: keep it on one line, as it is.
 pub const OUTPUT_VERSION: u32 = 1;
 
-/// Digest of this crate's sources (build.rs): the launcher prepares a version in-process when
+/// Digest of this crate's sources (build.rs): a caller may prepare a version in-process when
 /// that version ships these same sources, and runs the version's own binary otherwise.
 pub const SOURCES_SHA256: &str = env!("HORIZON_PREPARE_SOURCES_SHA256");
 

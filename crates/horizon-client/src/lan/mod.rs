@@ -20,8 +20,10 @@ pub mod guest;
 pub mod hub;
 #[cfg(target_os = "linux")]
 mod io_pool;
+pub mod item_extras;
 pub mod menu;
 pub mod playerdata;
+pub mod plugin_containers;
 mod recipes;
 pub mod scoreboard;
 pub mod tracking;
@@ -67,11 +69,13 @@ pub struct Joined {
     /// The profile's properties (skin textures, in online mode).
     pub properties: Vec<horizon_protocol::packets::login::Property>,
     pub info: ClientInformation,
-    pub brand: String,
     pub sender: PlayerSender,
     /// Smoothed keep-alive round trip in milliseconds.
     pub latency: Arc<AtomicI32>,
     pub address: SocketAddr,
+    /// Ferraloom: the plugin bridge's login attempt it was admitted under
+    /// (`ferraloom_plugins::login_attempt`), 0 for none.
+    pub plugin_attempt: i64,
 }
 /// Queued for a connection's writer thread.
 pub enum Out {
@@ -85,9 +89,12 @@ pub enum Out {
 }
 
 /// PlayerList.canPlayerLogin for a dedicated server: the disconnect reason
-/// (bans, whitelist) for a profile connecting from an address, if refused.
+/// (bans, whitelist, then a full server: the last argument says whether it is
+/// full for this profile) for a profile connecting from an address, if refused.
+/// Ferraloom: the gate decides the full server too, so PlayerLoginEvent sees
+/// KICK_FULL and a plugin may let the player in, as CraftBukkit's does.
 pub type LoginGate =
-    Arc<dyn Fn(SocketAddr, u128, &str) -> Option<horizon_world::nbt::Tag> + Send + Sync>;
+    Arc<dyn Fn(SocketAddr, u128, &str, bool) -> Option<horizon_world::nbt::Tag> + Send + Sync>;
 
 /// online-mode=true: the key pair the server made at startup
 /// (MinecraftServer.initializeKeyPair) and how players are verified.
@@ -148,6 +155,9 @@ pub struct NetConfig {
     /// sent in configuration when non-empty
     /// (ServerConfigurationPacketListenerImpl.startConfiguration).
     pub server_links: Vec<horizon_protocol::packets::configuration::ServerLink>,
+    /// Ferraloom: `enable-code-of-conduct`'s texts by language
+    /// (`DedicatedServer.getCodeOfConducts`); empty shows none.
+    pub code_of_conduct: std::collections::BTreeMap<String, String>,
 }
 impl NetConfig {
     /// MinecraftServer.enforceSecureProfile.
@@ -175,6 +185,7 @@ impl NetConfig {
             log: None,
             resource_pack: None,
             server_links: Vec::new(),
+            code_of_conduct: Default::default(),
         }
     }
 }
@@ -230,6 +241,9 @@ pub struct Shared {
     online: Mutex<Vec<(u128, String)>>,
     /// Profiles held by the host (the LAN host's own name).
     reserved: Mutex<HashSet<u128>>,
+    /// Ferraloom: the players whose "Allow Server Listings" is off
+    /// (ServerPlayer.allowsListing), shown as "Anonymous Player".
+    unlisted: Mutex<HashSet<u128>>,
     next: AtomicU32,
     stop: AtomicBool,
     random: Mutex<u64>,
@@ -247,21 +261,19 @@ impl Shared {
         uuid: u128,
         name: &str,
     ) -> Option<horizon_world::nbt::Tag> {
+        let bypass = self.config.bypasses_limit.as_ref().is_some_and(|b| b(uuid));
+        let full = !bypass && self.online() >= self.max_players();
         if let Some(gate) = &self.config.gate
-            && let Some(reason) = gate(address, uuid, name)
+            && let Some(reason) = gate(address, uuid, name, full)
         {
             return Some(reason);
         }
         if self.reserved.lock().unwrap().contains(&uuid) {
             return Some(translatable("multiplayer.disconnect.duplicate_login", &[]));
         }
-        {
-            let online = self.online.lock().unwrap();
-            let bypass = self.config.bypasses_limit.as_ref().is_some_and(|b| b(uuid));
-            let taken = online.len() + self.reserved.lock().unwrap().len();
-            if taken >= self.max_players() && !bypass {
-                return Some(translatable("multiplayer.disconnect.server_full", &[]));
-            }
+        // Ferraloom: with a gate, the gate decided the full server.
+        if full && self.config.gate.is_none() {
+            return Some(translatable("multiplayer.disconnect.server_full", &[]));
         }
         if self.is_online(uuid) {
             let _ = self.events.send(NetEvent::Duplicate(uuid));
@@ -273,7 +285,19 @@ impl Shared {
                 std::thread::sleep(Duration::from_millis(10));
             }
         }
-        self.online.lock().unwrap().push((uuid, name.to_owned()));
+        // Recount under the lock: another login may have taken the last place
+        // while the gate ran. A gate that let a full server's login through
+        // overrode the limit, so only a login seen with room is refused here.
+        let mut online = self.online.lock().unwrap();
+        // Another attempt for this profile may have passed the wait too.
+        if online.iter().any(|(u, _)| *u == uuid) {
+            return Some(translatable("multiplayer.disconnect.duplicate_login", &[]));
+        }
+        let taken = online.len() + self.reserved.lock().unwrap().len();
+        if !full && !bypass && taken >= self.max_players() {
+            return Some(translatable("multiplayer.disconnect.server_full", &[]));
+        }
+        online.push((uuid, name.to_owned()));
         None
     }
     fn is_online(&self, uuid: u128) -> bool {
@@ -287,6 +311,16 @@ impl Shared {
     }
     pub fn release(&self, uuid: u128) {
         self.online.lock().unwrap().retain(|(u, _)| *u != uuid);
+        self.unlisted.lock().unwrap().remove(&uuid);
+    }
+    /// The player's `allowsListing` (ClientInformation), for the status.
+    pub fn set_listed(&self, uuid: u128, listed: bool) {
+        let mut unlisted = self.unlisted.lock().unwrap();
+        if listed {
+            unlisted.remove(&uuid);
+        } else {
+            unlisted.insert(uuid);
+        }
     }
     pub fn online(&self) -> usize {
         self.online.lock().unwrap().len() + self.reserved.lock().unwrap().len()
@@ -316,7 +350,17 @@ impl Shared {
         if !self.config.hide_online_players && !online.is_empty() {
             let size = online.len().min(12);
             let offset = self.next_random(online.len() - size + 1);
-            let mut sample: Vec<(u128, String)> = online[offset..offset + size].to_vec();
+            // MinecraftServer.buildPlayerStatus: ANONYMOUS_PLAYER_PROFILE for
+            // a player who doesn't allow listing.
+            let unlisted = self.unlisted.lock().unwrap();
+            let mut sample: Vec<(u128, String)> = online[offset..offset + size]
+                .iter()
+                .map(|(u, n)| match unlisted.contains(u) {
+                    true => (0, "Anonymous Player".to_owned()),
+                    false => (*u, n.clone()),
+                })
+                .collect();
+            drop(unlisted);
             for i in (1..sample.len()).rev() {
                 let j = self.next_random(i + 1);
                 sample.swap(i, j);
@@ -402,15 +446,6 @@ pub struct Lan {
     _pinger: Option<discovery::Pinger>,
 }
 impl Lan {
-    /// Listen on `port` (0 picks a free one).
-    pub fn start(
-        sync: Arc<data::SyncData>,
-        port: u16,
-        motd: String,
-        max_players: usize,
-    ) -> io::Result<Self> {
-        Self::start_with(sync, NetConfig::lan(port, motd, max_players))
-    }
     /// ServerConnectionListener.startTcpServerListener with a configuration.
     pub fn start_with(sync: Arc<data::SyncData>, config: NetConfig) -> io::Result<Self> {
         let (tx, events) = channel();
@@ -422,6 +457,7 @@ impl Lan {
             max_players: AtomicUsize::new(config.max_players),
             online: Mutex::new(Vec::new()),
             reserved: Mutex::new(HashSet::new()),
+            unlisted: Mutex::new(HashSet::new()),
             next: AtomicU32::new(1),
             stop: AtomicBool::new(false),
             random: Mutex::new(crate::server::java_properties::now_millis() as u64 | 1),
@@ -498,26 +534,6 @@ impl Lan {
         self._pinger = None;
         self.port = 0;
     }
-    /// Whether connections from the network are accepted.
-    pub fn listening(&self) -> bool {
-        self.listener.is_some()
-    }
-    /// `Connection.connectToLocalServer`: a connection through memory, its
-    /// server end served on its own thread like an accepted socket.
-    pub fn connect_local(&self) -> io::Result<horizon_protocol::connection::Pipe> {
-        let (client, server) = horizon_protocol::connection::Pipe::pair();
-        let shared = self.shared.clone();
-        std::thread::Builder::new()
-            .name("horizon-local-conn".into())
-            .spawn(move || {
-                if let Err(e) = conn::serve_local(server, shared)
-                    && std::env::var_os("HORIZON_NET_DEBUG").is_some()
-                {
-                    log::warn!("[lan] local: {e}");
-                }
-            })?;
-        Ok(client)
-    }
     /// Everything the connection threads reported since the last call.
     pub fn poll(&self) -> Vec<NetEvent> {
         self.events.try_iter().collect()
@@ -529,6 +545,15 @@ impl Lan {
     pub fn stop(&mut self) {
         self.shared.stop.store(true, Ordering::Relaxed);
         self.stop_listening();
+    }
+    /// Listen on `port` (0 picks a free one).
+    pub fn start(
+        sync: Arc<data::SyncData>,
+        port: u16,
+        motd: String,
+        max_players: usize,
+    ) -> io::Result<Self> {
+        Self::start_with(sync, NetConfig::lan(port, motd, max_players))
     }
 }
 impl Drop for Lan {
@@ -564,11 +589,4 @@ fn handle(stream: TcpStream, addr: SocketAddr, shared: Arc<Shared>) {
     {
         log::warn!("[lan] {addr}: {e}");
     }
-}
-
-/// HttpUtil.getAvailablePort: a free local port.
-pub fn available_port() -> u16 {
-    TcpListener::bind(("0.0.0.0", 0))
-        .and_then(|l| l.local_addr())
-        .map_or(25565, |a| a.port())
 }

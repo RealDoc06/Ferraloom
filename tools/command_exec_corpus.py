@@ -1,12 +1,21 @@
-"""Command scripts for tools/test_command_exec_parity.py.
+"""Command scripts for tools/test_command_exec_parity.py, run by an operator on a dedicated server.
 
-Each group is a list of operations: `cmd` runs a command as the player and
-records its messages and results (`record: false` runs setup silently),
-`tick` advances the game, `settle` loads the terrain and entities around the
-player and `portal` sends the player through the nether portal it stands in.
-Everything happens high above the terrain (y 200 and up, where both worlds
-are air) after the world's entities are removed, so the results do not
-depend on world generation.
+Each group is a list of operations (CommandExecClient runs them): `cmd` runs a
+command as the player and records its messages and result (`record: false`
+runs setup silently), `tick` steps the frozen game, `settle` waits for the
+terrain and entities around the player and `portal` sends the player through a
+nether portal: into the one at `at`, or out of the one it stands in and back.
+Between two operations nothing ticks but the player (the game is frozen), so
+a check right after a command that changes the player's own ticked state
+(its attributes' effects, say) would race the player's tick: such checks
+follow a `tick`. Everything happens high above the terrain (y 200 and up,
+where both worlds are air) after the world's entities are removed, so the
+results do not depend on world generation.
+
+Integrated-only cases left with the move to a dedicated server: `/kick` of the
+player itself (it ends the session; on the integrated server it was refused
+for the owner) and `/fetchprofile name|id` (a dedicated server asks Mojang's
+profile service).
 """
 
 
@@ -36,8 +45,8 @@ def group_setup():
         *setup('/kill @e[type=!player]'),
         {'op': 'tick', 'n': 25},
         *setup('/fill 0 200 0 15 228 15 air', '/time set 1000', '/weather clear', '/difficulty normal', '/clear @s'),
-        # Before the gamerules above, while the oracle waits for its entities to load (a number of ticks that
-        # depends on the machine), mobs spawn and some die with their drops on: a bat's death rolled
+        # Before the gamerules above, while the server loads the world (a number of ticks that depends
+        # on the machine), mobs spawn and some die with their drops on: a bat's death rolled
         # minecraft:entities/bat on 1 vanilla run in 24, one more sequence for the ticking group's
         # /random reset * to count. Every run starts the script without them.
         *setup('/random reset *'),
@@ -81,16 +90,14 @@ def client_commands():
         cmd('/dialog show @s {type:"minecraft:notice",title:"Hello"}'),
         cmd('/dialog clear @s'),
         cmd('/dialog clear @a'),
-        cmd('/kick @s'),
-        cmd('/kick @s Go away'),
-        cmd('/kick Player'),
-        cmd('/fetchprofile name Notch'),
-        {'op': 'tick', 'n': 5, 'record': True},
-        cmd('/fetchprofile id 069a79f4-44e9-4726-a5be-fca90e38aaf5'),
-        {'op': 'tick', 'n': 5, 'record': True},
+        cmd('/kick Nobody'),
+        # Only the integrated server has them.
         cmd('/unpublish'),
+        cmd('/publish'),
         cmd('/debug stop'),
         cmd('/debug start'),
+        # The profiler starts at the next tick (MinecraftServer.debugCommandProfilerDelayStart).
+        {'op': 'tick', 'n': 1},
         cmd('/debug start'),
         cmd('/debug stop'),
         cmd('/debug stop'),
@@ -549,12 +556,13 @@ def levels():
     bounded one does not."""
     return [
         *setup('/fill 2 231 12 5 236 12 minecraft:obsidian', '/fill 3 232 12 4 235 12 minecraft:nether_portal[axis=x]',
-               '/tp @s 3.5 232 12.5 0 0',
                # A cow in the Overworld, in a chunk that stays loaded while the
                # player is in the nether.
                '/forceload add 0 0',
-               '/summon minecraft:cow 10.5 210 4.5 {NoAI:1b,NoGravity:1b,Tags:["remote_cow"]}'),
-        {'op': 'portal'},
+               '/summon minecraft:cow 10.5 210 4.5 {NoAI:1b,NoGravity:1b,Tags:["remote_cow"]}',
+               # Above the portal: the player ticks, so standing in it starts the trip.
+               '/tp @s 3.5 240 12.5 0 0'),
+        {'op': 'portal', 'at': '3.5 232 12.5'},
         {'op': 'settle'},
         cmd('/execute if dimension minecraft:the_nether run say through the portal'),
         cmd('/data get entity @e[tag=remote_cow,limit=1] Pos'),
@@ -719,7 +727,6 @@ def world_misc():
         # so at most one transmitter at a time. Range changes take effect when
         # the entity ticks.
         cmd('/attribute @s minecraft:waypoint_transmit_range base set 0'),
-        cmd('/waypoint list'),
         {'op': 'tick', 'n': 1},
         cmd('/waypoint list'),
         cmd('/attribute @e[type=minecraft:pig,tag=w,limit=1] minecraft:waypoint_transmit_range base set 100'),
@@ -808,6 +815,9 @@ def progression():
         cmd('/experience query @s levels'),
         cmd('/experience query @s points'),
         cmd('/advancement revoke @s everything'),
+        # The player ticks between two commands and earns some again (its location trigger runs every 20
+        # ticks): the second revoke follows enough ticks for that.
+        {'op': 'tick', 'n': 40},
         cmd('/advancement revoke @s everything'),
         cmd('/advancement grant @s only minecraft:nonexistent'),
         cmd('/recipe give @s minecraft:oak_planks'),
@@ -878,6 +888,8 @@ def ticking():
         cmd('/tick sprint stop'),
         cmd('/tick rate 1'),
         cmd('/tick rate 20'),
+        # Frozen again for the rest of the script.
+        *setup('/tick freeze'),
         cmd('/stopwatch create harness:t'),
         cmd('/stopwatch restart harness:t'),
         cmd('/stopwatch restart harness:missing'),
@@ -1102,9 +1114,31 @@ def server_clock():
         *setup('/execute store result score elapsed harness_clock run time query gametime',
                '/scoreboard players operation elapsed harness_clock -= before harness_clock'),
         cmd('/scoreboard players get elapsed harness_clock'),
-        # The connected owner is the only player; @s and @a use the same body.
+        # The operator is the only player; @s and @a use the same body.
         cmd('/execute as @a run say connected owner'),
         *setup('/scoreboard objectives remove harness_clock'),
+    ]
+
+
+def dedicated():
+    """Commands only a dedicated server has (Commands.CommandSelection.DEDICATED) that leave the session and the
+    world as they were; tools/test_server_ops_feedback_parity.py runs the rest with two players."""
+    return [
+        cmd('/op Player'),
+        cmd('/op Nobody'),
+        cmd('/deop Nobody'),
+        cmd('/banlist'),
+        cmd('/banlist ips'),
+        cmd('/pardon Nobody'),
+        cmd('/pardon-ip 203.0.113.7'),
+        cmd('/whitelist list'),
+        cmd('/whitelist remove Nobody'),
+        cmd('/save-off'),
+        cmd('/save-off'),
+        cmd('/save-on'),
+        cmd('/save-on'),
+        cmd('/setidletimeout 0'),
+        cmd('/perf stop'),
     ]
 
 
@@ -1130,4 +1164,5 @@ def groups():
         ('compute', compute()),
         ('social and scoreboard', social()),
         ('test', test_command()),
+        ('dedicated', dedicated()),
     ]

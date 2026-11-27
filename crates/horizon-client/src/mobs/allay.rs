@@ -3,12 +3,10 @@
 //! jukeboxes and duplicate when given an amethyst shard mid-dance.
 use super::{
     Mob,
-    anim::{Poses, State},
     control::MoveKind,
     goals::{Cx, Goal, LookAtPlayer, MOVE, Panic, RandomLookAround, Stroll, goal_clone},
     nav::NavKind,
 };
-use horizon_core::geometry::trig::Mth;
 
 // Allay state: `main_hand` the held item, `ints[1]` how many it carries,
 // `tame` a liked player, `point` the wanted item (set by the game),
@@ -150,46 +148,4 @@ pub fn animate(m: &mut Mob) {
         v[SPIN] = 0.0;
         m.anim.vo[SPIN] = 0.0;
     }
-}
-/// `AllayModel.setupAnim`.
-pub fn anim(m: &Mob, s: &State, p: &mut Poses) {
-    use std::f32::consts::PI;
-    let (speed, pos) = (s.speed, s.pos);
-    let flap_speed = (s.age * 20.0).to_radians() + pos;
-    let flap = flap_speed.mcos() * PI * 0.15 + speed;
-    let idle_bob = (s.age * 9.0).to_radians();
-    let flying = (speed / 0.3).min(1.0);
-    let idle = 1.0 - flying;
-    let hold = m.anim.lerp(HOLD, s.partial) / 5.0;
-    if m.extra.flag {
-        let dance = (s.age * 8.0).to_radians() + speed;
-        let freq = dance.mcos() * 16f32.to_radians();
-        let spin = m.anim.lerp(SPIN, s.partial) / 15.0;
-        let spinning = (m.extra.ints[4] as f32 % 55.0) < 15.0;
-        if spinning {
-            p.yrot("root", PI * 4.0 * spin);
-        }
-        p.zrot("root", freq * (1.0 - spin));
-        p.yrot("head", dance.mcos() * 30f32.to_radians() * (1.0 - spin));
-        p.zrot("head", dance.mcos() * 14f32.to_radians() * (1.0 - spin));
-    } else {
-        p.xrot("head", s.x_rot.to_radians());
-        p.yrot("head", s.y_rot.to_radians());
-    }
-    p.xrot("right_wing", 0.436_332_32 * (1.0 - flying));
-    p.yrot("right_wing", -PI / 4.0 + flap);
-    p.xrot("left_wing", 0.436_332_32 * (1.0 - flying));
-    p.yrot("left_wing", PI / 4.0 - flap);
-    p.xrot("body", flying * PI / 4.0);
-    let arm_x = hold * (-PI / 3.0 + (-1.134_464 + PI / 3.0) * flying);
-    // `(float) Math.cos`: the exact function, not `Mth.cos`.
-    p.get("root")[1] += (f64::from(idle_bob).cos() as f32) * 0.25 * idle;
-    p.xrot("right_arm", arm_x);
-    p.xrot("left_arm", arm_x);
-    let arm_bob = idle * (1.0 - hold);
-    let amount = 0.436_332_32 - (idle_bob + PI * 1.5).mcos() * PI * 0.075 * arm_bob;
-    p.zrot("left_arm", -amount);
-    p.zrot("right_arm", amount);
-    p.yrot("right_arm", 0.279_252_68 * hold);
-    p.yrot("left_arm", -0.279_252_68 * hold);
 }

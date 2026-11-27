@@ -84,11 +84,6 @@ impl CommandTree {
         })
     }
 
-    /// The ClientboundCommandsPacket for a player with `level` permissions.
-    pub fn packet(&self, level: u8, dedicated: bool, builtin: &Builtin) -> Commands {
-        self.packet_with(level, dedicated, builtin, &Value::Null)
-    }
-
     /// [`CommandTree::packet`] with more commands after vanilla's: `extra`
     /// is a root in the report's format (server mods' commands).
     pub fn packet_with(
@@ -168,6 +163,11 @@ impl CommandTree {
             root: 0,
         }
     }
+    /// The ClientboundCommandsPacket for a player with `level` permissions.
+    #[cfg(test)]
+    pub fn packet(&self, level: u8, dedicated: bool, builtin: &Builtin) -> Commands {
+        self.packet_with(level, dedicated, builtin, &Value::Null)
+    }
 }
 
 /// Commands.fillUsableCommands over the report: the children the source may use.
@@ -237,7 +237,14 @@ fn fill(
                 )
             }),
             suggestions: if argument {
-                suggestions.get(path.join(" ").as_str()).copied()
+                suggestions
+                    .get(path.join(" ").as_str())
+                    .copied()
+                    .or_else(|| {
+                        // Ferraloom: plugin commands' `args` ask the server (their TabCompleter).
+                        (child["suggestions"] == "minecraft:ask_server")
+                            .then_some("minecraft:ask_server")
+                    })
             } else {
                 None
             },

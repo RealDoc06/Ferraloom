@@ -15,8 +15,8 @@ pub const VERSION: &str = match RELEASE {
     None => env!("CARGO_PKG_VERSION"),
 };
 
-/// A nightly's date and commit (`2026-10-28 0c02067`): nightly-build.yml builds the opt-in Nightly
-/// channel with `HORIZON_NIGHTLY` set (docs/release-flow.md). None for a release or a build from source.
+/// A nightly's date and commit (`2026-10-28 0c02067`), from `HORIZON_NIGHTLY` at build time. No
+/// workflow sets it now (upstream's Nightly channel is gone). None for a release or a build from source.
 pub const NIGHTLY: Option<&str> = match option_env!("HORIZON_NIGHTLY") {
     Some(nightly) if !nightly.is_empty() => Some(nightly),
     _ => None,
@@ -28,7 +28,7 @@ pub fn nightly_label() -> Option<String> {
     NIGHTLY.map(label)
 }
 
-/// A nightly's version as the launcher installs it (`nightly-2026-10-28-0c02067`).
+/// A nightly's version as a release folder names it (`nightly-2026-10-28-0c02067`).
 pub fn nightly_version() -> Option<String> {
     NIGHTLY.map(|n| format!("nightly-{}", n.replace(' ', "-")))
 }

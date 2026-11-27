@@ -1,14 +1,9 @@
 //! Villagers (`Villager`): professions, sleeping, the unhappy head shake,
 //! food, gossip and the raid state. Their AI is the brain in
 //! `villager_brain`.
-use super::{
-    Mob, MobEvent, MobWorld, Species,
-    anim::{Poses, State},
-};
+use super::{Mob, MobEvent, MobWorld, Species};
 use crate::items::ItemStack;
-use horizon_core::geometry::trig::Mth;
 use horizon_core::random::RandomSource;
-use std::f32::consts::PI;
 
 // Villager state: `variant` type, `variant2` profession (index into
 // `render::PROFESSIONS`), `variant3` level, `home` the claimed job site,
@@ -49,18 +44,6 @@ pub fn register(m: &mut Mob) {
     m.set_required_path_length(48.0);
 }
 
-/// `LivingEntity.addParticlesAroundSelf`: five particles about the body.
-pub fn particles_around(m: &mut Mob, kind: &'static str, events: &mut Vec<MobEvent>) {
-    let (w, h) = (f64::from(m.width()), f64::from(m.height()));
-    for _ in 0..5 {
-        let at = [
-            m.position.x + w * (2.0 * m.random.next_double() - 1.0),
-            m.position.y + h * m.random.next_double() + 1.0,
-            m.position.z + w * (2.0 * m.random.next_double() - 1.0),
-        ];
-        events.push(MobEvent::Particles { kind, at, count: 0 });
-    }
-}
 /// The `villager_activity` / `baby_villager_activity` timeline.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Activity {
@@ -69,9 +52,6 @@ pub enum Activity {
     Play,
     Meet,
     Rest,
-}
-pub fn activity(m: &Mob, day_time: i64) -> Activity {
-    activity_at(m.is_baby(), day_time)
 }
 pub fn activity_at(baby: bool, day_time: i64) -> Activity {
     let t = day_time.rem_euclid(24000);
@@ -148,15 +128,6 @@ pub fn bed_facing_code(facing: Option<&str>) -> i32 {
         _ => 4,
     }
 }
-pub fn sleep_pose(m: &Mob) -> Option<(f32, [f32; 2])> {
-    Some(match m.extra.ints[1] {
-        1 => (270.0, [0.0, -1.0]),
-        2 => (90.0, [0.0, 1.0]),
-        3 => (0.0, [-1.0, 0.0]),
-        4 => (180.0, [1.0, 0.0]),
-        _ => return None,
-    })
-}
 /// `Villager.tick`: the unhappy counter and the gossip decay; a sleeper
 /// hurt or without its bed wakes up (`LivingEntity.hurtServer`,
 /// `LivingEntity.checkBedExists`). The brain does the rest.
@@ -192,26 +163,6 @@ pub fn set_unhappy(m: &mut Mob, events: &mut Vec<MobEvent>) {
         1.0,
         1.0,
     ));
-}
-/// `VillagerModel.setupAnim`.
-pub fn anim(m: &Mob, s: &State, p: &mut Poses) {
-    let awake = !sleeping(m);
-    p.yrot("head", if awake { s.y_rot.to_radians() } else { 0.0 });
-    p.xrot("head", if awake { s.x_rot.to_radians() } else { 0.0 });
-    if m.extra.ints[0] > 0 {
-        p.zrot("head", 0.3 * (0.45 * s.age).msin());
-        p.xrot("head", 0.4);
-    } else {
-        p.zrot("head", 0.0);
-    }
-    let leg = (s.pos * 0.6662).mcos() * 1.4 * s.speed * 0.5;
-    p.xrot("right_leg", leg);
-    p.xrot(
-        "left_leg",
-        (s.pos * 0.6662 + PI).mcos() * 1.4 * s.speed * 0.5,
-    );
-    p.yrot("right_leg", 0.0);
-    p.yrot("left_leg", 0.0);
 }
 
 // ---- Raids: the raid activities and the gift for a hero.

@@ -1,20 +1,16 @@
 # Data formats
 
-The files Horizon writes that other tools may read: benchmark reports, telemetry, settings, mods, release checksums
-and worlds. Each entry names its version field, its documentation and its level ([stability.md](stability.md)).
+The files Horizon writes that other tools may read: mods, server settings, release checksums and worlds. Each
+entry names its version field, its documentation and its level ([stability.md](stability.md)).
 
 ## Overview
 
 | Format | Where | Version | Level | Documented in |
 | --- | --- | --- | --- | --- |
-| Benchmark report | the benchmark's output, the local log, uploads | `"format": "horizon-benchmark-report"`, `"version": 1` | stable | [benchmark-report.md](../benchmark-report.md) |
-| Telemetry batch | `POST /v1/batch` from the launcher | `"schema": 1` | stable | [telemetry.md](../telemetry.md) |
-| Telemetry consent | `telemetry/consent.json` in the game folder | `"version": 2` | stable | [telemetry.md](../telemetry.md) |
 | Mod package | `.hmod`: a zip with `horizon-mod.toml`, `mod.wasm`, `assets/`, `data/` | the manifest's `api` | preview | [mods.md](../mods.md#the-manifest), [mods-reference.md](mods-reference.md) |
-| Mods turned on | `horizon-mods.txt` | none | preview | [mods.md](../mods.md#playing-with-mods) |
-| Horizon settings | `horizon-graphics.txt`, `horizon-extras.txt` (`key:value`, as `options.txt`) | none: unknown keys fall back to defaults | preview | [graphics.md](../graphics.md), [extras.md](../extras.md#options-storage) |
+| Mods turned on | `horizon-mods.txt` | none | preview | [mods.md](../mods.md#running-mods-on-a-server) |
 | Server settings | `server.toml` | its keys | stable | [server-reference.md](server-reference.md) |
-| Control endpoints | the game's socket file (TCP form), `.horizon/api.json` | none | preview | [agent-control.md](agent-control.md), [server-reference.md](server-reference.md) |
+| Control endpoints | `.horizon/api.json` | none | preview | [server-reference.md](server-reference.md) |
 | Release checksums | `SHA256SUMS`, `SHA256SUMS.sig` on releases since signing began (#1011) | the signed text names the tag | stable | [security.md](../security.md) |
 | Worlds | the world folder | vanilla 26.3's (`DataVersion`) | vanilla's | [world-data.md](../world-data.md) |
 
@@ -32,9 +28,7 @@ Worlds are vanilla's format, so any tool that reads a 26.3 world reads a Horizon
 
 - Versions for the settings files and the control endpoint files (a `version` line or field).
 - Sample files and reader tests for every versioned format.
-- A generated schema for the benchmark report and the telemetry batch from their Rust types, checked by a test like
-  the references.
 
 ## Changelog
 
-- Benchmark report version 1; telemetry schema 1, consent version 2.
+- Benchmark report version 1, removed with `horizon-bench` in November 2026.

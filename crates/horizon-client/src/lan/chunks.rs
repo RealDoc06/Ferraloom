@@ -8,12 +8,11 @@ use crate::{
 };
 use horizon_protocol::{
     buf::{BitSet, Codec, List, Writer, set_bit},
-    chunk::{
-        BIOMES, BLOCKS, BlockEntityInfo, ChunkData, Heightmaps, LightData, Paletted, Strategy,
-    },
-    packets::play::LevelChunkWithLight,
+    chunk::{BIOMES, BLOCKS, BlockEntityInfo, Heightmaps, LightData, Paletted, Strategy},
     registry::{Builtin, ceil_log2},
 };
+#[cfg(test)]
+use horizon_protocol::{chunk::ChunkData, packets::play::LevelChunkWithLight};
 use horizon_world::nbt::Tag;
 use std::{
     collections::HashMap,
@@ -326,15 +325,6 @@ impl SectionCoder {
                 values.push(v as i32);
             }
         }
-        let biome_values: Vec<i32> = (0..BIOMES)
-            .map(|j| {
-                let internal = section.biomes.get(j) as u16;
-                self.biome_ids
-                    .get(usize::from(internal))
-                    .copied()
-                    .unwrap_or(0)
-            })
-            .collect();
         (
             horizon_protocol::chunk::Section {
                 non_empty,
@@ -351,10 +341,24 @@ impl SectionCoder {
                         crate::chunk::block_strategy().global_bits,
                     ),
                 },
-                biomes: Paletted::from_values(&biome_values, Strategy::Biomes, self.biome_bits),
+                biomes: self.biomes(section),
             },
             entities,
         )
+    }
+
+    /// The section's biomes as its PalettedContainer, in network ids.
+    fn biomes(&self, section: &Section) -> Paletted {
+        let values: Vec<i32> = (0..BIOMES)
+            .map(|j| {
+                let internal = section.biomes.get(j) as u16;
+                self.biome_ids
+                    .get(usize::from(internal))
+                    .copied()
+                    .unwrap_or(0)
+            })
+            .collect();
+        Paletted::from_values(&values, Strategy::Biomes, self.biome_bits)
     }
 }
 
@@ -567,17 +571,21 @@ impl ChunkEncoder {
         // The heightmaps depend on the level's height.
         self.heights.lock().unwrap().clear();
     }
+    /// `ClientboundChunksBiomesPacket.ChunkBiomeData`'s buffer: the biomes
+    /// of each of the level's sections, as the column's body has them.
+    /// Ferraloom: for `/fillbiome` (`ChunkMap.resendBiomesForChunks`).
+    pub fn biomes(&self, chunk: &Chunk) -> Vec<u8> {
+        let mut w = Writer::new();
+        for section in &chunk.sections[self.sections.clone()] {
+            self.coder.biomes(section).write(&mut w);
+        }
+        w.data
+    }
     pub fn entity_type(&self, state: u32) -> Option<i32> {
         self.entity_types
             .get(state as usize)
             .filter(|t| **t >= 0)
             .map(|t| i32::from(*t))
-    }
-    pub fn is_air(&self, state: u32) -> bool {
-        self.coder
-            .flags
-            .get(state as usize)
-            .is_none_or(|f| f & NON_AIR == 0)
     }
 
     /// The non-air sections of a column as bits (LevelChunkSection.hasOnlyAir).
@@ -592,25 +600,6 @@ impl ChunkEncoder {
                 None => self.cached(s, |e| e.non_air),
             })
             .fold(0, |bits, (i, _)| bits | 1 << i)
-    }
-
-    /// The non-air sections of the column and its neighbours, as bits.
-    fn around(&self, chunk: &Chunk, world: &crate::world::World) -> u64 {
-        AROUND
-            .iter()
-            .filter_map(|(dx, dz)| world.chunks.get(&(chunk.x + dx, chunk.z + dz)))
-            .fold(0, |around, c| around | self.occupied(&c.sections))
-    }
-
-    /// The chunk column with its light and block entities, as the body
-    /// `Clientbound::encode` gives for its LevelChunkWithLight. `world` gives
-    /// the neighbouring columns, whose sections decide which light layers
-    /// exist. It is written once into a buffer of its final size: the cached
-    /// sections and light layers go straight to it, with no packet built and
-    /// copied again first.
-    pub fn body_in(&self, chunk: &Chunk, world: &crate::world::World) -> Vec<u8> {
-        let tag = |pos: &_| world.block_entities.get(pos).and_then(entity_tag);
-        self.body(chunk.into(), tag, self.around(chunk, world))
     }
 
     /// [`Self::body_in`] of these columns as the level has them now, each to
@@ -791,43 +780,6 @@ impl ChunkEncoder {
         .encode()
     }
 
-    pub fn encode(
-        &self,
-        chunk: &Chunk,
-        block_entities: &HashMap<(i32, i32, i32), BlockEntity>,
-    ) -> LevelChunkWithLight {
-        let mut packet = self.encode_blocks(chunk, block_entities);
-        packet.light = self.light_data(chunk, u64::MAX);
-        packet
-    }
-
-    /// The packet without its light.
-    fn encode_blocks(
-        &self,
-        chunk: &Chunk,
-        block_entities: &HashMap<(i32, i32, i32), BlockEntity>,
-    ) -> LevelChunkWithLight {
-        let tag = |pos: &_| block_entities.get(pos).and_then(entity_tag);
-        let (wires, block_entities) = self.blocks(chunk.into(), tag);
-        LevelChunkWithLight {
-            x: chunk.x,
-            z: chunk.z,
-            chunk: ChunkData {
-                heightmaps: self.heightmaps_of(chunk.into()).to_vec(),
-                buffer: wires.concat(),
-                block_entities,
-            },
-            light: LightData {
-                sky_mask: Vec::new(),
-                block_mask: Vec::new(),
-                empty_sky_mask: Vec::new(),
-                empty_block_mask: Vec::new(),
-                sky: Vec::new(),
-                block: Vec::new(),
-            },
-        }
-    }
-
     fn heightmaps_of(&self, chunk: Column) -> ColumnHeightmaps {
         self.tables
             .as_ref()
@@ -894,15 +846,6 @@ impl ChunkEncoder {
         (wires, entity_infos)
     }
 
-    /// ClientboundLightUpdatePacketData: the light layers of the sections
-    /// that exist around the column (`around`: the non-air sections of it
-    /// and its neighbours, as bits). A resident section's layers come from
-    /// the cache while it is unchanged (uniform light is quicker to fill than
-    /// to keep).
-    fn light_data(&self, chunk: &Chunk, around: u64) -> LightData {
-        light_data_of(&self.light_sections(chunk.into(), around), self.sky)
-    }
-
     fn light_sections(&self, chunk: Column, around: u64) -> Vec<(usize, SectionLight)> {
         light_sections(&chunk.sections[self.sections.clone()], around, |s| {
             if let Light::Uniform(v) = s.light {
@@ -917,6 +860,71 @@ impl ChunkEncoder {
                 layers
             }))
         })
+    }
+    /// The chunk column with its light and block entities, as the body
+    /// `Clientbound::encode` gives for its LevelChunkWithLight. `world` gives
+    /// the neighbouring columns, whose sections decide which light layers
+    /// exist. It is written once into a buffer of its final size: the cached
+    /// sections and light layers go straight to it, with no packet built and
+    /// copied again first.
+    #[cfg(test)]
+    pub fn body_in(&self, chunk: &Chunk, world: &crate::world::World) -> Vec<u8> {
+        let tag = |pos: &_| world.block_entities.get(pos).and_then(entity_tag);
+        self.body(chunk.into(), tag, self.around(chunk, world))
+    }
+    #[cfg(test)]
+    pub fn encode(
+        &self,
+        chunk: &Chunk,
+        block_entities: &HashMap<(i32, i32, i32), BlockEntity>,
+    ) -> LevelChunkWithLight {
+        let mut packet = self.encode_blocks(chunk, block_entities);
+        packet.light = self.light_data(chunk, u64::MAX);
+        packet
+    }
+    /// The packet without its light.
+    #[cfg(test)]
+    fn encode_blocks(
+        &self,
+        chunk: &Chunk,
+        block_entities: &HashMap<(i32, i32, i32), BlockEntity>,
+    ) -> LevelChunkWithLight {
+        let tag = |pos: &_| block_entities.get(pos).and_then(entity_tag);
+        let (wires, block_entities) = self.blocks(chunk.into(), tag);
+        LevelChunkWithLight {
+            x: chunk.x,
+            z: chunk.z,
+            chunk: ChunkData {
+                heightmaps: self.heightmaps_of(chunk.into()).to_vec(),
+                buffer: wires.concat(),
+                block_entities,
+            },
+            light: LightData {
+                sky_mask: Vec::new(),
+                block_mask: Vec::new(),
+                empty_sky_mask: Vec::new(),
+                empty_block_mask: Vec::new(),
+                sky: Vec::new(),
+                block: Vec::new(),
+            },
+        }
+    }
+    /// ClientboundLightUpdatePacketData: the light layers of the sections
+    /// that exist around the column (`around`: the non-air sections of it
+    /// and its neighbours, as bits). A resident section's layers come from
+    /// the cache while it is unchanged (uniform light is quicker to fill than
+    /// to keep).
+    #[cfg(test)]
+    fn light_data(&self, chunk: &Chunk, around: u64) -> LightData {
+        light_data_of(&self.light_sections(chunk.into(), around), self.sky)
+    }
+    /// The non-air sections of the column and its neighbours, as bits.
+    #[cfg(test)]
+    fn around(&self, chunk: &Chunk, world: &crate::world::World) -> u64 {
+        AROUND
+            .iter()
+            .filter_map(|(dx, dz)| world.chunks.get(&(chunk.x + dx, chunk.z + dz)))
+            .fold(0, |around, c| around | self.occupied(&c.sections))
     }
 }
 

@@ -23,10 +23,6 @@ permissions:
 concurrency:
   group: nightly-audit
   cancel-in-progress: false
-env:
-  # Test runs never reach the telemetry server: no live-count ping, no uploads (docs/telemetry.md).
-  HORIZON_TELEMETRY_URL: "off"
-
 jobs:
   audit:
     # The Mac mini's runners only: the audit compares with the previous one, so it stays on one platform.
@@ -71,7 +67,7 @@ jobs:
         run: |
           echo "since=$(date +%Y-%m-%dT%H:%M:%S)" >> "$GITHUB_OUTPUT"
           set +e
-          # lan_integration (the whole lan_e2e suite) takes ~2,400 s under load, past the usual 1,800.
+          # A slow harness under load can pass the usual 1,800 s.
           python3 tools/parity.py --all --timeout 3000 2>&1 | tee "$RUNNER_TEMP/audit.log"
           echo "exit=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
           { echo '```'; tail -40 "$RUNNER_TEMP/audit.log"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

@@ -9,12 +9,8 @@
 pub mod gui;
 mod special;
 
-use crate::{
-    block_entity_render::{ModelPart, diffuse},
-    hud::Rect,
-    mesher::{CULL_BACK, Vertex},
-};
-use glam::{Mat3, Mat4, Vec3};
+use crate::block_entity_render::ModelPart;
+use glam::{Mat4, Vec3};
 use horizon_assets::{
     animation::AnimationMetadata,
     item_bake::{BakedItemModel, SpriteLookup, SpriteMask, bake_item_model},
@@ -22,7 +18,6 @@ use horizon_assets::{
         ClientItem, Components, Context, DisplayContext, FoilType, ItemEnv, ItemModels,
         LayerContent, LevelState, OwnerState, SpecialModel, StackView,
     },
-    model::Direction,
     palette::PalettedPermutations,
     resolve::{MISSING_MODEL, ModelLibrary},
 };
@@ -34,109 +29,6 @@ use std::{
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
-
-/// One quad as submitted for drawing: pose-space corners, atlas UVs, the
-/// transformed unit normal, ARGB colour (tint, `-1` white) and its glint.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ItemQuad {
-    pub pos: [Vec3; 4],
-    pub uv: [[f32; 2]; 4],
-    /// The model UVs `GLINT_TEXTURING` scrolls for the glint (vanilla's UV0,
-    /// or UV3 for a special model).
-    pub foil_uv: [[f32; 2]; 4],
-    pub normal: Vec3,
-    pub color: u32,
-    pub foil: Foil,
-    /// `MaterialInfo.lightEmission` (block light floor).
-    pub light_emission: u8,
-    /// The render type culls back faces (`entitySolid`): world drawing discards them.
-    pub cull_back: bool,
-    /// The quad's sprite has translucent pixels (`MaterialInfo.itemRenderType`
-    /// is a translucent sheet): drawn with the translucent entities.
-    pub translucent: bool,
-}
-/// `TextureTransform.setupGlintTexturing`'s inputs.
-#[derive(Clone, Copy, Debug)]
-pub struct Glint {
-    /// `options.glintSpeed` (vanilla default 0.5).
-    pub speed: f32,
-    /// `options.glintStrength` / shader `GlintAlpha` (vanilla default 0.75).
-    pub alpha: f32,
-    /// `Util.getMillis()`.
-    pub millis: f32,
-    /// The transform's scale: `GLINT_TEXTURING`'s 8.0 for GUI items,
-    /// `ENTITY_GLINT_TEXTURING`'s 0.5 for items in the world and
-    /// `ARMOR_ENTITY_GLINT_TEXTURING`'s 0.16 for armour (entity.wgsl).
-    pub scale: f32,
-}
-impl Glint {
-    /// `Util.getMillis() * glintSpeed * 8.0` as vanilla's long.
-    fn ticks(millis: f32, speed: f32) -> i64 {
-        (f64::from(millis) * f64::from(speed) * 8.0) as i64
-    }
-    /// The scroll clock modulo the common period of both offsets (110000 and
-    /// 30000 divide 330000), for `globals.time.w`: the entity shader derives
-    /// `ARMOR_ENTITY_GLINT_TEXTURING` from it.
-    pub fn scroll_ticks(millis: f32, speed: f32) -> f32 {
-        (Self::ticks(millis, speed) % 330_000) as f32
-    }
-    /// `TextureTransform.setupGlintTexturing(scale)` applied to the model UV:
-    /// translation(-o0, o1) * rotateZ(PI/18) * scale. The result repeats:
-    /// the shader samples the dedicated glint texture with vanilla's
-    /// repeating `GlintSampler`, so the UVs stay unwrapped.
-    pub fn uv(&self, model: [f32; 2]) -> [f32; 2] {
-        let ticks = Self::ticks(self.millis, self.speed);
-        let offset0 = (ticks % 110_000) as f32 / 110_000.0;
-        let offset1 = (ticks % 30_000) as f32 / 30_000.0;
-        let angle = std::f32::consts::PI / 18.0;
-        let (sin, cos) = angle.sin_cos();
-        [
-            model[0] * self.scale * cos - model[1] * self.scale * sin - offset0,
-            model[0] * self.scale * sin + model[1] * self.scale * cos + offset1,
-        ]
-    }
-}
-/// Which glint render type a quad uses.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Foil {
-    None,
-    /// `GLINT_TEXTURING` over the sprite's UVs (`itemGlintRenderType`,
-    /// `entitySolidGlint`).
-    Standard,
-    /// `itemGlintSpecialRenderType`: compasses and clocks, a sheeted decal.
-    Special,
-}
-/// Where submitted quads go.
-pub trait ItemSink {
-    fn quad(&mut self, quad: ItemQuad);
-}
-impl ItemSink for Vec<ItemQuad> {
-    fn quad(&mut self, quad: ItemQuad) {
-        self.push(quad);
-    }
-}
-
-/// Data special renderers read from the game (registries, skins).
-pub trait SpecialHost {
-    /// The banner atlas texture of a banner pattern (`entity/banner/<asset>`).
-    fn banner_texture(&self, pattern: &str) -> Option<String>;
-    /// The shield atlas texture of a banner pattern (`entity/shield/<asset>`).
-    fn shield_texture(&self, pattern: &str) -> Option<String>;
-    /// The skin texture of a `minecraft:profile` component, if loaded.
-    fn player_skin(&self, _profile: &Value) -> Option<String> {
-        None
-    }
-}
-/// A host with no registries: patterns and skins fall back to defaults.
-pub struct NoHost;
-impl SpecialHost for NoHost {
-    fn banner_texture(&self, _: &str) -> Option<String> {
-        None
-    }
-    fn shield_texture(&self, _: &str) -> Option<String> {
-        None
-    }
-}
 
 /// The geometry of one layer.
 #[derive(Clone, Debug)]
@@ -169,150 +61,10 @@ pub struct ItemRenderState {
     pub oversized_in_gui: bool,
     pub animated: bool,
 }
-impl ItemRenderState {
-    pub fn is_empty(&self) -> bool {
-        self.layers.is_empty()
-    }
-    /// `usesBlockLight` of the first layer (GUI lighting choice).
-    pub fn uses_block_light(&self) -> bool {
-        self.layers.first().is_some_and(|l| l.uses_block_light)
-    }
-    /// `getModelBoundingBox`: the transformed extents of every layer, as
-    /// (min, max); a zero box at the origin when there are none.
-    pub fn bounding_box(&self) -> (Vec3, Vec3) {
-        let mut lo = Vec3::splat(f32::INFINITY);
-        let mut hi = Vec3::splat(f32::NEG_INFINITY);
-        for layer in &self.layers {
-            for p in layer.extents.iter() {
-                let q = layer.matrix.transform_point3(*p);
-                lo = lo.min(q);
-                hi = hi.max(q);
-            }
-        }
-        if lo.x > hi.x {
-            (Vec3::ZERO, Vec3::ZERO)
-        } else {
-            (lo, hi)
-        }
-    }
-    /// `ItemStackRenderState.submit` under `pose`.
-    pub fn submit(
-        &self,
-        renderer: &ItemRenderer,
-        sprites: &HashMap<String, Rect>,
-        host: &dyn SpecialHost,
-        pose: Mat4,
-        sink: &mut dyn ItemSink,
-    ) {
-        for layer in &self.layers {
-            let m = pose * layer.matrix;
-            match &layer.geometry {
-                LayerGeometry::Quads(baked) => {
-                    submit_quads(renderer, baked, layer, self.display, m, sprites, sink);
-                }
-                LayerGeometry::Special { model, argument } => special::submit(
-                    renderer,
-                    model,
-                    argument,
-                    layer.foil != FoilType::None,
-                    m,
-                    sprites,
-                    host,
-                    sink,
-                ),
-            }
-        }
-    }
-}
 
 /// The atlas name of a sprite identifier (`minecraft:item/apple` -> `item/apple`).
 pub fn sprite_name(sprite: &str) -> &str {
     sprite.strip_prefix("minecraft:").unwrap_or(sprite)
-}
-/// `Direction.getUnitVec3f`.
-pub fn direction_vector(d: Direction) -> Vec3 {
-    match d {
-        Direction::Down => Vec3::NEG_Y,
-        Direction::Up => Vec3::Y,
-        Direction::North => Vec3::NEG_Z,
-        Direction::South => Vec3::Z,
-        Direction::West => Vec3::NEG_X,
-        Direction::East => Vec3::X,
-    }
-}
-/// `PoseStack.Pose.transformNormal`: the normal matrix, renormalized.
-pub fn transform_normal(m: Mat4, n: Vec3) -> Vec3 {
-    let normal = Mat3::from_mat4(m).inverse().transpose();
-    (normal * n).normalize_or_zero()
-}
-/// An `ARGB` int as the `u32` colour of an [`ItemQuad`].
-pub fn argb(color: i32) -> u32 {
-    color as u32
-}
-
-/// `ItemFeatureRenderer.prepareMainSubmit` for one cuboid layer.
-fn submit_quads(
-    renderer: &ItemRenderer,
-    baked: &BakedItemModel,
-    layer: &LayerRender,
-    display: DisplayContext,
-    m: Mat4,
-    sprites: &HashMap<String, Rect>,
-    sink: &mut dyn ItemSink,
-) {
-    let foil = match layer.foil {
-        FoilType::None => Foil::None,
-        FoilType::Standard => Foil::Standard,
-        FoilType::Special => Foil::Special,
-    };
-    let _ = display;
-    // Quads of one layer mostly share a sprite: look its translucency up once.
-    let mut last: Option<(&str, bool)> = None;
-    for q in &baked.quads {
-        let Some(r) = sprites
-            .get(sprite_name(&q.material.sprite))
-            .or_else(|| sprites.get("misc/missingno"))
-            .or_else(|| sprites.get("horizon/missingno"))
-            .copied()
-        else {
-            continue;
-        };
-        // `getLayerColorSafe`: an untinted quad, or a tint index past the
-        // tints, draws white.
-        let color = if q.tint_index >= 0 {
-            layer
-                .tints
-                .get(q.tint_index as usize)
-                .copied()
-                .unwrap_or(-1)
-        } else {
-            -1
-        };
-        let pos = q.positions.map(|p| m.transform_point3(Vec3::from(p)));
-        let uv =
-            q.uv.map(|[u, v]| [r.u0 + (r.u1 - r.u0) * u, r.v0 + (r.v1 - r.v0) * v]);
-        let translucent = match last {
-            Some((sprite, translucent)) if sprite == q.material.sprite => translucent,
-            _ => {
-                let translucent = renderer
-                    .sprites
-                    .translucent(sprite_name(&q.material.sprite));
-                last = Some((&q.material.sprite, translucent));
-                translucent
-            }
-        };
-        sink.quad(ItemQuad {
-            pos,
-            uv,
-            foil_uv: q.uv,
-            normal: transform_normal(m, direction_vector(q.facing)),
-            color: argb(color),
-            foil,
-            light_emission: q.light_emission,
-            cull_back: false,
-            translucent: translucent || q.material.force_translucent,
-        });
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -351,13 +103,6 @@ fn argb_pixels(rgba: &[u8]) -> Vec<u32> {
         .collect()
 }
 impl FileSprites {
-    fn translucent(&self, sprite: &str) -> bool {
-        let known = |this: &Self| this.translucent.lock().ok()?.get(sprite).copied();
-        known(self).unwrap_or_else(|| {
-            self.mask(sprite);
-            known(self).unwrap_or(false)
-        })
-    }
     fn png(&self, sprite: &str, directory: &str) -> PathBuf {
         crate::atlas_sources::texture_path(&self.root, sprite, directory)
     }
@@ -442,15 +187,10 @@ pub struct ItemRenderer {
     sprites: FileSprites,
     baked: Mutex<HashMap<String, Arc<BakedItemModel>>>,
     extents: Mutex<HashMap<String, Arc<Vec<Vec3>>>>,
-    /// GUI items already drawn: the HUD vertices of a static item at a GUI position
-    /// (`gui::draw`), which are the same every frame it stays there.
-    pub(crate) gui_drawn: Mutex<HashMap<gui::DrawnKey, Arc<[crate::hud::HudVertex]>>>,
     /// Entity model layers of the special renderers.
     parts: HashMap<String, ModelPart>,
     /// `colormap/grass.png` as ARGB.
     grass: Vec<i32>,
-    /// `minecraft:item` registry ids (`Item.getId`).
-    item_ids: HashMap<String, i32>,
 }
 
 /// Every `items/*.json` client item definition, by identifier.
@@ -482,14 +222,6 @@ fn load_definitions(root: &Path) -> BTreeMap<String, ClientItem> {
 }
 
 impl ItemRenderer {
-    /// Load item definitions, item prototypes (`items.json`), every model,
-    /// the special renderers' entity models and the grass colormap.
-    pub fn load(root: &Path) -> crate::Result<Self> {
-        Self::load_with_library(
-            root,
-            crate::model_library::ParsedModels::load(root).into_item_library(),
-        )
-    }
     /// Reuse the immutable models prepared with the block resources at `root`.
     /// Defer item-only validation failures until after item definitions are loaded.
     pub fn load_with_library(
@@ -511,20 +243,7 @@ impl ItemRenderer {
         let grass = crate::hud::decode(&root.join("assets/minecraft/textures/colormap/grass.png"))
             .map(|(_, _, rgba)| argb_pixels(&rgba).into_iter().map(|p| p as i32).collect())
             .unwrap_or_default();
-        let item_ids = horizon_protocol::registry::Builtin::find(root)
-            .and_then(|p| horizon_protocol::registry::Builtin::load(&p).ok())
-            .and_then(|b| {
-                let ids = b.get("minecraft:item")?;
-                let mut out = HashMap::new();
-                for i in 0.. {
-                    let Some(name) = ids.name(i) else { break };
-                    out.insert(name.to_owned(), i);
-                }
-                Some(out)
-            })
-            .unwrap_or_default();
         Ok(Self {
-            item_ids,
             models,
             library,
             sprites: FileSprites {
@@ -535,7 +254,6 @@ impl ItemRenderer {
             },
             baked: Mutex::default(),
             extents: Mutex::default(),
-            gui_drawn: Mutex::default(),
             parts,
             grass,
         })
@@ -673,25 +391,6 @@ impl ItemRenderer {
         let index = (y << 8 | x) as usize;
         self.grass.get(index).copied().unwrap_or(-65281)
     }
-    /// Submit a special model renderer directly (worn skulls of
-    /// `CustomHeadLayer`, which draw the skull model, not the item).
-    #[allow(clippy::too_many_arguments)]
-    pub fn submit_special(
-        &self,
-        model: &SpecialModel,
-        argument: &Value,
-        has_foil: bool,
-        pose: Mat4,
-        sprites: &HashMap<String, Rect>,
-        host: &dyn SpecialHost,
-        sink: &mut dyn ItemSink,
-    ) {
-        special::submit(self, model, argument, has_foil, pose, sprites, host, sink);
-    }
-    /// `Item.getId` (0 when the registry report is missing).
-    pub fn item_id(&self, item: &str) -> i32 {
-        self.item_ids.get(item).copied().unwrap_or(0)
-    }
     pub(crate) fn part(&self, key: &str) -> Option<&ModelPart> {
         self.parts.get(key)
     }
@@ -750,105 +449,6 @@ pub fn stack_view(stack: &crate::items::ItemStack) -> StackView {
 // World drawing
 // ---------------------------------------------------------------------------
 
-/// Entity vertices for submitted quads: the `item`/`entity` shader's
-/// `minecraft_mix_light` with the level's diffuse lights on the vertex
-/// colour, the packed lightmap coordinates (raised by light emission) and
-/// overlay 7 for the glint.
-pub struct WorldSink<'a> {
-    pub out: &'a mut Vec<Vertex>,
-    /// Packed light (`block_entity_render::vertex_light`).
-    pub light: u32,
-    /// The level's diffuse lights; `None` leaves the colour unshaded.
-    pub lights: Option<(Vec3, Vec3)>,
-    /// The `GLINT_TEXTURING` sample for foil quads (`None` leaves them unglinted).
-    pub glint: Option<Glint>,
-}
-impl ItemSink for WorldSink<'_> {
-    fn quad(&mut self, q: ItemQuad) {
-        let brightness = self.lights.map_or(1.0, |l| diffuse(q.normal, l));
-        let [a, r, g, b] = q.color.to_be_bytes();
-        let c = |v: u8| (f32::from(v) * brightness) as u32;
-        let color = u32::from(a) << 24 | c(b) << 16 | c(g) << 8 | c(r);
-        // `LightCoordsUtil.lightCoordsWithEmission`: block light at least the emission.
-        let emission = u32::from(q.light_emission) * 16;
-        let light = if (self.light >> 8 & 0xFF) < emission {
-            (self.light & 0xFF) | emission << 8
-        } else {
-            self.light
-        };
-        let glint = if q.foil == Foil::None {
-            None
-        } else {
-            self.glint
-        };
-        let overlay = match (glint.is_some(), q.translucent) {
-            (false, true) => crate::gfx::TRANSLUCENT_ITEM_OVERLAY,
-            (false, false) => 0,
-            (true, true) => crate::gfx::TRANSLUCENT_GLINT_ITEM_OVERLAY,
-            (true, false) => 7,
-        };
-        for (i, (p, uv)) in q.pos.iter().zip(q.uv).enumerate() {
-            let glint_uv = glint.map_or([0.0, 0.0], |glint| glint.uv(q.foil_uv[i]));
-            self.out.push(Vertex {
-                normal: if q.cull_back { CULL_BACK } else { [0; 4] },
-                pos: p.to_array(),
-                uv,
-                layer: overlay,
-                color,
-                light,
-                glint_uv,
-            });
-        }
-    }
-}
-
-/// `ItemEntity.getSpin`.
-pub fn item_spin(age_in_ticks: f32, bob_offset: f32) -> f32 {
-    age_in_ticks / 20.0 + bob_offset
-}
-/// `ItemClusterRenderState.getRenderedAmount`.
-pub fn rendered_amount(count: u32) -> u32 {
-    match count {
-        0..=1 => 1,
-        2..=16 => 2,
-        17..=32 => 3,
-        33..=48 => 4,
-        _ => 5,
-    }
-}
-/// `ItemEntityRenderer.submitMultipleFromCount`: the poses of each copy of
-/// a stack (`seed` is `ItemClusterRenderState.getSeedForItemStack`).
-pub fn cluster_poses(state: &ItemRenderState, pose: Mat4, amount: u32, seed: i64) -> Vec<Mat4> {
-    use horizon_core::random::{LegacyRandom, RandomSource};
-    let mut out = Vec::new();
-    if amount == 0 {
-        return out;
-    }
-    let mut random = LegacyRandom::new(seed);
-    let (lo, hi) = state.bounding_box();
-    let depth = hi.z - lo.z;
-    let mut next = || random.next_float() * 2.0 - 1.0;
-    if depth > 0.0625 {
-        out.push(pose);
-        for _ in 1..amount {
-            let (x, y, z) = (next() * 0.15, next() * 0.15, next() * 0.15);
-            out.push(pose * Mat4::from_translation(Vec3::new(x, y, z)));
-        }
-    } else {
-        let offset = depth * 1.5;
-        let mut p = pose
-            * Mat4::from_translation(Vec3::new(0.0, 0.0, -(offset * (amount - 1) as f32 / 2.0)));
-        out.push(p);
-        p *= Mat4::from_translation(Vec3::new(0.0, 0.0, offset));
-        for _ in 1..amount {
-            let (x, y) = (next() * 0.15 * 0.5, next() * 0.15 * 0.5);
-            out.push(p * Mat4::from_translation(Vec3::new(x, y, 0.0)));
-            p *= Mat4::from_translation(Vec3::new(0.0, 0.0, offset));
-        }
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -881,14 +481,6 @@ mod tests {
     }
 
     #[test]
-    fn rendered_amounts_follow_the_count_bands() {
-        let bands: Vec<u32> = [0, 1, 2, 16, 17, 32, 33, 48, 49, 64]
-            .iter()
-            .map(|c| rendered_amount(*c))
-            .collect();
-        assert_eq!(bands, [1, 1, 2, 2, 3, 3, 4, 4, 5, 5]);
-    }
-    #[test]
     fn nbt_components_read_as_json() {
         let tag = Tag::compound([
             ("a", Tag::Int(3)),
@@ -899,12 +491,5 @@ mod tests {
             tag_json(&tag),
             serde_json::json!({"a": 3, "b": ["x"], "c": 1.5})
         );
-    }
-    #[test]
-    fn normals_follow_the_inverse_transpose() {
-        let m = Mat4::from_scale(Vec3::new(2.0, 1.0, 1.0));
-        assert_eq!(transform_normal(m, Vec3::X), Vec3::X);
-        let r = Mat4::from_rotation_y(std::f32::consts::FRAC_PI_2);
-        assert!((transform_normal(r, Vec3::Z) - Vec3::X).length() < 1e-6);
     }
 }

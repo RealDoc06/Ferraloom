@@ -1,9 +1,9 @@
 # The registry index and `.hpack`
 
-Horizon's registry lists what is made for Horizon and reviewed: mods (`.hmod`), modpacks (`.hpack`), resource packs
-and Horizon shader packs (`.hshader`, [shaders.md](../shaders.md)). Submissions are pull requests in
-[horizon-rust/horizon-mods](https://github.com/horizon-rust/horizon-mods); merging one publishes it. The launcher and the
-website read one file, `index.json`, which that repository's CI builds. The Rust types and every check below are
+Horizon's registry listed what was made for Horizon and reviewed: mods (`.hmod`), modpacks (`.hpack`), resource
+packs and Horizon shader packs (`.hshader`). Submissions were pull requests in `horizon-rust/horizon-mods`, which
+went with upstream; its CI built one file, `index.json`, which Horizon's launcher and website read. The engine reads
+no index. The Rust types and every check below are
 `horizon_mods::index` and `horizon_mods::modpack` (feature `index`); the sample is
 `crates/horizon-mods/tests/index/index-v1.json`, read by the tests with the files it lists.
 
@@ -48,7 +48,7 @@ Level: preview ([stability.md](stability.md)). Schema 1.
 | `game` | The Minecraft version it is for. |
 | `requires` | A modpack's mods: `{ id, version, sha256 }`, each a version in this index with that hash. |
 | `file` | A plain name with the kind's extension (`.hmod`, `.hpack`, `.zip`), an `https://` URL, the size (at most 64 MiB), the lowercase hex SHA-256, and the `.minisig` text when the project has a key. |
-| `revoked` | Files taken down: one file by `sha256`, or every version of `id` without it. The launcher refuses to install them and turns installed copies off with the reason. |
+| `revoked` | Files taken down: one file by `sha256`, or every version of `id` without it. An installer refuses to install them and turns installed copies off with the reason. |
 
 Readers ignore fields they don't know, so an optional field can be added to schema 1. Renaming or removing a field, or
 changing what one means, makes schema 2.
@@ -70,7 +70,7 @@ The game still checks a mod's component imports against its capabilities when it
 
 ## `.hpack`
 
-A zip holding `horizon-modpack.toml` and, optionally, `overrides/`. The mods are not inside: the launcher downloads
+A zip holding `horizon-modpack.toml` and, optionally, `overrides/`. The mods are not inside: an installer downloads
 each from the index and checks it as above.
 
 ```toml
@@ -91,12 +91,12 @@ on = true                   # optional, default true: turned on in the profile's
 
 Unknown keys are refused. `overrides/` may hold only `options.txt`, `horizon-graphics.txt`, `horizon-extras.txt`,
 `resourcepacks/<name>.zip` and `horizon-mods/.horizon-mod-data/<a listed mod>/...` (a mod's own saved settings,
-capability `storage`), each at most 64 MiB and 256 MiB in all; anything else refuses the pack. The launcher copies
-them into the profile's game folder.
+capability `storage`), each at most 64 MiB and 256 MiB in all; anything else refuses the pack. An installer copies
+them into the game folder.
 
 ## The registry repository
 
-[horizon-rust/horizon-mods](https://github.com/horizon-rust/horizon-mods) holds one `mods/<id>.toml` per project, written by
+`horizon-rust/horizon-mods` held one `mods/<id>.toml` per project, written by
 the submission form or by hand, and `revoked.toml`. What an entry can't vouch for is read from its file by the kind's
 own check (`index::inspect`): a mod's API, side and capabilities, a modpack's mods, the size. Types and rules:
 `horizon_mods::index::registry`.
@@ -133,7 +133,7 @@ reason = "Sent chat messages it didn't declare."
 date = "2026-10-24"
 ```
 
-The submission form's service (`crates/horizon-mod-registry`) writes these entries: it signs the creator in with GitHub, runs the file's checks, uploads the file to the repository's `staging` release as `<sha256>.<extension>` and opens the pull request. Only an entry's `owners` publish updates through it.
+The submission form's service (Horizon's `horizon-mod-registry`, not part of Ferraloom) writes these entries: it signs the creator in with GitHub, runs the file's checks, uploads the file to the repository's `staging` release as `<sha256>.<extension>` and opens the pull request. Only an entry's `owners` publish updates through it.
 
 Unknown keys are refused. Its CI runs `cargo-horizon-mod` (`crates/cargo-horizon-mod`):
 
@@ -142,7 +142,7 @@ Unknown keys are refused. Its CI runs `cargo-horizon-mod` (`crates/cargo-horizon
 | `cargo horizon-mod check <file> [--json]` | A submission's checks: its kind's (above), its signature with `--key` and `--signature`, and for a mod a trial run in the sandbox (40 ticks, 120 frames, a chat line, each command). |
 | `cargo horizon-mod registry check <base> <head> --files <dir>` | `check` on each file `head` lists and `base` doesn't: a pull request's new files. |
 | `cargo horizon-mod registry list <checkout>` | `<sha256> <id> <version> <file>` per version: the files to download. |
-| `cargo horizon-mod registry build <checkout> --files <dir> --out index.json` | Reads every entry and its file (`<dir>/<sha256>`), lists every problem, and writes the index with URLs `<release><id>-<version>/<file>` (`--release`, ending in `/`, defaults to the repository's releases). |
+| `cargo horizon-mod registry build <checkout> --files <dir> --out index.json --release <url> --site <url>` | Reads every entry and its file (`<dir>/<sha256>`), lists every problem, and writes the index with URLs `<release><id>-<version>/<file>` (`--release`, ending in `/`: the registry's release assets) and icons under `--site`. Neither has a default. |
 | `cargo horizon-mod registry review <base> <head> --author <login>` | A pull request's changes: a published file never changes and is never removed (take it down in `revoked.toml`), a kind never changes; changes by a non-owner and to owners or keys are pointed out for the reviewers. |
 
 How the repository runs (its workflows are in `.github/workflows/`):
@@ -161,7 +161,7 @@ How the repository runs (its workflows are in `.github/workflows/`):
   nobody installed) fails `registry review` on purpose and needs an administrator's merge.
 
 Kinds open to submissions: `mod`, `modpack`, `resourcepack`, `shader`. A shader pack (`.hshader`) passes
-`horizon_shader_api::check`, the check the game runs before it loads one (`horizon-shader check`, [shaders.md](../shaders.md)):
+`horizon_shader_api::check`, the check the game runs before it loads one (`horizon-shader check`):
 every stage validated by naga and translated for Vulkan, Metal and DirectX 12; its manifest's id, version and shader
 API line are its facts. Iris and OptiFine packs are for the Modrinth browser. A new kind gets its own check before it
 opens.

@@ -430,9 +430,8 @@ impl Game<'_> {
                                 c.insert("minecraft:item_name".into(), name);
                             });
                         } else {
-                            let t = horizon_client::packs::component(&m["name"]);
-                            stack.extra.get_or_insert_with(Default::default).custom_name =
-                                Some(t.plain());
+                            let name = horizon_client::scoreboard::json_to_tag(&m["name"]);
+                            stack.data_mut().set_custom_name_tag(&name);
                         }
                     }
                     "minecraft:set_enchantments" => {
@@ -595,11 +594,14 @@ impl Game<'_> {
     }
     /// `ItemStack.getMaxStackSize`: the max_stack_size component, else the
     /// item's.
-    pub(super) fn stack_max_size(&self, s: &ItemStack) -> u32 {
+    pub(in crate::game) fn stack_max_size(&self, s: &ItemStack) -> u32 {
         if let Some(Tag::Int(n)) = s.data().and_then(|d| d.other("minecraft:max_stack_size")) {
             return (*n).clamp(1, 99) as u32;
         }
-        self.res.items().get(&s.item).map_or(64, |i| i.max_stack)
+        self.res
+            .items()
+            .get(&s.item)
+            .map_or(64, |i| i.max_stack.max(1))
     }
     /// `ResourceOrIdArgument.getItemModifier`: an inline modifier (SNBT) or
     /// a registered one.

@@ -30,3 +30,10 @@ Use a separate result directory via `R`; leave existing results intact.
 Deploy there with
 `FERRALOOM_BENCH_HOST=root@10.10.10.243 FERRALOOM_BENCH_ROOT=/root/bench tools/ferraloom-bench/deploy.sh <sha>`.
 The original VM remains the default deployment target.
+
+Plugins: `FERRALOOM_BENCH_OVERLAY=<folder>` makes `tools/server_bench.py` lay that folder over the Ferraloom
+server's before it starts. Give it `ferraloom-bukkit/` (the bridge, `.local/ferraloom-plugins/dist`) and
+`plugins/` with one of the benchmark plugins that `crates/ferraloom-plugins/java/build.py` builds into
+`.local/ferraloom-plugins/bench-plugins/`: `FerraloomBenchIdle` (no listener: what a loaded JVM costs) or
+`FerraloomBenchMove` (a `PlayerMoveEvent` listener, the busiest event; it logs its counts at stop). Set
+`JAVA_HOME`. Compare against a run without the overlay, alternating, on the same build.

@@ -81,14 +81,40 @@ import net.minecraft.world.phys.Vec3;
  * at that place, on the ground or not), {@code sprint NAME on|off}, {@code
  * sync NAME} (a round trip through the server thread; "synced NAME" on stdout when
  * it is back), {@code attack NAME TARGET} (ServerboundAttackPacket then the swing; TARGET is a
- * player's name or an entity type's path, the last one added), {@code use
- * NAME} (ServerboundUseItemPacket, main hand) and {@code end}. Each player
+ * player's name or an entity type's path, the last one added), {@code interact
+ * NAME TARGET} (ServerboundInteractPacket, main hand, on such a target), {@code use
+ * NAME} (ServerboundUseItemPacket, main hand), {@code slot NAME N}
+ * (ServerboundSetCarriedItemPacket), and for the player handlers
+ * (tools/test_server_player_handlers_parity.py) {@code spectate NAME TARGET}
+ * (ServerboundSpectatorActionPacket), {@code sneak NAME on|off}
+ * (ServerboundPlayerInputPacket), {@code ridejump NAME DATA}
+ * (START_RIDING_JUMP), {@code useon NAME X Y Z FACE CX CY CZ}
+ * (ServerboundUseItemOnPacket, main hand, the click at the block corner plus
+ * C), {@code dig NAME ACTION X Y Z FACE} (ServerboundPlayerActionPacket),
+ * {@code tagentity NAME ID TARGET} and {@code tagblock NAME ID X Y Z} (the tag
+ * queries); then {@code end}. Each player
  * records the ClientboundSetEntityMotionPacket it receives, its own sprint
- * flag as the server sets it, teleports, and the system chat (command
- * feedback).
+ * flag as the server sets it, teleports, the system chat (command
+ * feedback; an overlay line as {@code overlay}), the
+ * ClientboundDamageEventPacket about a player (the hurt player and the damage
+ * type), the sounds it is sent of {@link #SOUNDS}, its camera
+ * (ClientboundSetCameraPacket), dialogs, tag query answers (their top-level
+ * keys), block updates, a horse's or camel's flags and dash (entity data 18
+ * and 19), and for tools/test_server_combat_parity.py the
+ * ClientboundUpdateAttributesPacket
+ * (instances sorted by attribute, as vanilla's set has no order; modifiers in
+ * the packet's order) and ClientboundCooldownPacket it receives; for
+ * tools/test_server_entity_data_parity.py every entity's arrow and stinger
+ * counts (entity data 12 and 13) and on-fire bit as they change, the biomes of
+ * each ClientboundChunksBiomesPacket, ClientboundAddTransientBlockPacket and
+ * ClientboundTeleportEntityPacket; and for tools/test_server_items_parity.py
+ * the inventory's ClientboundContainerSetSlotPacket stacks with their
+ * component patch.
  */
 public final class KnockbackClient {
     private static volatile String step = "start";
+    /** The sound paths recorded, by prefix. */
+    private static final List<String> SOUNDS = List.of("entity.player.hurt", "entity.horse.jump", "entity.camel.dash");
     private static final Map<UUID, String> NAMES = new LinkedHashMap<>();
 
     public static void main(String[] args) throws Exception {
@@ -120,8 +146,40 @@ public final class KnockbackClient {
                     }
                     case "sprint" -> players.get(w[1]).sprint(w[2].equals("on"));
                     case "attack" -> players.get(w[1]).attack(w[2]);
+                    case "interact" -> players.get(w[1]).interact(w[2]);
                     case "use" -> players.get(w[1]).send(new ServerboundUseItemPacket(InteractionHand.MAIN_HAND, 0, 0, 0));
                     case "punch" -> players.get(w[1]).send(net.minecraft.network.protocol.game.ServerboundPunchPacket.INSTANCE);
+                    case "slot" -> players.get(w[1]).send(new net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket(Integer.parseInt(w[2])));
+                    case "spectate" -> players.get(w[1]).spectate(w[2]);
+                    case "sneak" -> players.get(w[1]).send(new net.minecraft.network.protocol.game.ServerboundPlayerInputPacket(
+                        new net.minecraft.world.entity.player.Input(false, false, false, false, false, w[2].equals("on"), false)));
+                    case "ridejump" -> players.get(w[1]).command(ServerboundPlayerCommandPacket.Action.START_RIDING_JUMP, Integer.parseInt(w[2]));
+                    case "useon" -> {
+                        String[] a = w[2].split(" ");
+                        net.minecraft.core.BlockPos pos = new net.minecraft.core.BlockPos(Integer.parseInt(a[0]), Integer.parseInt(a[1]), Integer.parseInt(a[2]));
+                        Vec3 at = new Vec3(pos.getX() + Double.parseDouble(a[4]), pos.getY() + Double.parseDouble(a[5]), pos.getZ() + Double.parseDouble(a[6]));
+                        Player p = players.get(w[1]);
+                        p.send(new net.minecraft.network.protocol.game.ServerboundUseItemOnPacket(InteractionHand.MAIN_HAND,
+                            new net.minecraft.world.phys.BlockHitResult(at, net.minecraft.core.Direction.from3DDataValue(Integer.parseInt(a[3])), pos, false),
+                            ++p.sequence));
+                    }
+                    case "dig" -> {
+                        String[] a = w[2].split(" ");
+                        Player p = players.get(w[1]);
+                        p.send(new net.minecraft.network.protocol.game.ServerboundPlayerActionPacket(
+                            net.minecraft.network.protocol.game.ServerboundPlayerActionPacket.Action.values()[Integer.parseInt(a[0])],
+                            new net.minecraft.core.BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3])),
+                            net.minecraft.core.Direction.from3DDataValue(Integer.parseInt(a[4])), ++p.sequence));
+                    }
+                    case "tagentity" -> {
+                        String[] a = w[2].split(" ");
+                        players.get(w[1]).tagEntity(Integer.parseInt(a[0]), a[1]);
+                    }
+                    case "tagblock" -> {
+                        String[] a = w[2].split(" ");
+                        players.get(w[1]).send(new net.minecraft.network.protocol.game.ServerboundBlockEntityTagQueryPacket(Integer.parseInt(a[0]),
+                            new net.minecraft.core.BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3]))));
+                    }
                     case "sync" -> {
                         try {
                             players.get(w[1]).sync();
@@ -168,12 +226,16 @@ public final class KnockbackClient {
         /** Every entity this player was sent: its id to a name (players) or type path. */
         private final Map<Integer, String> seen = new java.util.concurrent.ConcurrentHashMap<>();
         private final Map<String, Integer> last = new java.util.concurrent.ConcurrentHashMap<>();
+        /** The on-fire bit last sent for each entity. */
+        private final Map<Integer, Boolean> fire = new java.util.concurrent.ConcurrentHashMap<>();
         private final Object replyLock = new Object();
         private int replies;
         private int syncs;
         /** The motion packets about this player it was sent, and how many there were at the last `mark`. */
         private int pushes;
         private int marked;
+        /** The block change sequence of the last use or dig. */
+        int sequence;
 
         Player(String name) {
             this.name = name;
@@ -250,12 +312,34 @@ public final class KnockbackClient {
         }
 
         void sprint(boolean on) throws Exception {
+            command(on ? ServerboundPlayerCommandPacket.Action.START_SPRINTING : ServerboundPlayerCommandPacket.Action.STOP_SPRINTING, 0);
+        }
+
+        void command(ServerboundPlayerCommandPacket.Action action, int data) throws Exception {
             // ServerboundPlayerCommandPacket's only public constructors take an Entity: read it from its bytes.
             FriendlyByteBuf b = new FriendlyByteBuf(Unpooled.buffer());
             b.writeVarInt(id);
-            b.writeVarInt((on ? ServerboundPlayerCommandPacket.Action.START_SPRINTING : ServerboundPlayerCommandPacket.Action.STOP_SPRINTING).ordinal());
-            b.writeVarInt(0);
+            b.writeVarInt(action.ordinal());
+            b.writeVarInt(data);
             send(ServerboundPlayerCommandPacket.STREAM_CODEC.decode(b));
+        }
+
+        void spectate(String target) throws Exception {
+            Integer entity = last.get(target);
+            if (entity == null) {
+                record("error no " + target + " to spectate");
+                return;
+            }
+            send(new net.minecraft.network.protocol.game.ServerboundSpectatorActionPacket(java.util.OptionalInt.of(entity)));
+        }
+
+        void tagEntity(int transaction, String target) throws Exception {
+            Integer entity = last.get(target);
+            if (entity == null) {
+                record("error no " + target + " to query");
+                return;
+            }
+            send(new net.minecraft.network.protocol.game.ServerboundEntityTagQueryPacket(transaction, entity));
         }
 
         void attack(String target) throws Exception {
@@ -266,6 +350,17 @@ public final class KnockbackClient {
             }
             send(new ServerboundAttackPacket(entity));
             send(ServerboundPunchPacket.INSTANCE);
+        }
+
+        /** ServerboundInteractPacket on the last TARGET added, main hand (a boat to board). */
+        void interact(String target) throws Exception {
+            Integer entity = last.get(target);
+            if (entity == null) {
+                record("error no " + target + " to interact with");
+                return;
+            }
+            send(new net.minecraft.network.protocol.game.ServerboundInteractPacket(entity, InteractionHand.MAIN_HAND,
+                new Vec3(0.0, 0.3, 0.0), false));
         }
 
         void close() throws Exception {
@@ -355,10 +450,97 @@ public final class KnockbackClient {
                                 replyLock.notifyAll();
                             }
                         }
-                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket d && d.id() == id) {
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundDamageEventPacket d
+                        && (d.entityId() == id || NAMES.containsValue(seen.get(d.entityId())))) {
+                        // The causing and direct entities are left out: Ferraloom doesn't attribute a player's hurt yet.
+                        record("damage " + seen.get(d.entityId()) + " " + d.sourceType().getRegisteredName());
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundSoundPacket s
+                        && SOUNDS.stream().anyMatch(s.getSound().value().location().getPath()::startsWith)) {
+                        record("sound " + s.getSound().value().location().getPath());
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundSetCameraPacket) {
+                        // Its camera id is private: the varint after the packet id.
+                        ByteBuf b = Unpooled.wrappedBuffer(r.payload);
+                        net.minecraft.network.VarInt.read(b);
+                        int camera = net.minecraft.network.VarInt.read(b);
+                        record("camera " + seen.getOrDefault(camera, "id" + camera));
+                    } else if (p instanceof net.minecraft.network.protocol.common.ClientboundShowDialogPacket d) {
+                        record("dialog " + d.dialog().getRegisteredNameIfPresent().orElse("direct"));
+                    } else if (p instanceof net.minecraft.network.protocol.common.ClientboundClearDialogPacket) {
+                        record("dialog clear");
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundTagQueryPacket t) {
+                        record("tag " + t.getTransactionId() + " "
+                            + (t.getTag() == null ? "none" : String.join(",", new java.util.TreeSet<>(t.getTag().keySet()))));
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket u && loaded) {
+                        net.minecraft.core.BlockPos at = u.getPos();
+                        record("block " + at.getX() + " " + at.getY() + " " + at.getZ() + " "
+                            + net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(u.getBlockState().getBlock()).getPath());
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket d) {
+                        String who = seen.getOrDefault(d.id(), "id" + d.id());
                         for (var value : d.packedItems()) {
-                            if (value.id() == 0) record("sprinting " + ((((Byte) value.value()) & 8) != 0));
+                            if (d.id() == id && value.id() == 0) record("sprinting " + ((((Byte) value.value()) & 8) != 0));
+                            // AbstractHorse.DATA_ID_FLAGS and Camel.DASH.
+                            if ((who.equals("horse") || who.equals("camel")) && (value.id() == 18 || value.id() == 19)) {
+                                record("data " + who + " " + value.id() + " " + value.value());
+                            }
+                            // Entity.DATA_SHARED_FLAGS_ID's on-fire bit, as it changes.
+                            if (value.id() == 0) {
+                                boolean burning = (((Byte) value.value()) & 1) != 0;
+                                if (fire.getOrDefault(d.id(), false) != burning) record("fire " + who + " " + burning);
+                                fire.put(d.id(), burning);
+                            }
+                            // LivingEntity.DATA_ARROW_COUNT_ID and DATA_STINGER_COUNT_ID (other types use
+                            // these indices for their own data: the harness keeps the living ones).
+                            if (value.id() == 12 || value.id() == 13) {
+                                record((value.id() == 12 ? "arrows " : "stingers ") + who + " " + value.value());
+                            }
                         }
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundChunksBiomesPacket b) {
+                        // ClientPacketListener.handleChunksBiomes: each section's biomes read as the client does.
+                        for (var c : b.chunkBiomeData()) {
+                            FriendlyByteBuf buffer = c.getReadBuffer();
+                            List<String> sections = new ArrayList<>();
+                            for (int s = 0; buffer.isReadable(); s++) {
+                                var section = new net.minecraft.world.level.chunk.LevelChunkSection(
+                                    net.minecraft.world.level.chunk.PalettedContainerFactory.create(ParityData.access));
+                                section.readBiomes(buffer);
+                                Map<String, Integer> counts = new java.util.TreeMap<>();
+                                for (int i = 0; i < 64; i++) {
+                                    var biome = section.getNoiseBiome(i & 3, i >> 4, (i >> 2) & 3);
+                                    counts.merge(biome.unwrapKey().orElseThrow().identifier().getPath(), 1, Integer::sum);
+                                }
+                                sections.add(s + ":" + counts);
+                            }
+                            record("biomes " + c.pos().x() + "," + c.pos().z() + " " + String.join(" ", sections));
+                        }
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundTeleportEntityPacket t) {
+                        var c = t.change();
+                        List<String> relatives = new ArrayList<>();
+                        for (var relative : t.relatives()) relatives.add(relative.name());
+                        java.util.Collections.sort(relatives);
+                        record(String.format(java.util.Locale.ROOT, "tpentity %s %.3f %.3f %.3f %.5f %.5f %.5f %.2f %.2f %s %s",
+                            seen.getOrDefault(t.id(), "id" + t.id()), c.position().x, c.position().y, c.position().z,
+                            c.deltaMovement().x, c.deltaMovement().y, c.deltaMovement().z, c.yRot(), c.xRot(),
+                            String.join(",", relatives), t.onGround()));
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundAddTransientBlockPacket t) {
+                        record("transient " + t.getPos().toShortString() + " " + t.getBlockState());
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundUpdateAttributesPacket a) {
+                        List<String> instances = new ArrayList<>();
+                        for (var v : a.getValues()) {
+                            StringBuilder b = new StringBuilder(v.attribute().unwrapKey().orElseThrow().identifier().getPath());
+                            b.append('=').append(v.base());
+                            for (var m : v.modifiers()) {
+                                b.append(' ').append(m.id()).append(':').append(m.amount()).append(':').append(m.operation().id());
+                            }
+                            instances.add(b.toString());
+                        }
+                        java.util.Collections.sort(instances);
+                        record("attributes " + seen.getOrDefault(a.getEntityId(), "id" + a.getEntityId()) + " " + String.join(" | ", instances));
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket s
+                        && s.getContainerId() == 0 && !s.getItem().isEmpty()) {
+                        // tools/test_server_items_parity.py: the inventory slot and its stack's component patch.
+                        record("slot " + s.getSlot() + " " + describe(s.getItem()));
+                    } else if (p instanceof net.minecraft.network.protocol.game.ClientboundCooldownPacket c) {
+                        record("cooldown " + c.cooldownGroup() + " " + c.duration());
                     } else if (p instanceof ClientboundSystemChatPacket c
                         && c.content().getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents t
                         && t.getKey().equals("commands.time.query.gametime")) {
@@ -366,6 +548,8 @@ public final class KnockbackClient {
                             syncs++;
                             replyLock.notifyAll();
                         }
+                    } else if (p instanceof ClientboundSystemChatPacket c && c.overlay()) {
+                        record("overlay " + c.content().getString());
                     } else if (p instanceof ClientboundSystemChatPacket c) {
                         record("chat " + c.content().getString());
                         synchronized (replyLock) {
@@ -398,6 +582,17 @@ public final class KnockbackClient {
             } catch (Exception e) {
                 if (!socket.isClosed()) record("error play " + e);
             }
+        }
+
+        /** An item, its count and its component patch, each component once, sorted. */
+        private static String describe(net.minecraft.world.item.ItemStack stack) {
+            List<String> parts = new ArrayList<>();
+            var split = stack.getComponentsPatch().split();
+            for (var c : split.added()) parts.add(c.type() + "=" + c.value());
+            for (var t : split.removed()) parts.add("!" + t);
+            java.util.Collections.sort(parts);
+            return net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()) + " x" + stack.getCount()
+                + (parts.isEmpty() ? "" : " " + String.join(" ", parts));
         }
 
         private record Received(Packet<?> packet, byte[] payload) {}

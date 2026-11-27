@@ -907,28 +907,6 @@ impl Game<'_> {
                     })
             })
     }
-    /// Enchantment attribute modifiers of worn armor (respiration, depth strider...).
-    /// Each piece's modifier id ends with its slot (`EnchantmentAttributeEffect.idForSlot`),
-    /// so the same enchantment on two pieces stacks instead of replacing itself.
-    pub(super) fn apply_enchantment_attributes(&mut self) {
-        let mut wanted: Vec<(String, String, f64, String)> = Vec::new();
-        for (stack, slot) in self.armor.iter().zip(["head", "chest", "legs", "feet"]) {
-            let Some(stack) = stack else { continue };
-            for (attr, id, amount, op) in self.res.stations().enchantments.attributes(stack) {
-                wanted.push((attr, format!("{id}/{slot}"), amount, op));
-            }
-        }
-        let Some(p) = self.player.as_mut() else {
-            return;
-        };
-        for (attr, id, _, op) in std::mem::take(&mut self.potions.enchant_modifiers) {
-            let _ = p.set_modifier(&attr, &id, 0.0, &op, false);
-        }
-        for (attr, id, amount, op) in &wanted {
-            let _ = p.set_modifier(attr, id, *amount, op, true);
-        }
-        self.potions.enchant_modifiers = wanted;
-    }
 }
 
 /// Soul Speed's `attribute` effects at `level` (attribute, id, amount, operation),

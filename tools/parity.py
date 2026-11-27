@@ -592,7 +592,7 @@ def java_sources(arguments):
 
 
 def run_environment(reuse_oracles=False):
-    environment = dict(os.environ, CARGO_TARGET_DIR=str(TARGET), PYTHONDONTWRITEBYTECODE="1", HORIZON_NO_AUDIO="1", **PROFILE)
+    environment = dict(os.environ, CARGO_TARGET_DIR=str(TARGET), PYTHONDONTWRITEBYTECODE="1", **PROFILE)
     environment.pop("CARGO_BUILD_JOBS", None)
     if reuse_oracles:
         # tools/parity_shim.py stands in for java and javac and replays unchanged oracle runs.

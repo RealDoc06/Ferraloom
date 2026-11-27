@@ -3,14 +3,12 @@
 //! breeding, conversions, drops), projectiles, player interactions
 //! (feeding, shearing, milking, spawn eggs, throwing) and rendering.
 use super::{Dim, Game, view_vector};
-use horizon_assets::item_model::DisplayContext;
 use horizon_client::{
     Result,
     arrows::EntityHit,
     blocks::Fluid,
     collisions::SceneCollisions,
     items::ItemStack,
-    mesher::Vertex,
     mobs::{
         Damage, DamageKind, Mob, MobEvent, MobWorld, PlayerView, Seen, SpawnSetup, Species, Who,
         ai::{eating_sound, feed_animal},
@@ -129,62 +127,6 @@ impl ProjectileWorld for ProjWorld<'_, '_> {
             .full_collision
     }
 }
-/// `FlameFeatureRenderer`: fire quads stacked up a burning entity's box,
-/// turned to the camera around Y, at full block light. `at` is the entity's
-/// feet relative to the camera.
-fn flame_geometry(
-    atlas: &horizon_client::hud::HudAtlas,
-    at: glam::Vec3,
-    width: f32,
-    height: f32,
-    camera_yaw: f32,
-    light: u8,
-    out: &mut Vec<Vertex>,
-) {
-    let (Some(fire0), Some(fire1)) = (
-        atlas.sprites.get("block/fire_0").copied(),
-        atlas.sprites.get("block/fire_1").copied(),
-    ) else {
-        return;
-    };
-    let s = width * 1.4;
-    let mut h = height / s;
-    // Mth.rotationAroundAxis(Y, camera.orientation): the camera's turn about Y.
-    let turn = glam::Mat3::from_rotation_y(std::f32::consts::PI - camera_yaw.to_radians());
-    let lift = 0.3 - (h as i32) as f32 * 0.02;
-    let packed = (u32::from(light >> 4) * 16) | ((15 * 16) << 8);
-    let (mut r, mut yo, mut zo, mut ss) = (0.5f32, 0.0f32, 0.0f32, 0);
-    while h > 0.0 {
-        let tex = if ss % 2 == 0 { fire0 } else { fire1 };
-        let (mut u0, v0, mut u1, v1) = (tex.u0, tex.v0, tex.u1, tex.v1);
-        if ss / 2 % 2 == 0 {
-            std::mem::swap(&mut u0, &mut u1);
-        }
-        for (x, y, uv) in [
-            (-r, -yo, [u1, v1]),
-            (r, -yo, [u0, v1]),
-            (r, 1.4 - yo, [u0, v0]),
-            (-r, 1.4 - yo, [u1, v0]),
-        ] {
-            let p = at + turn * glam::Vec3::new(x, y, zo + lift) * s;
-            out.push(Vertex {
-                normal: [0; 4],
-                pos: p.to_array(),
-                uv,
-                layer: 0,
-                color: 0xFFFF_FFFF,
-                light: packed,
-
-                glint_uv: [0.0, 0.0],
-            });
-        }
-        h -= 0.45;
-        yo -= 0.45;
-        r *= 0.9;
-        zo -= 0.03;
-        ss += 1;
-    }
-}
 pub(super) fn seen(m: &Mob, player: Option<[i32; 4]>) -> Seen {
     m.seen(player)
 }
@@ -290,7 +232,7 @@ impl Game<'_> {
             alive: !p.health.dead_or_dying(),
             // EntitySelector.NO_CREATIVE_OR_SPECTATOR.
             creative: self.creative || self.spectator(),
-            sneaking: self.keys.contains(&winit::keyboard::KeyCode::ShiftLeft),
+            sneaking: self.keys.contains(&crate::game::keys::KeyCode::ShiftLeft),
             swimming: p.swimming,
             look: view_vector(self.yaw, self.pitch),
             main_hand: self.held().map(|s| s.item.clone()),
@@ -339,8 +281,6 @@ impl Game<'_> {
                 || b.name.contains("snow")
                 || b.name.contains("frozen"),
             swamp: b.name.contains("swamp"),
-            ocean: has("minecraft:is_ocean"),
-            mushroom: b.name == "minecraft:mushroom_fields",
             desert: b.name == "minecraft:desert",
             jungle: has("minecraft:is_jungle"),
             wolf: horizon_client::mobs::tame::wolf_variant_for(&b.name, &has),
@@ -394,108 +334,17 @@ impl Game<'_> {
         }
         let id = mob.id;
         self.mobs.push(mob);
+        // Ferraloom: CreatureSpawnEvent as the mob is added (game/plugins/entities.rs).
+        if ferraloom_plugins::listens(ferraloom_plugins::Event::EntitySpawn)
+            && self.plugin_spawned(id, ferraloom_plugins::SpawnReason::Default)
+        {
+            return None;
+        }
         self.enchant_spawn_equipment(id);
         if !persistent && !scripted {
             self.spawn_jockeys(id, true);
         }
         Some(id)
-    }
-    /// The `summon` command: spawn a mob in front of the player or at a position.
-    pub(super) fn summon(&mut self, kind: &str, at: Option<[f64; 3]>, baby: bool) -> Result<u32> {
-        let at = match at {
-            Some(a) => a,
-            None => {
-                let p = self.player.as_ref().ok_or("no player yet")?;
-                let d = view_vector(self.yaw, 0.0);
-                [
-                    p.position.x + d[0] * 3.0,
-                    p.position.y,
-                    p.position.z + d[2] * 3.0,
-                ]
-            }
-        };
-        let id = self
-            .spawn_mob(kind, at, true)
-            .ok_or_else(|| format!("unknown or unsupported mob {kind}"))?;
-        if baby && let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
-            m.extra.age = if m.species() == Species::Sniffer {
-                horizon_client::mobs::sniffer::BABY_START_AGE
-            } else {
-                -24000
-            };
-        }
-        self.spawn_jockeys(id, false);
-        Ok(id)
-    }
-    /// The `mobs` command: nearby mobs with position, health and running goals.
-    pub(super) fn control_mobs(&self, radius: f64) -> serde_json::Value {
-        let center = self.player.as_ref().map_or(Vec3::ZERO, |p| p.position);
-        self.control_mobs_at(radius, center)
-    }
-    pub(super) fn control_mobs_at(&self, radius: f64, center: Vec3) -> serde_json::Value {
-        let list: Vec<serde_json::Value> = self
-            .mobs
-            .iter()
-            .filter(|m| m.distance_sqr(center) <= radius * radius)
-            .map(|m| {
-                let mut state = serde_json::json!({
-                    "id": m.id,
-                    "kind": m.kind.id,
-                    "pos": [m.position.x, m.position.y, m.position.z],
-                    "health": m.health,
-                    "baby": m.is_baby(),
-                    "target": m.ai.target.map(|t| format!("{t:?}")),
-                    "goals": m.ai.goals.running_names(),
-                    "held": m.extra.main_hand.as_deref(),
-                    "mount": m.extra.mount,
-                    "rider": m.extra.rider,
-                    // A player's input this tick, and whether it steers.
-                    "ridden": m.rider.map(|r| r.steer),
-                    "controlled": horizon_client::mobs::equine::controlled(m),
-                    "saddled": m.extra.saddled,
-                    "enchants": horizon_client::mobs::gear::gear(m).map(|g| g.slots.iter().map(|s| s.iter().map(|(e, l)| format!("{e}:{l}")).collect::<Vec<_>>()).collect::<Vec<_>>()),
-                    "ints": m.extra.ints,
-                    "pois": [m.extra.home, m.extra.bed, m.extra.meeting],
-                    "profession": m.extra.variant2,
-                    "targets": m.ai.targets.running_names(),
-                    "path": m.ai.nav.path.as_ref().map(|p| p.nodes.len() - p.next.min(p.nodes.len())),
-                    "on_ground": m.on_ground,
-                    "variant": m.extra.variant,
-                    "color": m.extra.color,
-                    "sheared": m.extra.sheared,
-                    "burning": m.fire_ticks > 0,
-                    "size": m.extra.size,
-                    "leash": m.extra.leash.map(|h| format!("{h:?}")),
-                    "tame": m.extra.tame,
-                    "sitting": m.extra.sitting,
-                    "temper": m.extra.variant3,
-                    "chested": m.extra.chested,
-                    "head": m.extra.head.as_deref(),
-                    "warden": horizon_client::mobs::warden::describe(m),
-                    "villager": horizon_client::mobs::villager::ext(m).map(|e| serde_json::json!({
-                        "food_level": e.food_level,
-                        "inventory": e.inventory.iter().map(|s| format!("{}x{}", s.count, s.item)).collect::<Vec<_>>(),
-                        "gossips": e.gossips.len(),
-                        "last_slept": e.last_slept,
-                        "raid": e.raid,
-                    })),
-                    "raider": horizon_client::mobs::raider::state(m).map(|s| serde_json::json!({
-                        "raid": s.raid_id,
-                        "wave": s.wave,
-                        "leader": s.patrol_leader,
-                        "patrolling": s.patrolling,
-                        "patrol_target": s.patrol_target,
-                        "vehicle": m.extra.mount,
-                    })),
-                });
-                // Drawn seated (Entity.isPassenger); set apart because the
-                // json! above is at the macro recursion limit.
-                state["passenger"] = m.extra.passenger.into();
-                state["guardian_beam"] = serde_json::json!(horizon_client::mobs::guardian::beam(m, 0.0));
-                state
-            })
-            .collect();
-        serde_json::json!({ "count": self.mobs.len(), "near": list, "projectiles": self.creatures.projectiles.len() })
     }
     /// Highest motion-blocking (no leaves) block + 1 (Heightmap MOTION_BLOCKING_NO_LEAVES).
     pub(super) fn motion_top(&self, x: i32, z: i32) -> i32 {
@@ -778,6 +627,8 @@ impl Game<'_> {
             self.mobs.append(&mut mobs);
         }
         self.died = died;
+        // Ferraloom: plugin changes from the pass, in mob order (game/plugins/entities.rs).
+        self.plugin_after_mob_pass();
         // ... and entity event 60 goes out as it is: the poof.
         for (id, at, width, height) in gone {
             let at = [at.x, at.y, at.z];
@@ -870,6 +721,8 @@ impl Game<'_> {
     /// LivingEntity.die / dropAllDeathLoot.
     fn mob_died(&mut self, m: &Mob) {
         let killer = self.last_hurt_by_player.remove(&m.id);
+        // Ferraloom: the killer, for EntityDeathEvent (game/plugins/entities.rs).
+        super::plugins::entities::note_killer(m.id, killer.flatten());
         let by_player = killer.is_some() || m.ai.last_hurt_by_player > 0;
         let mut dying = m.clone();
         // LivingEntity.die: the death is heard, and a sculk catalyst nearby
@@ -1014,7 +867,11 @@ impl Game<'_> {
             mob_drops: self.ui.rules.bool("mob_drops"),
             world_seed: self.level.seed,
         };
-        let (items, skulls) = drops::die(m, &death, &mut self.rand_sequences);
+        let (mut items, skulls) = drops::die(m, &death, &mut self.rand_sequences);
+        // Ferraloom: EntityDeathEvent, the loot collected and not dropped (CraftBukkit's dropAllDeathLoot).
+        if ferraloom_plugins::listens(ferraloom_plugins::Event::EntityDeath) {
+            items = self.plugin_entity_death(m, items);
+        }
         if skulls && let Some(Who::Mob(id)) = m.last_damage.and_then(|(d, _)| d.attacker) {
             // Creeper.droppedSkulls: one head per charged explosion.
             self.combat.charged_exploders.retain(|c| *c != id);
@@ -1223,6 +1080,13 @@ impl Game<'_> {
                 MobEvent::DamagePlayer { amount, from, kind } => {
                     self.mob_hits_player(amount, from, kind);
                 }
+                MobEvent::Sting {
+                    target,
+                    bee,
+                    amount,
+                    from,
+                    poison,
+                } => self.bee_sting(target, bee, amount, from, poison),
                 MobEvent::ElderCurse { at } => self.elder_curse(at),
                 MobEvent::Push { target, velocity } => {
                     let v = Vec3::new(velocity[0], velocity[1], velocity[2]);
@@ -2173,6 +2037,15 @@ impl Game<'_> {
         // DamageSource.scalesWithDifficulty: a mob (or its projectile's
         // owner) caused the hit, not a player.
         let living_cause = attacker.or(owner).is_some();
+        // Ferraloom: EntityDamageEvent for the player (game/plugins/entities.rs).
+        let amount = if ferraloom_plugins::listens(ferraloom_plugins::Event::EntityDamage) {
+            match self.plugin_player_damage(amount, damage_type, attacker.or(owner)) {
+                Some(amount) => amount,
+                None => return false,
+            }
+        } else {
+            amount
+        };
         let mut outcome = horizon_client::health::BlockOutcome::default();
         if let Some(player) = self.player.as_mut()
             && let Some(id) = self.motion.health.damage.id(damage_type)
@@ -2280,7 +2153,7 @@ impl Game<'_> {
     /// player is invulnerable to wither damage (creative, spectator). A
     /// server's player gets it from the server.
     pub(super) fn wither_rose_contact(&mut self) {
-        if self.remote.is_some() || self.ui.difficulty == 0 {
+        if self.ui.difficulty == 0 {
             return;
         }
         self.give_player_effect("minecraft:wither", 40, 0);
@@ -2289,6 +2162,15 @@ impl Game<'_> {
         if self.creative {
             return;
         }
+        // Ferraloom: EntityDamageEvent for the player (game/plugins/entities.rs).
+        let amount = if ferraloom_plugins::listens(ferraloom_plugins::Event::EntityDamage) {
+            match self.plugin_player_damage(amount, damage_type, None) {
+                Some(amount) => amount,
+                None => return,
+            }
+        } else {
+            amount
+        };
         if let Some(player) = self.player.as_mut()
             && let Some(id) = self.motion.health.damage.id(damage_type)
         {
@@ -2319,7 +2201,6 @@ impl Game<'_> {
         // Player.hasInfiniteMaterials.
         let creative = self.creative;
         let mut projectiles = std::mem::take(&mut self.creatures.projectiles);
-        let mut picked = Vec::new();
         projectiles.retain(|shot| {
             let Some(a) = shot.arrow.as_ref().filter(|a| !a.removed) else {
                 return true;
@@ -2347,17 +2228,10 @@ impl Game<'_> {
                     0.2,
                     pitch,
                 );
-                picked.push(shot.clone());
             }
             !taken
         });
         self.creatures.projectiles = projectiles;
-        for shot in picked {
-            self.add_pickup(
-                super::pickups::Taken::Arrow(Box::new(shot)),
-                super::pickups::Collector::Player,
-            );
-        }
     }
 
     fn tick_projectiles(&mut self) -> Result<()> {
@@ -2720,6 +2594,49 @@ impl Game<'_> {
             tnt_explodes: self.ui.rules.bool("tnt_explodes"),
         }
     }
+    /// The arrows and stingers stuck in the player or a mob.
+    fn stuck_counts(&mut self, who: Who) -> Option<&mut horizon_client::arrows::StuckCounts> {
+        match who {
+            Who::Player => self.player.as_mut().map(|p| &mut p.stuck),
+            Who::Mob(id) => self
+                .mobs
+                .iter_mut()
+                .find(|m| m.id == id)
+                .map(|m| &mut m.stuck),
+        }
+    }
+    /// Port of Bee#doHurtTarget's hit: a sting that hurt leaves a stinger
+    /// and, on normal and hard, poison.
+    fn bee_sting(&mut self, target: Who, bee: u32, amount: f32, from: [f64; 3], poison: i32) {
+        let hurt = match target {
+            Who::Player => self.mob_hits_player(amount, from, "minecraft:sting"),
+            Who::Mob(id) => self.mob_hits_mob(
+                id,
+                amount,
+                Damage {
+                    kind: DamageKind::Sting,
+                    attacker: Some(Who::Mob(bee)),
+                    from: Some(from),
+                },
+            ),
+        };
+        if !hurt {
+            return;
+        }
+        if let Some(c) = self.stuck_counts(target) {
+            c.add_stinger();
+        }
+        if poison > 0 {
+            match target {
+                Who::Player => self.give_player_effect("minecraft:poison", poison, 0),
+                Who::Mob(id) => {
+                    if let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
+                        m.add_effect("minecraft:poison", poison, 0);
+                    }
+                }
+            }
+        }
+    }
     /// The rest of the tick of an arrow that hit an entity
     /// (`arrows::finish_entity_hit`): its sounds and drop, and back among the
     /// projectiles if it flies on.
@@ -2972,6 +2889,14 @@ impl Game<'_> {
                         hurt
                     }
                 };
+                // AbstractArrow.onHitEntity: a hurt leaves the arrow stuck in
+                // the target, but for a piercing one's (Ferraloom).
+                if hurt
+                    && p.arrow.as_ref().is_some_and(|a| a.pierce == 0)
+                    && let Some(c) = self.stuck_counts(who)
+                {
+                    c.add_arrow();
+                }
                 // doKnockback: Punch pushes along the flight, less the target's
                 // knockback resistance.
                 let flight = (p.velocity.x * p.velocity.x + p.velocity.z * p.velocity.z).sqrt();
@@ -3062,7 +2987,11 @@ impl Game<'_> {
                 {
                     m.damage(0.0, source);
                 }
-                if p.owner == Some(Who::Player) && self.player.is_some() {
+                if p.owner == Some(Who::Player)
+                    && self.player.is_some()
+                    // Ferraloom: PlayerTeleportEvent ENDER_PEARL; cancelled, the pearl only breaks.
+                    && self.plugin_pearl_allowed([p.previous.x, p.previous.y, p.previous.z])
+                {
                     // ThrownEnderpearl: 5% endermite where the player was
                     // (when monsters spawn), teleport, 5 damage.
                     if self.world.random.next_float() < 0.05
@@ -3482,8 +3411,8 @@ impl Game<'_> {
             .is_some_and(|t| t.contains(&*item));
         let player_at = self.eye_position();
         let acting = self.acting_player_uuid();
-        let sneaking = self.keys.contains(&winit::keyboard::KeyCode::ShiftLeft)
-            || self.keys.contains(&winit::keyboard::KeyCode::ShiftRight);
+        let sneaking = self.keys.contains(&crate::game::keys::KeyCode::ShiftLeft)
+            || self.keys.contains(&crate::game::keys::KeyCode::ShiftRight);
         let held_damage = held.as_ref().map_or(0, |h| h.damage as i32);
         let held_extra = held.as_ref().and_then(|h| h.extra.clone());
         let m = &mut self.mobs[index];
@@ -4300,302 +4229,6 @@ impl Game<'_> {
             }
         }
     }
-    /// Mob models and projectiles for the entity pass.
-    pub(super) fn mob_geometry(&self, camera: glam::DVec3, alpha: f64, out: &mut Vec<Vertex>) {
-        let atlas = &self.gui.atlas;
-        let lookup = |name: &str| atlas.sprites.get(name).map(|r| [r.u0, r.v0, r.u1, r.v1]);
-        let scale = self.view_scale();
-        for mob in &self.mobs {
-            let entity_start = out.len();
-            let outline = self.mob_outline(mob);
-            // Entity.DATA_SHARED_FLAGS_ID invisible: only the name tag draws (and
-            // the outline of a glowing mob, LivingEntityRenderer.getRenderType).
-            if mob.invisible && outline.is_none() {
-                continue;
-            }
-            let d = glam::DVec3::new(mob.position.x, mob.position.y, mob.position.z) - camera;
-            // Entity.shouldRenderAtSqrDistance: 64 times the bounding box's
-            // mean edge, scaled by the view scale. RemotePlayer's box counts
-            // ten times.
-            let (w, h, _) = mob.dims();
-            let edge = (w + h + w) / 3.0
-                * if &*mob.kind.id == "minecraft:player" {
-                    10.0
-                } else {
-                    1.0
-                };
-            let range = edge * 64.0 * scale;
-            if d.length_squared() >= range * range {
-                continue;
-            }
-            // EntityRenderer.shouldRender: the culling box, grown by 0.5
-            // (GuardianRenderer also draws while its beam is out).
-            if let Some(view) = &self.view_frustum
-                && horizon_client::mobs::guardian::beam(mob, alpha as f32).is_none()
-            {
-                let lo =
-                    d.as_vec3() - glam::Vec3::new(w as f32 / 2.0 + 0.5, 0.5, w as f32 / 2.0 + 0.5);
-                let hi = d.as_vec3()
-                    + glam::Vec3::new(w as f32 / 2.0 + 0.5, h as f32 + 0.5, w as f32 / 2.0 + 0.5);
-                if !view.intersects(lo, hi) {
-                    continue;
-                }
-            }
-            self.mark_entity(entity_start, &mob.kind.id);
-            let light = self.world.light(
-                mob.position.x.floor() as i32,
-                (mob.position.y + mob.eye_height()).floor() as i32,
-                mob.position.z.floor() as i32,
-            );
-            let mut packed = (u32::from(light >> 4) * 16) | ((u32::from(light & 15) * 16) << 8);
-            if mob.fire_ticks > 0 || matches!(mob.species(), Species::Blaze | Species::MagmaCube) {
-                packed = (15 * 16) | ((15 * 16) << 8);
-            }
-            if mob.species() == Species::SulfurCube
-                && !horizon_client::mobs::trader::is_invisible(mob)
-            {
-                self.sulfur_cube_body_geometry(
-                    mob,
-                    alpha as f32,
-                    horizon_client::mobs::render::base_transform(mob, alpha as f32, camera),
-                    packed,
-                    out,
-                );
-            }
-            // Other players on a server: PlayerRenderer's HumanoidArmorLayer.
-            let armor = if &*mob.kind.id == "minecraft:player" {
-                self.worn_armor_layers(mob)
-            } else {
-                Vec::new()
-            };
-            horizon_client::mobs::render::render_with(
-                mob,
-                alpha as f32,
-                camera,
-                &lookup,
-                packed,
-                self.res.mob_data(),
-                &armor,
-                out,
-            );
-            if &*mob.kind.id == "minecraft:player" {
-                // PlayerRenderer's WingsLayer and SpinAttackEffectLayer.
-                self.player_elytra_geometry(
-                    mob,
-                    mob.extra.chest.as_deref(),
-                    camera,
-                    alpha as f32,
-                    packed,
-                    out,
-                );
-                self.spin_attack_geometry(mob, camera, alpha as f32, packed, out);
-            }
-            self.mob_block_geometry(mob, camera, alpha, packed, out);
-            if let Some(rgb) = outline {
-                self.mark_outline(&out[entity_start..], rgb);
-                if mob.invisible {
-                    out.truncate(entity_start);
-                    continue;
-                }
-            }
-            // Glowing outlines and a guardian's beam remain visible independently
-            // of whether the body is hidden behind terrain.
-            if outline.is_none()
-                && horizon_client::mobs::guardian::beam(mob, alpha as f32).is_none()
-            {
-                self.cull_entity_vertices(out, entity_start);
-            }
-            // GuardianRenderer: the laser to the locked target.
-            if let Some((time, scale)) = horizon_client::mobs::guardian::beam(mob, alpha as f32)
-                && let Some(target) = self.beam_target(mob.ai.target, alpha)
-                && let Some(uv) = lookup("entity/guardian/guardian_beam")
-            {
-                let a = alpha;
-                let eye = glam::DVec3::new(
-                    mob.previous.x + (mob.position.x - mob.previous.x) * a,
-                    mob.previous.y + (mob.position.y - mob.previous.y) * a + mob.eye_height(),
-                    mob.previous.z + (mob.position.z - mob.previous.z) * a,
-                ) - camera;
-                horizon_client::mobs::guardian::beam_geometry(
-                    eye.as_vec3(),
-                    (target - camera).as_vec3(),
-                    time,
-                    scale,
-                    uv,
-                    out,
-                );
-            }
-        }
-        self.elder_apparition_geometry(alpha, out);
-        self.spawner_geometry(camera, alpha, out);
-        // Projectiles: the baked vanilla arrow model, the rest as item billboards.
-        let (yaw, pitch) = (self.yaw.to_radians(), self.pitch.to_radians());
-        let forward = glam::Vec3::new(
-            -yaw.sin() * pitch.cos(),
-            -pitch.sin(),
-            yaw.cos() * pitch.cos(),
-        );
-        let right = forward.cross(glam::Vec3::Y).normalize_or_zero();
-        let up = right.cross(forward).normalize_or_zero();
-        let live = self.creatures.projectiles.iter().map(|a| {
-            let at = [
-                a.previous.x + (a.position.x - a.previous.x) * alpha,
-                a.previous.y + (a.position.y - a.previous.y) * alpha,
-                a.previous.z + (a.position.z - a.previous.z) * alpha,
-            ];
-            (a, at)
-        });
-        // ItemPickupParticle: a picked-up arrow flying to its collector.
-        let taken = self.pickups.live.iter().filter_map(|p| match &p.taken {
-            super::pickups::Taken::Arrow(a) => Some((&**a, super::pickups::position(p, alpha))),
-            _ => None,
-        });
-        // A glowing projectile's outline: what it drew up to the next one.
-        let mut glowing = None;
-        for (a, at) in live.chain(taken) {
-            if let Some((start, rgb)) = glowing.take() {
-                self.mark_outline(&out[start..], rgb);
-            }
-            if a.id != 0 && self.entity_glowing(a.id) {
-                glowing = Some((out.len(), super::glowing::team_color(self.mob_team(a.id))));
-            }
-            let p = glam::DVec3::from_array(at) - camera;
-            let c = p.as_vec3();
-            let light = self.world.light(
-                a.position.x.floor() as i32,
-                a.position.y.floor() as i32,
-                a.position.z.floor() as i32,
-            );
-            let mut packed = (u32::from(light >> 4) * 16) | ((u32::from(light & 15) * 16) << 8);
-            if a.is_fireball() {
-                packed = (15 * 16) | ((15 * 16) << 8);
-            }
-            if a.is_arrow() {
-                let Some(model) = self.arrow_model.as_ref() else {
-                    continue;
-                };
-                let Some(r) = atlas.sprites.get("entity/projectiles/arrow").copied() else {
-                    continue;
-                };
-                let m = glam::Mat4::from_translation(c)
-                    * glam::Mat4::from_rotation_y((a.yaw - 90.0).to_radians())
-                    * glam::Mat4::from_rotation_z(a.pitch.to_radians());
-                horizon_client::mobs::render_model(
-                    model,
-                    m,
-                    &|part| part.pose,
-                    [r.u0, r.v0, r.u1, r.v1],
-                    packed,
-                    0,
-                    out,
-                );
-                if a.arrow.as_ref().is_some_and(|s| s.on_fire()) {
-                    flame_geometry(atlas, c, 0.5, 0.5, self.yaw, light, out);
-                }
-                continue;
-            }
-            // ThrownTridentRenderer.
-            if matches!(a.kind, ProjectileKind::Trident) {
-                let Some(model) = self.trident_model.as_ref() else {
-                    continue;
-                };
-                let Some(r) = atlas.sprites.get("entity/trident/trident").copied() else {
-                    continue;
-                };
-                let m = glam::Mat4::from_translation(c)
-                    * glam::Mat4::from_rotation_y((a.yaw - 90.0).to_radians())
-                    * glam::Mat4::from_rotation_z((a.pitch + 90.0).to_radians());
-                let poses = horizon_client::mobs::anim::Poses::new(model);
-                horizon_client::mobs::render::draw(
-                    model,
-                    m,
-                    &poses,
-                    [r.u0, r.v0, r.u1, r.v1],
-                    0xFFFF_FFFF,
-                    packed,
-                    0,
-                    out,
-                );
-                continue;
-            }
-            // WindChargeRenderer.
-            if matches!(
-                a.kind,
-                ProjectileKind::WindCharge | ProjectileKind::BreezeWindCharge
-            ) {
-                self.wind_charge_geometry(a, c, packed, out);
-                continue;
-            }
-            // WitherSkullRenderer: the skull model facing its flight.
-            if let Some(dangerous) = super::wither::skull_kind(a) {
-                static SKULL: std::sync::OnceLock<Option<horizon_client::mobs::Part>> =
-                    std::sync::OnceLock::new();
-                let model = SKULL.get_or_init(|| {
-                    horizon_client::mobs::load_model(
-                        &self.options.resources,
-                        "minecraft:wither_skull#main",
-                    )
-                });
-                let tex = if dangerous {
-                    "entity/wither/wither_invulnerable"
-                } else {
-                    "entity/wither/wither"
-                };
-                if let (Some(model), Some(r)) = (model, atlas.sprites.get(tex).copied()) {
-                    let mut poses = horizon_client::mobs::anim::Poses::new(model);
-                    poses.yrot("head", a.yaw.to_radians());
-                    poses.xrot("head", a.pitch.to_radians());
-                    let base = glam::Mat4::from_translation(c)
-                        * glam::Mat4::from_scale(glam::Vec3::new(-1.0, -1.0, 1.0));
-                    horizon_client::mobs::render::draw(
-                        model,
-                        base,
-                        &poses,
-                        [r.u0, r.v0, r.u1, r.v1],
-                        0xFFFF_FFFF,
-                        packed,
-                        0,
-                        out,
-                    );
-                }
-                continue;
-            }
-            if let Some(stack) = a.potion_item() {
-                let owner = super::item_draw::owner_at(at, 0.0, "minecraft:splash_potion");
-                let state = self.resolve_item(&stack, DisplayContext::Ground, Some(&owner), 0);
-                let pose = glam::Mat4::from_translation(c)
-                    * glam::Mat4::from_quat(self.camera_orientation());
-                self.submit_item_world(&state, pose, packed, out);
-                continue;
-            }
-            let Some(name) = a.item_sprite() else {
-                continue;
-            };
-            let Some(r) = atlas.sprites.get(name).copied() else {
-                continue;
-            };
-            let s = 0.25 * a.sprite_scale();
-            for (k, uv) in [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]
-                .iter()
-                .zip([[r.u0, r.v1], [r.u1, r.v1], [r.u1, r.v0], [r.u0, r.v0]])
-            {
-                let v = c + right * k.0 * s + up * k.1 * s;
-                out.push(Vertex {
-                    normal: [0; 4],
-                    pos: v.to_array(),
-                    uv,
-                    layer: 0,
-                    color: 0xFFFF_FFFF,
-                    light: packed,
-
-                    glint_uv: [0.0, 0.0],
-                });
-            }
-        }
-        if let Some((start, rgb)) = glowing {
-            self.mark_outline(&out[start..], rgb);
-        }
-    }
 }
 /// `Bucketable.getBucketItemStack` and `getPickupSound` of a mob that a water
 /// bucket picks up.
@@ -4670,7 +4303,7 @@ fn to_loot(stack: &ItemStack) -> horizon_world::loot::LootStack {
     }
 }
 /// A generated loot stack as a Horizon item stack.
-fn from_loot(stack: &horizon_world::loot::LootStack) -> ItemStack {
+pub(super) fn from_loot(stack: &horizon_world::loot::LootStack) -> ItemStack {
     let mut item = ItemStack {
         item: Arc::from(stack.item.as_str()),
         count: stack.count.max(1) as u32,

@@ -218,11 +218,17 @@ impl Hub {
             target: None,
         };
         let line = format!("<{name}> {}", message.content);
-        self.broadcast_chat(&message, &bound, line, events);
+        // Ferraloom: AsyncPlayerChatEvent's listeners decide who gets what
+        // (the game hands them HostEvent::PlayerChat, game/plugins.rs).
+        if !ferraloom_plugins::listens(ferraloom_plugins::Event::AsyncPlayerChat) {
+            self.broadcast_chat(&message, &bound, line, events);
+        }
         events.push(HostEvent::PlayerChat {
             sender: uuid,
             text: message.content,
         });
+        // Ferraloom: broadcastChatMessage's detectChatRateSpam.
+        self.detect_chat_spam(i);
     }
 
     /// handleChatSessionUpdate: a new profile key, validated against the

@@ -19,12 +19,11 @@
 //! - `report <work>`: the coverage report, per mod ported, partial, not yet
 //!   or not needed with the reason, in `<work>/coverage.json` and
 //!   `coverage.md`.
-//! - `check <jar> <out>`: one mod jar on its own, as the launcher's mod
-//!   browser installs it: carried over into `<out>/carry/`, its classes
+//! - `check <jar> <out>`: one mod jar on its own: carried over into `<out>/carry/`, its classes
 //!   read, and the verdict (Works, Partly, Doesn't run) in
 //!   `<out>/check.json`.
 //! - `port <pack> <work> [--from <folder>] [--resources <prepared>]`: every
-//!   step for the portable mods, as the launcher's "Import modpack" runs it.
+//!   step for the portable mods.
 //!
 //! The work folder belongs to the user: jars and carried-over files stay
 //! there and are never uploaded or committed.

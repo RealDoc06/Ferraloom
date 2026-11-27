@@ -4,7 +4,6 @@
 //! flown, healing is slow (fast in the rain) and `HappyGhastModel`.
 use super::{
     Mob, MobEvent, MobWorld,
-    anim::{Poses, State},
     control::{LookKind, MoveKind, Operation},
     goals::{Cx, Float, Goal, LOOK, MOVE, goal_clone},
     nav::NavKind,
@@ -579,35 +578,6 @@ pub fn sounds(m: &Mob) -> [&'static str; 3] {
 pub fn volume(m: &Mob) -> f32 {
     if m.is_baby() { 1.0 } else { 4.0 }
 }
-/// `HappyGhastModel.setupAnim`: the tentacles, and the body squeezed under a harness.
-pub fn anim(m: &Mob, s: &State, p: &mut Poses) {
-    // HappyGhastHarnessModel.setupAnim: the goggles down while ridden
-    // (vanilla's literal -0.7854, not -PI/4).
-    #[allow(clippy::approx_constant)]
-    if p.has("goggles") {
-        let g = p.get("goggles");
-        if m.rider.is_some() {
-            g[3] = 0.0;
-            g[1] = 14.0;
-        } else {
-            g[3] = -0.7854;
-            g[1] = 9.0;
-        }
-    }
-    if wearing_harness(m) {
-        let b = p.get("body");
-        b[6] = 0.9375;
-        b[7] = 0.9375;
-        b[8] = 0.9375;
-    }
-    super::nether::ghast_anim(s, p);
-}
-/// Texture of the harness layer for the worn item.
-pub fn harness_texture(item: &str) -> Option<String> {
-    let name = item.strip_prefix("minecraft:")?;
-    name.ends_with("_harness")
-        .then(|| format!("entity/equipment/happy_ghast_body/{name}"))
-}
 /// Events for the player getting on or off.
 pub fn goggles(down: bool, m: &Mob) -> MobEvent {
     MobEvent::Sound(
@@ -635,14 +605,6 @@ mod tests {
         assert!(!player_collision(false, false, true, 84.0, 84.0));
     }
 
-    #[test]
-    fn a_harness_names_its_texture() {
-        assert_eq!(
-            harness_texture("minecraft:red_harness").as_deref(),
-            Some("entity/equipment/happy_ghast_body/red_harness")
-        );
-        assert_eq!(harness_texture("minecraft:saddle"), None);
-    }
     #[test]
     fn travel_speed_is_five_thirds_of_the_flying_speed() {
         assert!((f64::from(AIR_SPEED) - FLYING_SPEED * 5.0 / 3.0).abs() < 1e-7);

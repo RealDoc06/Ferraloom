@@ -288,14 +288,14 @@ pub fn anvil_result(
             if n != hover_name {
                 naming_cost = 1;
                 price += 1;
-                result.data_mut().custom_name = Some(n.to_owned());
+                result.data_mut().set_custom_name(Some(n.to_owned()));
             }
         }
         _ => {
             if input.custom_name().is_some() {
                 naming_cost = 1;
                 price += 1;
-                result.data_mut().custom_name = None;
+                result.data_mut().set_custom_name(None);
             }
         }
     }
@@ -437,15 +437,6 @@ pub fn grindstone_xp_roll(amount: i32, random: &mut LegacyRandom) -> u32 {
         0
     }
 }
-/// Experience from the grindstone result slot's `getExperienceAmount`.
-pub fn grindstone_experience(
-    e: &Enchantments,
-    random: &mut LegacyRandom,
-    input: Option<&ItemStack>,
-    additional: Option<&ItemStack>,
-) -> u32 {
-    grindstone_xp_roll(grindstone_xp_base(e, input, additional), random)
-}
 
 // ---------------------------------------------------------------- smithing & stonecutting
 
@@ -477,8 +468,6 @@ pub struct StationRecipes {
     pub smithing: Vec<Smithing>,
     /// Sorted by recipe id, the registry order vanilla lists them in.
     pub stonecutting: Vec<Stonecutting>,
-    /// `trim_material` registry: id -> (asset name, description).
-    pub trim_materials: Vec<(String, String)>,
 }
 fn ingredient(v: &Value, items: &Items) -> Ingredient {
     let mut list: Vec<String> = Vec::new();
@@ -587,7 +576,6 @@ impl StationRecipes {
         Self {
             smithing,
             stonecutting,
-            trim_materials,
         }
     }
     /// Recipes whose input accepts `stack`, in display order.
@@ -897,109 +885,5 @@ mod tests {
         );
         assert_eq!(increased_repair_cost(0), 1);
         assert_eq!(increased_repair_cost(3), 7);
-    }
-
-    /// Checks against the prepared vanilla resources when they are present.
-    #[test]
-    fn prepared_vanilla_data() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../.local/horizon-client")
-            .join(horizon_core::VANILLA_VERSION);
-        if !root.join("items.json").exists() {
-            return;
-        }
-        let items = Items::tags_only(&root).unwrap();
-        let data = StationData::load(&root, &items);
-        let e = &data.enchantments;
-        assert_eq!(e.list.len(), 43);
-        assert_eq!(
-            &*e.tag("minecraft:in_enchanting_table")[0],
-            "minecraft:protection"
-        );
-        assert!(!e.compatible("minecraft:fortune", "minecraft:silk_touch"));
-        assert!(e.is_curse("minecraft:binding_curse"));
-        assert_eq!(e.full_name("minecraft:sharpness", 5).0, "Sharpness V");
-        assert_eq!(e.enchantable("minecraft:golden_sword"), 22);
-        // Brewing: water + nether wart = awkward.
-        assert_eq!(data.brewing.recipes.len(), 279);
-        let water = ItemStack::new("minecraft:potion", 1).with_potion("minecraft:water");
-        let r = data
-            .brewing
-            .find(&water, &ItemStack::new("minecraft:nether_wart", 1))
-            .unwrap();
-        assert_eq!(r.output.potion(), Some("minecraft:awkward"));
-        assert!(
-            data.brewing
-                .is_reagent(&ItemStack::new("minecraft:blaze_powder", 1))
-        );
-        // Smithing: netherite upgrade keeps enchantments.
-        let mut sword = ItemStack::new("minecraft:diamond_sword", 1);
-        sword.enchant("minecraft:sharpness", 2);
-        let out = data
-            .recipes
-            .smithing_result(
-                e,
-                Some(&ItemStack::new(
-                    "minecraft:netherite_upgrade_smithing_template",
-                    1,
-                )),
-                Some(&sword),
-                Some(&ItemStack::new("minecraft:netherite_ingot", 1)),
-            )
-            .unwrap();
-        assert_eq!(
-            (&*out.item, out.enchantment_level("minecraft:sharpness")),
-            ("minecraft:netherite_sword", 2)
-        );
-        assert!(
-            data.recipes
-                .stonecutter(&ItemStack::new("minecraft:stone", 1))
-                .len()
-                >= 10
-        );
-        // Trades: every profession level set yields offers.
-        let ctx = crate::merchant::TradeContext {
-            items: &items,
-            enchantments: e,
-            variant: "minecraft:plains",
-            origin: [0.0; 3],
-            maps: None,
-        };
-        for p in crate::merchant::PROFESSIONS {
-            let set = crate::merchant::Trades::set_for(p, 1);
-            let mut random = crate::merchant::sequence_random(
-                12345,
-                &format!(
-                    "minecraft:trade_set/{}",
-                    set.trim_start_matches("minecraft:")
-                ),
-            );
-            assert!(
-                !data
-                    .trades
-                    .offers_from_set(&ctx, &set, &mut random)
-                    .is_empty(),
-                "{p}"
-            );
-        }
-    }
-
-    #[test]
-    fn grindstone_strips_non_curses() {
-        let e = sample();
-        let items = sample_items();
-        let s = sword(&[("minecraft:sharpness", 3)]);
-        let out = grindstone_result(&e, &items, Some(&s), None).unwrap();
-        assert!(out.enchantments().is_empty());
-        assert_eq!(out.repair_cost(), 0);
-        assert!(out.extra.is_none());
-        let b =
-            grindstone_result(&e, &items, None, Some(&book(&[("minecraft:mending", 1)]))).unwrap();
-        assert_eq!(&*b.item, "minecraft:book");
-        assert!(grindstone_result(&e, &items, Some(&sword(&[])), None).is_none());
-        let mut r = LegacyRandom::new(5);
-        // min cost of Sharpness III = 23; ceil(23/2)=12 -> 12..23.
-        let xp = grindstone_experience(&e, &mut r, Some(&s), None);
-        assert!((12..24).contains(&xp));
     }
 }

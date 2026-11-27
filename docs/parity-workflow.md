@@ -26,7 +26,7 @@ Each harness runs unmodified under a tracer that records the files it depended o
 
 Vanilla oracle runs are reused as well. `tools/parity_shim.py` stands in for `java` and `javac`: it records each oracle run's outputs and the content of every file under the paths its arguments name, and replays the run while those are unchanged. After a Rust-only change a harness pays only for its Rust side (`block_update`: 53 s to 5 s). Files an oracle writes outside its named paths aren't tracked, so a harness that fails while reusing oracle results is rerun fresh, and stops reusing them if it then passes. `--all` and `--fresh` never reuse them.
 
-Probes build into `.local/parity-target/` with release optimisation but no LTO and 16 codegen units. On ludodesktop that rebuilds every `horizon-world` probe in 3 seconds after a one-line change, against 122 seconds with the release profile. Rust gives these settings identical results (no fast-math; overflow checks as in release), and the full harness suite passes under them. Probes that harnesses build in the dev profile get `opt-level = 3` too, keeping their overflow checks and debug assertions. Harnesses must locate binaries through `cargo metadata` or `lab.cargo_target()`, never a hard-coded `target/`.
+Probes build into `.local/parity-target/` with release optimisation but no LTO and 16 codegen units. On upstream's desktop that rebuilt every `horizon-world` probe in 3 seconds after a one-line change, against 122 seconds with the release profile. Rust gives these settings identical results (no fast-math; overflow checks as in release), and the full harness suite passes under them. Probes that harnesses build in the dev profile get `opt-level = 3` too, keeping their overflow checks and debug assertions. Harnesses must locate binaries through `cargo metadata` or `lab.cargo_target()`, never a hard-coded `target/`.
 
 The probes of `horizon-world` and of `horizon-client` are one binary per crate, `world_probe` and `client_probe` (`cargo build --release -p horizon-world --example world_probe`): a harness runs `world_probe <name> [arguments]`, and `<name>` is a module in `crates/<crate>/examples/probe/` (add it to the `mod` list and the `probes!` list in its `main.rs`; read arguments with `crate::args()` or `crate::args_os()`, which drop the name). Code several probes share goes in `examples/probe/support/` or a module of its own. Linking one binary instead of ~250 examples is most of what a probe build used to cost. Each crate's probe has its own target name (set in its `Cargo.toml`, `protocol_probe` too): Cargo copies every crate's examples into one `<profile>/examples/` directory, and with one shared name a harness could run the binary another harness had just copied there. The runner counts only the probes a harness ran, the probes and support modules they name, their own subdirectories and `dispatch.rs` as its dependencies, not `main.rs`, which only lists the probes: editing one probe reruns only its harnesses, and adding one reruns none.
 
@@ -34,21 +34,24 @@ Passes are shared between worktrees. A harness's key depends only on the content
 
 Every runner on the machine shares `PARITY_MACHINE_JOBS` slots (default: half the CPU threads), so several agents' runs together can't overload it. Parallel harnesses are also admitted by memory: each harness's recorded peak is reserved, within three quarters of the memory available at the start, and a harness starts only if the memory free at that moment still leaves 2 GB. `-j` caps the count here (default: `PARITY_LOCAL_JOBS`, else 3 while other machines help or a third of the CPU threads alone, within `$FLEET_LOAD_JOBS`).
 
-### Harnesses that start the game
+### Harnesses that start the engine
 
-The game logs into `HORIZON_HOME` and falls back to the player's own game folder when it is unset, so a harness that starts the game, `horizon-ctl`, the launcher or the dedicated server builds the environment with `lab.game_env(**extra)`: no audio, and fresh scratch folders for `HORIZON_HOME`, `HORIZON_LAUNCHER_HOME`, `XDG_DATA_HOME` and `XDG_CONFIG_HOME`, removed when the harness exits (a folder you pass, or that the environment already has, is kept). The runner also gives each harness its own `HORIZON_HOME` under `.local/parity-runner/game-home/`. `tests/test_game_home.py` fails for a script in `tools/` that starts the game without it.
+The engine logs into `HORIZON_HOME` and falls back to the player's own game folder when it is unset, so a harness that starts the engine or `horizon-server` builds the environment with `lab.game_env(**extra)` (or `integration_env.game_environment`): fresh scratch folders for `HORIZON_HOME`, `XDG_DATA_HOME` and `XDG_CONFIG_HOME`, removed when the harness exits (a folder you pass, or that the environment already has, is kept). The runner also gives each harness its own `HORIZON_HOME` under `.local/parity-runner/game-home/`. `tests/test_game_home.py` fails for a script in `tools/` that starts the engine without it.
 
 ### Other machines
 
+Ferraloom runs builds and harnesses on its builder through `ferraloom-build` ([AGENTS.md](../AGENTS.md)). The rest of
+this section and the next describe upstream Horizon's hosts, which `tools/parity_hosts.json` still lists.
+
 Harnesses can also run on the Mac mini, the desktop and playhorizon (`tools/parity_hosts.json` describes them; `desktop` and `playhorizon` use their CI runner's environment and vanilla data, and the desktop refuses work, or stops it, while someone uses it: docs/release-flow.md, "The desktop's runner"; its `default` list is empty, so pass `--hosts macmini,playhorizon` or set `PARITY_HOSTS`, after copying `shared-local/` to `~/code/horizon-parity/shared-local` on each host). The runner mirrors the worktree there with rsync (not `.git`, `.local`, `target` or ignored files) into `~/code/horizon-parity/remote/<host><path>`, whose `.local` links to the vanilla data in `~/code/horizon-parity/shared-local`, and starts `tools/parity.py --worker` over ssh. The worker builds the probes (about 80 s the first time) and runs what it is sent under the same tracer, admitting harnesses against its own free memory. One queue, longest first, feeds every machine, remote ones first: the Mac takes up to 14 harnesses, the desktop 8, playhorizon 3 (on CPUs 0-3: its CI runner has 4-7). Each pass comes back with the content hash of every file it depended on, so it is keyed on exactly what ran, and logs come back to `.local/parity-runner/logs/`; state, sharing and `gate.py` work as before. If a host can't be reached, or drops out, its harnesses run here.
 
-Harnesses a host can't run are listed in the file: `local_only` (`save_roundtrip` runs the game on a virtual screen) and each host's `exclude`. A host's `exclude` also holds when `parity.py` runs on that host itself, as its CI runner does: the harness is skipped there with its reason (playhorizon skips `remote_fireball` and `remote_fireworks`, which its CPU-starved CI slice fails even on bare main), unless named on the command line. The Mac mini's runner and the nightly audit still run them. The Mac excludes nothing: vanilla's `Math.sin`, `pow`, `log` and the like don't round the same on an Apple silicon Mac as on Linux (HotSpot uses fdlibm there, Intel's stubs on x86-64), and Rust's float functions round like neither (they call the platform libm), so code that mirrors a vanilla `Math` call uses `horizon_core::jmath`, which computes what HotSpot computes on the host architecture. The ThinkPad no longer runs harnesses (2026-10-26): playhorizon is the Linux host that is always on.
+Harnesses a host can't run are listed in the file: `local_only` and each host's `exclude`. A host's `exclude` also holds when `parity.py` runs on that host itself, as its CI runner does: the harness is skipped there with its reason (playhorizon skips `mob_ai`, whose oracle runs out of its heap there), unless named on the command line. The Mac mini's runner and the nightly audit still run it. The Mac excludes nothing: vanilla's `Math.sin`, `pow`, `log` and the like don't round the same on an Apple silicon Mac as on Linux (HotSpot uses fdlibm there, Intel's stubs on x86-64), and Rust's float functions round like neither (they call the platform libm), so code that mirrors a vanilla `Math` call uses `horizon_core::jmath`, which computes what HotSpot computes on the host architecture. The ThinkPad no longer runs harnesses (2026-10-26): playhorizon is the Linux host that is always on.
 
-The file's `solo` list names harnesses that drive game windows (`remote_fireworks`, `server_player_sculk`, `world_reopen`, ...). On a machine where `parity.py` has 4 CPUs or fewer, such as playhorizon's CI runner, each of them runs alone, after the others: there frames are drawn on the CPU, and beside other harnesses a screenshot or a control request took more ticks than the check allows. `PARITY_SOLO=1` or `0` forces this on or off.
+The file's `solo` list (empty now: its harnesses drove game windows and were removed with the client) names harnesses that run alone, after the others, on a machine where `parity.py` has 4 CPUs or fewer. `PARITY_SOLO=1` or `0` forces this on or off.
 
 ### Any command on playhorizon: `tools/remote.sh`
 
-For Linux work that doesn't need a whole parity run (a crate's tests, a few harnesses, a server build), `tools/remote.sh <worktree> <command...>` runs the command on playhorizon at the worktree's commit and streams its output back; its exit status is the command's. Commit and push first: the host fetches the commit from GitHub, and nothing else leaves this machine (no files, no credentials, no environment). Each worktree keeps one checkout there, `~/remote-work/<name>` with its own `target/`, so the next run only rebuilds what changed, and one run per name goes at a time. The command runs niced in the host's CI slice, pinned to CPUs 0-3 (`--cpus`): the CI runner has 4-7, so these runs never slow a pull request's parity job. A benchmark asks for its CPUs with `--cpus 0-3 --exclusive` (and says so in its pull request): it starts only when no other run uses them, and later runs wait for it to end. The command gets scratch game and launcher homes and the vanilla data linked as CI links it; a command naming `parity`, `lan_e2e` or `horizon-prepare` also gets `.local/horizon-client`, prepared as CI prepares it. Whatever the command leaves running (a game, a daemon) is stopped when it ends, and stopping `remote.sh` (or losing the connection) stops the command on the host. Logs stay in `~/remote-work/<name>.logs/`; `--list` shows the checkouts, `--gc [DAYS]` removes old ones.
+For Linux work that doesn't need a whole parity run (a crate's tests, a few harnesses, a server build), `tools/remote.sh <worktree> <command...>` runs the command on playhorizon at the worktree's commit and streams its output back; its exit status is the command's. Commit and push first: the host fetches the commit from GitHub, and nothing else leaves this machine (no files, no credentials, no environment). Each worktree keeps one checkout there, `~/remote-work/<name>` with its own `target/`, so the next run only rebuilds what changed, and one run per name goes at a time. The command runs niced in the host's CI slice, pinned to CPUs 0-3 (`--cpus`): the CI runner has 4-7, so these runs never slow a pull request's parity job. A benchmark asks for its CPUs with `--cpus 0-3 --exclusive` (and says so in its pull request): it starts only when no other run uses them, and later runs wait for it to end. The command gets scratch engine homes and the vanilla data linked as CI links it; a command naming `parity` or `horizon-prepare` also gets `.local/horizon-client`, prepared as CI prepares it. Whatever the command leaves running (a server, a daemon) is stopped when it ends, and stopping `remote.sh` (or losing the connection) stops the command on the host. Logs stay in `~/remote-work/<name>.logs/`; `--list` shows the checkouts, `--gc [DAYS]` removes old ones.
 
 ```sh
 tools/remote.sh .claude/worktrees/my-fix cargo test -p horizon-world --lib   # 33 s, warm
@@ -91,60 +94,31 @@ An agent working an area merges the integration branch first, uses `tools/parity
 
 `check` and `integrate` start by trial-merging the candidates with `git merge-tree`, in the object database, without touching any worktree: each branch alone, every pair, then the largest set without conflicts, merged in turn. That takes about a second for ten branches and names the conflicting files. `integrate` merges that set, gates it once (formatting, lints and tests before the long harness run; the flake check covers everything the branches change) and pushes. If the gate fails it tries each half of the set in turn, so the branches that pass still land; `--no-bisect` turns that off.
 
-On ludodesktop, source `~/code/horizon-parity/env.sh` first: it sets the ALSA build path and the Cargo job cap. Debug builds carry line tables only (`[profile.dev]` in `Cargo.toml`), which keeps backtraces readable while keeping each worktree's build small; a fresh worktree builds `horizon-client` and its tests in under a minute.
+Debug builds carry line tables only (`[profile.dev]` in `Cargo.toml`), which keeps backtraces readable while keeping each worktree's build small; a fresh worktree builds `horizon-client` and its tests in under a minute.
 
-## Server execution in game fixtures
+## Engine fixtures
 
-`HORIZON_COMMAND_SCRIPT` runs on the integrated server's `Server thread`, with the
-headless client joined through the normal memory connection. Commands use the connected
-owner's body and dimension. The script owns the clock: each `tick` calls `tick_server`,
-while login and portal arrival pump connection-only passes. The client acknowledges
-terrain and teleports without predicting movement, matching the command oracle's stationary
-player. Script and save errors return through server shutdown; output keeps the existing
-styled messages and `CommandResultCallback` schema. `--in-frame` is not needed.
+`HORIZON_DISPENSE_FIXTURE` and `HORIZON_SCULK_FIXTURE` are component probes of the engine (`game/integrated.rs`,
+`run_component_harness`). They construct a server `Game` on a "Server thread" and keep the oracles' synthetic
+levels, seeded random streams and explicit entity and block phases. A synthetic sculk player controls warning
+levels; dispenser probes call one activation without running unrelated world ticks. Keep those controls when
+extending the fixtures. `integration_env.run_game` runs them in scratch homes.
 
-`HORIZON_DISPENSE_FIXTURE` and `HORIZON_SCULK_FIXTURE` are component probes. They construct
-a server `Game` on a server thread and retain the oracles' synthetic levels, seeded random
-streams and explicit entity/block phases. A synthetic sculk player controls warning levels,
-not client input; dispenser probes call one activation without running unrelated world ticks.
-Keep those controls when extending the fixtures. Player interactions belong in connected-client
-coverage alongside the components:
+Player interactions are covered against vanilla's own dedicated server instead: `command_exec`, `dedicated_server`
+and the `server_*` harnesses start both servers and join each with a client built from vanilla's protocol code
+(`CommandExecClient`, `VanillaProtocolClient`, ...).
 
 ```sh
 python3 tools/test_command_exec_parity.py
 python3 tools/test_dispenser_parity.py
 python3 tools/test_sculk_parity.py
-python3 tools/lan_e2e.py --server-thread --check machines --check fireball --check sculk_container
 ```
-
-The LAN checks open and fill machines through the guest's inventory packets, observe a
-powered dispenser's projectile on both clients, and open a chest to activate a sculk sensor
-and shrieker. They supplement the deterministic component comparisons.
 
 ## Reading vanilla
 
 Besides the Vineflower sources in `.local/minecraft/<version>/sources/`, `tools/rea_vanilla.py` queries the shipped bytecode through REA (callers through lambdas, overloads, a second decompiler); see [decompilation status](decompilation-status.md#querying-the-shipped-bytecode-with-rea).
 
-## Player-facing integration and deterministic fixtures
-
-`python3 tools/lan_e2e.py` runs every LAN check with an integrated server thread,
-the same path as normal single player. `python3 tools/test_friends.py --client
-target/fast/horizon-client --relay target/fast/horizon-relay --baseline` covers
-plain LAN, direct invitations, a local relay and ended invitations in that mode.
-Both accept `--in-frame` for comparison and retain `--server-thread` for existing
-callers. Run Linux games under `xvfb-run -a` when no display is available. Each
-process gets scratch game, launcher, XDG data and config homes; telemetry, audio
-and launcher self-update are disabled.
-
-`lan_integration` and `friends_integration` register these suites with `parity.py`.
-`friends_integration` (under a minute) is selected like any harness when the
-drivers or game implementation change. `lan_integration` is the whole LAN suite
-(~40 minutes on a loaded runner, and single checks flake under load), so
-`tools/parity_hosts.json` lists it under `named_only`: no automatic selection
-(`--changed`, `--failed`, `--flake-check`, CI, parity-main) picks it; it runs
-when named and in the nightly audit (`--all`). LAN writes `results.json`
-with the host mode and each result beside its screenshots and logs. A skipped
-case is recorded explicitly and does not count as passing coverage.
+## Flaky harnesses
 
 `known_flaky` in `tools/parity_hosts.json` lists harnesses that fail now and then for a
 cause not fixed yet, each with its reason. One that fails runs once more from
@@ -153,31 +127,5 @@ in its summary and in the CI job's summary (PR parity and parity-main), so the
 flake stays visible. No other harness gets this retry. Fix the cause, then take
 the harness off the list.
 
-The game-binary fixture audit keeps these complementary direct rule tests:
-
-- `command_harness.rs`: command feedback, styled spans and result callbacks,
-  held player position, explicit ticks and portal completion matching
-  `VanillaCommandExecOracle`. LAN `commands`, `feedback`, `styles`, `levels` and
-  `portals` cover command input, packet feedback and travel across the boundary.
-- `dispense_fixture.rs`: seeded synthetic worlds, block/event traces, item
-  use/mining and combat hooks matching `VanillaDispenserOracle`. These isolate
-  rule results and RNG order; LAN machines, crafting, clicks, fireball, mining
-  and combat exercise real input and server handling separately. The new
-  `dispenser_input_host` / `dispenser_input_guest` checks press a button and
-  verify authoritative inventory consumption and exactly one drop on both clients.
-- `sculk_fixture.rs`: scripted events and exact per-tick sculk/warden traces
-  matching `VanillaSculkOracle`; introducing wall-clock network ticks would
-  destroy that deterministic oracle contract. `sculk_input_host` and
-  `sculk_input_guest` separately exercise real footsteps reaching a sensor;
-  failures remain visible rather than changing the oracle trace.
-- `net_harness.rs`: already a real network client of a dedicated server; keep
-  its handshake, world loading, chat and command packet assertions.
-
-Library probes, `lan_bot`'s protocol hub fixture, generation/save tests and
-streaming/mesh tests remain fast deterministic coverage. They do not become
-full game launches. Setup and authoritative reads use the owning server;
-interactions stay on the client. `server-hold on|off` provides a prediction-test
-barrier between server ticks, including player packet handling, while transport
-threads and control calls remain responsive. `stall MILLISECONDS` stalls only
-the window to test recovery from a hung frame without process signals interrupting
-socket reads. Neither mechanism changes normal gameplay.
+Library probes, `lan_bot`'s protocol hub fixture and the generation and save tests stay fast deterministic
+coverage beside the harnesses.

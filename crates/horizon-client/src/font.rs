@@ -2,8 +2,9 @@
 //! text component names (`minecraft:alt`, `minecraft:uniform`, a pack's own),
 //! each a list of providers tried in order: `space`, `bitmap` (sheets in the
 //! shared atlas, or rasterized on demand when a pack's sheet is not in it),
-//! `unihex` (GNU Unifont) and `ttf` (TrueTypeGlyphProvider, rasterized with
-//! ab_glyph). Glyphs drawn at run time go into a reserved atlas region.
+//! and `unihex` (GNU Unifont); a `ttf` provider (a pack's own TrueType font)
+//! is skipped, as vanilla skips a provider that fails to load. Glyphs drawn at
+//! run time go into a reserved atlas region.
 //! Vanilla glyph metrics (ascent, oversampling, advances, bold/shadow
 //! offsets), styled drawing and StringSplitter-style line wrapping.
 use crate::{
@@ -11,7 +12,6 @@ use crate::{
     text::{Style, Text},
     zip::Zip,
 };
-use ab_glyph::{Font as _, ScaleFont as _};
 use std::{
     cell::RefCell,
     collections::HashMap,
@@ -82,22 +82,11 @@ enum BitmapGlyph {
     Atlas(Glyph),
     Sheet(SheetCell),
 }
-/// `TrueTypeGlyphProvider`.
-struct TrueType {
-    font: ab_glyph::FontVec,
-    ids: HashMap<char, ab_glyph::GlyphId>,
-    /// FT_Set_Pixel_Sizes: `size * oversample` pixels to the em.
-    scale: ab_glyph::PxScale,
-    oversample: f32,
-    /// FT_Set_Transform's delta, in oversampled pixels (y down).
-    shift: (f32, f32),
-}
 enum Provider {
     Space(HashMap<char, f32>),
     Bitmap(Filter, HashMap<char, BitmapGlyph>),
     /// The definition, and its glyphs once read.
     Unihex(Filter, serde_json::Value, Option<HashMap<u32, HexGlyph>>),
-    TrueType(Filter, Box<TrueType>),
 }
 /// One font (`FontSet`): its providers and the glyphs resolved so far.
 struct FontSet {
@@ -353,112 +342,6 @@ fn load_bitmap(
     }
     out
 }
-/// `TrueTypeGlyphProviderDefinition.load`: a TrueType file (not CFF) under
-/// `font/`, its Unicode characters but the `skip` ones.
-fn load_true_type(root: &Path, p: &serde_json::Value) -> Option<TrueType> {
-    let file = p["file"].as_str()?;
-    let data = std::fs::read(root.join(resource_path(file, "font", "")))
-        .map_err(|e| log::warn!("font file {file}: {e}"))
-        .ok()?;
-    // FT_Get_Font_Format must say TrueType: CFF outlines ("OTTO") are refused.
-    if data.starts_with(b"OTTO") {
-        log::warn!("font file {file} is not in TTF format");
-        return None;
-    }
-    let font = ab_glyph::FontVec::try_from_vec(data)
-        .map_err(|e| log::warn!("font file {file}: {e}"))
-        .ok()?;
-    let size = p["size"].as_f64().unwrap_or(11.0) as f32;
-    let oversample = p["oversample"].as_f64().unwrap_or(1.0) as f32;
-    let shift = p["shift"].as_array().map_or((0.0, 0.0), |s| {
-        let f = |i: usize| s.get(i).and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-        (f(0), f(1))
-    });
-    let skip: Vec<char> = match &p["skip"] {
-        serde_json::Value::String(s) => s.chars().collect(),
-        serde_json::Value::Array(a) => a
-            .iter()
-            .filter_map(|v| v.as_str())
-            .flat_map(str::chars)
-            .collect(),
-        _ => Vec::new(),
-    };
-    let ids = font
-        .codepoint_ids()
-        .filter(|(id, c)| id.0 != 0 && !skip.contains(c))
-        .map(|(id, c)| (c, id))
-        .collect();
-    let pixels_per_em = (size * oversample).round();
-    // ab_glyph scales by the font's height; FreeType by its em.
-    let units = font.units_per_em().unwrap_or(1000.0);
-    let scale = ab_glyph::PxScale::from(pixels_per_em * font.height_unscaled() / units);
-    Some(TrueType {
-        font,
-        ids,
-        scale,
-        oversample,
-        shift: (shift.0 * oversample, shift.1 * oversample),
-    })
-}
-impl TrueType {
-    /// The advance in GUI pixels: hinted FreeType advances are whole
-    /// oversampled pixels.
-    fn advance(&self, id: ab_glyph::GlyphId) -> f32 {
-        self.font.as_scaled(self.scale).h_advance(id).round() / self.oversample
-    }
-    /// `loadGlyph` and its bitmap: the grey coverage as `rrrr` texels
-    /// (`text_intensity`), below 0.1 cut (its discard).
-    fn glyph(&self, id: ab_glyph::GlyphId) -> (Glyph, Option<(u32, u32, Vec<u8>)>) {
-        let advance = self.advance(id);
-        let glyph =
-            id.with_scale_and_position(self.scale, ab_glyph::point(self.shift.0, self.shift.1));
-        let empty = Glyph {
-            rect: None,
-            left: 0.0,
-            top: 0.0,
-            right: 0.0,
-            bottom: 0.0,
-            advance,
-            offset: 1.0,
-        };
-        let Some(outline) = self.font.outline_glyph(glyph) else {
-            return (empty, None);
-        };
-        let bounds = outline.px_bounds();
-        let (w, h) = (bounds.width() as u32, bounds.height() as u32);
-        if w == 0 || h == 0 {
-            return (empty, None);
-        }
-        let mut rgba = vec![0u8; (w * h * 4) as usize];
-        outline.draw(|x, y, coverage| {
-            let v = if coverage < 0.1 {
-                0
-            } else {
-                (coverage.min(1.0) * 255.0).round() as u8
-            };
-            let i = ((y * w + x) * 4) as usize;
-            if let Some(px) = rgba.get_mut(i..i + 4) {
-                px.copy_from_slice(&[v; 4]);
-            }
-        });
-        let os = self.oversample;
-        // GlyphBitmap: bitmap_left / bitmap_top over the oversampling, and
-        // top = 7 - bearingTop.
-        let (left, top) = (bounds.min.x / os, 7.0 + bounds.min.y / os);
-        (
-            Glyph {
-                rect: None,
-                left,
-                top,
-                right: left + w as f32 / os,
-                bottom: top + h as f32 / os,
-                advance,
-                offset: 1.0,
-            },
-            Some((w, h, rgba)),
-        )
-    }
-}
 fn load_hex(root: &Path, p: &serde_json::Value) -> HashMap<u32, HexGlyph> {
     let mut glyphs = HashMap::new();
     let Some(file) = p["hex_file"].as_str() else {
@@ -639,10 +522,6 @@ impl Font {
                     load_bitmap(&self.root, p, &self.sheets, pixels, self.atlas),
                 )),
                 "unihex" => Some(Provider::Unihex(Filter::of(p), p.clone(), None)),
-                "ttf" => Some(Provider::TrueType(
-                    Filter::of(p),
-                    Box::new(load_true_type(&self.root, p)?),
-                )),
                 _ => None,
             })
             .collect();
@@ -736,21 +615,6 @@ impl Font {
                     let glyphs = glyphs.get_or_insert_with(|| load_hex(&self.root, def));
                     if let Some(h) = glyphs.get(&u32::from(c)).copied() {
                         return self.rasterize_hex(region, h);
-                    }
-                }
-                Provider::TrueType(filter, ttf) if filter.passes(uniform, japanese) => {
-                    if let Some(id) = ttf.ids.get(&c) {
-                        let (glyph, bitmap) = ttf.glyph(*id);
-                        return match bitmap {
-                            Some((w, h, rgba)) => {
-                                let (x, y) = region.place(w, h, rgba, self.atlas, self.region)?;
-                                Some(Glyph {
-                                    rect: Some(glyph_rect(x, y, w, h, self.atlas)),
-                                    ..glyph
-                                })
-                            }
-                            None => Some(glyph),
-                        };
                     }
                 }
                 _ => {}
@@ -864,11 +728,6 @@ impl Font {
                     if let Some(h) = glyphs.get(&u32::from(c)) {
                         let width = h.right.saturating_sub(h.left) + 1;
                         return Some((width / 2 + 1) as f32);
-                    }
-                }
-                Provider::TrueType(filter, ttf) if filter.passes(uniform, japanese) => {
-                    if let Some(id) = ttf.ids.get(&c) {
-                        return Some(ttf.advance(*id));
                     }
                 }
                 _ => {}
@@ -1124,47 +983,6 @@ mod tests {
             .write_image_data(&pixels)
             .unwrap();
         out
-    }
-
-    #[test]
-    fn true_type_glyphs_are_rasterized_at_the_provider_size() {
-        let def = br#"{"providers":[{"type":"ttf","file":"minecraft:mono.ttf","size":11,"oversample":2,"shift":[0.5,1],"skip":["B"]}]}"#;
-        let root = root(
-            "ttf",
-            &[
-                ("assets/minecraft/font/default.json", def),
-                (
-                    "assets/minecraft/font/mono.ttf",
-                    horizon_theme::fonts::GEIST_MONO,
-                ),
-            ],
-        );
-        let font = load(&root);
-        let _ = std::fs::remove_dir_all(&root);
-        let a = font.glyph('A');
-        let rect = a.rect.expect("A is drawn");
-        // Oversampled 2x: the bitmap is twice the glyph's GUI size.
-        assert_eq!(rect.w as f32 / 2.0, a.right - a.left);
-        assert_eq!(rect.h as f32 / 2.0, a.bottom - a.top);
-        // A monospaced font: every advance is the same, in half pixels.
-        assert_eq!(a.advance, font.glyph('i').advance);
-        assert_eq!((a.advance * 2.0).fract(), 0.0);
-        assert!(a.advance > 4.0 && a.advance < 9.0, "{}", a.advance);
-        // Capitals sit on the baseline at y = 7, shifted down a pixel.
-        assert!((a.bottom - 8.0).abs() <= 0.5, "{}", a.bottom);
-        assert_eq!(a.offset, 1.0);
-        // The space has an advance and nothing to draw.
-        let space = font.glyph(' ');
-        assert!(space.rect.is_none() && space.advance > 0.0);
-        // Skipped characters fall through to the missing glyph.
-        assert_eq!(font.glyph('B').advance, 6.0);
-        // Coverage as `rrrr` texels, faint coverage cut.
-        let patches = font.take_patches();
-        assert_eq!(patches.len(), 2);
-        let texels: Vec<&[u8]> = patches.iter().flat_map(|p| p.rgba.chunks(4)).collect();
-        assert!(texels.iter().all(|t| t.iter().all(|v| *v == t[0])));
-        assert!(texels.iter().all(|t| t[0] == 0 || t[0] >= 25));
-        assert!(texels.iter().any(|t| t[0] == 255));
     }
 
     #[test]

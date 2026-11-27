@@ -44,7 +44,7 @@ impl Game<'_> {
             return false;
         }
         let at = m.center();
-        let sneaking = self.keys.contains(&winit::keyboard::KeyCode::ShiftLeft);
+        let sneaking = self.keys.contains(&crate::game::keys::KeyCode::ShiftLeft);
         let harnessed = m.extra.head.is_some();
         // Equippable.equipOnInteract: a harness goes on a bare adult.
         if item.ends_with("_harness") && item.starts_with("minecraft:") && !harnessed {

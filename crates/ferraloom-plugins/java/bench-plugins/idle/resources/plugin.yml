@@ -1,0 +1,5 @@
+name: FerraloomBenchIdle
+version: '1.0'
+main: dev.ferraloom.benchidle.BenchIdle
+api-version: '26.3'
+description: Benchmark plugin with no listener.

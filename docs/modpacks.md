@@ -11,6 +11,10 @@ This page is the design. It builds on [mods.md](mods.md) (the mod API, WASM in w
 why Java jars cannot run in Horizon, so we port instead). The ATM10 inventory behind the numbers below is
 [modpacks/atm10-mods.csv](modpacks/atm10-mods.csv).
 
+Written for Horizon when it was a whole game. Its client, launcher (with the mod browser and "Import modpack")
+and `horizon-ctl` were removed in November 2026, so the FPS goals, the client tier and the launcher steps below
+are history. What remains here: `horizon-port-pack` (the CLI) and content mods, which a Ferraloom server loads.
+
 ## In one picture
 
 ```
@@ -134,7 +138,7 @@ derivative work. These rules are part of the pipeline, not advice to users:
 2. **The licence is recorded per mod** in the inventory (`license` from `mods.toml` or
    `fabric.mod.json`, plus Modrinth's SPDX id where one exists) and travels with the port into
    its `horizon-mod.toml` (`ported-from = { id, version, license, url }`).
-3. **Publishing needs permission.** A port can go into a mod index, the launcher browser or a
+3. **Publishing needs permission.** A port can go into a mod index or a
    server's download list only if its licence allows redistributing derivatives (permissive,
    or copyleft with the port under the same licence and its source published) or the author
    has given written permission, recorded in the index entry. The tooling refuses to package
@@ -178,7 +182,7 @@ frame, chat and command hooks. Server mods do not run yet. What a content pack n
 | Custom renderers and animated models (block-entity, entity, item; GeckoLib's format) | — | deep | 0.5 | data models (Bedrock geometry + animations), plus a budgeted draw-list interface for the rest |
 | Dimensions: dimension types, levels, chunk generators | — | about 10 (Twilight Forest, Aether, Ad Astra, Undergarden, ...) | 0.5 | JSON part with worldgen; custom generators as mod code |
 | New hooks into vanilla behaviour (what Mixins do) | — | deep | as asked | each becomes a named hook, added for everyone |
-| Client interfaces: `keys`, `target`, `inventory-read`, `ui`, `render`, `world-read` | planned | client tier (38) | 0.2–0.4 | as in [mods.md](mods.md#planned-interfaces) |
+| Client interfaces: `keys`, `target`, `inventory-read`, `ui`, `render`, `world-read` | dropped with the client | client tier (38) | none | |
 
 Two rules from mods.md stay: **the sandbox** (no files, sockets or processes; memory cap; fuel
 per call; a crashing mod stops alone) and **free when unused** (no mods means vanilla code
@@ -242,8 +246,8 @@ How the game loads them, without touching vanilla's path:
   listed namespace another mod that is on already owns is left out, with both named in the log.
   `horizon-port-pack` avoids that inside a pack: a namespace two carried mods both claim (YUNG's
   structure mods all ship files under `yungsapi`, the namespace of YUNG's API, whose own jar isn't
-  carried) is left to none of them, and its files stay outside. The launcher applies the game's
-  rule before it starts a pack (`pipeline::loadable`) and lists what it left off.
+  carried) is left to none of them, and its files stay outside. `pipeline::loadable` applies the game's
+  rule before a pack starts and lists what it leaves off.
 - The overlay is built on the first start with a set of mods and kept for later starts. A stamp
   (`horizon-mod-content.stamp`) hashes the game executable, the base tables and every mod file's
   size and mtime. Adding, removing or editing a mod, or a new build of Horizon, rebuilds it. For
@@ -272,7 +276,7 @@ How the game loads them, without touching vanilla's path:
 
 ## The pipeline: `horizon-port-pack`
 
-A Rust tool in this repo (`crates/horizon-port-pack`, a CLI the launcher also calls), modelled
+A Rust tool in this repo (`crates/horizon-port-pack`, a CLI), modelled
 on the version-port pipeline (`tools/version_port.py`: detect, diff, regen, harnesses, report,
 publish). Each step reads and writes files in a work directory, so it can be rerun, resumed and
 inspected:
@@ -292,8 +296,7 @@ inspected:
 ```
 
 **Status.** `import`, `inventory`, `fetch`, `carry` and `report` run today, and `port` runs
-them all for what a player's machine can port (content mods of the data tier), as the
-launcher's "Import modpack" does:
+them all for what a player's machine can port (content mods of the data tier):
 
 ```
 cargo run -p horizon-port-pack -- import ~/Downloads/pack.mrpack ~/.horizon/ports/pack
@@ -306,8 +309,7 @@ cargo run -p horizon-port-pack -- report ~/.horizon/ports/pack        # coverage
 cargo run -p horizon-port-pack -- port ~/Downloads/pack.zip ~/.horizon/ports/pack [--from <folder>] [--resources <root>]
 ```
 
-`check <jar> <out>` takes one mod jar on its own, as the launcher's mod browser installs it
-([mod-browser.md](mod-browser.md)): it carries the jar into `<out>/carry/` and reads its class
+`check <jar> <out>` takes one mod jar on its own: it carries the jar into `<out>/carry/` and reads its class
 files (constant pool, superclass, declared methods; no decompiling) for what the carry can't
 take, then writes the verdict to `<out>/check.json`. **Works**: content only, and the code just
 registers it. **Partly**: the content ports, and the code features listed don't (block entities,
@@ -835,144 +837,6 @@ Glassential, Factory Blocks, Cloud Glass, Chipped (see the harness table) and MV
 structures now generate (see step 4). Of the 9, 7 are MIT, one LGPL and Chipped is under the
 Terrarium License; nothing is published.
 
-## Measuring "10x"
-
-`tools/perf_bench.py` already measures Horizon against vanilla and vanilla with performance
-mods on the same machine, world and camera path ([benchmark.md](benchmark.md)). With
-`--game neoforge --mod-jars <dir> --deps <dir>` it runs the mods on their own loader (NeoForge
-21.1.259 for ATM10, installed under `.local/neoforge-oracle`, `-Xmx2G` like the launcher),
-driven by the same steps through a dev-only NeoForge port of the bench mod
-(`mods/horizon/src/neoforge-bench`). `--game horizon --port-work <work>` loads a work folder's
-carried-over mods into Horizon. A whole pack (`--pack`, its recommended JVM arguments) is next.
-
-| Metric | How | Horizon side |
-|---|---|---|
-| **Load time** | start → title screen; start → in a fresh world, every chunk around the spawn drawn | the same with the ported pack's `.hmod`s enabled |
-| **RAM** | peak and steady RSS of the process, sampled 4 times a second from outside (the whole JVM for Java) | the whole process |
-| **FPS** | the four flight scenes: mean, 1 % and 0.1 % lows, p99 frame time | same |
-| **TPS / MSPT** | a fixed server-load world: N loaded chunks with the pack's machines and mobs placed by the harness fixtures; mean and p99 milliseconds per tick over 60 s (NeoForge: `/neoforge tps` and spark; Horizon: the integrated server's tick times, which today feed only the debug chart, exposed through `horizon-ctl`) | same fixture, the ported content |
-| **World generation** | chunks per second pregenerating a fixed square (Chunky on NeoForge; Horizon gets a pregeneration command for this) with the pack's worldgen | same |
-| **Disk and download** | install size of the pack against its `.hmod`s | |
-
-Two comparisons, both published:
-
-1. **Same content.** NeoForge with only the mods Horizon has ported (plus their dependencies)
-   against Horizon with those ports. Content matches, so this is the honest ratio.
-2. **What players run today.** The full pack on NeoForge as a reference row, labelled as
-   such, beside Horizon's partial pack. This is not a like-for-like ratio.
-
-"10x" is claimed per metric only where the same-content ratio reaches it over the repeats'
-confidence interval. Other ratios are reported as they come out. Caveat (in every report):
-the pack runs Minecraft 1.21.1 and Horizon runs 26.3, so the vanilla parts differ by a few
-versions.
-
-### Measured: six ported mods against the same mods on NeoForge
-
-Cloud Glass, Factory Blocks, Glassential, Macaw's Fences, Paths and Trapdoors (Doors left out:
-with Trapdoors it passes the block states chunks hold, see Limits), carried over and loaded as
-dev mods in Horizon, against their jars plus Architectury and Fusion on NeoForge 21.1.259.
-Mac mini M4 Pro, 1280x720, seed 1234, the four flight scenes, 2 games per row, 2026-10-17.
-Means; FPS is the mean of the four scenes. "Title" is start to title screen, "world" start to
-a fresh world drawn around the spawn, "scene load" a teleport to every chunk drawn.
-
-| RD | game | title s | world s | scene load s | FPS | RSS steady / peak MB | load avg |
-|---|---|---:|---:|---:|---:|---:|---:|
-| 8 | Horizon + 6 mods | 9.8 | 16.2 | 4.0 | 122 | 2,644 / 2,771 | 32 |
-| 8 | NeoForge + 6 mods | 19.5 | 50.0 | 30.2 | 72 | 2,325 / 2,592 | 56 |
-| 8 | Horizon | 5.0 | 11.0 | 4.0 | 124 | 1,559 / 1,629 | 51 |
-| 8 | NeoForge | 12.8 | 36.1 | 21.9 | 104 | 2,334 / 2,558 | 30 |
-| 16 | Horizon + 6 mods | 10.8 | 27.0 | 11.3 | 90 | 2,925 / 3,032 | 40 |
-| 16 | NeoForge + 6 mods | 26.4 | 82.5 | 64.3 | 25 | 3,016 / 3,519 | 45 |
-| 16 | Horizon | 3.5 | 10.0 | 7.4 | 119 | 1,732 / 1,871 | 56 |
-| 16 | NeoForge | 16.9 | 73.7 | 43.2 | 36 | 2,748 / 3,425 | 48 |
-
-Same content, Horizon against NeoForge: the world is ready 3.1x sooner at 8 chunks and 3.1x at
-16, the title screen 2.0x and 2.4x sooner, and the flights run 1.7x and 3.6x the frames. RAM is
-not lower: Horizon's steady RSS grows 1.1 GB with the mods (61,816 block states against
-vanilla's 35,723; the per-state tables are the next thing to measure), while the JVM stays
-inside its 2 GB heap. Caveats, so none of this is a "10x" claim yet: other sessions and CI
-runners kept the machine's load average between 30 and 56 on 14 threads, so the confidence
-intervals are as wide as the means (`perf_bench.py --table`); Horizon's frames are paced near
-the display's 144 Hz at 8 chunks; Horizon's title time includes building the content overlay
-(about 5 s for six mods; it was rebuilt on every start then, and is kept for later starts now);
-and the pack runs 1.21.1 against Horizon's 26.3.
-A quiet rerun with more games is the next measurement.
-
-**Where the RAM goes (2026-10-17).** RSS overstates it on macOS. `ps` counts pages the allocator
-freed and marked reusable, and the content tables free a lot at load. `perf_bench.py` now also
-samples the physical footprint (`footprint`, what the OS charges the process). The machine was
-shared and very busy (load average 90-138 on 14 threads). RD 8, the same six mods, one or two
-games per row:
-
-| game | RSS steady MB | footprint steady MB |
-|---|---:|---:|
-| Horizon | 1,598-1,636 | 1,277-1,295 |
-| Horizon + 6 mods | 2,996-3,052 | 1,736-1,869 |
-
-So the six mods cost about 0.5 GB of footprint, not 1.1-1.4 GB. ATM10's 42 mods (193,762
-states) take the game to 7.7 GB RSS but 3.9 GB footprint. The rest is startup garbage the
-allocator keeps.
-
-`crates/horizon-client/examples/resource_memory.rs` breaks it down per loader: the live heap
-(a counting allocator), each step's peak, RSS and the footprint. Live heap after every loader,
-vanilla against ATM10's 42 mods:
-
-| loader | vanilla MB | ATM10 42 mods MB |
-|---|---:|---:|
-| block registry | 24 | 125 |
-| assets (registry, models, sprites: 153 MB of pixels for 9,790 layers) | 94 | 657 |
-| block facts and behaviours | +29 | +75 |
-| items, recipes | +14 | +82 |
-| light, mesh, collision, motion | +24 | +53 |
-| worldgen | +79 | +182 |
-| **live** / **footprint** | **240 / 551** | **1,049 / 2,724** |
-
-The block registry kept a second copy of every state as the key of its id map; it now
-indexes ids by a hash checked against the states: -22 MB live for vanilla, -124 MB for
-ATM10's, -30 MB and -140 MB of footprint. The startup peaks are what is left. Each step parses
-its per-state tables whole: as JSON trees, or as NBT trees of 300-600 MB each for ATM10
-(`block-properties.nbt`, the collision, support, occlusion and movement tables). The peak
-reaches 3.9 GB during worldgen loading, and the footprint stays near the peak.
-
-The NBT tables now stream: the readers check each state's identity as it is read, and no
-`states` tree is built (#753). That tree was about 240 MB for each table. With the carried
-ATM10 mods (153,511 states), the peak of each step falls by about 210 MB:
-
-| step | before MB | after MB |
-|---|---:|---:|
-| light | 911 | 699 |
-| collision | 945 | 733 |
-| motion | 1,427 | 1,215 |
-| worldgen, uncached | 3,000 | 2,788 |
-
-The fluid tables no longer decode the 211 MB `gameplay-facts.json` a second time (#754). The
-content root is kept between starts (#756). What is left at startup:
-
-- `facts.json` went through a JSON tree, then an NBT tree, in both the registry and the assets
-  step. It now streams (#825): at ATM10's size (214,338 states) each step's peak fell from
-  816 MB to 153 MB (registry) and 235 MB (assets), and the RSS after the assets step from
-  1,344 MB to 442 MB;
-- on a first start, the content-root build and `Behaviours`' decode of `gameplay-facts.json`
-  (cached afterwards in the behaviour snapshot).
-
-**Against NeoForge, same 40 mods (2026-10-17).** The 40 data-tier mods carried from ATM10 (the
-42 without Regions Unexplored and MO Structures, whose libraries are only on CurseForge),
-against their jars on NeoForge 21.1.259 with `-Xmx2G`. `perf_bench.py --port-work`, RD 8, one
-game each, load average 80-125 on 14 threads; `--warm` measures a later start:
-
-| game | title / world s | RSS steady / peak MB | footprint steady / peak MB |
-|---|---|---|---|
-| Horizon before #756 (every start) | 81.1 / 102.8 | 4,008 / 4,164 | 2,368 / 2,554 |
-| Horizon, first start | 105.2 / 128.8 | 3,795 / 3,993 | 2,306 / 2,560 |
-| **Horizon, later starts** | **21.6 / 33.7** | **2,629 / 2,935** | **2,445 / 2,731** |
-| NeoForge + 40 mods | 53.2 / 119.9 | 3,099 / 3,203 | 3,304 / 3,381 |
-
-On later starts, Horizon uses 15 % less RSS and 26 % less footprint than NeoForge with the
-same mods. It reaches the title 2.5x sooner and the world 3.6x sooner, and its flights ran at
-93-233 FPS against NeoForge's 27-62. The first start is slower than NeoForge's to the title,
-because it builds the content root once. One game per row on a loaded machine is not a
-benchmark; a quiet rerun with repeats is still to do.
-
 ## The working version for 2026-10-23
 
 In scope (each is a PR or a small stack):
@@ -994,7 +858,8 @@ In scope (each is a PR or a small stack):
    with its harness against the NeoForge 1.21.1 oracle. The ports stay local even though these
    licences would allow publishing: we ask first.
 5. **Launcher:** "Import modpack" (`.mrpack` / CurseForge zip / instance) showing the
-   coverage report (ATM10's first), and "Port and play" for what is portable.
+   coverage report (ATM10's first), and "Port and play" for what is portable. Built in Horizon's launcher,
+   removed with it.
 6. **Measured:** load time, RAM and FPS of that pack on NeoForge 1.21.1 against Horizon, with
    the full ATM10 on NeoForge as the reference row.
 
@@ -1052,7 +917,7 @@ What is missing, ranked by how much a player notices:
 6. **Smaller gaps:** Mo' Structures' mixin that keeps lakes out of its structures and its two
    block-ageing processors, and the 5 missing block models.
 
-### Three packs through the mod browser, measured
+### Three packs through the mod browser, measured (Horizon's launcher and game, since removed)
 
 2026-10-22, Mac mini M4 Pro (offscreen, a debug launcher, release-profile `horizon-port-pack` and game), while
 other sessions kept the CPU at 85 to 93 %, so times are upper bounds. The two Modrinth packs were imported with
@@ -1077,7 +942,7 @@ Adventure lost three of YUNG's mods at start ("both use the namespace yungsapi")
 the mods that need porting (not counting performance mods and libraries), 2 of 81 ported partly, 20 of 66 and 42 of
 375. Every ported mod is Partial: their Java code (block entities, entities, Mixins) doesn't come along.
 
-## Open questions for Ludovic
+## Open questions (upstream's, October 2026)
 
 - Contacting authors of permissively licensed mods to publish ports (none contacted).
 - Whether players should run code-port agents themselves (their own Claude Code or Codex

@@ -8,14 +8,10 @@ use horizon_assets::item_model::{
     Components, DisplayContext, GlobalPos, ItemEnv, LevelState, OwnerState, StackView,
 };
 use horizon_client::{
-    block_entity_render::{diffuse_lights, vertex_light},
-    hud::{HudBatch, Rect},
-    item_render::{self, ItemRenderState, SpecialHost, WorldSink},
+    item_render::{self, ItemRenderState},
     items::ItemStack,
-    mesher::Vertex,
 };
 use serde_json::Value;
-use std::{cell::RefCell, collections::HashMap};
 
 /// The game's answers to what the resolver cannot read from the stack.
 pub(super) struct Env<'a, 'g> {
@@ -124,86 +120,9 @@ pub(super) fn local_time(pattern: &str) -> String {
     out
 }
 
-/// Banner and shield pattern textures from the banner pattern registry.
-pub(super) struct Host<'a> {
-    banners: &'a horizon_client::banner::Banners,
-    sprites: &'a HashMap<String, Rect>,
-    skins: &'a RefCell<horizon_client::skins::Downloader>,
-    profiles: &'a RefCell<horizon_client::skins::Resolver>,
-}
-impl SpecialHost for Host<'_> {
-    fn banner_texture(&self, pattern: &str) -> Option<String> {
-        self.banners
-            .pattern(pattern)
-            .map(|_| self.banners.banner_texture(pattern))
-    }
-    fn shield_texture(&self, pattern: &str) -> Option<String> {
-        self.banners
-            .pattern(pattern)
-            .map(|_| self.banners.shield_texture(pattern))
-    }
-    fn player_skin(&self, profile: &Value) -> Option<String> {
-        // SkullBlockRenderer.getPlayerSkin: SkinManager.getInsecureSkinInformation
-        // accepts a texture property without a signature, unlike the tab list.
-        // A `Dynamic` profile (a name or id only) resolves through the
-        // services (`PlayerSkinRenderCache.getOrDefault`).
-        Some(horizon_client::skins::head_skin(
-            profile,
-            &mut self.profiles.borrow_mut(),
-            &mut self.skins.borrow_mut(),
-            |location| self.sprites.contains_key(location),
-        ))
-    }
-}
-
-/// `ItemOwner` of an entity holding or showing an item.
-pub(super) fn owner_at(position: [f64; 3], yaw: f32, entity_type: &str) -> OwnerState {
-    OwnerState {
-        position,
-        visual_rotation_y_degrees: yaw,
-        entity_type: entity_type.to_owned(),
-        ..Default::default()
-    }
-}
-/// `UseDuration` of a stack (`Item.getUseDuration`): 72000 for drawn items
-/// and for `blocks_attacks` items (shields), the consume time for food.
-fn use_duration(components: &Components) -> i32 {
-    if let Some(c) = components.get("minecraft:consumable") {
-        let seconds = c["consume_seconds"].as_f64().unwrap_or(1.6);
-        return (seconds * 20.0) as i32;
-    }
-    if components.get("minecraft:blocks_attacks").is_some()
-        || components.get("minecraft:kinetic_weapon").is_some()
-    {
-        return 72_000;
-    }
-    let item_model = components
-        .get("minecraft:item_model")
-        .and_then(Value::as_str)
-        .unwrap_or("");
-    match item_model {
-        "minecraft:bow"
-        | "minecraft:crossbow"
-        | "minecraft:trident"
-        | "minecraft:spyglass"
-        | "minecraft:goat_horn" => 72_000,
-        // BrushItem.USE_DURATION.
-        "minecraft:brush" => 200,
-        _ => 0,
-    }
-}
-
 impl Game<'_> {
     pub(super) fn item_env(&self) -> Env<'_, '_> {
         Env { game: self }
-    }
-    pub(super) fn item_host(&self) -> Host<'_> {
-        Host {
-            banners: &self.res.stations().banners,
-            sprites: &self.gui.atlas.sprites,
-            skins: &self.skin_downloads,
-            profiles: &self.skin_profiles,
-        }
     }
     /// The client level as item models read it: worked out once a frame (a
     /// screen of items read the same level, its sky sampled once).
@@ -245,40 +164,6 @@ impl Game<'_> {
             runs_normally: true,
         }
     }
-    /// The local player as `ItemOwner`; `stack` is the stack drawn, to tell
-    /// whether it is the one in use.
-    pub(super) fn player_owner(&self, stack: Option<&ItemStack>) -> OwnerState {
-        let position = self
-            .player
-            .as_ref()
-            .map_or([0.0; 3], |p| [p.position.x, p.position.y, p.position.z]);
-        let mut owner = owner_at(position, self.yaw, "minecraft:player");
-        owner.main_arm_left = self.settings.main_hand_left;
-        owner.is_local_player = true;
-        owner.is_view_entity = true;
-        owner.last_death_location = self
-            .level
-            .last_death
-            .clone()
-            .map(|(dimension, pos)| GlobalPos { dimension, pos });
-        if let (Some((slot, ticks)), Some(stack)) = (self.using, stack)
-            && self.stack_in(slot) == Some(stack)
-        {
-            let view = item_render::stack_view(stack);
-            let duration = use_duration(&self.pack.item_renderer.models.components(&view));
-            owner.using_this_item = true;
-            owner.use_duration = duration;
-            owner.use_item_remaining_ticks = duration - ticks as i32;
-            owner.crossbow_charge_duration = Self::charge_ticks(stack).max(1) as i32;
-        }
-        owner.fishing_cast_with_this_item = stack
-            .zip(self.cast_rod())
-            .is_some_and(|(s, rod)| std::ptr::eq(s, rod));
-        owner.is_selected =
-            stack.is_some() && self.inventory.get(self.selected).and_then(Option::as_ref) == stack;
-        owner.is_carried = owner.is_selected;
-        owner
-    }
     /// `ItemModelResolver.updateForTopItem`.
     pub(super) fn resolve_item(
         &self,
@@ -296,162 +181,6 @@ impl Game<'_> {
             seed,
             &self.item_env(),
         )
-    }
-    /// `GuiGraphics.renderItem(player, level, stack, x, y, 0)`.
-    pub(super) fn draw_item_model(&self, batch: &mut HudBatch, stack: &ItemStack, x: f32, y: f32) {
-        let owner = self.player_owner(Some(stack));
-        let state = self.resolve_item(stack, DisplayContext::Gui, Some(&owner), 0);
-        item_render::gui::draw(
-            &state,
-            &self.pack.item_renderer,
-            &self.gui.atlas.sprites,
-            &self.item_host(),
-            batch,
-            x,
-            y,
-            self.started.elapsed().as_secs_f32(),
-            self.settings.file.double("glintSpeed") as f32,
-            self.settings.file.double("glintStrength") as f32,
-        );
-    }
-    /// The `GLINT_TEXTURING` inputs the atlas and options provide.
-    pub(super) fn glint(&self) -> Option<item_render::Glint> {
-        self.gui
-            .atlas
-            .sprites
-            .get("misc/enchanted_glint_item")
-            .copied()
-            .map(|_| item_render::Glint {
-                speed: self.settings.file.double("glintSpeed") as f32,
-                alpha: self.settings.file.double("glintStrength") as f32,
-                millis: self.started.elapsed().as_secs_f32() * 1000.0,
-                scale: 0.5,
-            })
-    }
-    /// The glint scroll phase shared by world items and armour
-    /// (`item_render::Glint::scroll_ticks`).
-    pub(super) fn glint_ticks(&self) -> f32 {
-        item_render::Glint::scroll_ticks(
-            self.started.elapsed().as_secs_f32() * 1000.0,
-            self.settings.file.double("glintSpeed") as f32,
-        )
-    }
-    /// Submit a resolved item under `pose` (camera-relative) at `light`
-    /// (packed lightmap coordinates).
-    pub(super) fn submit_item_world(
-        &self,
-        state: &ItemRenderState,
-        pose: glam::Mat4,
-        light: u32,
-        out: &mut Vec<Vertex>,
-    ) {
-        let mut sink = WorldSink {
-            out,
-            light,
-            lights: Some(diffuse_lights(self.dim == Dim::Nether)),
-            glint: self.glint(),
-        };
-        state.submit(
-            &self.pack.item_renderer,
-            &self.gui.atlas.sprites,
-            &self.item_host(),
-            pose,
-            &mut sink,
-        );
-    }
-    /// [`Self::submit_item_world`] without the level's diffuse shading.
-    pub(super) fn submit_item_unlit(
-        &self,
-        state: &ItemRenderState,
-        pose: glam::Mat4,
-        light: u32,
-        out: &mut Vec<Vertex>,
-    ) {
-        let mut sink = WorldSink {
-            out,
-            light,
-            lights: None,
-            glint: self.glint(),
-        };
-        state.submit(
-            &self.pack.item_renderer,
-            &self.gui.atlas.sprites,
-            &self.item_host(),
-            pose,
-            &mut sink,
-        );
-    }
-    /// `ItemEntityRenderer.submit` for every dropped item.
-    pub(super) fn dropped_item_geometry(
-        &self,
-        camera: glam::DVec3,
-        alpha: f64,
-        out: &mut Vec<Vertex>,
-    ) {
-        let live = self.dropped.iter().map(|item| {
-            let (p, q) = (item.previous, item.position);
-            let at = [
-                p.x + (q.x - p.x) * alpha,
-                p.y + (q.y - p.y) * alpha,
-                p.z + (q.z - p.z) * alpha,
-            ];
-            (item, at, alpha as f32)
-        });
-        // ItemPickupParticle: the render state extracted at partial tick 1.
-        let taken = self.pickups.live.iter().filter_map(|p| match &p.taken {
-            super::pickups::Taken::Item(item) => {
-                Some((&**item, super::pickups::position(p, alpha), 1.0))
-            }
-            _ => None,
-        });
-        for (item, at, partial) in live.chain(taken) {
-            let entity_start = out.len();
-            let q = item.position;
-            let pos = glam::DVec3::from_array(at) - camera;
-            if pos.length_squared() > 64.0 * 64.0 {
-                continue;
-            }
-            // `extractItemGroupRenderState`: GROUND, seeded by the entity id.
-            let owner = owner_at([q.x, q.y, q.z], 0.0, "minecraft:item");
-            let state = self.resolve_item(
-                &item.stack,
-                DisplayContext::Ground,
-                Some(&owner),
-                item.id as i32,
-            );
-            if state.is_empty() {
-                continue;
-            }
-            let age = item.age as f32 + partial;
-            let (lo, _) = state.bounding_box();
-            let min_offset_y = -lo.y + 0.0625;
-            let bob = (age / 10.0 + item.bob_offset).sin() * 0.1 + 0.1;
-            let spin = item_render::item_spin(age, item.bob_offset);
-            let pose = glam::Mat4::from_translation(pos.as_vec3())
-                * glam::Mat4::from_translation(glam::Vec3::new(0.0, bob + min_offset_y, 0.0))
-                * glam::Mat4::from_rotation_y(spin);
-            let packed = self.world.light(
-                q.x.floor() as i32,
-                (q.y + 0.1).floor() as i32,
-                q.z.floor() as i32,
-            );
-            let seed = i64::from(self.pack.item_renderer.item_id(&item.stack.item))
-                + i64::from(item.stack.damage);
-            for copy in item_render::cluster_poses(
-                &state,
-                pose,
-                item_render::rendered_amount(item.stack.count),
-                seed,
-            ) {
-                self.submit_item_world(&state, copy, vertex_light(packed), out);
-            }
-            if self.entity_glowing(item.id) {
-                let rgb = super::glowing::team_color(self.mob_team(item.id));
-                self.mark_outline(&out[entity_start..], rgb);
-            } else {
-                self.cull_entity_vertices(out, entity_start);
-            }
-        }
     }
 }
 

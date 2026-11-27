@@ -1,7 +1,7 @@
 //! Hub operations on what guests perceive and do beyond the basics: sounds,
 //! level events, animations and block containers with their clicks.
 use super::{
-    hub::Hub,
+    hub::{HostEvent, Hub},
     menu::{self, Menu, Rules, Slots, View},
 };
 use crate::{containers::BlockEntity, items::ItemStack, world::World};
@@ -148,6 +148,71 @@ impl Hub {
         }
     }
 
+    /// `ChunkMap.sendToTrackingPlayers`: the players in the level that track
+    /// entity `id`, each sent `packets` in order.
+    pub fn send_to_tracking(&mut self, id: i32, packets: &[C]) {
+        self.finish_tracking();
+        let bodies: Vec<Vec<u8>> = packets.iter().map(C::encode).collect();
+        for g in self
+            .guests
+            .iter()
+            .filter(|g| self.here(g) && g.tracker.is_tracking(id))
+        {
+            for body in &bodies {
+                g.sender.send(body.clone());
+            }
+        }
+    }
+
+    /// Port of Entity#sendTeleportTransitionToPlayers: each player riding
+    /// entity `id` gets its packet in `riders` (by the player's entity id),
+    /// then, when `tracked` is given, the players tracking it but riding it.
+    pub fn teleport_entity(
+        &mut self,
+        id: i32,
+        riders: &[(i32, play::TeleportEntity)],
+        tracked: Option<play::TeleportEntity>,
+    ) {
+        self.finish_tracking();
+        for (rider, packet) in riders {
+            if let Some(g) = self.guests.iter().find(|g| g.entity_id == *rider) {
+                g.send(&C::TeleportEntity(packet.clone()));
+            }
+        }
+        let Some(packet) = tracked else {
+            return;
+        };
+        let body = C::TeleportEntity(packet).encode();
+        for g in self.guests.iter().filter(|g| {
+            self.here(g)
+                && g.tracker.is_tracking(id)
+                && !riders.iter().any(|(rider, _)| *rider == g.entity_id)
+        }) {
+            g.sender.send(body.clone());
+        }
+    }
+
+    /// Port of FallingBlockEntity#tick's landing: the falling block's
+    /// trackers are sent the block it set (ClientboundBlockUpdatePacket,
+    /// then ClientboundAddTransientBlockPacket), so their client shows the
+    /// block from the tick the entity goes.
+    pub fn falling_block_landed(&mut self, id: i32, pos: [i32; 3], state: u32) {
+        let mut w = horizon_protocol::buf::Writer::new();
+        // BlockPos.asLong.
+        let [x, y, z] = pos.map(i64::from);
+        w.i64((x & 0x3FF_FFFF) << 38 | (z & 0x3FF_FFFF) << 12 | (y & 0xFFF));
+        w.varint(state as i32);
+        let transient = C::Unknown(
+            horizon_protocol::ids::play::clientbound::ADD_TRANSIENT_BLOCK,
+            w.data,
+        );
+        let update = C::BlockUpdate(play::BlockUpdate {
+            pos,
+            state: state as i32,
+        });
+        self.send_to_tracking(id, &[update, transient]);
+    }
+
     /// `ServerLevel.broadcastDamageEvent`: the clients around show the hurt
     /// entity's flash and hear its hurt sound.
     pub fn damage_event(
@@ -202,7 +267,9 @@ impl Hub {
         );
     }
 
-    /// Open a block container for a guest (ServerPlayer.openMenu).
+    /// Open a block container for a guest (ServerPlayer.openMenu), as its
+    /// `opening` (`menu::next_opening`).
+    #[allow(clippy::too_many_arguments)]
     pub fn open_container(
         &mut self,
         conn: u32,
@@ -211,6 +278,7 @@ impl Hub {
         pos: (i32, i32, i32),
         slots: Slots,
         items: Vec<Option<ItemStack>>,
+        opening: u32,
     ) {
         let Some(kind) = self
             .sync
@@ -242,6 +310,8 @@ impl Hub {
             sent: Vec::new(),
             drag: None,
             sent_data: Vec::new(),
+            inventory_type: "",
+            opening,
         });
         self.send_menu_content(i, items);
     }
@@ -312,6 +382,15 @@ impl Hub {
         g.send(&packet);
     }
 
+    /// The open menu's whole contents and the carried stack again, as after a
+    /// denied click (`AbstractContainerMenu.sendAllDataToRemote`).
+    pub fn resend_menu(&mut self, i: usize, world: &World) {
+        let g = &self.guests[i];
+        if let Some(items) = g.menu.as_ref().and_then(|m| m.slots.read(world, g)) {
+            self.send_menu_content(i, items);
+        }
+    }
+
     fn close_container_at(&mut self, i: usize) {
         let g = &mut self.guests[i];
         if let Some(menu) = g.menu.take() {
@@ -348,9 +427,11 @@ impl Hub {
         }
     }
 
-    fn view_slot(&self, i: usize, world: &World, slot: usize) -> Option<ItemStack> {
+    /// What the guest's view of raw `slot` holds: of the open menu when `in_menu`,
+    /// else of the inventory menu (window 0).
+    fn view_slot(&self, i: usize, world: &World, in_menu: bool, slot: usize) -> Option<ItemStack> {
         let g = &self.guests[i];
-        match &g.menu {
+        match g.menu.as_ref().filter(|_| in_menu) {
             Some(m) if slot < m.size => m.slots.get(world, g, slot),
             Some(m) => g
                 .inventory
@@ -484,8 +565,9 @@ impl Hub {
         }
     }
 
-    /// After a click: tell the client about every slot it got wrong, or that
-    /// it did not claim, and the carried stack.
+    /// After a click (`broadcastChanges` with the client's claims as the remote
+    /// slots): tell the client about every slot it got wrong, every slot it did
+    /// not claim that differs from what it was last sent, and the carried stack.
     fn answer_click(
         &mut self,
         i: usize,
@@ -506,17 +588,25 @@ impl Hub {
         };
         let mut resend: Vec<usize> = Vec::new();
         for slot in 0..total {
-            let mine = self.view_slot(i, world, slot);
+            let mine = self.view_slot(i, world, in_menu, slot);
             let agreed = match claimed.get(&slot) {
                 Some(c) => self.hashed_matches(c, &mine),
-                None => !changed.contains(&slot),
+                None => {
+                    let g = &self.guests[i];
+                    let sent = if in_menu {
+                        g.menu.as_ref().and_then(|m| m.sent.get(slot))
+                    } else {
+                        g.menu_sent.get(slot)
+                    };
+                    !changed.contains(&slot) && sent == Some(&mine)
+                }
             };
             if !agreed {
                 resend.push(slot);
             }
         }
         for slot in resend {
-            let mine = self.view_slot(i, world, slot);
+            let mine = self.view_slot(i, world, in_menu, slot);
             let net = self.stack(&mine);
             let g = &mut self.guests[i];
             let state = if in_menu {
@@ -541,7 +631,9 @@ impl Hub {
             self.guests[i].send(&C::SetCursorItem(play::SetCursorItem { item: net }));
         }
         // What the client now believes equals the server's state.
-        let items: Vec<_> = (0..total).map(|s| self.view_slot(i, world, s)).collect();
+        let items: Vec<_> = (0..total)
+            .map(|s| self.view_slot(i, world, in_menu, s))
+            .collect();
         if in_menu {
             if let Some(m) = self.guests[i].menu.as_mut() {
                 m.sent = items;
@@ -607,7 +699,9 @@ impl Hub {
     }
 
     /// Slot changes of open containers (AbstractContainerMenu.broadcastChanges).
-    pub fn sync_containers(&mut self, world: &World) {
+    /// A container whose block went closes, and while plugins run the game is
+    /// told (`HostEvent::MenuGone`).
+    pub fn sync_containers(&mut self, world: &World, events: &mut Vec<HostEvent>) {
         for i in 0..self.guests.len() {
             let Some(menu) = self.guests[i]
                 .menu
@@ -616,13 +710,23 @@ impl Hub {
             else {
                 continue;
             };
-            let (size, window, slots) = (menu.size, menu.window, menu.slots);
+            let (size, window, slots, kind, opening) = (
+                menu.size,
+                menu.window,
+                menu.slots,
+                menu.inventory_type,
+                menu.opening,
+            );
             if !slots.valid(world) {
                 self.close_container_at(i);
+                if ferraloom_plugins::running() {
+                    let conn = self.guests[i].conn;
+                    events.push(HostEvent::MenuGone(conn, slots, opening, kind));
+                }
                 continue;
             }
             for slot in 0..size + 36 {
-                let now = self.view_slot(i, world, slot);
+                let now = self.view_slot(i, world, true, slot);
                 let sent = self.guests[i]
                     .menu
                     .as_ref()

@@ -13,8 +13,6 @@ pub struct BiomeFacts {
     pub temperature: f32,
     pub snowy: bool,
     pub swamp: bool,
-    pub ocean: bool,
-    pub mushroom: bool,
     pub desert: bool,
     pub jungle: bool,
     /// Frog variant from `spawns_warm/cold_variant_frogs` (0 temperate, 1 warm, 2 cold).

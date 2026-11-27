@@ -140,7 +140,7 @@ containers, weather-driven blocks. The library code lives in
   bundle. Without one, the tests skip.
 - Client tests cover the Java `Vec3i` hash and compare order and the
   explosion stack merging.
-- In the game on the virtual screen, driven by `horizon-ctl`:
+- In the game on the virtual screen, driven by `horizon-ctl` (both removed with the client since):
   - Bone meal on oak, birch, cherry, 2×2 dark oak, spruce and jungle
     saplings grew all of them.
   - Flint and steel on a TNT cluster: the TNT flashed white and chain
@@ -152,8 +152,6 @@ containers, weather-driven blocks. The library code lives in
   - Landing on farmland turned it to dirt and popped the wheat.
   - The hopper screen shows the vanilla layout.
 
-  New `horizon-ctl` commands drive these checks: `setblock`, `fill`,
-  `getblock` and `container`.
 
 ## Known gaps
 

@@ -192,7 +192,8 @@ impl Game<'_> {
         scratch.levels.retain(|_, list| list.used != 0);
         for (conn, delivery) in scratch.out.drain(..) {
             match delivery {
-                waypoints::Delivery::Local(waypoint) => self.handle_waypoint(&waypoint),
+                // The window's own player: a server has none.
+                waypoints::Delivery::Local(_) => {}
                 waypoints::Delivery::Encoded(body) => {
                     if let Some(g) = host.hub.guest(conn) {
                         g.sender.send_bodies([body]);

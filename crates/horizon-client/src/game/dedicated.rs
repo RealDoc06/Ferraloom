@@ -14,10 +14,7 @@ use horizon_client::{
         eula, profiles,
         properties::{GAME_MODES, ServerProperties, SystemEntropy},
         user_cache::UserCache,
-        user_lists::{
-            BanEntry, BanList, IpBanList, NameAndId, OpEntry, OpList, WhiteEntry, WhiteList,
-            format_date,
-        },
+        user_lists::{BanList, IpBanList, NameAndId, OpList, WhiteList, format_date},
     },
     text::Text,
 };
@@ -77,7 +74,7 @@ pub(super) fn log(level: &str, message: &str) {
 }
 
 /// A line from another of vanilla's threads (the login's User Authenticator).
-fn log_from(thread: &str, level: &str, message: &str) {
+pub(super) fn log_from(thread: &str, level: &str, message: &str) {
     let file_level = match level {
         "WARN" => ::log::Level::Warn,
         "ERROR" => ::log::Level::Error,
@@ -90,7 +87,7 @@ fn log_from(thread: &str, level: &str, message: &str) {
         }
     });
     // Log4j's %d{HH:mm:ss}: the local time, as in logs/latest.log.
-    // The launcher can close its stdout pipe while the server keeps running.
+    // Whatever started the server can close its stdout pipe while the server keeps running.
     let _ = writeln!(
         std::io::stdout().lock(),
         "[{}] [{thread}/{level}]: {message}",
@@ -166,6 +163,9 @@ pub(super) fn preflight(options: &mut Options) -> Result<bool> {
     {
         horizon_client::command::vanilla::set_horizon_commands(true);
     }
+    // Commands.CommandSelection.DEDICATED: `/op`, `/ban`, `/stop`... for
+    // the console and the players alike (game/commands/server_cmds.rs).
+    horizon_client::command::vanilla::set_dedicated(true);
     props.store(&settings)?;
     let eula_file = PathBuf::from("eula.txt");
     let agreed = match eula::agreed(&eula_file) {
@@ -400,43 +400,45 @@ fn append(to: &mut Tag, sibling: Tag) {
     }
 }
 
+/// What the dedicated-only commands read and change (DedicatedServer and
+/// its DedicatedPlayerList), for the console's commands and the players'
+/// alike (game/commands/server_cmds.rs). Set while `run_dedicated` runs.
+pub(super) struct Admin {
+    pub lists: Arc<Mutex<Lists>>,
+    /// `/stop` ran (MinecraftServer.halt): the loop ends after this tick.
+    pub stop: bool,
+    /// The autosave (`ServerLevel.noSave`, `/save-off` and `/save-on`).
+    pub autosave: bool,
+    /// `op-permission-level`: what `/op` grants (operatorUserPermissions).
+    pub op_level: i32,
+    /// `player-idle-timeout` in minutes, which `/setidletimeout` changes.
+    pub idle_timeout: i32,
+    /// Players' `/save-all`, done once their turn is over.
+    pub saves: Vec<super::commands::server_cmds::DeferredSave>,
+}
+static ADMIN: Mutex<Option<Admin>> = Mutex::new(None);
+
+/// `f` on the dedicated server's [`Admin`]; None when no dedicated server
+/// runs. Never call it again inside `f`.
+pub(super) fn admin<T>(f: impl FnOnce(&mut Admin) -> T) -> Option<T> {
+    ADMIN.lock().unwrap().as_mut().map(f)
+}
+
 /// What the server loop keeps between ticks.
 struct ServerState {
-    lists: Arc<Mutex<Lists>>,
     console: mpsc::Receiver<String>,
-    stop: bool,
-    autosave: bool,
     empty_ticks: i32,
     /// When the last passes of the loop ended, for the tick rate horizon-server shows.
     ticks: std::collections::VecDeque<Instant>,
     paused: bool,
     /// `broadcast-console-to-ops`.
     broadcast_console: bool,
-    /// `op-permission-level`: what `/op` grants (operatorUserPermissions).
-    op_level: i32,
 }
 
-/// The dedicated-only commands' replies vanilla sends with `broadcast`
-/// (`sendSuccess(..., true)`): the operators hear of them.
-const BROADCAST: &[&str] = &[
-    "commands.ban.success",
-    "commands.banip.info",
-    "commands.banip.success",
-    "commands.deop.success",
-    "commands.kick.success",
-    "commands.op.success",
-    "commands.pardon.success",
-    "commands.pardonip.success",
-    "commands.save.disabled",
-    "commands.save.enabled",
-    "commands.save.success",
-    "commands.stop.stopping",
-    "commands.whitelist.add.success",
-    "commands.whitelist.disabled",
-    "commands.whitelist.enabled",
-    "commands.whitelist.reloaded",
-    "commands.whitelist.remove.success",
-];
+/// The replies of the console's own `kick` vanilla sends with `broadcast`
+/// (`sendSuccess(..., true)`): the operators hear of them. The dispatcher's
+/// commands broadcast through `Game::feedback`.
+const BROADCAST: &[&str] = &["commands.kick.success"];
 
 impl Game<'_> {
     /// DedicatedServer.initServer and MinecraftServer.runServer.
@@ -561,6 +563,12 @@ impl Game<'_> {
         lists.use_whitelist = props.white_list;
         lists.enforce_whitelist = props.enforce_whitelist;
         let lists = Arc::new(Mutex::new(lists));
+        // Ferraloom: the lists and the user cache for plugins (Server.getBanList, OfflinePlayer.setOp...).
+        super::plugins::register_lists(&lists, &USER_CACHE, props.op_permission_level);
+        // Ferraloom: functions compile at `function-permission-level` (Main's WorldLoader.InitConfig).
+        super::functions::set_compilation_level(props.function_permission_level);
+        // Ferraloom: plugins load (onLoad) before the level, as CraftBukkit's do.
+        self.start_plugins(&level_name, &props, port);
         log("INFO", &format!("Preparing level \"{level_name}\""));
         let folder = world_dir.to_string_lossy().into_owned();
         self.load_world(WorldRequest::new(
@@ -568,7 +576,6 @@ impl Game<'_> {
             Some(&level_name),
             Some(props.seed),
             game_mode == 1,
-            None,
         )?)?;
         if new_world {
             self.level.hardcore = props.hardcore;
@@ -591,12 +598,20 @@ impl Game<'_> {
         self.streaming.radius = self.settings.render_distance;
         self.settle_spawn()?;
         let gate_lists = lists.clone();
-        let gate: LoginGate = Arc::new(move |address, uuid, name| {
+        let gate: LoginGate = Arc::new(move |address, uuid, name, full| {
             let user = NameAndId {
                 id: uuid,
                 name: name.to_owned(),
             };
-            gate_lists.lock().unwrap().can_login(address, &user)
+            let mut lists = gate_lists.lock().unwrap();
+            // PlayerList.canPlayerLogin: bans, the whitelist, then a full server.
+            let refused = lists
+                .can_login(address, &user)
+                .or_else(|| full.then(|| translatable("multiplayer.disconnect.server_full", &[])));
+            let op = lists.ops.contains(&user);
+            drop(lists);
+            // Ferraloom: AsyncPlayerPreLoginEvent and PlayerLoginEvent (game/plugins/players.rs).
+            super::plugins::login(address, uuid, name, op, refused)
         });
         let bypass_lists = lists.clone();
         let favicon = std::fs::read("server-icon.png")
@@ -650,6 +665,18 @@ impl Game<'_> {
                 );
                 Vec::new()
             },
+            // Ferraloom: enable-code-of-conduct (DedicatedServer.readCodeOfConducts).
+            code_of_conduct: if props.code_of_conduct {
+                horizon_client::lan::conn::read_code_of_conducts(std::path::Path::new(
+                    "codeofconduct",
+                ))
+                .unwrap_or_else(|e| {
+                    log("ERROR", &e);
+                    Default::default()
+                })
+            } else {
+                Default::default()
+            },
         };
         let config = HubConfig {
             default_game_mode: game_mode,
@@ -679,6 +706,17 @@ impl Game<'_> {
         if let Some(host) = self.lan.as_mut() {
             host.hub.spawn_protection = props.spawn_protection;
         }
+        // Before the plugins: a server command one runs from onEnable needs it.
+        *ADMIN.lock().unwrap() = Some(Admin {
+            lists,
+            stop: false,
+            autosave: true,
+            op_level: props.op_permission_level,
+            idle_timeout: props.player_idle_timeout,
+            saves: Vec::new(),
+        });
+        // Ferraloom: plugins' onEnable, before "Done" as CraftBukkit's POSTWORLD.
+        self.enable_plugins();
         log(
             "INFO",
             &format!(
@@ -691,23 +729,24 @@ impl Game<'_> {
         self.log_saved_levels();
         if let Some(host) = self.lan.as_mut() {
             host.hub.entity_range_percent = props.entity_broadcast_range_percentage;
+            // Ferraloom: allow-flight and the chat and command spam thresholds.
+            host.hub.player_rules = horizon_client::lan::hub::player_meta::PlayerRules::dedicated(
+                props.allow_flight,
+                props.chat_spam_threshold_seconds,
+                props.command_spam_threshold_seconds,
+            );
         }
         let mut state = ServerState {
-            lists,
             console,
-            stop: false,
-            autosave: true,
             empty_ticks: 0,
             ticks: Default::default(),
             paused: false,
             broadcast_console: props.broadcast_console_to_ops,
-            op_level: props.op_permission_level,
         };
         let pause_after = props.pause_when_empty_seconds * 20;
-        let idle_timeout = props.player_idle_timeout;
         horizon_threads::tick_affinity();
         let mut next = Instant::now();
-        while !state.stop {
+        while !admin(|a| a.stop).unwrap_or(true) {
             let tick_start = Instant::now();
             while let Ok(line) = state.console.try_recv() {
                 self.console_line(&mut state, &line);
@@ -735,12 +774,16 @@ impl Game<'_> {
                 );
                 self.save_game()?;
             }
-            if !paused && !state.autosave {
-                // `save-off`: the periodic save inside the tick is skipped.
-                self.ticks = self.ticks.max(1);
+            // Ferraloom: logins waiting for PlayerLoginEvent, paused or not (game/plugins/players.rs).
+            self.plugin_logins();
+            // Ferraloom: the plugins' scheduler heartbeat (tickChildren's, so not while paused).
+            if !paused && self.tick_plugins() {
+                admin(|a| a.stop = true);
             }
             // MinecraftServer.tickServer: while paused only the connections run.
             self.tick_server_timed(paused)?;
+            self.run_deferred_saves();
+            let idle_timeout = admin(|a| a.idle_timeout).unwrap_or(0);
             if idle_timeout > 0 {
                 self.kick_idle(idle_timeout);
             }
@@ -749,7 +792,9 @@ impl Game<'_> {
             state.ticked(Instant::now());
             self.wait_for_next_server_tick(&mut next, paused);
         }
-        self.stop_dedicated()
+        let stopped = self.stop_dedicated();
+        *ADMIN.lock().unwrap() = None;
+        stopped
     }
 
     /// Load the spawn area and find the world spawn as single player does,
@@ -805,13 +850,19 @@ impl Game<'_> {
             .map(|g| g.conn)
             .collect();
         for conn in idle {
-            host.hub
-                .kick(conn, translatable("multiplayer.disconnect.idling", &[]));
+            // Ferraloom: PlayerKickEvent (game/plugins/players.rs).
+            let tag = translatable("multiplayer.disconnect.idling", &[]);
+            let reason = "You have been idle for too long!";
+            if let Some(tag) = self.plugin_kick(conn, reason, tag)
+                && let Some(host) = self.lan.as_mut()
+            {
+                host.hub.kick(conn, tag);
+            }
         }
     }
 
     /// Ops' permission levels for the hub (PlayerList.getProfilePermissions).
-    fn sync_ops(&mut self, lists: &Arc<Mutex<Lists>>) {
+    pub(super) fn sync_ops(&mut self, lists: &Arc<Mutex<Lists>>) {
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -823,6 +874,8 @@ impl Game<'_> {
             .iter()
             .map(|e| (e.user.id, e.level as u8))
             .collect();
+        // Ferraloom: plugins' permissions follow before the trees are filtered (CraftBukkit's sendPlayerPermissionLevel).
+        ferraloom_plugins::ops_changed();
         host.hub.resend_commands();
     }
 
@@ -840,10 +893,9 @@ impl Game<'_> {
     }
 
     /// GameProfileArgument for a name: the user cache, else the profile
-    /// service, else (offline) the offline player. None, told to the console:
-    /// no such player.
-    fn resolve(&self, name: &str) -> Option<NameAndId> {
-        let found = USER_CACHE.lock().unwrap().as_mut().and_then(|cache| {
+    /// service, else (offline) the offline player. None: no such player.
+    pub(super) fn resolve(&self, name: &str) -> Option<NameAndId> {
+        USER_CACHE.lock().unwrap().as_mut().and_then(|cache| {
             cache.get_by_name(name, |lower| {
                 let found = profiles::find_by_name(&profiles::discovery_url(), lower);
                 if found.is_none() {
@@ -851,12 +903,7 @@ impl Game<'_> {
                 }
                 found
             })
-        });
-        if found.is_none() {
-            let unknown = Text::translate("argument.player.unknown", &[]);
-            log("INFO", &format!("System chat: {}", unknown.plain()));
-        }
-        found
+        })
     }
 
     /// MinecraftServer.sendSystemMessage: what the console is told; while
@@ -876,7 +923,7 @@ impl Game<'_> {
     /// One console line, then the operators' share of its feedback.
     fn console_line(&mut self, state: &mut ServerState, line: &str) {
         self.console_broadcast = Some(state.broadcast_console);
-        self.console_command(state, line);
+        self.console_command(line);
         self.console_broadcast = None;
         if let Some(mut host) = self.lan.take() {
             self.run_level_teleports(&mut host);
@@ -887,10 +934,15 @@ impl Game<'_> {
     }
 
     /// DedicatedServer.handleConsoleInputs: one console line, run as the
-    /// server (permission level 4). The dedicated-only commands are here;
-    /// everything else goes to the game's dispatcher.
-    fn console_command(&mut self, state: &mut ServerState, line: &str) {
+    /// server (permission level 4). The console's own `list`, `kick` and
+    /// `say` are here; everything else, the dedicated-only commands
+    /// included (game/commands/server_cmds.rs), goes to the game's dispatcher.
+    fn console_command(&mut self, line: &str) {
         let line = line.strip_prefix('/').unwrap_or(line);
+        // Ferraloom: a Bukkit plugin's command (game/plugins.rs).
+        if self.plugin_console_command(line) {
+            return;
+        }
         let mut words = line.split_whitespace();
         let Some(command) = words.next() else {
             return;
@@ -898,33 +950,6 @@ impl Game<'_> {
         let rest: Vec<&str> = words.collect();
         let lit = |s: &str| Text::literal(s.to_owned());
         match command {
-            "stop" => {
-                self.console_reply(Text::translate("commands.stop.stopping", &[]));
-                state.stop = true;
-            }
-            "save-all" => {
-                self.console_reply(Text::translate("commands.save.saving", &[]));
-                match self.save_game() {
-                    Ok(()) => self.console_reply(Text::translate("commands.save.success", &[])),
-                    Err(e) => log("ERROR", &format!("{e}")),
-                }
-            }
-            "save-off" => {
-                if state.autosave {
-                    state.autosave = false;
-                    self.console_reply(Text::translate("commands.save.disabled", &[]));
-                } else {
-                    self.console_reply(Text::translate("commands.save.alreadyOff", &[]));
-                }
-            }
-            "save-on" => {
-                if state.autosave {
-                    self.console_reply(Text::translate("commands.save.alreadyOn", &[]));
-                } else {
-                    state.autosave = true;
-                    self.console_reply(Text::translate("commands.save.enabled", &[]));
-                }
-            }
             "list" => {
                 let guests: Vec<(String, u128)> = self
                     .lan
@@ -960,202 +985,6 @@ impl Game<'_> {
                     ],
                 ));
             }
-            "op" | "deop" if !rest.is_empty() => {
-                let Some(user) = self.resolve(rest[0]) else {
-                    return;
-                };
-                let level = state.op_level;
-                let changed = {
-                    let mut l = state.lists.lock().unwrap();
-                    if command == "op" {
-                        if l.ops.contains(&user) {
-                            false
-                        } else {
-                            l.ops.add(OpEntry {
-                                user: user.clone(),
-                                level,
-                                bypasses_player_limit: false,
-                            })
-                        }
-                    } else {
-                        l.ops.remove(&user)
-                    }
-                };
-                let key = match (command, changed) {
-                    ("op", true) => "commands.op.success",
-                    ("op", false) => "commands.op.failed",
-                    (_, true) => "commands.deop.success",
-                    _ => "commands.deop.failed",
-                };
-                self.console_reply(Text::translate(key, &[lit(&user.name)]));
-                let lists = state.lists.clone();
-                self.sync_ops(&lists);
-                // DeOpCommands.deopPlayers.
-                if command == "deop" && changed {
-                    self.kick_unlisted_players(&lists);
-                }
-            }
-            "whitelist" => self.console_whitelist(state, &rest),
-            "ban" if !rest.is_empty() => {
-                let Some(user) = self.resolve(rest[0]) else {
-                    return;
-                };
-                let reason = (rest.len() > 1).then(|| rest[1..].join(" "));
-                let added = state.lists.lock().unwrap().bans.add(BanEntry::new(
-                    user.clone(),
-                    Some("Server".into()),
-                    None,
-                    reason.clone(),
-                ));
-                if added {
-                    self.console_reply(Text::translate(
-                        "commands.ban.success",
-                        &[
-                            lit(&user.name),
-                            reason.as_deref().map_or_else(
-                                || {
-                                    Text::translate(
-                                        "multiplayer.disconnect.banned.reason.default",
-                                        &[],
-                                    )
-                                },
-                                lit,
-                            ),
-                        ],
-                    ));
-                    self.kick_uuid(user.id, translatable("multiplayer.disconnect.banned", &[]));
-                } else {
-                    self.console_reply(Text::translate("commands.ban.failed", &[]));
-                }
-            }
-            "ban-ip" if !rest.is_empty() => {
-                let target = rest[0];
-                let ip = if target.parse::<std::net::IpAddr>().is_ok() {
-                    Some(target.to_owned())
-                } else {
-                    self.lan.as_ref().and_then(|h| {
-                        h.hub
-                            .guests
-                            .iter()
-                            .find(|g| g.name.eq_ignore_ascii_case(target))
-                            .map(|g| g.address.ip().to_string())
-                    })
-                };
-                let Some(ip) = ip else {
-                    self.console_reply(Text::translate("commands.banip.invalid", &[]));
-                    return;
-                };
-                let reason = (rest.len() > 1).then(|| rest[1..].join(" "));
-                let added = state.lists.lock().unwrap().ip_bans.add(BanEntry::new(
-                    ip.clone(),
-                    Some("Server".into()),
-                    None,
-                    reason.clone(),
-                ));
-                if !added {
-                    self.console_reply(Text::translate("commands.banip.failed", &[]));
-                    return;
-                }
-                self.console_reply(Text::translate(
-                    "commands.banip.success",
-                    &[
-                        lit(&ip),
-                        reason.as_deref().map_or_else(
-                            || Text::translate("multiplayer.disconnect.banned.reason.default", &[]),
-                            lit,
-                        ),
-                    ],
-                ));
-                let banned: Vec<u128> = self
-                    .lan
-                    .as_ref()
-                    .map(|h| {
-                        h.hub
-                            .guests
-                            .iter()
-                            .filter(|g| g.address.ip().to_string() == ip)
-                            .map(|g| g.uuid)
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                if !banned.is_empty() {
-                    self.console_reply(Text::translate(
-                        "commands.banip.info",
-                        &[lit(&banned.len().to_string()), lit("")],
-                    ));
-                }
-                for uuid in banned {
-                    self.kick_uuid(uuid, translatable("multiplayer.disconnect.ip_banned", &[]));
-                }
-            }
-            "pardon" if !rest.is_empty() => {
-                let Some(user) = self.resolve(rest[0]) else {
-                    return;
-                };
-                let removed = state.lists.lock().unwrap().bans.remove(&user);
-                let key = if removed {
-                    "commands.pardon.success"
-                } else {
-                    "commands.pardon.failed"
-                };
-                self.console_reply(Text::translate(key, &[lit(&user.name)]));
-            }
-            "pardon-ip" if !rest.is_empty() => {
-                let ip = rest[0].to_owned();
-                if ip.parse::<std::net::IpAddr>().is_err() {
-                    self.console_reply(Text::translate("commands.pardonip.invalid", &[]));
-                    return;
-                }
-                let removed = state.lists.lock().unwrap().ip_bans.remove(&ip);
-                let key = if removed {
-                    "commands.pardonip.success"
-                } else {
-                    "commands.pardonip.failed"
-                };
-                self.console_reply(Text::translate(key, &[lit(&ip)]));
-            }
-            "banlist" => {
-                let l = state.lists.lock().unwrap();
-                let mut lines = Vec::new();
-                let which = rest.first().copied().unwrap_or("");
-                if which != "ips" {
-                    for b in l.bans.entries() {
-                        lines.push((b.user.name.clone(), b.source.clone(), b.reason.clone()));
-                    }
-                }
-                if which != "players" {
-                    for b in l.ip_bans.entries() {
-                        lines.push((b.user.clone(), b.source.clone(), b.reason.clone()));
-                    }
-                }
-                drop(l);
-                if lines.is_empty() {
-                    self.console_reply(Text::translate("commands.banlist.none", &[]));
-                } else {
-                    self.console_reply(Text::translate(
-                        "commands.banlist.list",
-                        &[lit(&lines.len().to_string())],
-                    ));
-                    for (name, source, reason) in lines {
-                        self.console_reply(Text::translate(
-                            "commands.banlist.entry",
-                            &[
-                                lit(&name),
-                                lit(&source),
-                                reason.as_deref().map_or_else(
-                                    || {
-                                        Text::translate(
-                                            "multiplayer.disconnect.banned.reason.default",
-                                            &[],
-                                        )
-                                    },
-                                    lit,
-                                ),
-                            ],
-                        ));
-                    }
-                }
-            }
             "kick" if !rest.is_empty() => {
                 let Some(user) = self.online_player(rest[0]) else {
                     self.console_reply(Text::translate("argument.entity.notfound.player", &[]));
@@ -1166,7 +995,32 @@ impl Game<'_> {
                 } else {
                     translatable("multiplayer.disconnect.kicked", &[])
                 };
-                self.kick_uuid(user.id, reason);
+                // Ferraloom: PlayerKickEvent, as a player's /kick; cancelled,
+                // they stay and nothing is reported (game/plugins/players.rs).
+                let plain = if rest.len() > 1 {
+                    rest[1..].join(" ")
+                } else {
+                    "Kicked by an operator".to_owned()
+                };
+                let conns: Vec<u32> = self.lan.as_ref().map_or(Vec::new(), |h| {
+                    let guests = h.hub.guests.iter();
+                    guests
+                        .filter(|g| g.uuid == user.id)
+                        .map(|g| g.conn)
+                        .collect()
+                });
+                let mut kicked = false;
+                for conn in conns {
+                    if let Some(tag) = self.plugin_kick(conn, &plain, reason.clone())
+                        && let Some(h) = self.lan.as_mut()
+                    {
+                        h.hub.kick(conn, tag);
+                        kicked = true;
+                    }
+                }
+                if !kicked {
+                    return;
+                }
                 self.console_reply(Text::translate(
                     "commands.kick.success",
                     &[
@@ -1199,88 +1053,8 @@ impl Game<'_> {
         }
     }
 
-    fn console_whitelist(&mut self, state: &mut ServerState, rest: &[&str]) {
-        let lit = |s: &str| Text::literal(s.to_owned());
-        match rest {
-            ["on"] | ["off"] => {
-                let on = rest[0] == "on";
-                let mut l = state.lists.lock().unwrap();
-                let turned_on = on && !l.use_whitelist;
-                let key = match (on, l.use_whitelist) {
-                    (true, true) => "commands.whitelist.alreadyOn",
-                    (true, false) => "commands.whitelist.enabled",
-                    (false, false) => "commands.whitelist.alreadyOff",
-                    (false, true) => "commands.whitelist.disabled",
-                };
-                l.use_whitelist = on;
-                drop(l);
-                self.store_property("white-list", on.to_string());
-                self.console_reply(Text::translate(key, &[]));
-                if turned_on {
-                    let lists = state.lists.clone();
-                    self.kick_unlisted_players(&lists);
-                }
-            }
-            ["list"] => {
-                let names: Vec<String> = state
-                    .lists
-                    .lock()
-                    .unwrap()
-                    .white
-                    .entries()
-                    .iter()
-                    .map(|e| e.user.name.clone())
-                    .collect();
-                if names.is_empty() {
-                    self.console_reply(Text::translate("commands.whitelist.none", &[]));
-                } else {
-                    self.console_reply(Text::translate(
-                        "commands.whitelist.list",
-                        &[lit(&names.len().to_string()), lit(&names.join(", "))],
-                    ));
-                }
-            }
-            ["reload"] => {
-                let _ = state.lists.lock().unwrap().white.load();
-                self.console_reply(Text::translate("commands.whitelist.reloaded", &[]));
-                let lists = state.lists.clone();
-                self.kick_unlisted_players(&lists);
-            }
-            ["add", name] | ["remove", name] => {
-                let Some(user) = self.resolve(name) else {
-                    return;
-                };
-                let mut l = state.lists.lock().unwrap();
-                let (ok, key) = if rest[0] == "add" {
-                    if l.white.contains(&user) {
-                        (false, "commands.whitelist.add.failed")
-                    } else {
-                        l.white.add(WhiteEntry { user: user.clone() });
-                        (true, "commands.whitelist.add.success")
-                    }
-                } else if l.white.remove(&user) {
-                    (true, "commands.whitelist.remove.success")
-                } else {
-                    (false, "commands.whitelist.remove.failed")
-                };
-                drop(l);
-                let args = if ok {
-                    vec![lit(&user.name)]
-                } else {
-                    Vec::new()
-                };
-                self.console_reply(Text::translate(key, &args));
-                if ok && rest[0] == "remove" {
-                    let lists = state.lists.clone();
-                    self.kick_unlisted_players(&lists);
-                }
-            }
-            _ => self.console_reply(Text::translate("command.unknown.argument", &[])),
-        }
-    }
-
     /// DedicatedServerSettings.update: change one key and store the file.
-    fn store_property(&mut self, key: &str, value: String) {
+    pub(super) fn store_property(&mut self, key: &str, value: String) {
         let path = PathBuf::from("server.properties");
         if let Ok(p) = ServerProperties::from_file(&path, &mut SystemEntropy::default())
             && let Ok(p) = p.update(key, value)
@@ -1292,7 +1066,7 @@ impl Game<'_> {
     /// MinecraftServer.kickUnlistedPlayers: with `enforce-whitelist` and the
     /// whitelist on, whoever is online and not on the whitelist file is
     /// disconnected (operators are not spared here).
-    fn kick_unlisted_players(&mut self, lists: &Arc<Mutex<Lists>>) {
+    pub(super) fn kick_unlisted_players(&mut self, lists: &Arc<Mutex<Lists>>) {
         let unlisted: Vec<u128> = {
             let l = lists.lock().unwrap();
             let Some(host) = self.lan.as_ref() else {
@@ -1321,7 +1095,7 @@ impl Game<'_> {
         }
     }
 
-    fn kick_uuid(&mut self, uuid: u128, reason: Tag) {
+    pub(super) fn kick_uuid(&mut self, uuid: u128, reason: Tag) {
         if let Some(h) = self.lan.as_mut() {
             let conns: Vec<u32> = h
                 .hub
@@ -1357,6 +1131,8 @@ impl Game<'_> {
 
     fn stop_dedicated(&mut self) -> Result<()> {
         log("INFO", "Stopping server");
+        // Ferraloom: plugins' onDisable, first, as CraftBukkit's stopServer.
+        self.disable_plugins();
         log("INFO", "Saving players");
         if let Some(h) = self.lan.as_mut() {
             for g in &h.hub.guests {
