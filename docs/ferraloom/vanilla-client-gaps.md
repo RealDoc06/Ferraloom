@@ -7,7 +7,7 @@ Horizon's own client is out of scope.
 Verified against `ferraloom/next` at `5d5371c7b` (2026-11-26): every **Fixed** row's commit is an ancestor of
 that head, and every **Open** row was checked in the code unless it says otherwise.
 
-**Adding a gap.** Give it the next free number (the first free one is **#137**), put it in its area, ranked by how
+**Adding a gap.** Give it the next free number (the first free one is **#138**), put it in its area, ranked by how
 visible it is to players, and fill every column: what is seen and how vanilla differs, the vanilla
 reference (`Class#method` from `.cache/decompiled/26.3/`), where it lives in our code, a size and who found
 it. When it is fixed, move it to **Fixed** with the commit and the harness case that proves it. Numbers are
@@ -81,6 +81,7 @@ Sizes: S under a day, M a few days, L a week or more. Sources: *audit* (the orig
 | 131 | A `profile` component whose properties are stored in vanilla's map form loses them on the wire, and its skin patch is always sent empty, so some custom heads render differently for clients though the saved item is intact | `ExtraCodecs.PROPERTY_MAP`, `ResolvableProfile.STREAM_CODEC` | `lan/item_extras.rs` `profile`, `horizon-protocol/src/item.rs` `Profile` | S | review |
 | 133 | A click's prediction is checked against the server's slots by item and count only, where vanilla compares the hashed components too, so a client stack that differs only in components (a listener renamed it and allowed the click; two stacks differing only by name) is not corrected. Predates the plugin work | `AbstractContainerMenu` remote slots, `HashedStack#matches` | `lan/containers.rs` `hashed_matches` | M | review |
 | 134 | Drags inside the player's own inventory fire no `InventoryDragEvent`: that window's drags are run by the game's own inventory menu, whose drag state the plugin hook never sees | CraftBukkit's `InventoryDragEvent` in `AbstractContainerMenu#doClick` (`QUICK_CRAFT`) | `game/lan_actions.rs` `ContainerClick` arms (`plugin_drag`, `lan_inventory_click`), `game/lan_crafting.rs` `lan_inventory_click` | S | review |
+| 137 | A stack's own `max_stack_size` component (a `/give` with components, a plugin's `ItemMeta.setMaxStackSize`) is ignored when stacks merge or fill a slot: menus, hoppers, item entities, crafting, trading and the rest use the item type's maximum. The component is kept and sent, so clients predict the other limit and get corrected | `ItemStack#getMaxStackSize` (`DataComponents.MAX_STACK_SIZE`), `Container#getMaxStackSize(ItemStack)` | some 48 reads of `max_stack` over about 27 files, among them `lan/menu.rs` `slot_max`, `menu.rs` `max_stack`, `game/machines.rs` `Containers::max_stack`, `entities.rs`; only `game/commands/items.rs` `stack_max_size` honours it | M | review |
 
 ### Networking and protocol
 

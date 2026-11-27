@@ -519,7 +519,14 @@ impl Game<'_> {
         };
         match target {
             None => {
-                *target = Some(stack.clone());
+                // Container.setItem's limitSize: a stack over its maximum (a
+                // plugin's replacement, an item entity summoned so) loses the
+                // rest, which counts as inserted. A bookshelf sets it as it is.
+                let mut placed = stack.clone();
+                if view.kind != Kind::Bookshelf {
+                    placed.count = placed.count.min(max);
+                }
+                *target = Some(placed);
                 stack.count = 0;
                 success = true;
             }
