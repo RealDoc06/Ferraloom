@@ -13,7 +13,10 @@ use horizon_client::{
     world::World,
 };
 use horizon_core::{geometry::Direction, position::BlockPos, random::RandomSource};
-use horizon_world::{level::Behaviours, registry::BlockStateId};
+use horizon_world::{
+    level::{Behaviours, states::BlockId},
+    registry::BlockStateId,
+};
 
 type Pos = (i32, i32, i32);
 
@@ -582,12 +585,19 @@ impl Game<'_> {
         }
         rest
     }
+    /// The block at `p`, to tell whether an InventoryMoveItemEvent listener
+    /// replaced it.
+    fn block_id_at(&self, p: Pos) -> BlockId {
+        self.res.behaviours().block(self.world.block(p.0, p.1, p.2))
+    }
     /// The destination of a move after its InventoryMoveItemEvent: the
-    /// container at the same place, if a listener left one of the same kind.
-    fn moved_into(&self, view: &View) -> Option<View> {
-        let now = self.containers().view(view.parts[0].0, false)?;
-        let kind = std::mem::discriminant(&view.kind);
-        (std::mem::discriminant(&now.kind) == kind).then_some(now)
+    /// container at `at`, the block the mover faces, if a listener left the
+    /// block that was there (`before`, from `block_id_at`).
+    fn moved_into(&self, at: Pos, before: BlockId) -> Option<View> {
+        if self.block_id_at(at) != before {
+            return None;
+        }
+        self.containers().view(at, false)
     }
     /// Remove one item from a slot (`removeItem(slot, 1)`).
     fn take_one(&mut self, view: &View, slot: usize) -> Option<ItemStack> {
@@ -679,7 +689,7 @@ impl Game<'_> {
         let front = offset(pos, facing);
         let face = facing.opposite();
         if let Some(target) = c.view(front, false) {
-            return self.eject_into(pos, hopper, &target, face);
+            return self.eject_into(pos, hopper, front, &target, face);
         }
         let Some(id) = self.entity_container_at([
             f64::from(front.0) + 0.5,
@@ -688,11 +698,21 @@ impl Game<'_> {
         ]) else {
             return false;
         };
-        self.with_entity_container(id, |g, target| g.eject_into(pos, hopper, target, face))
-            .unwrap_or(false)
+        self.with_entity_container(id, |g, target| {
+            g.eject_into(pos, hopper, target.parts[0].0, target, face)
+        })
+        .unwrap_or(false)
     }
-    /// The rest of `HopperBlockEntity.ejectItems`: one item into `target`.
-    fn eject_into(&mut self, pos: Pos, hopper: &View, target: &View, face: Direction) -> bool {
+    /// The rest of `HopperBlockEntity.ejectItems`: one item into `target`,
+    /// the container the hopper faces at `front`.
+    fn eject_into(
+        &mut self,
+        pos: Pos,
+        hopper: &View,
+        front: Pos,
+        target: &View,
+        face: Direction,
+    ) -> bool {
         if self.containers().is_full(target, face) {
             return false;
         }
@@ -703,6 +723,7 @@ impl Game<'_> {
             // Ferraloom: InventoryMoveItemEvent (game/plugins/inventory.rs).
             let (mut original, mut fresh) = (None, None);
             if ferraloom_plugins::listens(ferraloom_plugins::Event::InventoryMoveItem) {
+                let before = self.block_id_at(front);
                 match self.plugin_move_item(pos, target.parts[0].0, true, &one) {
                     Move::Unchanged => {}
                     Move::Cancelled => {
@@ -712,9 +733,9 @@ impl Game<'_> {
                     }
                     Move::Replaced(item) => original = Some(std::mem::replace(&mut one, item)),
                 }
-                // A listener that removed the destination, or put another kind
-                // of container there, leaves the move as a cancel does.
-                let Some(now) = self.moved_into(target) else {
+                // A listener that removed the destination, or put another
+                // block there, leaves the move as a cancel does.
+                let Some(now) = self.moved_into(front, before) else {
                     self.put_back(hopper, slot, original.unwrap_or(one));
                     self.hoppers.entry(pos).or_default().cooldown = 8;
                     return false;
@@ -831,6 +852,7 @@ impl Game<'_> {
             let (mut original, mut fresh) = (None, None);
             if ferraloom_plugins::listens(ferraloom_plugins::Event::InventoryMoveItem) {
                 let (from, to) = (source.parts[0].0, hopper.parts[0].0);
+                let before = self.block_id_at(to);
                 match self.plugin_move_item(from, to, false, &one) {
                     Move::Unchanged => {}
                     Move::Cancelled => {
@@ -842,9 +864,9 @@ impl Game<'_> {
                     }
                     Move::Replaced(item) => original = Some(std::mem::replace(&mut one, item)),
                 }
-                // A listener that removed the destination, or put another kind
-                // of container there, leaves the move as a cancel does.
-                let Some(now) = self.moved_into(hopper) else {
+                // A listener that removed the destination, or put another
+                // block there, leaves the move as a cancel does.
+                let Some(now) = self.moved_into(to, before) else {
                     self.put_back(source, slot, original.unwrap_or(one));
                     if hopper.kind == Kind::Hopper {
                         self.hoppers.entry(to).or_default().cooldown = 8;
