@@ -706,6 +706,15 @@ impl Game<'_> {
         if let Some(host) = self.lan.as_mut() {
             host.hub.spawn_protection = props.spawn_protection;
         }
+        // Before the plugins: a server command one runs from onEnable needs it.
+        *ADMIN.lock().unwrap() = Some(Admin {
+            lists,
+            stop: false,
+            autosave: true,
+            op_level: props.op_permission_level,
+            idle_timeout: props.player_idle_timeout,
+            saves: Vec::new(),
+        });
         // Ferraloom: plugins' onEnable, before "Done" as CraftBukkit's POSTWORLD.
         self.enable_plugins();
         log(
@@ -727,14 +736,6 @@ impl Game<'_> {
                 props.command_spam_threshold_seconds,
             );
         }
-        *ADMIN.lock().unwrap() = Some(Admin {
-            lists,
-            stop: false,
-            autosave: true,
-            op_level: props.op_permission_level,
-            idle_timeout: props.player_idle_timeout,
-            saves: Vec::new(),
-        });
         let mut state = ServerState {
             console,
             empty_ticks: 0,
