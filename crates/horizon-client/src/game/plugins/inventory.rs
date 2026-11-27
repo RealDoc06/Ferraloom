@@ -267,9 +267,11 @@ impl InventoryHost for GameHost<'_, '_> {
             };
             let g = &hub.hub.guests[gi];
             let (conn, open) = (g.conn, g.menu.is_some());
+            // The player's clicks resolve the block in their own level.
+            let own = super::world_index(Dim::from_id(&g.dimension));
             let (slots, pos) = match at {
                 Holder::Custom(id) => (Slots::Custom(id), (i32::MIN, PLUGIN_KEY_Y, id as i32)),
-                Holder::Block { world, pos } if world == dim => {
+                Holder::Block { world, pos } if world == dim && world == own => {
                     let key = (pos[0], pos[1], pos[2]);
                     (Slots::Block(key), key)
                 }
