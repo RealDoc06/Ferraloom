@@ -87,9 +87,9 @@ impl InventoryHost for GameHost<'_, '_> {
             Holder::Crafting(id) => self.placed(id).map(|_| 5),
             Holder::Custom(id) => plugin_containers::size(id),
             Holder::Menu(opening) => {
+                let pending = self.pending;
                 let hub = self.hub()?;
-                let g = &hub.hub.guests[opener(&hub.hub.guests, opening)?];
-                g.menu.as_ref().map(|m| m.size)
+                opened(&hub.hub.guests, pending, opening).map(|(_, _, size)| size)
             }
             Holder::Block { world, pos } => {
                 let w = self.game.level_world(*DIMS.get(world)?)?;
@@ -105,15 +105,18 @@ impl InventoryHost for GameHost<'_, '_> {
             Holder::Ender(id) => self.placed(id)?.ender_items.get(slot)?.clone(),
             Holder::Crafting(id) => self.placed(id).and_then(|g| g.menu_slot(slot)),
             Holder::Custom(id) => plugin_containers::get(id, slot),
-            Holder::Menu(opening) => self
-                .split(|game, hub| {
-                    let g = &hub.hub.guests[opener(&hub.hub.guests, opening)?];
-                    let m = g.menu.as_ref().filter(|m| slot < m.size)?;
+            Holder::Menu(opening) => {
+                let pending = self.pending;
+                self.split(|game, hub| {
+                    let (i, slots, _) = opened(&hub.hub.guests, pending, opening)
+                        .filter(|&(_, _, size)| slot < size)?;
+                    let g = &hub.hub.guests[i];
                     // In the guest's own level, which may not be the one in place.
                     let world = game.level_world(Dim::from_id(&g.dimension))?;
-                    m.slots.get(world, g, slot)
+                    slots.get(world, g, slot)
                 })
-                .flatten(),
+                .flatten()
+            }
             Holder::Block { world, pos } => {
                 let w = self.game.level_world(*DIMS.get(world)?)?;
                 let e = w.block_entities.get(&(pos[0], pos[1], pos[2]))?;
@@ -146,16 +149,13 @@ impl InventoryHost for GameHost<'_, '_> {
                 _ => false,
             },
             Holder::Custom(id) => plugin_containers::set(id, slot, item),
-            Holder::Menu(opening) => self
-                .split(|game, hub| {
-                    let Some(i) = opener(&hub.hub.guests, opening) else {
+            Holder::Menu(opening) => {
+                let pending = self.pending;
+                self.split(|game, hub| {
+                    let Some((i, slots, size)) = opened(&hub.hub.guests, pending, opening) else {
                         return false;
                     };
                     let g = &mut hub.hub.guests[i];
-                    let Some(m) = g.menu.as_ref().filter(|m| slot < m.size) else {
-                        return false;
-                    };
-                    let (slots, size) = (m.slots, m.size);
                     // In the guest's own level, which may not be the one in place.
                     let dim = Dim::from_id(&g.dimension);
                     game.in_level(dim, |game| {
@@ -180,7 +180,8 @@ impl InventoryHost for GameHost<'_, '_> {
                     })
                     .unwrap_or(false)
                 })
-                .unwrap_or(false),
+                .unwrap_or(false)
+            }
             Holder::Block { world, pos } => {
                 let Some(&dim) = DIMS.get(world) else {
                     return false;
@@ -433,6 +434,33 @@ fn top(g: &Guest, window: i32) -> Option<(Holder, &'static str, usize)> {
     }
     let m = g.menu.as_ref().filter(|m| m.window == window)?;
     Some((holder(g, m.slots, m.opening), m.inventory_type, m.size))
+}
+
+/// A vehicle's container during its InventoryOpenEvent, which names it by
+/// `opening` before its menu is installed: guest `conn`'s, over `slots`
+/// (`size` of them).
+#[derive(Clone, Copy)]
+pub(super) struct Pending {
+    opening: u32,
+    conn: u32,
+    slots: Slots,
+    size: usize,
+}
+
+/// The guest with `opening` open, that menu's slots and their count: the
+/// installed menu's, or the vehicle's whose open event is `pending`.
+fn opened(
+    guests: &[Guest],
+    pending: Option<Pending>,
+    opening: u32,
+) -> Option<(usize, Slots, usize)> {
+    if let Some(p) = pending.filter(|p| p.opening == opening) {
+        let i = guests.iter().position(|g| g.conn == p.conn && g.placed)?;
+        return Some((i, p.slots, p.size));
+    }
+    let i = opener(guests, opening)?;
+    let m = guests[i].menu.as_ref()?;
+    Some((i, m.slots, m.size))
 }
 
 /// The guest whose open menu is `opening`: none once that opening ended.
@@ -829,8 +857,9 @@ impl Game<'_> {
 
     /// InventoryOpenEvent as a guest's container is about to open
     /// (`ServerPlayer.openMenu`) as `opening`: true when a plugin cancelled it.
-    /// A vehicle's container is named by that opening, so it reads as nothing
-    /// until it is open.
+    /// A vehicle's container is named by that opening, which reads and writes
+    /// the vehicle's items while the event runs (`Pending`); the caller reads
+    /// the menu's contents after it.
     pub(in crate::game) fn plugin_opening(
         &mut self,
         host: &mut LanHost,
@@ -851,7 +880,21 @@ impl Game<'_> {
             },
         };
         let kind = top_type(self, slots);
-        ferraloom_plugins::inventory_open(&mut GameHost::new(self, Some(host)), id, holder, kind)
+        let pending = match (holder, slots) {
+            (Holder::Menu(_), Slots::Block(key)) => {
+                let size = self.world.block_entities.get(&key).map(|e| e.slots().len());
+                size.map(|size| Pending {
+                    opening,
+                    conn,
+                    slots,
+                    size,
+                })
+            }
+            _ => None,
+        };
+        let mut gh = GameHost::new(self, Some(host));
+        gh.pending = pending;
+        ferraloom_plugins::inventory_open(&mut gh, id, holder, kind)
     }
 
     /// InventoryCloseEvent as the client closes its window (`handleContainerClose`),

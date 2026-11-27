@@ -1180,13 +1180,6 @@ impl Game<'_> {
             };
             (menu, title, Slots::Block(pos))
         };
-        let Some(items) = host
-            .hub
-            .guest(conn)
-            .and_then(|g| slots.read(&self.world, g))
-        else {
-            return false;
-        };
         let opening = next_opening();
         // Ferraloom: InventoryOpenEvent; a cancelled one opens nothing and
         // leaves open what was.
@@ -1195,6 +1188,14 @@ impl Game<'_> {
         {
             return false;
         }
+        // Read after the event, so a listener's edits are in the first packet.
+        let Some(items) = host
+            .hub
+            .guest(conn)
+            .and_then(|g| slots.read(&self.world, g))
+        else {
+            return false;
+        };
         // ServerPlayer.openMenu closes the menu that was open.
         self.guest_container_closed(host, conn);
         self.lan_station_closed(host, conn, None);

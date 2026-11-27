@@ -75,11 +75,18 @@ struct GameHost<'a, 'g> {
     /// The hub when the caller holds it (a packet handler, a guest's turn);
     /// none when it is in `game.lan` (or there is none).
     hub: Option<&'a mut LanHost>,
+    /// The vehicle container whose InventoryOpenEvent is running: its menu
+    /// is not installed yet (`inventory::Pending`).
+    pending: Option<inventory::Pending>,
 }
 
 impl<'a, 'g> GameHost<'a, 'g> {
     fn new(game: &'a mut Game<'g>, hub: Option<&'a mut LanHost>) -> Self {
-        Self { game, hub }
+        Self {
+            game,
+            hub,
+            pending: None,
+        }
     }
 
     /// The hub wherever it is now.
