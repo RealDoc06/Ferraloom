@@ -42,8 +42,9 @@ pub use entities::{
 };
 pub use events::{Event, latch_for_tests, listens, listens_any};
 pub use inventory::{
-    Click, Drag, Holder, InventoryHost, ItemFacts, Side, Swap, inventory_click, inventory_close,
-    inventory_drag, inventory_move_item, inventory_open, player_item_consume, player_swap_hands,
+    Click, Drag, Holder, InventoryHost, ItemFacts, Move, Side, Swap, inventory_click,
+    inventory_close, inventory_drag, inventory_move_item, inventory_open, player_item_consume,
+    player_swap_hands,
 };
 pub use lent::{borrow_lent, lend};
 pub use players::{

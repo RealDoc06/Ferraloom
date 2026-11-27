@@ -109,7 +109,8 @@ public final class InventoryEvents {
 
     /**
      * HopperBlockEntity's InventoryMoveItemEvent, for one item moving between two block containers
-     * of {@code world} (positions as BlockPos.asLong): the item to move, or null when cancelled.
+     * of {@code world} (positions as BlockPos.asLong): {@code item} itself when it moves unchanged, the
+     * listener's item when it set another, or null when cancelled.
      */
     public static byte[] moveItem(int world, long from, String fromType, long to, String toType, boolean sourceInitiated,
             byte[] item) {
@@ -119,7 +120,12 @@ public final class InventoryEvents {
             ItemStack stack = Items.read(item);
             InventoryMoveItemEvent event = new InventoryMoveItemEvent(source, stack, destination, sourceInitiated);
             Bridge.server.pluginManager.callEvent(event);
-            return event.isCancelled() ? null : Items.write(event.getItem());
+            if (event.isCancelled()) {
+                return null;
+            }
+            // The same array back tells the server the item moves as it is.
+            ItemStack moved = event.getItem();
+            return moved.equals(stack) ? item : Items.write(moved);
         } catch (Throwable ex) {
             Bridge.log(ex, "an item moving between inventories");
             return item;

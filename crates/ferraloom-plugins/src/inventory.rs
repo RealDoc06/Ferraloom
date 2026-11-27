@@ -495,13 +495,24 @@ pub struct Side<'a> {
     pub kind: &'a str,
 }
 
+/// What `InventoryMoveItemEvent` decided.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Move {
+    /// Nothing moves: the item goes back to the source.
+    Cancelled,
+    /// The item moves as vanilla moves it.
+    Unchanged,
+    /// `setItem`: the original stays in the source and this moves instead;
+    /// what the destination cannot take of it is discarded.
+    Replaced(ItemStack),
+}
+
 /// `InventoryMoveItemEvent` as a hopper moves `item` (one item) from one
-/// block container to another in `world`, before it lands: the item to move
-/// (the plugin may have changed it), or none when a plugin cancelled the
-/// move, which must then put the item back. `source_initiated`: the source
-/// pushed it (a hopper ejecting) rather than the destination pulling.
-/// Without a listener this is never called; with one, each transfer costs
-/// one JNI call, the item's NBT both ways, and the event's objects.
+/// block container to another in `world`, before it lands.
+/// `source_initiated`: the source pushed it (a hopper ejecting) rather than
+/// the destination pulling. Without a listener this is never called; with
+/// one, each transfer costs one JNI call, the item's NBT both ways, and the
+/// event's objects.
 pub fn inventory_move_item(
     host: &mut dyn crate::PluginHost,
     world: usize,
@@ -509,9 +520,9 @@ pub fn inventory_move_item(
     to: Side,
     source_initiated: bool,
     item: &ItemStack,
-) -> Option<ItemStack> {
+) -> Move {
     let Some(events) = EVENTS.get() else {
-        return Some(item.clone());
+        return Move::Unchanged;
     };
     let out = bridge::call(host, |env| {
         let from_kind = env.new_string(from.kind)?;
@@ -528,15 +539,20 @@ pub fn inventory_move_item(
         ];
         // SAFETY: `moveItem`'s signature in `load`.
         let moved = unsafe { events.invoke(env, MOVE_ITEM, ReturnType::Array, &args) }?.l()?;
+        // Java hands back the very array it got when the item was left alone.
+        if env.is_same_object(&moved, &bytes)? {
+            return Ok(Move::Unchanged);
+        }
         let moved = JByteArray::from(moved);
-        Ok(if moved.is_null() {
+        let moved = if moved.is_null() {
             None
         } else {
             decode(&env.convert_byte_array(&moved)?)
-        })
+        };
+        Ok(moved.map_or(Move::Cancelled, Move::Replaced))
     });
     // A bridge that failed lets the move happen, as an event no one cancelled.
-    out.unwrap_or_else(|| Some(item.clone()))
+    out.unwrap_or(Move::Unchanged)
 }
 
 fn holder(kind: jint, a: jlong, b: jlong) -> Result<Holder, Fail> {

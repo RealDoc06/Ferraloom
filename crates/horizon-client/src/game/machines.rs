@@ -3,6 +3,7 @@
 //! the vanilla dispense behaviours Horizon has entities for, and container
 //! comparator signals (`AbstractContainerMenu.getRedstoneSignalFromContainer`).
 use super::Game;
+use ferraloom_plugins::Move;
 
 mod crafter;
 use horizon_client::{
@@ -680,21 +681,30 @@ impl Game<'_> {
             let Some(mut one) = self.take_one(hopper, slot) else {
                 continue;
             };
-            // Ferraloom: InventoryMoveItemEvent; cancelled, the item goes back (game/plugins/inventory.rs).
-            let to = target.parts[0].0;
-            if ferraloom_plugins::listens(ferraloom_plugins::Event::InventoryMoveItem)
-                && !self.plugin_move_item(pos, to, true, &mut one)
-            {
-                self.put_back(hopper, slot, one);
-                self.hoppers.entry(pos).or_default().cooldown = 8;
-                return false;
+            // Ferraloom: InventoryMoveItemEvent (game/plugins/inventory.rs).
+            let mut original = None;
+            if ferraloom_plugins::listens(ferraloom_plugins::Event::InventoryMoveItem) {
+                match self.plugin_move_item(pos, target.parts[0].0, true, &one) {
+                    Move::Unchanged => {}
+                    Move::Cancelled => {
+                        self.put_back(hopper, slot, one);
+                        self.hoppers.entry(pos).or_default().cooldown = 8;
+                        return false;
+                    }
+                    Move::Replaced(item) => original = Some(std::mem::replace(&mut one, item)),
+                }
             }
+            // A replaced item's original goes back whatever happens, and the
+            // rest of the replacement is discarded.
             match self.add_item(Some(pos), target, one, Some(face)) {
                 None => {
+                    if let Some(original) = original {
+                        self.put_back(hopper, slot, original);
+                    }
                     self.view_changed(target);
                     return true;
                 }
-                Some(rest) => self.put_back(hopper, slot, rest),
+                Some(rest) => self.put_back(hopper, slot, original.unwrap_or(rest)),
             }
         }
         false
@@ -789,23 +799,33 @@ impl Game<'_> {
             let Some(mut one) = self.take_one(source, slot) else {
                 continue;
             };
-            // Ferraloom: InventoryMoveItemEvent; cancelled, the item goes back (game/plugins/inventory.rs).
-            let (from, to) = (source.parts[0].0, hopper.parts[0].0);
-            if ferraloom_plugins::listens(ferraloom_plugins::Event::InventoryMoveItem)
-                && !self.plugin_move_item(from, to, false, &mut one)
-            {
-                self.put_back(source, slot, one);
-                if hopper.kind == Kind::Hopper {
-                    self.hoppers.entry(to).or_default().cooldown = 8;
+            // Ferraloom: InventoryMoveItemEvent (game/plugins/inventory.rs).
+            let mut original = None;
+            if ferraloom_plugins::listens(ferraloom_plugins::Event::InventoryMoveItem) {
+                let (from, to) = (source.parts[0].0, hopper.parts[0].0);
+                match self.plugin_move_item(from, to, false, &one) {
+                    Move::Unchanged => {}
+                    Move::Cancelled => {
+                        self.put_back(source, slot, one);
+                        if hopper.kind == Kind::Hopper {
+                            self.hoppers.entry(to).or_default().cooldown = 8;
+                        }
+                        return false;
+                    }
+                    Move::Replaced(item) => original = Some(std::mem::replace(&mut one, item)),
                 }
-                return false;
             }
+            // A replaced item's original goes back whatever happens, and the
+            // rest of the replacement is discarded.
             match self.add_item(source_hopper, hopper, one, None) {
                 None => {
+                    if let Some(original) = original {
+                        self.put_back(source, slot, original);
+                    }
                     self.view_changed(source);
                     return true;
                 }
-                Some(rest) => self.put_back(source, slot, rest),
+                Some(rest) => self.put_back(source, slot, original.unwrap_or(rest)),
             }
         }
         false

@@ -2,7 +2,9 @@
 //! menus that show them; container clicks, opens and closes.
 use super::{DIMS, GameHost};
 use crate::game::{Dim, Game, lan::LanHost};
-use ferraloom_plugins::{Click, Drag, Holder, InventoryHost, ItemFacts, PlayerId, Side, Swap};
+use ferraloom_plugins::{
+    Click, Drag, Holder, InventoryHost, ItemFacts, Move, PlayerId, Side, Swap,
+};
 use horizon_client::{
     items::ItemStack,
     lan::{
@@ -988,16 +990,14 @@ impl Game<'_> {
     }
 
     /// HopperBlockEntity's InventoryMoveItemEvent for `item` (one item, taken
-    /// out already) moving between the block containers at `from` and `to`:
-    /// false when a plugin cancelled it, and the caller puts the item back.
-    /// The plugin may change the item that moves.
+    /// out already) moving between the block containers at `from` and `to`.
     pub(in crate::game) fn plugin_move_item(
         &mut self,
         from: (i32, i32, i32),
         to: (i32, i32, i32),
         source_initiated: bool,
-        item: &mut ItemStack,
-    ) -> bool {
+        item: &ItemStack,
+    ) -> Move {
         let world = super::world_index(self.dim);
         let side = |game: &Game<'_>, p: (i32, i32, i32)| Side {
             pos: [p.0, p.1, p.2],
@@ -1005,20 +1005,7 @@ impl Game<'_> {
         };
         let (from, to) = (side(self, from), side(self, to));
         let mut host = GameHost::new(self, None);
-        match ferraloom_plugins::inventory_move_item(
-            &mut host,
-            world,
-            from,
-            to,
-            source_initiated,
-            item,
-        ) {
-            Some(moved) => {
-                *item = moved;
-                true
-            }
-            None => false,
-        }
+        ferraloom_plugins::inventory_move_item(&mut host, world, from, to, source_initiated, item)
     }
 
     /// handlePlayerAction's PlayerSwapHandItemsEvent, before the hands swap:
