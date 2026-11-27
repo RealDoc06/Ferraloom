@@ -155,14 +155,21 @@ impl InventoryHost for GameHost<'_, '_> {
                     let Some(m) = g.menu.as_ref().filter(|m| slot < m.size) else {
                         return false;
                     };
-                    let slots = m.slots;
+                    let (slots, size) = (m.slots, m.size);
                     // In the guest's own level, which may not be the one in place.
                     let dim = Dim::from_id(&g.dimension);
                     game.in_level(dim, |game| {
-                        let Some(mut items) = slots.read(&game.world, g) else {
+                        // A half replaced by a smaller container, or gone, since
+                        // the opening: not the menu's slots any more.
+                        let Some(mut items) =
+                            slots.read(&game.world, g).filter(|i| i.len() == size)
+                        else {
                             return false;
                         };
-                        items[slot] = item;
+                        let Some(s) = items.get_mut(slot) else {
+                            return false;
+                        };
+                        *s = item;
                         slots.write(&mut game.world, g, items);
                         if let Slots::Block(key) | Slots::Double(key, _) = slots {
                             game.container_changed(key);
