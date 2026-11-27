@@ -506,12 +506,14 @@ impl Game<'_> {
         mut stack: ItemStack,
         slot: usize,
     ) -> Option<ItemStack> {
+        // The stack's own maximum (its max_stack_size component) caps both
+        // the empty-slot set and the merge, as ItemStack#getMaxStackSize does.
+        let max = self.stack_max_size(&stack);
         let c = self.containers();
         if !c.can_place(view, slot, &stack) {
             return Some(stack);
         }
         let was_empty = c.is_empty(view);
-        let max = c.max_stack(&stack);
         let mut success = false;
         // A slot gone (a plugin removed the container mid-move) takes nothing.
         let Some(target) = self.slot_mut_at(view, slot) else {
