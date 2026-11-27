@@ -513,7 +513,10 @@ impl Game<'_> {
         let was_empty = c.is_empty(view);
         let max = c.max_stack(&stack);
         let mut success = false;
-        let target = self.slot_mut_at(view, slot)?;
+        // A slot gone (a plugin removed the container mid-move) takes nothing.
+        let Some(target) = self.slot_mut_at(view, slot) else {
+            return Some(stack);
+        };
         match target {
             None => {
                 *target = Some(stack.clone());
