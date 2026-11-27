@@ -1199,6 +1199,19 @@ impl Game<'_> {
                     .container_menu(pos)
                     .is_none_or(|(m, _, s)| (m, s) != (menu, slots)))
         {
+            // A vehicle's placeholder (interact_cart, interact_boat) gives its
+            // items back and goes, unless a menu still open uses it.
+            if pos.1 == super::minecarts::CART_KEY_Y {
+                self.store_cart_items(pos);
+                let in_use = host
+                    .hub
+                    .guests
+                    .iter()
+                    .any(|g| g.menu.as_ref().is_some_and(|m| m.pos == Some(pos)));
+                if !in_use {
+                    self.world.block_entities.remove(&pos);
+                }
+            }
             return false;
         }
         // Read after the event, so a listener's edits are in the first packet.
