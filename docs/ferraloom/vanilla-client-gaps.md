@@ -7,7 +7,7 @@ Horizon's own client is out of scope.
 Verified against `ferraloom/next` at `5d5371c7b` (2026-11-26): every **Fixed** row's commit is an ancestor of
 that head, and every **Open** row was checked in the code unless it says otherwise.
 
-**Adding a gap.** Give it the next free number (the first free one is **#136**), put it in its area, ranked by how
+**Adding a gap.** Give it the next free number (the first free one is **#137**), put it in its area, ranked by how
 visible it is to players, and fill every column: what is seen and how vanilla differs, the vanilla
 reference (`Class#method` from `.cache/decompiled/26.3/`), where it lives in our code, a size and who found
 it. When it is fixed, move it to **Fixed** with the commit and the harness case that proves it. Numbers are
@@ -163,6 +163,7 @@ don't reach players)
 | # | Gap | Size | Source |
 |---|---|---|---|
 | 95 | Menus the game runs itself (crafting table, anvil, furnace, enchanting, trading, stations) fire no click events, which blocks `CraftItemEvent`, `PrepareItemCraftEvent`, `FurnaceSmeltEvent`, `EnchantItemEvent`, `PrepareAnvilEvent` | L | p-inv |
+| 136 | A departing player is saved, and has left the hub, before their `InventoryCloseEvent` and `PlayerQuitEvent` fire, so items a plugin hands back to them in those listeners (`player.getInventory().addItem` from a GUI's input slots) are refused and lost; CraftBukkit closes the container and fires quit before removing and saving the player (`PlayerList#remove`; ours `game/lan.rs` `HostEvent::Left`, `plugin_left_menu`, `save_guest`) | M | review |
 | 96 | `PlayerItemDamageEvent` not fired: items wear in about eight separate places, with no single site | M | p-inv |
 | 97 | `createInventory` for furnace, workbench and similar types, `ItemFactory.createItemStack`, `ItemMeta` component objects (food, tool, equippable) and `ItemType.getCompostChance` not supported | M | p-inv |
 | 98 | `InventoryOpenEvent` on a double chest reports one half; `InventoryDragEvent` ignores a cursor the plugin sets; `PlayerItemConsumeEvent` ignores a replacement item | S | p-inv |
